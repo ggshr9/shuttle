@@ -9,6 +9,7 @@ on:
 
 permissions:
   contents: write
+  packages: write
 
 jobs:
   test:
@@ -112,7 +113,7 @@ jobs:
             goos: linux
             goarch: amd64
             ext: ''
-            deps: sudo apt-get update && sudo apt-get install -y gcc libayatana-appindicator3-dev libgtk-3-dev libwebkit2gtk-4.0-dev
+            deps: sudo apt-get update && sudo apt-get install -y gcc libayatana-appindicator3-dev libgtk-3-dev libwebkit2gtk-4.1-dev
           - os: windows-latest
             goos: windows
             goarch: amd64
@@ -191,7 +192,7 @@ jobs:
           file: deploy/Dockerfile
           platforms: linux/amd64,linux/arm64
           push: true
-          tags: ghcr.io/${{ github.repository }}/shuttled:latest
+          tags: ghcr.io/${{ github.repository_owner }}/shuttled:latest
 
   build-android:
     needs: [test, build-frontend]
@@ -205,16 +206,18 @@ jobs:
         with:
           distribution: 'temurin'
           java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - name: Install NDK
+        run: sdkmanager "ndk;27.2.12479018"
       - name: Install gomobile
         run: |
           go install golang.org/x/mobile/cmd/gomobile@latest
+          go install golang.org/x/mobile/cmd/gobind@latest
           gomobile init
       - name: Build .aar
-        run: gomobile bind -target=android -o mobile/android/app/libs/shuttle.aar ./mobile
-      - uses: actions/download-artifact@v4
-        with:
-          name: web-dist
-          path: gui/web/dist/
+        env:
+          ANDROID_NDK_HOME: ${{ env.ANDROID_HOME }}/ndk/27.2.12479018
+        run: gomobile bind -target=android/arm64,android/arm -androidapi 21 -o mobile/android/app/libs/shuttle.aar ./mobile
       - uses: actions/upload-artifact@v4
         with:
           name: android-aar
@@ -231,6 +234,7 @@ jobs:
       - name: Install gomobile
         run: |
           go install golang.org/x/mobile/cmd/gomobile@latest
+          go install golang.org/x/mobile/cmd/gobind@latest
           gomobile init
       - name: Build .xcframework
         run: gomobile bind -target=ios -o mobile/ios/Shuttle.xcframework ./mobile
@@ -240,7 +244,7 @@ jobs:
           path: mobile/ios/Shuttle.xcframework/
 
   release:
-    needs: [build-cli, build-gui, build-server, build-docker]
+    needs: [build-cli, build-gui, build-server]
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/')
     steps:
