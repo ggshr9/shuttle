@@ -1,4 +1,4 @@
-//go:build !windows
+//go:build linux
 
 package procnet
 
@@ -10,15 +10,21 @@ import (
 	"strings"
 )
 
-// ListNetworkProcesses returns processes with active TCP connections.
-// On Linux it parses /proc/net/tcp; on other platforms it returns an empty list.
+// ListNetworkProcesses returns processes with active TCP and UDP connections.
 func ListNetworkProcesses() ([]ProcInfo, error) {
 	return listLinux()
 }
 
-// PortToPID returns the owning PID for the given local TCP port, or 0 if not found.
+// PortToPID returns the owning PID for the given local port (TCP then UDP fallback), or 0 if not found.
 func PortToPID(port uint16) uint32 {
-	data, err := os.ReadFile("/proc/net/tcp")
+	if pid := portToPIDFromFile("/proc/net/tcp", port); pid > 0 {
+		return pid
+	}
+	return portToPIDFromFile("/proc/net/udp", port)
+}
+
+func portToPIDFromFile(path string, port uint16) uint32 {
+	data, err := os.ReadFile(path)
 	if err != nil {
 		return 0
 	}
@@ -43,36 +49,28 @@ func PortToPID(port uint16) uint32 {
 }
 
 func listLinux() ([]ProcInfo, error) {
-	data, err := os.ReadFile("/proc/net/tcp")
-	if err != nil {
-		// Not Linux or no permission — return empty
-		return nil, nil
-	}
+	inodeSet := make(map[uint64]struct{})
 
-	// Parse /proc/net/tcp: collect inodes
-	type connInfo struct {
-		inode uint64
-	}
-	var inodes []connInfo
-	for _, line := range strings.Split(string(data), "\n")[1:] {
-		fields := strings.Fields(line)
-		if len(fields) < 10 {
+	// Parse both /proc/net/tcp and /proc/net/udp
+	for _, path := range []string{"/proc/net/tcp", "/proc/net/udp"} {
+		data, err := os.ReadFile(path)
+		if err != nil {
 			continue
 		}
-		inode, _ := strconv.ParseUint(fields[9], 10, 64)
-		if inode > 0 {
-			inodes = append(inodes, connInfo{inode: inode})
+		for _, line := range strings.Split(string(data), "\n")[1:] {
+			fields := strings.Fields(line)
+			if len(fields) < 10 {
+				continue
+			}
+			inode, _ := strconv.ParseUint(fields[9], 10, 64)
+			if inode > 0 {
+				inodeSet[inode] = struct{}{}
+			}
 		}
 	}
 
-	if len(inodes) == 0 {
+	if len(inodeSet) == 0 {
 		return nil, nil
-	}
-
-	// Build inode set
-	inodeSet := make(map[uint64]struct{}, len(inodes))
-	for _, c := range inodes {
-		inodeSet[c.inode] = struct{}{}
 	}
 
 	// Walk /proc to find PID -> inode mapping

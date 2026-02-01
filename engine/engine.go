@@ -351,7 +351,9 @@ func (e *Engine) startProxies(ctx context.Context, cfg *config.ClientConfig, dia
 			CIDR:       cfg.Proxy.TUN.CIDR,
 			MTU:        cfg.Proxy.TUN.MTU,
 			AutoRoute:  cfg.Proxy.TUN.AutoRoute,
+			TunFD:      cfg.Proxy.TUN.TunFD,
 		}, dialer, e.logger)
+		tunServer.ProcResolver = procResolver
 		if err := tunServer.Start(ctx); err != nil {
 			e.logger.Warn("TUN device failed", "err", err)
 		} else {

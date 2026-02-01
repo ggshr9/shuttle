@@ -84,11 +84,14 @@ type HTTPConfig struct {
 
 // TUNConfig configures the TUN device.
 type TUNConfig struct {
-	Enabled    bool   `yaml:"enabled" json:"enabled"`
-	DeviceName string `yaml:"device_name" json:"device_name"`
-	CIDR       string `yaml:"cidr" json:"cidr"`
-	MTU        int    `yaml:"mtu" json:"mtu"`
-	AutoRoute  bool   `yaml:"auto_route" json:"auto_route"`
+	Enabled    bool     `yaml:"enabled" json:"enabled"`
+	DeviceName string   `yaml:"device_name" json:"device_name"`
+	CIDR       string   `yaml:"cidr" json:"cidr"`
+	MTU        int      `yaml:"mtu" json:"mtu"`
+	AutoRoute  bool     `yaml:"auto_route" json:"auto_route"`
+	TunFD      int      `yaml:"-" json:"-"`                        // externally provided fd (Android)
+	PerAppMode string   `yaml:"per_app_mode" json:"per_app_mode"` // "allow" / "deny" / ""
+	AppList    []string `yaml:"app_list" json:"app_list"`          // package names / bundle IDs
 }
 
 // RoutingConfig configures routing rules.
@@ -283,6 +286,10 @@ func (c *ClientConfig) DeepCopy() *ClientConfig {
 				copy(cp.Routing.Rules[i].IPCIDR, r.IPCIDR)
 			}
 		}
+	}
+	if c.Proxy.TUN.AppList != nil {
+		cp.Proxy.TUN.AppList = make([]string, len(c.Proxy.TUN.AppList))
+		copy(cp.Proxy.TUN.AppList, c.Proxy.TUN.AppList)
 	}
 	return &cp
 }

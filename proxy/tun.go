@@ -10,6 +10,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/shuttle-proxy/shuttle/internal/procnet"
 )
 
 // TUNConfig configures the TUN device for system-wide proxying.
@@ -18,14 +20,16 @@ type TUNConfig struct {
 	CIDR       string // e.g., "198.18.0.0/16"
 	MTU        int
 	AutoRoute  bool
+	TunFD      int // externally provided fd; if > 0, skip createTUN
 }
 
 // TUNServer manages a TUN device for transparent proxying.
 type TUNServer struct {
-	config *TUNConfig
-	dialer Dialer
-	closed atomic.Bool
-	logger *slog.Logger
+	config       *TUNConfig
+	dialer       Dialer
+	closed       atomic.Bool
+	logger       *slog.Logger
+	ProcResolver *procnet.Resolver
 
 	tunFile  *os.File
 	natTable natTable
@@ -136,21 +140,26 @@ func (n *natTable) closeAll() {
 
 // Start creates the TUN device, configures routes and begins packet processing.
 func (t *TUNServer) Start(ctx context.Context) error {
-	f, err := t.createTUN()
-	if err != nil {
-		return fmt.Errorf("tun: create device: %w", err)
-	}
-	t.tunFile = f
+	if t.config.TunFD > 0 {
+		// Use externally provided file descriptor (e.g. from Android VpnService)
+		t.tunFile = os.NewFile(uintptr(t.config.TunFD), "tun")
+	} else {
+		f, err := t.createTUN()
+		if err != nil {
+			return fmt.Errorf("tun: create device: %w", err)
+		}
+		t.tunFile = f
 
-	if err := t.configureTUN(); err != nil {
-		t.tunFile.Close()
-		return fmt.Errorf("tun: configure device: %w", err)
-	}
-
-	if t.config.AutoRoute {
-		if err := t.setupRoutes(); err != nil {
+		if err := t.configureTUN(); err != nil {
 			t.tunFile.Close()
-			return fmt.Errorf("tun: setup routes: %w", err)
+			return fmt.Errorf("tun: configure device: %w", err)
+		}
+
+		if t.config.AutoRoute {
+			if err := t.setupRoutes(); err != nil {
+				t.tunFile.Close()
+				return fmt.Errorf("tun: setup routes: %w", err)
+			}
 		}
 	}
 
@@ -328,6 +337,11 @@ func (t *TUNServer) dialAndProxyTCP(ctx context.Context, key natKey, clientISN u
 	)
 
 	dialCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	if t.ProcResolver != nil {
+		if procName := t.ProcResolver.Resolve(key.srcPort); procName != "" {
+			dialCtx = WithProcess(dialCtx, procName)
+		}
+	}
 	conn, err := t.dialer(dialCtx, "tcp", addr)
 	if err != nil {
 		cancel()
@@ -394,6 +408,11 @@ func (t *TUNServer) dialAndProxyUDP(ctx context.Context, key natKey, initialPayl
 	)
 
 	dialCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	if t.ProcResolver != nil {
+		if procName := t.ProcResolver.Resolve(key.srcPort); procName != "" {
+			dialCtx = WithProcess(dialCtx, procName)
+		}
+	}
 	conn, err := t.dialer(dialCtx, "udp", addr)
 	if err != nil {
 		cancel()
