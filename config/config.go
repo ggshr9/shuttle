@@ -205,6 +205,17 @@ func LoadServerConfig(path string) (*ServerConfig, error) {
 	return &cfg, nil
 }
 
+// DefaultClientConfig returns a config with sensible defaults, ready for the GUI
+// to display and let the user fill in server details.
+func DefaultClientConfig() *ClientConfig {
+	cfg := &ClientConfig{}
+	applyClientDefaults(cfg)
+	cfg.Proxy.SOCKS5.Enabled = true
+	cfg.Proxy.HTTP.Enabled = true
+	cfg.Transport.H3.Enabled = true
+	return cfg
+}
+
 func applyClientDefaults(cfg *ClientConfig) {
 	if cfg.Transport.Preferred == "" {
 		cfg.Transport.Preferred = "auto"

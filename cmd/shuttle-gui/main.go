@@ -71,16 +71,23 @@ func (a *App) SetConfig(cfg config.ClientConfig) error {
 }
 
 func main() {
-	configPath := "config/client.example.yaml"
+	var configPath string
 	for i, arg := range os.Args[1:] {
 		if arg == "-c" && i+1 < len(os.Args[1:]) {
 			configPath = os.Args[i+2]
 		}
 	}
 
-	cfg, err := config.LoadClientConfig(configPath)
-	if err != nil {
-		log.Fatalf("Failed to load config: %v", err)
+	var cfg *config.ClientConfig
+	if configPath != "" {
+		var err error
+		cfg, err = config.LoadClientConfig(configPath)
+		if err != nil {
+			log.Printf("Failed to load config %s: %v, using defaults", configPath, err)
+			cfg = config.DefaultClientConfig()
+		}
+	} else {
+		cfg = config.DefaultClientConfig()
 	}
 
 	eng := engine.New(cfg)
