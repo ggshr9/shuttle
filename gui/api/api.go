@@ -51,7 +51,10 @@ func Handler(eng *engine.Engine) http.Handler {
 
 	mux.HandleFunc("GET /api/config/servers", func(w http.ResponseWriter, r *http.Request) {
 		cfg := eng.Config()
-		writeJSON(w, cfg.Server)
+		writeJSON(w, map[string]any{
+			"active":  cfg.Server,
+			"servers": cfg.Servers,
+		})
 	})
 
 	mux.HandleFunc("PUT /api/config/servers", func(w http.ResponseWriter, r *http.Request) {
@@ -67,6 +70,38 @@ func Handler(eng *engine.Engine) http.Handler {
 			return
 		}
 		writeJSON(w, map[string]string{"status": "updated"})
+	})
+
+	mux.HandleFunc("POST /api/config/servers", func(w http.ResponseWriter, r *http.Request) {
+		var srv config.ServerEndpoint
+		if err := json.NewDecoder(r.Body).Decode(&srv); err != nil {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		cfg := *eng.Config()
+		cfg.Servers = append(cfg.Servers, srv)
+		eng.SetConfig(&cfg)
+		writeJSON(w, map[string]string{"status": "added"})
+	})
+
+	mux.HandleFunc("DELETE /api/config/servers", func(w http.ResponseWriter, r *http.Request) {
+		var req struct {
+			Addr string `json:"addr"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		cfg := *eng.Config()
+		filtered := cfg.Servers[:0]
+		for _, s := range cfg.Servers {
+			if s.Addr != req.Addr {
+				filtered = append(filtered, s)
+			}
+		}
+		cfg.Servers = filtered
+		eng.SetConfig(&cfg)
+		writeJSON(w, map[string]string{"status": "deleted"})
 	})
 
 	mux.HandleFunc("GET /api/routing/rules", func(w http.ResponseWriter, r *http.Request) {

@@ -3,6 +3,7 @@
 package tray
 
 import (
+	"github.com/getlantern/systray"
 	"github.com/shuttle-proxy/shuttle/engine"
 )
 
@@ -15,28 +16,41 @@ type Callbacks struct {
 }
 
 // Run starts the system tray. It blocks until the tray exits.
-// This is a placeholder — the actual systray integration requires
-// github.com/getlantern/systray which needs CGO on some platforms.
-// For now this provides the interface; the real implementation
-// can be swapped in when the dependency is added.
 func Run(eng *engine.Engine, cb Callbacks) {
-	// Placeholder: in production, this would call systray.Run(onReady, onExit)
-	// with menu items for Show/Hide, Connect/Disconnect, and Quit.
-	//
-	// Example with getlantern/systray:
-	//   systray.Run(func() {
-	//     systray.SetTitle("Shuttle")
-	//     mShow := systray.AddMenuItem("Show", "Show window")
-	//     mConn := systray.AddMenuItem("Connect", "Connect to server")
-	//     mQuit := systray.AddMenuItem("Quit", "Quit Shuttle")
-	//     go func() {
-	//       for {
-	//         select {
-	//         case <-mShow.ClickedCh: cb.OnShow()
-	//         case <-mConn.ClickedCh: cb.OnConnect()
-	//         case <-mQuit.ClickedCh: cb.OnQuit(); systray.Quit()
-	//         }
-	//       }
-	//     }()
-	//   }, func() {})
+	systray.Run(func() {
+		systray.SetTitle("Shuttle")
+		systray.SetTooltip("Shuttle Proxy")
+
+		mShow := systray.AddMenuItem("Show", "Show window")
+		systray.AddSeparator()
+		mConnect := systray.AddMenuItem("Connect", "Connect to server")
+		mDisconnect := systray.AddMenuItem("Disconnect", "Disconnect from server")
+		systray.AddSeparator()
+		mQuit := systray.AddMenuItem("Quit", "Quit Shuttle")
+
+		go func() {
+			for {
+				select {
+				case <-mShow.ClickedCh:
+					if cb.OnShow != nil {
+						cb.OnShow()
+					}
+				case <-mConnect.ClickedCh:
+					if cb.OnConnect != nil {
+						cb.OnConnect()
+					}
+				case <-mDisconnect.ClickedCh:
+					if cb.OnDisconnect != nil {
+						cb.OnDisconnect()
+					}
+				case <-mQuit.ClickedCh:
+					if cb.OnQuit != nil {
+						cb.OnQuit()
+					}
+					systray.Quit()
+					return
+				}
+			}
+		}()
+	}, func() {})
 }

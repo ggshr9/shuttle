@@ -161,6 +161,7 @@ func (e *Engine) Start(ctx context.Context) error {
 	}
 
 	if len(transports) == 0 {
+		cancel()
 		e.setState(StateStopped)
 		return fmt.Errorf("no transports enabled")
 	}
@@ -248,13 +249,22 @@ func (e *Engine) Start(ctx context.Context) error {
 	// --- Start local proxies ---
 	var closers []func() error
 
+	// cleanup closes all already-started resources on failure.
+	cleanup := func() {
+		for _, c := range closers {
+			c()
+		}
+		sel.Close()
+		cancel()
+		e.setState(StateStopped)
+	}
+
 	if e.cfg.Proxy.SOCKS5.Enabled {
 		socks := proxy.NewSOCKS5Server(&proxy.SOCKS5Config{
 			ListenAddr: e.cfg.Proxy.SOCKS5.Listen,
 		}, dialer, e.logger)
 		if err := socks.Start(ctx); err != nil {
-			cancel()
-			e.setState(StateStopped)
+			cleanup()
 			return fmt.Errorf("socks5: %w", err)
 		}
 		closers = append(closers, socks.Close)
@@ -265,8 +275,7 @@ func (e *Engine) Start(ctx context.Context) error {
 			ListenAddr: e.cfg.Proxy.HTTP.Listen,
 		}, dialer, e.logger)
 		if err := httpProxy.Start(ctx); err != nil {
-			cancel()
-			e.setState(StateStopped)
+			cleanup()
 			return fmt.Errorf("http proxy: %w", err)
 		}
 		closers = append(closers, httpProxy.Close)
@@ -333,9 +342,27 @@ func (e *Engine) Stop() error {
 	return nil
 }
 
+// ValidateConfig checks whether a config can start an engine
+// (at least one transport enabled, server addr set).
+func ValidateConfig(cfg *config.ClientConfig) error {
+	if cfg.Server.Addr == "" {
+		return fmt.Errorf("server address is required")
+	}
+	if !cfg.Transport.H3.Enabled && !cfg.Transport.Reality.Enabled && !cfg.Transport.CDN.Enabled {
+		return fmt.Errorf("at least one transport must be enabled")
+	}
+	return nil
+}
+
 // Reload stops and restarts the engine with a new config.
+// The new config is validated before stopping; if invalid the engine keeps running.
 func (e *Engine) Reload(cfg *config.ClientConfig) error {
+	if err := ValidateConfig(cfg); err != nil {
+		return fmt.Errorf("invalid config: %w", err)
+	}
+
 	e.mu.RLock()
+	oldCfg := e.cfg
 	running := e.state == StateRunning
 	e.mu.RUnlock()
 
@@ -349,7 +376,19 @@ func (e *Engine) Reload(cfg *config.ClientConfig) error {
 	e.cfg = cfg
 	e.mu.Unlock()
 
-	return e.Start(context.Background())
+	if err := e.Start(context.Background()); err != nil {
+		// Rollback: restore old config and try to restart
+		e.mu.Lock()
+		e.cfg = oldCfg
+		e.mu.Unlock()
+		if running {
+			if startErr := e.Start(context.Background()); startErr != nil {
+				e.logger.Error("rollback restart failed", "err", startErr)
+			}
+		}
+		return fmt.Errorf("start with new config: %w", err)
+	}
+	return nil
 }
 
 // Status returns a snapshot of the engine's current state.
@@ -391,6 +430,14 @@ func (e *Engine) Config() *config.ClientConfig {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
 	return e.cfg
+}
+
+// SetConfig updates the config without restarting the engine.
+// Use this for non-critical changes like the saved server list.
+func (e *Engine) SetConfig(cfg *config.ClientConfig) {
+	e.mu.Lock()
+	e.cfg = cfg
+	e.mu.Unlock()
 }
 
 // Subscribe returns a channel that receives real-time engine events.

@@ -10,6 +10,7 @@ import (
 // ClientConfig is the top-level client configuration.
 type ClientConfig struct {
 	Server     ServerEndpoint   `yaml:"server" json:"server"`
+	Servers    []ServerEndpoint `yaml:"servers,omitempty" json:"servers,omitempty"` // saved server list
 	Transport  TransportConfig  `yaml:"transport" json:"transport"`
 	Proxy      ProxyConfig      `yaml:"proxy" json:"proxy"`
 	Routing    RoutingConfig    `yaml:"routing" json:"routing"`
