@@ -12,14 +12,24 @@ permissions:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            deps: sudo apt-get update && sudo apt-get install -y gcc libayatana-appindicator3-dev libgtk-3-dev
+          - os: windows-latest
+            deps: ''
+          - os: macos-latest
+            deps: ''
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
           go-version: '1.24'
-      - name: Install systray dependencies
-        run: sudo apt-get update && sudo apt-get install -y gcc libayatana-appindicator3-dev libgtk-3-dev
+      - name: Install dependencies
+        if: matrix.deps != ''
+        run: ${{ matrix.deps }}
       - run: go build ./...
       - run: go vet ./...
       - run: go test -count=1 -v ./...
@@ -58,6 +68,18 @@ jobs:
             ext: ''
           - goos: darwin
             goarch: arm64
+            ext: ''
+          - goos: linux
+            goarch: mipsle
+            ext: ''
+          - goos: linux
+            goarch: mips
+            ext: ''
+          - goos: linux
+            goarch: arm
+            ext: ''
+          - goos: freebsd
+            goarch: amd64
             ext: ''
     runs-on: ubuntu-latest
     steps:
@@ -132,6 +154,8 @@ jobs:
             goarch: amd64
           - goos: linux
             goarch: arm64
+          - goos: linux
+            goarch: arm
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
