@@ -1,0 +1,16 @@
+# Build output
+*.exe
+*.aar
+*.xcframework
+
+# Frontend
+gui/web/node_modules/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db

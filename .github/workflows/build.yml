@@ -32,13 +32,52 @@ jobs:
         with:
           node-version: '22'
       - working-directory: gui/web
-        run: npm install && npm run build
+        run: npm ci && npm run build
       - uses: actions/upload-artifact@v4
         with:
           name: web-dist
           path: gui/web/dist/
 
-  build-desktop:
+  # CLI client — pure Go, no CGo, cross-compile all targets
+  build-cli:
+    needs: [test, build-frontend]
+    strategy:
+      matrix:
+        include:
+          - goos: linux
+            goarch: amd64
+          - goos: linux
+            goarch: arm64
+          - goos: windows
+            goarch: amd64
+            ext: '.exe'
+          - goos: darwin
+            goarch: amd64
+          - goos: darwin
+            goarch: arm64
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+      - uses: actions/download-artifact@v4
+        with:
+          name: web-dist
+          path: gui/web/dist/
+      - name: Build shuttle
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: '0'
+        run: go build -ldflags="-s -w" -o shuttle-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext || '' }} ./cmd/shuttle
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cli-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: shuttle-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext || '' }}
+
+  # GUI desktop — requires CGo (Wails + systray), native build per OS
+  build-gui:
     needs: [test, build-frontend]
     strategy:
       matrix:
@@ -47,22 +86,17 @@ jobs:
             goos: linux
             goarch: amd64
             ext: ''
-          - os: ubuntu-latest
-            goos: linux
-            goarch: arm64
-            ext: ''
+            deps: sudo apt-get update && sudo apt-get install -y gcc libayatana-appindicator3-dev libgtk-3-dev libwebkit2gtk-4.0-dev
           - os: windows-latest
             goos: windows
             goarch: amd64
             ext: '.exe'
-          - os: macos-latest
-            goos: darwin
-            goarch: amd64
-            ext: ''
+            deps: ''
           - os: macos-latest
             goos: darwin
             goarch: arm64
             ext: ''
+            deps: ''
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -73,24 +107,17 @@ jobs:
         with:
           name: web-dist
           path: gui/web/dist/
-      - name: Build shuttle client
-        env:
-          GOOS: ${{ matrix.goos }}
-          GOARCH: ${{ matrix.goarch }}
-          CGO_ENABLED: '0'
-        run: go build -ldflags="-s -w" -o shuttle-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }} ./cmd/shuttle
+      - name: Install dependencies
+        if: matrix.deps != ''
+        run: ${{ matrix.deps }}
       - name: Build shuttle-gui
         env:
-          GOOS: ${{ matrix.goos }}
-          GOARCH: ${{ matrix.goarch }}
-          CGO_ENABLED: '0'
+          CGO_ENABLED: '1'
         run: go build -ldflags="-s -w" -o shuttle-gui-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }} ./cmd/shuttle-gui
       - uses: actions/upload-artifact@v4
         with:
-          name: desktop-${{ matrix.goos }}-${{ matrix.goarch }}
-          path: |
-            shuttle-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }}
-            shuttle-gui-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }}
+          name: gui-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: shuttle-gui-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }}
 
   build-server:
     needs: [test]
@@ -185,7 +212,7 @@ jobs:
           path: mobile/ios/Shuttle.xcframework/
 
   release:
-    needs: [build-desktop, build-server, build-docker]
+    needs: [build-cli, build-gui, build-server, build-docker]
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/')
     steps:
