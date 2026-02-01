@@ -140,7 +140,6 @@ jobs:
       - name: Build shuttle-gui
         env:
           CGO_ENABLED: '1'
-          CGO_LDFLAGS: ${{ matrix.goos == 'darwin' && '-framework UniformTypeIdentifiers' || '' }}
         run: go build -tags desktop,production -ldflags="-s -w" -o shuttle-gui-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }} ./cmd/shuttle-gui
       - uses: actions/upload-artifact@v4
         with:
@@ -219,7 +218,9 @@ jobs:
       - name: Build .aar
         env:
           ANDROID_NDK_HOME: ${{ env.ANDROID_HOME }}/ndk/27.2.12479018
-        run: gomobile bind -target=android/arm64,android/arm -androidapi 21 -o mobile/android/app/libs/shuttle.aar ./mobile
+        run: |
+          mkdir -p mobile/android/app/libs
+          gomobile bind -target=android/arm64,android/arm -androidapi 21 -o mobile/android/app/libs/shuttle.aar ./mobile
       - uses: actions/upload-artifact@v4
         with:
           name: android-aar

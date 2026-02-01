@@ -3,7 +3,7 @@
 package tray
 
 import (
-	"github.com/getlantern/systray"
+	"fyne.io/systray"
 	"github.com/shuttle-proxy/shuttle/engine"
 )
 
