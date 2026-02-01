@@ -280,13 +280,24 @@ func (c *dnsCache) put(domain string, ips []net.IP, ttl time.Duration, domestic 
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if len(c.entries) >= c.maxSize {
-		// Evict oldest entries (simple approach)
-		count := 0
+		// Evict expired entries first, then oldest up to 10% of max
+		now := time.Now()
+		evicted := 0
+		target := c.maxSize / 10
 		for k, v := range c.entries {
-			if time.Now().After(v.expiresAt) || count > c.maxSize/10 {
+			if now.After(v.expiresAt) {
 				delete(c.entries, k)
+				evicted++
 			}
-			count++
+		}
+		if evicted < target {
+			for k := range c.entries {
+				delete(c.entries, k)
+				evicted++
+				if evicted >= target {
+					break
+				}
+			}
 		}
 	}
 	c.entries[domain] = &dnsCacheEntry{

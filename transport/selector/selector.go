@@ -179,8 +179,9 @@ func (s *Selector) Dial(ctx context.Context, addr string) (transport.Connection,
 			conn, err := t.Dial(ctx, addr)
 			if err == nil {
 				s.mu.Lock()
-				s.active = t
-				s.activeConn = conn
+				if s.active == nil {
+					s.active = t
+				}
 				s.mu.Unlock()
 				return conn, nil
 			}

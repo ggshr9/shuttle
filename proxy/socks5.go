@@ -306,6 +306,7 @@ func relay(a, b net.Conn) {
 		done <- struct{}{}
 	}()
 	<-done
+	<-done
 }
 
 // Close shuts down the SOCKS5 server.

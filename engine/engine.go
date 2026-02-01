@@ -233,7 +233,7 @@ func (e *Engine) Start(ctx context.Context) error {
 			if err != nil || len(ips) == 0 {
 				ips2, err2 := net.DefaultResolver.LookupIP(dialCtx, "ip4", host)
 				if err2 != nil {
-					return nil, fmt.Errorf("dns resolve %s: %w", host, err)
+					return nil, fmt.Errorf("dns resolve %s: %w", host, err2)
 				}
 				ips = ips2
 			}

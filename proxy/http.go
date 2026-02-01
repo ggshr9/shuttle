@@ -143,7 +143,10 @@ func (s *HTTPServer) handleHTTP(ctx context.Context, conn net.Conn, req *http.Re
 	defer remote.Close()
 
 	// Forward the original request
-	req.Write(remote)
+	if err := req.Write(remote); err != nil {
+		s.logger.Debug("http request write failed", "target", target, "err", err)
+		return
+	}
 
 	// Relay response back
 	io.Copy(conn, remote)

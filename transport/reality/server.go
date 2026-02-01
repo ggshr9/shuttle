@@ -215,6 +215,7 @@ func (s *Server) forwardToTarget(conn net.Conn) {
 	go cp(target, conn)
 	go cp(conn, target)
 	<-done
+	<-done
 	target.Close()
 	conn.Close()
 }
