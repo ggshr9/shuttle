@@ -117,7 +117,7 @@ jobs:
       - name: Build shuttle-gui
         env:
           CGO_ENABLED: '1'
-        run: go build -ldflags="-s -w" -o shuttle-gui-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }} ./cmd/shuttle-gui
+        run: go build -tags desktop,production -ldflags="-s -w" -o shuttle-gui-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }} ./cmd/shuttle-gui
       - uses: actions/upload-artifact@v4
         with:
           name: gui-${{ matrix.goos }}-${{ matrix.goarch }}

@@ -46,10 +46,10 @@ go build -o shuttle ./cmd/shuttle
 
 ```bash
 # Requires CGo (Wails + systray)
-go build -o shuttle-gui ./cmd/shuttle-gui
+go build -tags desktop,production -o shuttle-gui ./cmd/shuttle-gui
 
-# Opens native window with web UI
-./shuttle-gui -c config.yaml
+# Opens native window with web UI (no config needed, uses defaults)
+./shuttle-gui
 ```
 
 ### Server
@@ -154,9 +154,9 @@ cd gui/web && npm install && npm run build && cd ../..
 CGO_ENABLED=0 go build -o shuttle ./cmd/shuttle
 CGO_ENABLED=0 go build -o shuttled ./cmd/shuttled
 
-# GUI (needs CGo)
+# GUI (needs CGo + Wails build tags)
 # Linux: apt install gcc libayatana-appindicator3-dev libgtk-3-dev libwebkit2gtk-4.0-dev
-CGO_ENABLED=1 go build -o shuttle-gui ./cmd/shuttle-gui
+CGO_ENABLED=1 go build -tags desktop,production -o shuttle-gui ./cmd/shuttle-gui
 ```
 
 ### Run Tests
