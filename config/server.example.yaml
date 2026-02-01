@@ -1,0 +1,28 @@
+# Shuttle Server Configuration
+
+listen: ":443"
+
+tls:
+  cert_file: "/etc/shuttle/cert.pem"
+  key_file: "/etc/shuttle/key.pem"
+
+auth:
+  password: "your-secret-password"
+
+cover:
+  mode: "reverse"           # default, static, reverse
+  reverse_url: "https://www.example.com"
+
+transport:
+  h3:
+    enabled: true
+    path_prefix: "/cdn/stream/"
+  reality:
+    enabled: true
+    target_sni: "www.apple.com"
+    target_addr: "www.apple.com:443"
+    short_ids: ["abc123"]
+
+log:
+  level: "info"
+  output: "stdout"

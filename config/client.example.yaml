@@ -1,0 +1,62 @@
+# Shuttle Client Configuration
+
+server:
+  addr: "your-server.com:443"
+  name: "my-server"
+  password: "your-secret-password"
+  sni: "your-server.com"
+
+transport:
+  preferred: "auto"  # auto, h3, reality, cdn
+  h3:
+    enabled: true
+    path_prefix: "/cdn/stream/"
+  reality:
+    enabled: true
+    server_name: "www.apple.com"
+    short_id: "abc123"
+    public_key: "server-public-key-base64"
+  cdn:
+    enabled: false
+    domain: "cdn.example.com"
+    path: "/ws"
+    mode: "h2"
+
+proxy:
+  socks5:
+    enabled: true
+    listen: "127.0.0.1:1080"
+  http:
+    enabled: true
+    listen: "127.0.0.1:8080"
+  tun:
+    enabled: false
+    device_name: "shuttle0"
+    cidr: "198.18.0.0/16"
+    mtu: 1500
+    auto_route: true
+
+routing:
+  rules:
+    - domains: "geosite:cn"
+      action: direct
+    - domains: "geosite:geolocation-!cn"
+      action: proxy
+    - geoip: CN
+      action: direct
+    - process: ["WeChat", "QQ", "DingTalk"]
+      action: direct
+    - protocol: bittorrent
+      action: direct
+  default: proxy
+  dns:
+    domestic: "223.5.5.5"
+    remote:
+      server: "https://1.1.1.1/dns-query"
+      via: proxy
+    cache: true
+    prefetch: true
+
+log:
+  level: "info"
+  output: "stdout"
