@@ -9,171 +9,171 @@ import (
 
 // ClientConfig is the top-level client configuration.
 type ClientConfig struct {
-	Server     ServerEndpoint   `yaml:"server"`
-	Transport  TransportConfig  `yaml:"transport"`
-	Proxy      ProxyConfig      `yaml:"proxy"`
-	Routing    RoutingConfig    `yaml:"routing"`
-	Congestion CongestionConfig `yaml:"congestion"`
-	Log        LogConfig        `yaml:"log"`
+	Server     ServerEndpoint   `yaml:"server" json:"server"`
+	Transport  TransportConfig  `yaml:"transport" json:"transport"`
+	Proxy      ProxyConfig      `yaml:"proxy" json:"proxy"`
+	Routing    RoutingConfig    `yaml:"routing" json:"routing"`
+	Congestion CongestionConfig `yaml:"congestion" json:"congestion"`
+	Log        LogConfig        `yaml:"log" json:"log"`
 }
 
 // CongestionConfig configures congestion control.
 type CongestionConfig struct {
-	Mode       string `yaml:"mode"`        // "adaptive", "bbr", "brutal"
-	BrutalRate uint64 `yaml:"brutal_rate"` // bytes/sec for brutal mode (default 100MB/s)
+	Mode       string `yaml:"mode" json:"mode"`               // "adaptive", "bbr", "brutal"
+	BrutalRate uint64 `yaml:"brutal_rate" json:"brutal_rate"` // bytes/sec for brutal mode (default 100MB/s)
 }
 
 // ServerEndpoint defines a remote server.
 type ServerEndpoint struct {
-	Addr     string `yaml:"addr"`
-	Name     string `yaml:"name"`
-	Password string `yaml:"password"`
-	SNI      string `yaml:"sni"`
+	Addr     string `yaml:"addr" json:"addr"`
+	Name     string `yaml:"name" json:"name"`
+	Password string `yaml:"password" json:"password"`
+	SNI      string `yaml:"sni" json:"sni"`
 }
 
 // TransportConfig configures available transports.
 type TransportConfig struct {
-	Preferred string      `yaml:"preferred"` // "h3", "reality", "cdn", "auto"
-	H3        H3Config    `yaml:"h3"`
-	Reality   RealityConf `yaml:"reality"`
-	CDN       CDNConfig   `yaml:"cdn"`
+	Preferred string      `yaml:"preferred" json:"preferred"` // "h3", "reality", "cdn", "auto"
+	H3        H3Config    `yaml:"h3" json:"h3"`
+	Reality   RealityConf `yaml:"reality" json:"reality"`
+	CDN       CDNConfig   `yaml:"cdn" json:"cdn"`
 }
 
 // H3Config configures HTTP/3 transport.
 type H3Config struct {
-	Enabled    bool   `yaml:"enabled"`
-	PathPrefix string `yaml:"path_prefix"`
+	Enabled    bool   `yaml:"enabled" json:"enabled"`
+	PathPrefix string `yaml:"path_prefix" json:"path_prefix"`
 }
 
 // RealityConf configures Reality transport.
 type RealityConf struct {
-	Enabled    bool   `yaml:"enabled"`
-	ServerName string `yaml:"server_name"`
-	ShortID    string `yaml:"short_id"`
-	PublicKey  string `yaml:"public_key"`
+	Enabled    bool   `yaml:"enabled" json:"enabled"`
+	ServerName string `yaml:"server_name" json:"server_name"`
+	ShortID    string `yaml:"short_id" json:"short_id"`
+	PublicKey  string `yaml:"public_key" json:"public_key"`
 }
 
 // CDNConfig configures CDN transport.
 type CDNConfig struct {
-	Enabled bool   `yaml:"enabled"`
-	Domain  string `yaml:"domain"`
-	Path    string `yaml:"path"`
-	Mode    string `yaml:"mode"` // "h2", "grpc"
+	Enabled bool   `yaml:"enabled" json:"enabled"`
+	Domain  string `yaml:"domain" json:"domain"`
+	Path    string `yaml:"path" json:"path"`
+	Mode    string `yaml:"mode" json:"mode"` // "h2", "grpc"
 }
 
 // ProxyConfig configures local proxy listeners.
 type ProxyConfig struct {
-	SOCKS5 SOCKS5Conf `yaml:"socks5"`
-	HTTP   HTTPConf   `yaml:"http"`
-	TUN    TUNConf    `yaml:"tun"`
+	SOCKS5 SOCKS5Conf `yaml:"socks5" json:"socks5"`
+	HTTP   HTTPConf   `yaml:"http" json:"http"`
+	TUN    TUNConf    `yaml:"tun" json:"tun"`
 }
 
 // SOCKS5Conf configures the SOCKS5 listener.
 type SOCKS5Conf struct {
-	Enabled bool   `yaml:"enabled"`
-	Listen  string `yaml:"listen"`
+	Enabled bool   `yaml:"enabled" json:"enabled"`
+	Listen  string `yaml:"listen" json:"listen"`
 }
 
 // HTTPConf configures the HTTP proxy listener.
 type HTTPConf struct {
-	Enabled bool   `yaml:"enabled"`
-	Listen  string `yaml:"listen"`
+	Enabled bool   `yaml:"enabled" json:"enabled"`
+	Listen  string `yaml:"listen" json:"listen"`
 }
 
 // TUNConf configures the TUN device.
 type TUNConf struct {
-	Enabled    bool   `yaml:"enabled"`
-	DeviceName string `yaml:"device_name"`
-	CIDR       string `yaml:"cidr"`
-	MTU        int    `yaml:"mtu"`
-	AutoRoute  bool   `yaml:"auto_route"`
+	Enabled    bool   `yaml:"enabled" json:"enabled"`
+	DeviceName string `yaml:"device_name" json:"device_name"`
+	CIDR       string `yaml:"cidr" json:"cidr"`
+	MTU        int    `yaml:"mtu" json:"mtu"`
+	AutoRoute  bool   `yaml:"auto_route" json:"auto_route"`
 }
 
 // RoutingConfig configures routing rules.
 type RoutingConfig struct {
-	Rules   []RouteRule `yaml:"rules"`
-	Default string      `yaml:"default"` // "proxy", "direct"
-	DNS     DNSConf     `yaml:"dns"`
+	Rules   []RouteRule `yaml:"rules" json:"rules"`
+	Default string      `yaml:"default" json:"default"` // "proxy", "direct"
+	DNS     DNSConf     `yaml:"dns" json:"dns"`
 }
 
 // RouteRule defines a single routing rule.
 type RouteRule struct {
-	Domains  string   `yaml:"domains,omitempty"`
-	GeoIP    string   `yaml:"geoip,omitempty"`
-	Process  []string `yaml:"process,omitempty"`
-	Protocol string   `yaml:"protocol,omitempty"`
-	IPCIDR   []string `yaml:"ip_cidr,omitempty"`
-	Action   string   `yaml:"action"`
+	Domains  string   `yaml:"domains,omitempty" json:"domains,omitempty"`
+	GeoIP    string   `yaml:"geoip,omitempty" json:"geoip,omitempty"`
+	Process  []string `yaml:"process,omitempty" json:"process,omitempty"`
+	Protocol string   `yaml:"protocol,omitempty" json:"protocol,omitempty"`
+	IPCIDR   []string `yaml:"ip_cidr,omitempty" json:"ip_cidr,omitempty"`
+	Action   string   `yaml:"action" json:"action"`
 }
 
 // DNSConf configures DNS resolution.
 type DNSConf struct {
-	Domestic string    `yaml:"domestic"`
-	Remote   DNSRemote `yaml:"remote"`
-	Cache    bool      `yaml:"cache"`
-	Prefetch bool      `yaml:"prefetch"`
+	Domestic string    `yaml:"domestic" json:"domestic"`
+	Remote   DNSRemote `yaml:"remote" json:"remote"`
+	Cache    bool      `yaml:"cache" json:"cache"`
+	Prefetch bool      `yaml:"prefetch" json:"prefetch"`
 }
 
 // DNSRemote configures the remote DNS server.
 type DNSRemote struct {
-	Server string `yaml:"server"`
-	Via    string `yaml:"via"` // "proxy" or "direct"
+	Server string `yaml:"server" json:"server"`
+	Via    string `yaml:"via" json:"via"` // "proxy" or "direct"
 }
 
 // LogConfig configures logging.
 type LogConfig struct {
-	Level  string `yaml:"level"`  // "debug", "info", "warn", "error"
-	Output string `yaml:"output"` // "stdout", "stderr", or file path
+	Level  string `yaml:"level" json:"level"`   // "debug", "info", "warn", "error"
+	Output string `yaml:"output" json:"output"` // "stdout", "stderr", or file path
 }
 
 // ServerConfig is the top-level server configuration.
 type ServerConfig struct {
-	Listen    string          `yaml:"listen"`
-	TLS       TLSConfig       `yaml:"tls"`
-	Auth      AuthConfig      `yaml:"auth"`
-	Cover     CoverSiteConfig `yaml:"cover"`
-	Transport ServerTransConf `yaml:"transport"`
-	Log       LogConfig       `yaml:"log"`
+	Listen    string          `yaml:"listen" json:"listen"`
+	TLS       TLSConfig       `yaml:"tls" json:"tls"`
+	Auth      AuthConfig      `yaml:"auth" json:"auth"`
+	Cover     CoverSiteConfig `yaml:"cover" json:"cover"`
+	Transport ServerTransConf `yaml:"transport" json:"transport"`
+	Log       LogConfig       `yaml:"log" json:"log"`
 }
 
 // TLSConfig configures TLS certificates.
 type TLSConfig struct {
-	CertFile string `yaml:"cert_file"`
-	KeyFile  string `yaml:"key_file"`
+	CertFile string `yaml:"cert_file" json:"cert_file"`
+	KeyFile  string `yaml:"key_file" json:"key_file"`
 }
 
 // AuthConfig configures authentication.
 type AuthConfig struct {
-	Password   string `yaml:"password"`
-	PrivateKey string `yaml:"private_key"`
-	PublicKey  string `yaml:"public_key"`
+	Password   string `yaml:"password" json:"password"`
+	PrivateKey string `yaml:"private_key" json:"private_key"`
+	PublicKey  string `yaml:"public_key" json:"public_key"`
 }
 
 // CoverSiteConfig configures the cover website.
 type CoverSiteConfig struct {
-	Mode       string `yaml:"mode"` // "static", "reverse", "default"
-	StaticDir  string `yaml:"static_dir"`
-	ReverseURL string `yaml:"reverse_url"`
+	Mode       string `yaml:"mode" json:"mode"` // "static", "reverse", "default"
+	StaticDir  string `yaml:"static_dir" json:"static_dir"`
+	ReverseURL string `yaml:"reverse_url" json:"reverse_url"`
 }
 
 // ServerTransConf configures server-side transports.
 type ServerTransConf struct {
-	H3      ServerH3Conf      `yaml:"h3"`
-	Reality ServerRealityConf `yaml:"reality"`
+	H3      ServerH3Conf      `yaml:"h3" json:"h3"`
+	Reality ServerRealityConf `yaml:"reality" json:"reality"`
 }
 
 // ServerH3Conf configures server H3.
 type ServerH3Conf struct {
-	Enabled    bool   `yaml:"enabled"`
-	PathPrefix string `yaml:"path_prefix"`
+	Enabled    bool   `yaml:"enabled" json:"enabled"`
+	PathPrefix string `yaml:"path_prefix" json:"path_prefix"`
 }
 
 // ServerRealityConf configures server Reality.
 type ServerRealityConf struct {
-	Enabled    bool     `yaml:"enabled"`
-	TargetSNI  string   `yaml:"target_sni"`
-	TargetAddr string   `yaml:"target_addr"`
-	ShortIDs   []string `yaml:"short_ids"`
+	Enabled    bool     `yaml:"enabled" json:"enabled"`
+	TargetSNI  string   `yaml:"target_sni" json:"target_sni"`
+	TargetAddr string   `yaml:"target_addr" json:"target_addr"`
+	ShortIDs   []string `yaml:"short_ids" json:"short_ids"`
 }
 
 // LoadClientConfig loads client config from a YAML file.

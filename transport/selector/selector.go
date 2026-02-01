@@ -216,6 +216,25 @@ func (s *Selector) dialFallback(ctx context.Context, addr string, failed transpo
 	return nil, fmt.Errorf("all fallback transports failed")
 }
 
+// Probes returns a snapshot of the latest probe results for all transports.
+func (s *Selector) Probes() map[string]*ProbeResult {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	out := make(map[string]*ProbeResult, len(s.probes))
+	for k, v := range s.probes {
+		cp := *v
+		out[k] = &cp
+	}
+	return out
+}
+
+// ActiveTransport returns the type name of the currently active transport.
+func (s *Selector) ActiveTransport() string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.activeType()
+}
+
 func (s *Selector) Type() string { return "selector" }
 
 func (s *Selector) Close() error {
