@@ -1,17 +1,14 @@
-version: "3.9"
-
 services:
   shuttled:
-    build: ..
-    dockerfile: deploy/Dockerfile
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
     ports:
       - "443:443/tcp"
       - "443:443/udp"
     volumes:
       - ./config:/etc/shuttle:ro
       - certs:/etc/letsencrypt:ro
-    environment:
-      - SHUTTLE_LOG_LEVEL=info
     restart: unless-stopped
 
 volumes:

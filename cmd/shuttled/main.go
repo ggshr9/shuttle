@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"flag"
 	"fmt"
 	"io"
 	"log/slog"
@@ -25,31 +26,44 @@ const version = "0.1.0"
 
 func main() {
 	if len(os.Args) < 2 {
-		fmt.Fprintf(os.Stderr, "Shuttled v%s — Shuttle Server\n\n", version)
-		fmt.Fprintf(os.Stderr, "Usage:\n")
-		fmt.Fprintf(os.Stderr, "  shuttled run -c <config.yaml>    Start the server\n")
-		fmt.Fprintf(os.Stderr, "  shuttled version                 Show version\n")
-		fmt.Fprintf(os.Stderr, "  shuttled genkey                  Generate key pair\n")
+		printUsage()
 		os.Exit(1)
 	}
 
 	switch os.Args[1] {
-	case "version":
+	case "version", "-v", "--version":
 		fmt.Printf("shuttled v%s\n", version)
 	case "genkey":
 		genKey()
 	case "run":
-		configPath := "config/server.example.yaml"
-		for i, arg := range os.Args[2:] {
-			if arg == "-c" && i+1 < len(os.Args[2:]) {
-				configPath = os.Args[i+3]
-			}
+		runCmd := flag.NewFlagSet("run", flag.ExitOnError)
+		configPath := runCmd.String("c", "", "path to config file (required)")
+		runCmd.Usage = func() {
+			fmt.Fprintf(os.Stderr, "Usage: shuttled run -c <config.yaml>\n\nFlags:\n")
+			runCmd.PrintDefaults()
 		}
-		run(configPath)
+		runCmd.Parse(os.Args[2:])
+		if *configPath == "" {
+			runCmd.Usage()
+			os.Exit(1)
+		}
+		run(*configPath)
+	case "help", "-h", "--help":
+		printUsage()
 	default:
-		fmt.Fprintf(os.Stderr, "Unknown command: %s\n", os.Args[1])
+		fmt.Fprintf(os.Stderr, "Unknown command: %s\n\n", os.Args[1])
+		printUsage()
 		os.Exit(1)
 	}
+}
+
+func printUsage() {
+	fmt.Fprintf(os.Stderr, "Shuttled v%s — Shuttle Server\n\n", version)
+	fmt.Fprintf(os.Stderr, "Usage:\n")
+	fmt.Fprintf(os.Stderr, "  shuttled run -c <config.yaml>    Start the server\n")
+	fmt.Fprintf(os.Stderr, "  shuttled genkey                  Generate key pair\n")
+	fmt.Fprintf(os.Stderr, "  shuttled version                 Show version\n")
+	fmt.Fprintf(os.Stderr, "  shuttled help                    Show this help\n")
 }
 
 func genKey() {
@@ -188,40 +202,65 @@ func handleConnection(ctx context.Context, conn transport.Connection, logger *sl
 func handleStream(ctx context.Context, stream transport.Stream, logger *slog.Logger) {
 	defer stream.Close()
 
-	// Read target address (first line)
+	// Read target address (first line). Use a buffered approach to avoid
+	// losing bytes that come after the \n delimiter in the same read.
 	buf := make([]byte, 512)
-	n, err := stream.Read(buf)
-	if err != nil {
-		return
-	}
+	total := 0
+	for {
+		n, err := stream.Read(buf[total:])
+		if err != nil {
+			return
+		}
+		total += n
+		// Look for newline in what we've read so far.
+		if idx := findNewline(buf[:total]); idx >= 0 {
+			target := string(buf[:idx])
+			residual := buf[idx+1 : total] // bytes after \n
 
-	// Parse target
-	target := string(buf[:n])
-	for i, b := range target {
-		if b == '\n' || b == '\r' {
-			target = target[:i]
-			break
+			logger.Debug("proxying", "target", target)
+
+			remote, err := net.DialTimeout("tcp", target, 10*time.Second)
+			if err != nil {
+				logger.Debug("dial target failed", "target", target, "err", err)
+				return
+			}
+			defer remote.Close()
+
+			// Forward any residual bytes that were read past the header.
+			if len(residual) > 0 {
+				if _, err := remote.Write(residual); err != nil {
+					return
+				}
+			}
+
+			// Relay bidirectionally.
+			relay(stream, remote)
+			return
+		}
+		if total >= len(buf) {
+			logger.Debug("target header too long")
+			return
 		}
 	}
+}
 
-	logger.Debug("proxying", "target", target)
-
-	// Connect to target
-	remote, err := net.DialTimeout("tcp", target, 10*time.Second)
-	if err != nil {
-		logger.Debug("dial target failed", "target", target, "err", err)
-		return
+func findNewline(b []byte) int {
+	for i, c := range b {
+		if c == '\n' {
+			return i
+		}
 	}
-	defer remote.Close()
+	return -1
+}
 
-	// Relay bidirectionally
+func relay(a io.ReadWriter, b io.ReadWriter) {
 	done := make(chan struct{}, 2)
 	go func() {
-		io.Copy(remote, stream)
+		io.Copy(b, a)
 		done <- struct{}{}
 	}()
 	go func() {
-		io.Copy(stream, remote)
+		io.Copy(a, b)
 		done <- struct{}{}
 	}()
 	<-done

@@ -18,6 +18,7 @@
   function normalizeRule(rule) {
     if (rule._type) return rule
     if (rule.domains) return { _type: 'domain', value: rule.domains, action: rule.action }
+    if (rule.geosite) return { _type: 'geosite', value: rule.geosite, action: rule.action }
     if (rule.process && rule.process.length) return { _type: 'process', value: rule.process.join(', '), action: rule.action }
     if (rule.geoip) return { _type: 'geoip', value: rule.geoip, action: rule.action }
     if (rule.ip_cidr && rule.ip_cidr.length) return { _type: 'ip_cidr', value: rule.ip_cidr.join(', '), action: rule.action }
@@ -28,6 +29,7 @@
     const out = { action: rule.action }
     switch (rule._type) {
       case 'domain': out.domains = rule.value; break
+      case 'geosite': out.geosite = rule.value; break
       case 'process': out.process = rule.value.split(',').map(s => s.trim()).filter(Boolean); break
       case 'geoip': out.geoip = rule.value; break
       case 'ip_cidr': out.ip_cidr = rule.value.split(',').map(s => s.trim()).filter(Boolean); break
@@ -108,6 +110,7 @@
       <div class="rule">
         <select bind:value={rule._type} class="type-select">
           <option value="domain">Domain</option>
+          <option value="geosite">GeoSite</option>
           <option value="process">Process</option>
           <option value="geoip">GeoIP</option>
           <option value="ip_cidr">IP CIDR</option>
@@ -118,8 +121,10 @@
             <input bind:value={rule.value} placeholder="chrome.exe, WeChat.exe" />
             <button class="pick-btn" onclick={() => openProcessPicker(i)}>Pick</button>
           </div>
+        {:else if rule._type === 'geosite'}
+          <input bind:value={rule.value} placeholder="category-ads, cn, geolocation-!cn" class="value-input" />
         {:else if rule._type === 'domain'}
-          <input bind:value={rule.value} placeholder="geosite:cn or *.example.com" class="value-input" />
+          <input bind:value={rule.value} placeholder="+.example.com, ads.example.com" class="value-input" />
         {:else if rule._type === 'geoip'}
           <input bind:value={rule.value} placeholder="CN" class="value-input" />
         {:else}

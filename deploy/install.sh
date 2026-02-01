@@ -68,9 +68,22 @@ configure() {
     # TLS certificate setup
     info "Setting up TLS certificates..."
     if command -v certbot &>/dev/null; then
-        certbot certonly --standalone -d "$DOMAIN" --non-interactive --agree-tos --register-unsafely-without-email || true
-        CERT_FILE="/etc/letsencrypt/live/${DOMAIN}/fullchain.pem"
-        KEY_FILE="/etc/letsencrypt/live/${DOMAIN}/privkey.pem"
+        # Check if port 80 is available for certbot standalone mode
+        if ss -tlnp 2>/dev/null | grep -q ':80 '; then
+            warn "Port 80 is in use. certbot --standalone requires port 80 to be free."
+            warn "Stop the service using port 80, or use certbot with --webroot or DNS challenge."
+            CERT_FILE="${CONFIG_DIR}/cert.pem"
+            KEY_FILE="${CONFIG_DIR}/key.pem"
+            warn "Please place your certificates at ${CERT_FILE} and ${KEY_FILE}"
+        else
+            certbot certonly --standalone -d "$DOMAIN" --non-interactive --agree-tos --register-unsafely-without-email || {
+                warn "certbot failed. Please obtain certificates manually."
+                CERT_FILE="${CONFIG_DIR}/cert.pem"
+                KEY_FILE="${CONFIG_DIR}/key.pem"
+            }
+            CERT_FILE="${CERT_FILE:-/etc/letsencrypt/live/${DOMAIN}/fullchain.pem}"
+            KEY_FILE="${KEY_FILE:-/etc/letsencrypt/live/${DOMAIN}/privkey.pem}"
+        fi
     else
         warn "certbot not found. Install it or provide certificates manually."
         CERT_FILE="${CONFIG_DIR}/cert.pem"
@@ -116,26 +129,55 @@ log:
   level: "info"
 EOF
 
-    info "Config written to ${CONFIG_DIR}/server.yaml"
+    # Secure config file — contains password and private key
+    chmod 600 "${CONFIG_DIR}/server.yaml"
+    info "Config written to ${CONFIG_DIR}/server.yaml (permissions: 600)"
+}
+
+# Create system user
+create_user() {
+    if ! id -u shuttle &>/dev/null; then
+        useradd -r -s /sbin/nologin -d /nonexistent shuttle
+        info "Created system user: shuttle"
+    fi
+    chown -R shuttle:shuttle "$CONFIG_DIR"
 }
 
 # Install systemd service
 install_service() {
-    cat > "$SERVICE_FILE" <<EOF
+    cat > "$SERVICE_FILE" <<'UNIT'
 [Unit]
 Description=Shuttle Server
-After=network.target
+After=network-online.target
+Wants=network-online.target
 
 [Service]
 Type=simple
-ExecStart=${INSTALL_DIR}/shuttled run -c ${CONFIG_DIR}/server.yaml
+User=shuttle
+Group=shuttle
+ExecStart=/usr/local/bin/shuttled run -c /etc/shuttle/server.yaml
 Restart=on-failure
 RestartSec=5
+StartLimitIntervalSec=300
+StartLimitBurst=5
 LimitNOFILE=65535
+
+# Security hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/etc/shuttle
+PrivateTmp=true
+ProtectKernelTunables=true
+ProtectControlGroups=true
+
+# Allow binding to privileged ports
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+CapabilityBoundingSet=CAP_NET_BIND_SERVICE
 
 [Install]
 WantedBy=multi-user.target
-EOF
+UNIT
 
     systemctl daemon-reload
     systemctl enable shuttled
@@ -185,17 +227,54 @@ EOF
     echo "=============================="
 }
 
+# Uninstall
+uninstall() {
+    info "Uninstalling shuttled..."
+    systemctl stop shuttled 2>/dev/null || true
+    systemctl disable shuttled 2>/dev/null || true
+    rm -f "$SERVICE_FILE"
+    systemctl daemon-reload
+    rm -f "${INSTALL_DIR}/shuttled"
+    info "Binary and service removed."
+    echo ""
+    warn "Config directory ${CONFIG_DIR} was NOT removed (contains keys)."
+    warn "To remove it: rm -rf ${CONFIG_DIR}"
+    warn "To remove the user: userdel shuttle"
+}
+
 # Main
 main() {
     [ "$(id -u)" -ne 0 ] && error "Please run as root"
 
-    detect_platform
-    download_binary "${1:-latest}"
-    configure
-    install_service
-    print_client_config
+    # Support subcommands
+    local action="${1:-install}"
+    shift || true
 
-    info "Setup complete! shuttled is running on ${DOMAIN}:443"
+    case "$action" in
+        install)
+            detect_platform
+            download_binary "${1:-latest}"
+            configure
+            create_user
+            install_service
+            print_client_config
+            info "Setup complete! shuttled is running on ${DOMAIN}:443"
+            ;;
+        uninstall)
+            uninstall
+            ;;
+        upgrade)
+            detect_platform
+            systemctl stop shuttled 2>/dev/null || true
+            download_binary "${1:-latest}"
+            systemctl start shuttled
+            info "Upgrade complete."
+            ;;
+        *)
+            echo "Usage: $0 [install|uninstall|upgrade] [version]"
+            exit 1
+            ;;
+    esac
 }
 
 main "$@"
