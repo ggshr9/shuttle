@@ -11,6 +11,7 @@ import (
 
 	"github.com/shuttle-proxy/shuttle/config"
 	"github.com/shuttle-proxy/shuttle/congestion"
+	"github.com/shuttle-proxy/shuttle/internal/procnet"
 	"github.com/shuttle-proxy/shuttle/internal/sysopt"
 	"github.com/shuttle-proxy/shuttle/plugin"
 	"github.com/shuttle-proxy/shuttle/proxy"
@@ -239,7 +240,8 @@ func (e *Engine) Start(ctx context.Context) error {
 			ip = ips[0]
 		}
 
-		action := rt.Match(host, ip, "", "")
+		procName := proxy.ProcessFromContext(dialCtx)
+		action := rt.Match(host, ip, procName, "")
 
 		switch action {
 		case router.ActionDirect:
@@ -268,6 +270,9 @@ func (e *Engine) Start(ctx context.Context) error {
 		}
 	}
 
+	// --- Process resolver ---
+	procResolver := procnet.NewResolver()
+
 	// --- Start local proxies ---
 	var closers []func() error
 
@@ -289,6 +294,7 @@ func (e *Engine) Start(ctx context.Context) error {
 		socks := proxy.NewSOCKS5Server(&proxy.SOCKS5Config{
 			ListenAddr: cfgSnap.Proxy.SOCKS5.Listen,
 		}, dialer, e.logger)
+		socks.ProcResolver = procResolver
 		if err := socks.Start(ctx); err != nil {
 			cleanup()
 			return fmt.Errorf("socks5: %w", err)
@@ -300,6 +306,7 @@ func (e *Engine) Start(ctx context.Context) error {
 		httpProxy := proxy.NewHTTPServer(&proxy.HTTPConfig{
 			ListenAddr: cfgSnap.Proxy.HTTP.Listen,
 		}, dialer, e.logger)
+		httpProxy.ProcResolver = procResolver
 		if err := httpProxy.Start(ctx); err != nil {
 			cleanup()
 			return fmt.Errorf("http proxy: %w", err)

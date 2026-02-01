@@ -6,6 +6,7 @@ import (
 
 	"github.com/shuttle-proxy/shuttle/config"
 	"github.com/shuttle-proxy/shuttle/engine"
+	"github.com/shuttle-proxy/shuttle/internal/procnet"
 )
 
 // Handler creates the HTTP handler for the shuttle API.
@@ -140,6 +141,15 @@ func Handler(eng *engine.Engine) http.Handler {
 			return
 		}
 		writeJSON(w, map[string]string{"status": "updated"})
+	})
+
+	mux.HandleFunc("GET /api/processes", func(w http.ResponseWriter, r *http.Request) {
+		procs, err := procnet.ListNetworkProcesses()
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		writeJSON(w, procs)
 	})
 
 	// WebSocket endpoints — use GET method filter

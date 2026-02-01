@@ -50,44 +50,6 @@
   </section>
 
   <section>
-    <h3>Transport</h3>
-    <label class="row">
-      <span>Preferred</span>
-      <select bind:value={config.transport.preferred}>
-        <option value="auto">Auto</option>
-        <option value="h3">HTTP/3</option>
-        <option value="reality">Reality</option>
-        <option value="cdn">CDN</option>
-      </select>
-    </label>
-
-    <label class="row">
-      <input type="checkbox" bind:checked={config.transport.h3.enabled} />
-      HTTP/3
-    </label>
-    <label class="row">
-      <input type="checkbox" bind:checked={config.transport.reality.enabled} />
-      Reality
-    </label>
-    <label class="row">
-      <input type="checkbox" bind:checked={config.transport.cdn.enabled} />
-      CDN
-    </label>
-  </section>
-
-  <section>
-    <h3>Congestion Control</h3>
-    <label class="row">
-      <span>Mode</span>
-      <select bind:value={config.congestion.mode}>
-        <option value="adaptive">Adaptive</option>
-        <option value="bbr">BBR</option>
-        <option value="brutal">Brutal</option>
-      </select>
-    </label>
-  </section>
-
-  <section>
     <h3>Log</h3>
     <label class="row">
       <span>Level</span>

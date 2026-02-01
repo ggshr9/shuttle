@@ -2,16 +2,16 @@
   import { api } from '../lib/api.js'
   import { onMount } from 'svelte'
 
-  let active = $state({ addr: '', name: '', password: '', sni: '' })
+  let active = $state({ addr: '', name: '', password: '' })
   let servers = $state([])
   let saving = $state(false)
   let msg = $state('')
-  let newServer = $state({ addr: '', name: '', password: '', sni: '' })
+  let newServer = $state({ addr: '', name: '', password: '' })
 
   onMount(async () => {
     try {
       const data = await api.getServers()
-      active = data.active || { addr: '', name: '', password: '', sni: '' }
+      active = data.active || { addr: '', name: '', password: '' }
       servers = data.servers || []
     } catch (e) {
       msg = 'Failed to load: ' + e.message
@@ -41,7 +41,7 @@
     try {
       await api.addServer(newServer)
       servers = [...servers, { ...newServer }]
-      newServer = { addr: '', name: '', password: '', sni: '' }
+      newServer = { addr: '', name: '', password: '' }
     } catch (e) {
       msg = e.message
     }
@@ -72,10 +72,6 @@
     <label>
       <span>Password</span>
       <input type="password" bind:value={active.password} />
-    </label>
-    <label>
-      <span>SNI</span>
-      <input bind:value={active.sni} placeholder="example.com" />
     </label>
 
     <button onclick={save} disabled={saving}>
@@ -110,7 +106,6 @@
     <input bind:value={newServer.addr} placeholder="addr:port" />
     <input bind:value={newServer.name} placeholder="Name" />
     <input type="password" bind:value={newServer.password} placeholder="Password" />
-    <input bind:value={newServer.sni} placeholder="SNI" />
     <button onclick={addServer}>Add</button>
   </div>
 </div>

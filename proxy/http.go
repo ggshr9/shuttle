@@ -21,12 +21,13 @@ type HTTPConfig struct {
 
 // HTTPServer implements an HTTP CONNECT proxy server.
 type HTTPServer struct {
-	config   *HTTPConfig
-	dialer   Dialer
-	listener net.Listener
-	closed   atomic.Bool
-	wg       sync.WaitGroup
-	logger   *slog.Logger
+	config       *HTTPConfig
+	dialer       Dialer
+	listener     net.Listener
+	closed       atomic.Bool
+	wg           sync.WaitGroup
+	logger       *slog.Logger
+	ProcResolver ProcResolver
 }
 
 // NewHTTPServer creates a new HTTP proxy server.
@@ -84,6 +85,16 @@ func (s *HTTPServer) acceptLoop(ctx context.Context) {
 
 func (s *HTTPServer) handleConn(ctx context.Context, conn net.Conn) {
 	defer conn.Close()
+
+	// Resolve source process
+	if s.ProcResolver != nil {
+		if tcpAddr, ok := conn.RemoteAddr().(*net.TCPAddr); ok {
+			if procName := s.ProcResolver.Resolve(uint16(tcpAddr.Port)); procName != "" {
+				ctx = WithProcess(ctx, procName)
+				s.logger.Debug("http proxy process identified", "process", procName)
+			}
+		}
+	}
 
 	br := bufio.NewReader(conn)
 	req, err := http.ReadRequest(br)

@@ -24,4 +24,5 @@ export const api = {
   deleteServer: (addr) => request('DELETE', '/api/config/servers', { addr }),
   getRouting: () => request('GET', '/api/routing/rules'),
   putRouting: (r) => request('PUT', '/api/routing/rules', r),
+  getProcesses: () => request('GET', '/api/processes'),
 }

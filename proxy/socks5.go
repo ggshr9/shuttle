@@ -34,6 +34,20 @@ const (
 	repAddrNotSupported = 0x08
 )
 
+// contextKeyProcess is the context key for the source process name.
+type contextKeyProcess struct{}
+
+// WithProcess returns a context carrying the source process name.
+func WithProcess(ctx context.Context, name string) context.Context {
+	return context.WithValue(ctx, contextKeyProcess{}, name)
+}
+
+// ProcessFromContext extracts the source process name from context.
+func ProcessFromContext(ctx context.Context) string {
+	v, _ := ctx.Value(contextKeyProcess{}).(string)
+	return v
+}
+
 // Dialer is a function that dials a target address, potentially through a proxy.
 type Dialer func(ctx context.Context, network, addr string) (net.Conn, error)
 
@@ -44,14 +58,20 @@ type SOCKS5Config struct {
 	Password   string
 }
 
+// ProcResolver resolves a local TCP port to a process name.
+type ProcResolver interface {
+	Resolve(localPort uint16) string
+}
+
 // SOCKS5Server implements a SOCKS5 proxy server.
 type SOCKS5Server struct {
-	config   *SOCKS5Config
-	dialer   Dialer
-	listener net.Listener
-	closed   atomic.Bool
-	wg       sync.WaitGroup
-	logger   *slog.Logger
+	config       *SOCKS5Config
+	dialer       Dialer
+	listener     net.Listener
+	closed       atomic.Bool
+	wg           sync.WaitGroup
+	logger       *slog.Logger
+	ProcResolver ProcResolver
 }
 
 // NewSOCKS5Server creates a new SOCKS5 server.
@@ -121,6 +141,16 @@ func (s *SOCKS5Server) handleConn(ctx context.Context, conn net.Conn) {
 	if err != nil {
 		s.logger.Debug("socks5 request failed", "err", err)
 		return
+	}
+
+	// 2.5 Resolve source process
+	if s.ProcResolver != nil {
+		if tcpAddr, ok := conn.RemoteAddr().(*net.TCPAddr); ok {
+			if procName := s.ProcResolver.Resolve(uint16(tcpAddr.Port)); procName != "" {
+				ctx = WithProcess(ctx, procName)
+				s.logger.Debug("socks5 process identified", "process", procName, "target", target)
+			}
+		}
 	}
 
 	// 3. Connect to target

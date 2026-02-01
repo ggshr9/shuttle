@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"net"
 	"os"
 
 	"gopkg.in/yaml.v3"
@@ -213,6 +214,9 @@ func DefaultClientConfig() *ClientConfig {
 	cfg.Proxy.SOCKS5.Enabled = true
 	cfg.Proxy.HTTP.Enabled = true
 	cfg.Transport.H3.Enabled = true
+	cfg.Transport.Reality.Enabled = true
+	cfg.Transport.CDN.Enabled = true
+	cfg.Congestion.Mode = "adaptive"
 	return cfg
 }
 
@@ -240,6 +244,20 @@ func applyClientDefaults(cfg *ClientConfig) {
 	}
 	if cfg.Log.Level == "" {
 		cfg.Log.Level = "info"
+	}
+	if cfg.Congestion.Mode == "" {
+		cfg.Congestion.Mode = "adaptive"
+	}
+	// Auto-fill SNI from server address hostname
+	if cfg.Server.SNI == "" && cfg.Server.Addr != "" {
+		host := cfg.Server.Addr
+		if h, _, err := net.SplitHostPort(host); err == nil {
+			host = h
+		}
+		// Only set SNI if it looks like a hostname (not an IP)
+		if net.ParseIP(host) == nil {
+			cfg.Server.SNI = host
+		}
 	}
 }
 

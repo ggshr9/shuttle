@@ -1,1 +1,0 @@
-import{F as o,G as t,u as c}from"./index-CtihbHC1.js";function u(e){throw new Error("https://svelte.dev/e/lifecycle_outside_component")}function r(e){o===null&&u(),t(()=>{const n=c(e);if(typeof n=="function")return n})}export{r as o};
