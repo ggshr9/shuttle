@@ -2,5 +2,5 @@ package gui
 
 import "embed"
 
-//go:embed web/dist/*
+//go:embed all:web/dist
 var WebAssets embed.FS

@@ -33,7 +33,8 @@ func Handler(eng *engine.Engine) http.Handler {
 	})
 
 	mux.HandleFunc("GET /api/config", func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, eng.Config())
+		cfg := eng.Config()
+		writeJSON(w, &cfg)
 	})
 
 	mux.HandleFunc("PUT /api/config", func(w http.ResponseWriter, r *http.Request) {
@@ -42,6 +43,7 @@ func Handler(eng *engine.Engine) http.Handler {
 			writeError(w, http.StatusBadRequest, err.Error())
 			return
 		}
+		r.Body.Close()
 		if err := eng.Reload(&cfg); err != nil {
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
@@ -63,7 +65,12 @@ func Handler(eng *engine.Engine) http.Handler {
 			writeError(w, http.StatusBadRequest, err.Error())
 			return
 		}
-		cfg := *eng.Config()
+		r.Body.Close()
+		if srv.Addr == "" {
+			writeError(w, http.StatusBadRequest, "addr is required")
+			return
+		}
+		cfg := eng.Config()
 		cfg.Server = srv
 		if err := eng.Reload(&cfg); err != nil {
 			writeError(w, http.StatusInternalServerError, err.Error())
@@ -78,7 +85,12 @@ func Handler(eng *engine.Engine) http.Handler {
 			writeError(w, http.StatusBadRequest, err.Error())
 			return
 		}
-		cfg := *eng.Config()
+		r.Body.Close()
+		if srv.Addr == "" {
+			writeError(w, http.StatusBadRequest, "addr is required")
+			return
+		}
+		cfg := eng.Config()
 		cfg.Servers = append(cfg.Servers, srv)
 		eng.SetConfig(&cfg)
 		writeJSON(w, map[string]string{"status": "added"})
@@ -92,8 +104,13 @@ func Handler(eng *engine.Engine) http.Handler {
 			writeError(w, http.StatusBadRequest, err.Error())
 			return
 		}
-		cfg := *eng.Config()
-		filtered := cfg.Servers[:0]
+		r.Body.Close()
+		if req.Addr == "" {
+			writeError(w, http.StatusBadRequest, "addr is required")
+			return
+		}
+		cfg := eng.Config()
+		filtered := make([]config.ServerEndpoint, 0, len(cfg.Servers))
 		for _, s := range cfg.Servers {
 			if s.Addr != req.Addr {
 				filtered = append(filtered, s)
@@ -115,7 +132,8 @@ func Handler(eng *engine.Engine) http.Handler {
 			writeError(w, http.StatusBadRequest, err.Error())
 			return
 		}
-		cfg := *eng.Config()
+		r.Body.Close()
+		cfg := eng.Config()
 		cfg.Routing = routing
 		if err := eng.Reload(&cfg); err != nil {
 			writeError(w, http.StatusInternalServerError, err.Error())
@@ -124,16 +142,30 @@ func Handler(eng *engine.Engine) http.Handler {
 		writeJSON(w, map[string]string{"status": "updated"})
 	})
 
-	// WebSocket endpoints
-	mux.HandleFunc("/api/logs", func(w http.ResponseWriter, r *http.Request) {
+	// WebSocket endpoints — use GET method filter
+	mux.HandleFunc("GET /api/logs", func(w http.ResponseWriter, r *http.Request) {
 		handleEventWS(w, r, eng, engine.EventLog)
 	})
 
-	mux.HandleFunc("/api/speed", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("GET /api/speed", func(w http.ResponseWriter, r *http.Request) {
 		handleEventWS(w, r, eng, engine.EventSpeedTick)
 	})
 
-	return mux
+	return corsMiddleware(mux)
+}
+
+// corsMiddleware adds CORS headers for dev mode (Vite on different port).
+func corsMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Access-Control-Allow-Origin", r.Header.Get("Origin"))
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+		if r.Method == http.MethodOptions {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
 }
 
 func writeJSON(w http.ResponseWriter, v any) {

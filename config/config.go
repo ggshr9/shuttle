@@ -232,6 +232,31 @@ func applyClientDefaults(cfg *ClientConfig) {
 	}
 }
 
+// DeepCopy returns a fully independent copy of the config.
+func (c *ClientConfig) DeepCopy() *ClientConfig {
+	cp := *c
+	// Copy slices that contain reference types
+	if c.Servers != nil {
+		cp.Servers = make([]ServerEndpoint, len(c.Servers))
+		copy(cp.Servers, c.Servers)
+	}
+	if c.Routing.Rules != nil {
+		cp.Routing.Rules = make([]RouteRule, len(c.Routing.Rules))
+		for i, r := range c.Routing.Rules {
+			cp.Routing.Rules[i] = r
+			if r.Process != nil {
+				cp.Routing.Rules[i].Process = make([]string, len(r.Process))
+				copy(cp.Routing.Rules[i].Process, r.Process)
+			}
+			if r.IPCIDR != nil {
+				cp.Routing.Rules[i].IPCIDR = make([]string, len(r.IPCIDR))
+				copy(cp.Routing.Rules[i].IPCIDR, r.IPCIDR)
+			}
+		}
+	}
+	return &cp
+}
+
 func applyServerDefaults(cfg *ServerConfig) {
 	if cfg.Listen == "" {
 		cfg.Listen = ":443"

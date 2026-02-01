@@ -31,11 +31,17 @@ func NewServer(eng *engine.Engine, webFS fs.FS) *Server {
 				return
 			}
 			// Try to serve static file
-			f, err := webFS.Open(strings.TrimPrefix(r.URL.Path, "/"))
+			path := strings.TrimPrefix(r.URL.Path, "/")
+			f, err := webFS.Open(path)
 			if err != nil {
-				// SPA fallback: serve index.html for unknown paths
-				r.URL.Path = "/"
-				fileServer.ServeHTTP(w, r)
+				// SPA fallback: serve index.html only for paths without
+				// a file extension (i.e. client-side routes, not missing assets).
+				if !strings.Contains(path[strings.LastIndex(path, "/")+1:], ".") {
+					r.URL.Path = "/"
+					fileServer.ServeHTTP(w, r)
+					return
+				}
+				http.NotFound(w, r)
 				return
 			}
 			f.Close()

@@ -14,6 +14,26 @@ const (
 	EventError                             // Non-fatal error
 )
 
+var eventTypeNames = [...]string{
+	EventConnected:        "connected",
+	EventDisconnected:     "disconnected",
+	EventSpeedTick:        "speed_tick",
+	EventLog:              "log",
+	EventTransportChanged: "transport_changed",
+	EventError:            "error",
+}
+
+func (t EventType) String() string {
+	if int(t) < len(eventTypeNames) {
+		return eventTypeNames[t]
+	}
+	return "unknown"
+}
+
+func (t EventType) MarshalJSON() ([]byte, error) {
+	return []byte(`"` + t.String() + `"`), nil
+}
+
 // Event represents a real-time engine event.
 type Event struct {
 	Type      EventType `json:"type"`
@@ -61,14 +81,14 @@ func (s EngineState) String() string {
 
 // EngineStatus is a snapshot of engine state for the API.
 type EngineStatus struct {
-	State         string         `json:"state"`
-	ActiveConns   int64          `json:"active_conns"`
-	TotalConns    int64          `json:"total_conns"`
-	BytesSent     int64          `json:"bytes_sent"`
-	BytesReceived int64          `json:"bytes_received"`
-	UploadSpeed   int64          `json:"upload_speed"`
-	DownloadSpeed int64          `json:"download_speed"`
-	Transport     string         `json:"transport"`
+	State         string          `json:"state"`
+	ActiveConns   int64           `json:"active_conns"`
+	TotalConns    int64           `json:"total_conns"`
+	BytesSent     int64           `json:"bytes_sent"`
+	BytesReceived int64           `json:"bytes_received"`
+	UploadSpeed   int64           `json:"upload_speed"`
+	DownloadSpeed int64           `json:"download_speed"`
+	Transport     string          `json:"transport"`
 	Transports    []TransportInfo `json:"transports"`
 }
 
