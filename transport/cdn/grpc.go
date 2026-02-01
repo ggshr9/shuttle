@@ -2,9 +2,6 @@ package cdn
 
 import (
 	"context"
-	"crypto/hmac"
-	"crypto/rand"
-	"crypto/sha256"
 	"crypto/tls"
 	"encoding/binary"
 	"fmt"
@@ -129,24 +126,17 @@ func (c *GRPCClient) Close() error {
 
 // sendGRPCAuth sends auth wrapped in a gRPC frame.
 func sendGRPCAuth(w io.Writer, password string) error {
-	var nonce [32]byte
-	if _, err := rand.Read(nonce[:]); err != nil {
+	payload, err := generateAuthPayload(password)
+	if err != nil {
 		return err
 	}
-	mac := hmac.New(sha256.New, []byte(password))
-	mac.Write(nonce[:])
-	sig := mac.Sum(nil)
-
-	var payload [64]byte
-	copy(payload[:32], nonce[:])
-	copy(payload[32:], sig)
 
 	// Write as gRPC frame: [0x00][4-byte length][payload]
 	var frame [5 + 64]byte
 	frame[0] = 0 // not compressed
 	binary.BigEndian.PutUint32(frame[1:5], 64)
 	copy(frame[5:], payload[:])
-	_, err := w.Write(frame[:])
+	_, err = w.Write(frame[:])
 	return err
 }
 

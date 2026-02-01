@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/quic-go/quic-go"
 	"github.com/shuttle-proxy/shuttle/config"
 	"github.com/shuttle-proxy/shuttle/congestion"
 	"github.com/shuttle-proxy/shuttle/internal/procnet"
@@ -97,88 +98,12 @@ func (e *Engine) Start(ctx context.Context) error {
 		return err
 	}
 
-	// --- Congestion control ---
-	var cc congestion.CongestionController
 	e.mu.RLock()
 	cfgSnap := e.cfg.DeepCopy()
 	e.mu.RUnlock()
 
-	switch cfgSnap.Congestion.Mode {
-	case "brutal":
-		rate := cfgSnap.Congestion.BrutalRate
-		if rate == 0 {
-			rate = 100 * 1024 * 1024
-		}
-		cc = congestion.NewBrutal(rate)
-	case "bbr":
-		cc = congestion.NewBBR(0)
-	default:
-		cc = congestion.NewAdaptive(&congestion.AdaptiveConfig{
-			BrutalRate: cfgSnap.Congestion.BrutalRate,
-		}, e.logger)
-	}
-	ccAdapter := congestion.NewQUICAdapter(cc)
-
-	// --- GeoIP/GeoSite ---
-	geoIPDB := router.NewGeoIPDB()
-	geoSiteDB := router.NewGeoSiteDB()
-	defaultIPEntries, defaultSiteEntries := geodata.LoadDefaults()
-	for _, entry := range defaultIPEntries {
-		geoIPDB.LoadFromCIDRs(entry.CountryCode, entry.CIDRs)
-	}
-	for _, entry := range defaultSiteEntries {
-		geoSiteDB.LoadCategory(entry.Category, entry.Domains)
-	}
-
-	// --- DNS resolver ---
-	dnsResolver := router.NewDNSResolver(&router.DNSConfig{
-		DomesticServer: cfgSnap.Routing.DNS.Domestic,
-		RemoteServer:   cfgSnap.Routing.DNS.Remote.Server,
-		RemoteViaProxy: cfgSnap.Routing.DNS.Remote.Via == "proxy",
-		CacheSize:      10000,
-		CacheTTL:       10 * time.Minute,
-	}, geoIPDB, e.logger)
-
-	// --- Build transports ---
-	var transports []transport.ClientTransport
-
-	if cfgSnap.Transport.H3.Enabled {
-		transports = append(transports, h3.NewClient(&h3.ClientConfig{
-			ServerAddr:        cfgSnap.Server.Addr,
-			ServerName:        cfgSnap.Server.SNI,
-			Password:          cfgSnap.Server.Password,
-			PathPrefix:        cfgSnap.Transport.H3.PathPrefix,
-			CongestionControl: ccAdapter,
-		}))
-	}
-
-	if cfgSnap.Transport.Reality.Enabled {
-		transports = append(transports, reality.NewClient(&reality.ClientConfig{
-			ServerAddr: cfgSnap.Server.Addr,
-			ServerName: cfgSnap.Transport.Reality.ServerName,
-			ShortID:    cfgSnap.Transport.Reality.ShortID,
-			PublicKey:  cfgSnap.Transport.Reality.PublicKey,
-			Password:   cfgSnap.Server.Password,
-		}))
-	}
-
-	if cfgSnap.Transport.CDN.Enabled {
-		switch cfgSnap.Transport.CDN.Mode {
-		case "grpc":
-			transports = append(transports, cdn.NewGRPCClient(&cdn.GRPCConfig{
-				CDNDomain: cfgSnap.Transport.CDN.Domain,
-				Password:  cfgSnap.Server.Password,
-			}))
-		default:
-			transports = append(transports, cdn.NewH2Client(&cdn.H2Config{
-				ServerAddr: cfgSnap.Server.Addr,
-				CDNDomain:  cfgSnap.Transport.CDN.Domain,
-				Path:       cfgSnap.Transport.CDN.Path,
-				Password:   cfgSnap.Server.Password,
-			}))
-		}
-	}
-
+	ccAdapter := e.buildCongestionControl(cfgSnap)
+	transports := e.buildTransports(cfgSnap, ccAdapter)
 	if len(transports) == 0 {
 		return fail(fmt.Errorf("no transports enabled"))
 	}
@@ -193,16 +118,121 @@ func (e *Engine) Start(ctx context.Context) error {
 	e.cancel = cancel
 	e.mu.Unlock()
 
-	// --- Router ---
-	routerCfg := &router.RouterConfig{
-		DefaultAction: router.Action(cfgSnap.Routing.Default),
+	rt, dnsResolver := e.buildRouter(cfgSnap)
+	dialer := e.createDialer(cfgSnap, rt, dnsResolver)
+
+	closers, err := e.startProxies(ctx, cfgSnap, dialer, sel, cancel)
+	if err != nil {
+		return err
 	}
-	for _, rule := range cfgSnap.Routing.Rules {
+
+	e.mu.Lock()
+	e.closers = closers
+	e.state = StateRunning
+	e.mu.Unlock()
+
+	e.emit(Event{Type: EventConnected, Message: "engine started"})
+	go e.speedLoop(ctx)
+
+	return nil
+}
+
+// buildCongestionControl creates the appropriate CC based on config.
+func (e *Engine) buildCongestionControl(cfg *config.ClientConfig) quic.CongestionControl {
+	var cc congestion.CongestionController
+	switch cfg.Congestion.Mode {
+	case "brutal":
+		rate := cfg.Congestion.BrutalRate
+		if rate == 0 {
+			rate = 100 * 1024 * 1024
+		}
+		cc = congestion.NewBrutal(rate)
+	case "bbr":
+		cc = congestion.NewBBR(0)
+	default:
+		cc = congestion.NewAdaptive(&congestion.AdaptiveConfig{
+			BrutalRate: cfg.Congestion.BrutalRate,
+		}, e.logger)
+	}
+	return congestion.NewQUICAdapter(cc)
+}
+
+// buildTransports creates client transports from config.
+func (e *Engine) buildTransports(cfg *config.ClientConfig, ccAdapter quic.CongestionControl) []transport.ClientTransport {
+	var transports []transport.ClientTransport
+
+	if cfg.Transport.H3.Enabled {
+		transports = append(transports, h3.NewClient(&h3.ClientConfig{
+			ServerAddr:        cfg.Server.Addr,
+			ServerName:        cfg.Server.SNI,
+			Password:          cfg.Server.Password,
+			PathPrefix:        cfg.Transport.H3.PathPrefix,
+			CongestionControl: ccAdapter,
+		}))
+	}
+
+	if cfg.Transport.Reality.Enabled {
+		transports = append(transports, reality.NewClient(&reality.ClientConfig{
+			ServerAddr: cfg.Server.Addr,
+			ServerName: cfg.Transport.Reality.ServerName,
+			ShortID:    cfg.Transport.Reality.ShortID,
+			PublicKey:  cfg.Transport.Reality.PublicKey,
+			Password:   cfg.Server.Password,
+		}))
+	}
+
+	if cfg.Transport.CDN.Enabled {
+		switch cfg.Transport.CDN.Mode {
+		case "grpc":
+			transports = append(transports, cdn.NewGRPCClient(&cdn.GRPCConfig{
+				CDNDomain: cfg.Transport.CDN.Domain,
+				Password:  cfg.Server.Password,
+			}))
+		default:
+			transports = append(transports, cdn.NewH2Client(&cdn.H2Config{
+				ServerAddr: cfg.Server.Addr,
+				CDNDomain:  cfg.Transport.CDN.Domain,
+				Path:       cfg.Transport.CDN.Path,
+				Password:   cfg.Server.Password,
+			}))
+		}
+	}
+
+	return transports
+}
+
+// buildRouter creates the routing engine including GeoIP/GeoSite and DNS.
+func (e *Engine) buildRouter(cfg *config.ClientConfig) (*router.Router, *router.DNSResolver) {
+	geoIPDB := router.NewGeoIPDB()
+	geoSiteDB := router.NewGeoSiteDB()
+	defaultIPEntries, defaultSiteEntries := geodata.LoadDefaults()
+	for _, entry := range defaultIPEntries {
+		geoIPDB.LoadFromCIDRs(entry.CountryCode, entry.CIDRs)
+	}
+	for _, entry := range defaultSiteEntries {
+		geoSiteDB.LoadCategory(entry.Category, entry.Domains)
+	}
+
+	dnsResolver := router.NewDNSResolver(&router.DNSConfig{
+		DomesticServer: cfg.Routing.DNS.Domestic,
+		RemoteServer:   cfg.Routing.DNS.Remote.Server,
+		RemoteViaProxy: cfg.Routing.DNS.Remote.Via == "proxy",
+		CacheSize:      10000,
+		CacheTTL:       10 * time.Minute,
+	}, geoIPDB, e.logger)
+
+	routerCfg := &router.RouterConfig{
+		DefaultAction: router.Action(cfg.Routing.Default),
+	}
+	for _, rule := range cfg.Routing.Rules {
 		r := router.Rule{Action: router.Action(rule.Action)}
 		switch {
 		case rule.Domains != "":
 			r.Type = "domain"
 			r.Values = []string{rule.Domains}
+		case rule.GeoSite != "":
+			r.Type = "geosite"
+			r.Values = []string{rule.GeoSite}
 		case rule.GeoIP != "":
 			r.Type = "geoip"
 			r.Values = []string{rule.GeoIP}
@@ -219,10 +249,13 @@ func (e *Engine) Start(ctx context.Context) error {
 		routerCfg.Rules = append(routerCfg.Rules, r)
 	}
 	rt := router.NewRouter(routerCfg, geoIPDB, geoSiteDB, e.logger)
+	return rt, dnsResolver
+}
 
-	// --- Dialer: uses e.selector() indirection so Reload swaps correctly ---
-	serverAddr := cfgSnap.Server.Addr
-	dialer := func(dialCtx context.Context, network, addr string) (net.Conn, error) {
+// createDialer builds the proxy dialer function.
+func (e *Engine) createDialer(cfg *config.ClientConfig, rt *router.Router, dnsResolver *router.DNSResolver) func(context.Context, string, string) (net.Conn, error) {
+	serverAddr := cfg.Server.Addr
+	return func(dialCtx context.Context, network, addr string) (net.Conn, error) {
 		host, port, _ := net.SplitHostPort(addr)
 
 		var ip net.IP
@@ -269,15 +302,14 @@ func (e *Engine) Start(ctx context.Context) error {
 			return &streamConn{stream: stream, addr: addr}, nil
 		}
 	}
+}
 
-	// --- Process resolver ---
+// startProxies starts all configured local proxy servers.
+func (e *Engine) startProxies(ctx context.Context, cfg *config.ClientConfig, dialer func(context.Context, string, string) (net.Conn, error), sel *selector.Selector, cancel context.CancelFunc) ([]func() error, error) {
 	procResolver := procnet.NewResolver()
-
-	// --- Start local proxies ---
 	var closers []func() error
 
-	// cleanup closes all already-started resources on failure.
-	cleanup := func() {
+	cleanup := func(err error) ([]func() error, error) {
 		for _, c := range closers {
 			c()
 		}
@@ -288,38 +320,37 @@ func (e *Engine) Start(ctx context.Context) error {
 		e.sel = nil
 		e.cancel = nil
 		e.mu.Unlock()
+		return nil, err
 	}
 
-	if cfgSnap.Proxy.SOCKS5.Enabled {
+	if cfg.Proxy.SOCKS5.Enabled {
 		socks := proxy.NewSOCKS5Server(&proxy.SOCKS5Config{
-			ListenAddr: cfgSnap.Proxy.SOCKS5.Listen,
+			ListenAddr: cfg.Proxy.SOCKS5.Listen,
 		}, dialer, e.logger)
 		socks.ProcResolver = procResolver
 		if err := socks.Start(ctx); err != nil {
-			cleanup()
-			return fmt.Errorf("socks5: %w", err)
+			return cleanup(fmt.Errorf("socks5: %w", err))
 		}
 		closers = append(closers, socks.Close)
 	}
 
-	if cfgSnap.Proxy.HTTP.Enabled {
+	if cfg.Proxy.HTTP.Enabled {
 		httpProxy := proxy.NewHTTPServer(&proxy.HTTPConfig{
-			ListenAddr: cfgSnap.Proxy.HTTP.Listen,
+			ListenAddr: cfg.Proxy.HTTP.Listen,
 		}, dialer, e.logger)
 		httpProxy.ProcResolver = procResolver
 		if err := httpProxy.Start(ctx); err != nil {
-			cleanup()
-			return fmt.Errorf("http proxy: %w", err)
+			return cleanup(fmt.Errorf("http proxy: %w", err))
 		}
 		closers = append(closers, httpProxy.Close)
 	}
 
-	if cfgSnap.Proxy.TUN.Enabled {
+	if cfg.Proxy.TUN.Enabled {
 		tunServer := proxy.NewTUNServer(&proxy.TUNConfig{
-			DeviceName: cfgSnap.Proxy.TUN.DeviceName,
-			CIDR:       cfgSnap.Proxy.TUN.CIDR,
-			MTU:        cfgSnap.Proxy.TUN.MTU,
-			AutoRoute:  cfgSnap.Proxy.TUN.AutoRoute,
+			DeviceName: cfg.Proxy.TUN.DeviceName,
+			CIDR:       cfg.Proxy.TUN.CIDR,
+			MTU:        cfg.Proxy.TUN.MTU,
+			AutoRoute:  cfg.Proxy.TUN.AutoRoute,
 		}, dialer, e.logger)
 		if err := tunServer.Start(ctx); err != nil {
 			e.logger.Warn("TUN device failed", "err", err)
@@ -328,17 +359,7 @@ func (e *Engine) Start(ctx context.Context) error {
 		}
 	}
 
-	e.mu.Lock()
-	e.closers = closers
-	e.state = StateRunning
-	e.mu.Unlock()
-
-	e.emit(Event{Type: EventConnected, Message: "engine started"})
-
-	// Start speed sampling loop (context-scoped, no leak)
-	go e.speedLoop(ctx)
-
-	return nil
+	return closers, nil
 }
 
 // selector returns the current selector under read lock.

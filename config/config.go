@@ -37,7 +37,7 @@ type ServerEndpoint struct {
 type TransportConfig struct {
 	Preferred string      `yaml:"preferred" json:"preferred"` // "h3", "reality", "cdn", "auto"
 	H3        H3Config    `yaml:"h3" json:"h3"`
-	Reality   RealityConf `yaml:"reality" json:"reality"`
+	Reality   RealityConfig `yaml:"reality" json:"reality"`
 	CDN       CDNConfig   `yaml:"cdn" json:"cdn"`
 }
 
@@ -47,8 +47,8 @@ type H3Config struct {
 	PathPrefix string `yaml:"path_prefix" json:"path_prefix"`
 }
 
-// RealityConf configures Reality transport.
-type RealityConf struct {
+// RealityConfig configures Reality transport.
+type RealityConfig struct {
 	Enabled    bool   `yaml:"enabled" json:"enabled"`
 	ServerName string `yaml:"server_name" json:"server_name"`
 	ShortID    string `yaml:"short_id" json:"short_id"`
@@ -65,25 +65,25 @@ type CDNConfig struct {
 
 // ProxyConfig configures local proxy listeners.
 type ProxyConfig struct {
-	SOCKS5 SOCKS5Conf `yaml:"socks5" json:"socks5"`
-	HTTP   HTTPConf   `yaml:"http" json:"http"`
-	TUN    TUNConf    `yaml:"tun" json:"tun"`
+	SOCKS5 SOCKS5Config `yaml:"socks5" json:"socks5"`
+	HTTP   HTTPConfig  `yaml:"http" json:"http"`
+	TUN    TUNConfig   `yaml:"tun" json:"tun"`
 }
 
-// SOCKS5Conf configures the SOCKS5 listener.
-type SOCKS5Conf struct {
+// SOCKS5Config configures the SOCKS5 listener.
+type SOCKS5Config struct {
 	Enabled bool   `yaml:"enabled" json:"enabled"`
 	Listen  string `yaml:"listen" json:"listen"`
 }
 
-// HTTPConf configures the HTTP proxy listener.
-type HTTPConf struct {
+// HTTPConfig configures the HTTP proxy listener.
+type HTTPConfig struct {
 	Enabled bool   `yaml:"enabled" json:"enabled"`
 	Listen  string `yaml:"listen" json:"listen"`
 }
 
-// TUNConf configures the TUN device.
-type TUNConf struct {
+// TUNConfig configures the TUN device.
+type TUNConfig struct {
 	Enabled    bool   `yaml:"enabled" json:"enabled"`
 	DeviceName string `yaml:"device_name" json:"device_name"`
 	CIDR       string `yaml:"cidr" json:"cidr"`
@@ -95,12 +95,13 @@ type TUNConf struct {
 type RoutingConfig struct {
 	Rules   []RouteRule `yaml:"rules" json:"rules"`
 	Default string      `yaml:"default" json:"default"` // "proxy", "direct"
-	DNS     DNSConf     `yaml:"dns" json:"dns"`
+	DNS     DNSConfig   `yaml:"dns" json:"dns"`
 }
 
 // RouteRule defines a single routing rule.
 type RouteRule struct {
 	Domains  string   `yaml:"domains,omitempty" json:"domains,omitempty"`
+	GeoSite  string   `yaml:"geosite,omitempty" json:"geosite,omitempty"`
 	GeoIP    string   `yaml:"geoip,omitempty" json:"geoip,omitempty"`
 	Process  []string `yaml:"process,omitempty" json:"process,omitempty"`
 	Protocol string   `yaml:"protocol,omitempty" json:"protocol,omitempty"`
@@ -108,8 +109,8 @@ type RouteRule struct {
 	Action   string   `yaml:"action" json:"action"`
 }
 
-// DNSConf configures DNS resolution.
-type DNSConf struct {
+// DNSConfig configures DNS resolution.
+type DNSConfig struct {
 	Domestic string    `yaml:"domestic" json:"domestic"`
 	Remote   DNSRemote `yaml:"remote" json:"remote"`
 	Cache    bool      `yaml:"cache" json:"cache"`
@@ -134,7 +135,7 @@ type ServerConfig struct {
 	TLS       TLSConfig       `yaml:"tls" json:"tls"`
 	Auth      AuthConfig      `yaml:"auth" json:"auth"`
 	Cover     CoverSiteConfig `yaml:"cover" json:"cover"`
-	Transport ServerTransConf `yaml:"transport" json:"transport"`
+	Transport ServerTransportConfig `yaml:"transport" json:"transport"`
 	Log       LogConfig       `yaml:"log" json:"log"`
 }
 
@@ -158,20 +159,20 @@ type CoverSiteConfig struct {
 	ReverseURL string `yaml:"reverse_url" json:"reverse_url"`
 }
 
-// ServerTransConf configures server-side transports.
-type ServerTransConf struct {
-	H3      ServerH3Conf      `yaml:"h3" json:"h3"`
-	Reality ServerRealityConf `yaml:"reality" json:"reality"`
+// ServerTransportConfig configures server-side transports.
+type ServerTransportConfig struct {
+	H3      ServerH3Config      `yaml:"h3" json:"h3"`
+	Reality ServerRealityConfig `yaml:"reality" json:"reality"`
 }
 
-// ServerH3Conf configures server H3.
-type ServerH3Conf struct {
+// ServerH3Config configures server H3.
+type ServerH3Config struct {
 	Enabled    bool   `yaml:"enabled" json:"enabled"`
 	PathPrefix string `yaml:"path_prefix" json:"path_prefix"`
 }
 
-// ServerRealityConf configures server Reality.
-type ServerRealityConf struct {
+// ServerRealityConfig configures server Reality.
+type ServerRealityConfig struct {
 	Enabled    bool     `yaml:"enabled" json:"enabled"`
 	TargetSNI  string   `yaml:"target_sni" json:"target_sni"`
 	TargetAddr string   `yaml:"target_addr" json:"target_addr"`

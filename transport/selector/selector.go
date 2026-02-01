@@ -23,9 +23,9 @@ const (
 type Selector struct {
 	transports []transport.ClientTransport
 	active     transport.ClientTransport
-	activeConn transport.Connection
 	strategy   Strategy
 	probes     map[string]*ProbeResult
+	migrator   *Migrator
 	mu         sync.RWMutex
 	logger     *slog.Logger
 }
@@ -62,6 +62,7 @@ func New(transports []transport.ClientTransport, cfg *Config, logger *slog.Logge
 		probes:     make(map[string]*ProbeResult),
 		logger:     logger,
 	}
+	s.migrator = NewMigrator(s, logger)
 	for _, t := range transports {
 		s.probes[t.Type()] = &ProbeResult{
 			Transport: t,
@@ -112,6 +113,7 @@ func (s *Selector) maybeSwitch() {
 	}
 	s.logger.Info("switching transport", "from", s.activeType(), "to", best.Type())
 	s.active = best
+	s.migrator.Cleanup()
 }
 
 func (s *Selector) activeType() string {
@@ -204,12 +206,12 @@ func (s *Selector) dialFallback(ctx context.Context, addr string, failed transpo
 		if t.Type() == failed.Type() {
 			continue
 		}
-		conn, err := t.Dial(ctx, addr)
+		conn, err := s.migrator.Migrate(ctx, t, addr)
 		if err == nil {
 			s.mu.Lock()
 			s.active = t
-			s.activeConn = conn
 			s.mu.Unlock()
+			s.migrator.Cleanup()
 			s.logger.Info("fell back to transport", "type", t.Type())
 			return conn, nil
 		}

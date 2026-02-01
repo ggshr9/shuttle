@@ -2,9 +2,6 @@ package cdn
 
 import (
 	"context"
-	"crypto/hmac"
-	"crypto/rand"
-	"crypto/sha256"
 	"crypto/tls"
 	"fmt"
 	"io"
@@ -124,18 +121,11 @@ func (c *H2Client) Close() error {
 
 // sendAuth writes [32-byte nonce][32-byte HMAC-SHA256(password, nonce)] to w.
 func sendAuth(w io.Writer, password string) error {
-	var nonce [32]byte
-	if _, err := rand.Read(nonce[:]); err != nil {
+	payload, err := generateAuthPayload(password)
+	if err != nil {
 		return err
 	}
-	mac := hmac.New(sha256.New, []byte(password))
-	mac.Write(nonce[:])
-	sig := mac.Sum(nil)
-
-	var buf [64]byte
-	copy(buf[:32], nonce[:])
-	copy(buf[32:], sig)
-	_, err := w.Write(buf[:])
+	_, err = w.Write(payload[:])
 	return err
 }
 

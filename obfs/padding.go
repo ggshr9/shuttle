@@ -2,58 +2,116 @@ package obfs
 
 import (
 	"crypto/rand"
+	"encoding/binary"
+	"fmt"
 	"io"
+	"math/big"
 )
 
 const (
-	// DefaultPaddingTarget is the QUIC recommended MTU.
-	DefaultPaddingTarget = 1200
+	// DefaultPaddingMinTarget is the minimum padding target size.
+	DefaultPaddingMinTarget = 1100
+	// headerSize is the overhead: 2-byte frame length + 2-byte original data length.
+	headerSize = 4
 )
 
-// Padder pads packets to a fixed size to eliminate packet-size fingerprinting.
+// Padder pads packets to a randomized size to eliminate packet-size fingerprinting.
+//
+// Wire format: [2-byte totalFrameLen][2-byte origDataLen][data][random padding]
+// totalFrameLen includes everything after itself (i.e. totalFrameLen = origDataLen header + data + padding).
 type Padder struct {
-	target int
+	minTarget int
+	maxTarget int
 }
 
-// NewPadder creates a new padder with the given target size.
-func NewPadder(target int) *Padder {
-	if target <= 0 {
-		target = DefaultPaddingTarget
+// NewPadder creates a new padder. If minTarget <= 0, defaults are used.
+func NewPadder(minTarget int, maxTarget ...int) *Padder {
+	mn := minTarget
+	mx := 0
+	if len(maxTarget) > 0 {
+		mx = maxTarget[0]
 	}
-	return &Padder{target: target}
+	if mn <= 0 {
+		mn = DefaultPaddingMinTarget
+	}
+	if mx <= 0 || mx < mn {
+		mx = mn + 300
+	}
+	return &Padder{minTarget: mn, maxTarget: mx}
 }
 
-// Pad pads data to the next multiple of the target size.
-// Format: [2-byte original length][data][random padding]
+// randomTarget returns a random target between minTarget and maxTarget.
+func (p *Padder) randomTarget() int {
+	diff := p.maxTarget - p.minTarget
+	if diff <= 0 {
+		return p.minTarget
+	}
+	n, err := rand.Int(rand.Reader, big.NewInt(int64(diff+1)))
+	if err != nil {
+		return p.minTarget
+	}
+	return p.minTarget + int(n.Int64())
+}
+
+// Pad pads data to the next multiple of a random target size.
+// Format: [2-byte totalFrameLen][2-byte origDataLen][data][random padding]
 func (p *Padder) Pad(data []byte) []byte {
 	origLen := len(data)
-	// Calculate padded size: next multiple of target
-	paddedSize := ((origLen + 2) / p.target + 1) * p.target
-	if paddedSize < p.target {
-		paddedSize = p.target
-	}
+	target := p.randomTarget()
+	// Total frame = headerSize + origLen + padding. Round up to next multiple of target.
+	totalSize := ((headerSize + origLen) / target + 1) * target
 
-	buf := make([]byte, paddedSize)
-	// Store original length (big-endian)
-	buf[0] = byte(origLen >> 8)
-	buf[1] = byte(origLen)
-	copy(buf[2:], data)
+	buf := make([]byte, totalSize)
+	// Frame length = everything after the first 2 bytes
+	frameLen := totalSize - 2
+	binary.BigEndian.PutUint16(buf[0:2], uint16(frameLen))
+	binary.BigEndian.PutUint16(buf[2:4], uint16(origLen))
+	copy(buf[headerSize:], data)
 
 	// Fill remaining with random bytes
-	if paddedSize > origLen+2 {
-		io.ReadFull(rand.Reader, buf[origLen+2:])
+	if padStart := headerSize + origLen; padStart < totalSize {
+		io.ReadFull(rand.Reader, buf[padStart:])
 	}
 	return buf
 }
 
-// Unpad removes padding and returns the original data.
-func (p *Padder) Unpad(data []byte) ([]byte, error) {
-	if len(data) < 2 {
+// Unpad removes padding and returns the original data from a complete frame.
+func (p *Padder) Unpad(frame []byte) ([]byte, error) {
+	if len(frame) < headerSize {
 		return nil, io.ErrUnexpectedEOF
 	}
-	origLen := int(data[0])<<8 | int(data[1])
-	if origLen+2 > len(data) {
+	frameLen := int(binary.BigEndian.Uint16(frame[0:2]))
+	if 2+frameLen > len(frame) {
 		return nil, io.ErrUnexpectedEOF
 	}
-	return data[2 : 2+origLen], nil
+	origLen := int(binary.BigEndian.Uint16(frame[2:4]))
+	if headerSize+origLen > 2+frameLen {
+		return nil, fmt.Errorf("obfs: origLen %d exceeds frame", origLen)
+	}
+	return frame[headerSize : headerSize+origLen], nil
+}
+
+// ReadFrame reads one padded frame from r and returns the original data.
+func (p *Padder) ReadFrame(r io.Reader) ([]byte, error) {
+	// Read 2-byte frame length.
+	var hdr [2]byte
+	if _, err := io.ReadFull(r, hdr[:]); err != nil {
+		return nil, err
+	}
+	frameLen := int(binary.BigEndian.Uint16(hdr[:]))
+	if frameLen < 2 {
+		return nil, fmt.Errorf("obfs: frame too short (%d)", frameLen)
+	}
+
+	// Read the rest of the frame.
+	frameBuf := make([]byte, frameLen)
+	if _, err := io.ReadFull(r, frameBuf); err != nil {
+		return nil, err
+	}
+
+	origLen := int(binary.BigEndian.Uint16(frameBuf[0:2]))
+	if 2+origLen > frameLen {
+		return nil, fmt.Errorf("obfs: origLen %d exceeds frame payload %d", origLen, frameLen)
+	}
+	return frameBuf[2 : 2+origLen], nil
 }

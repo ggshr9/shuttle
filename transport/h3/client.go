@@ -183,12 +183,32 @@ func (c *h3Connection) RemoteAddr() net.Addr { return c.qconn.RemoteAddr() }
 type h3Stream struct {
 	qs     *quic.Stream
 	padder *obfs.Padder
+
+	// Read buffer: data from a frame that didn't fit in the caller's buffer.
+	readBuf []byte
 }
 
 func (s *h3Stream) StreamID() uint64 { return uint64(s.qs.StreamID()) }
 
 func (s *h3Stream) Read(p []byte) (int, error) {
-	return s.qs.Read(p)
+	// Return buffered data from a previous read first.
+	if len(s.readBuf) > 0 {
+		n := copy(p, s.readBuf)
+		s.readBuf = s.readBuf[n:]
+		return n, nil
+	}
+
+	// Read one padded frame and extract original data.
+	data, err := s.padder.ReadFrame(s.qs)
+	if err != nil {
+		return 0, err
+	}
+
+	n := copy(p, data)
+	if n < len(data) {
+		s.readBuf = data[n:]
+	}
+	return n, nil
 }
 
 func (s *h3Stream) Write(p []byte) (int, error) {

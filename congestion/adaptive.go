@@ -27,11 +27,14 @@ type AdaptiveCongestion struct {
 	active CongestionController
 
 	// Detection state.
-	lossRate    float64
-	rttHistory  []time.Duration
-	rttTrend    float64 // positive = rising, negative = falling
-	switchCount int
-	lastSwitch  time.Time
+	lossRate         float64
+	windowSentBytes  uint64
+	windowLostBytes  uint64
+	lastWindowReset  time.Time
+	rttHistory       []time.Duration
+	rttTrend       float64 // positive = rising, negative = falling
+	switchCount    int
+	lastSwitch     time.Time
 
 	// Thresholds.
 	lossThreshold  float64       // Switch to Brutal above this loss rate
@@ -79,9 +82,11 @@ func NewAdaptive(cfg *AdaptiveConfig, logger *slog.Logger) *AdaptiveCongestion {
 	}
 }
 
-// OnPacketSent delegates to the active controller.
+// OnPacketSent delegates to the active controller and tracks bytes in the current window.
 func (ac *AdaptiveCongestion) OnPacketSent(bytes uint64) {
 	ac.mu.Lock()
+	ac.resetWindowIfNeeded()
+	ac.windowSentBytes += bytes
 	active := ac.active
 	ac.mu.Unlock()
 	active.OnPacketSent(bytes)
@@ -139,13 +144,25 @@ func (ac *AdaptiveCongestion) calculateRTTTrend() float64 {
 	return (recentAvg - olderAvg) / olderAvg
 }
 
-func (ac *AdaptiveCongestion) updateLossRate(lostBytes uint64) {
-	// Simple exponential moving average of loss events.
-	if lostBytes > 0 {
-		ac.lossRate = ac.lossRate*0.8 + 0.2
-	} else {
-		ac.lossRate = ac.lossRate * 0.95
+const lossWindowDuration = 10 * time.Second
+
+func (ac *AdaptiveCongestion) resetWindowIfNeeded() {
+	if time.Since(ac.lastWindowReset) >= lossWindowDuration {
+		ac.windowSentBytes = 0
+		ac.windowLostBytes = 0
+		ac.lastWindowReset = time.Now()
 	}
+}
+
+func (ac *AdaptiveCongestion) updateLossRate(lostBytes uint64) {
+	ac.resetWindowIfNeeded()
+	ac.windowLostBytes += lostBytes
+	if ac.windowSentBytes == 0 {
+		return
+	}
+	// Compute actual loss ratio within the current window and blend with EMA.
+	actualRatio := float64(ac.windowLostBytes) / float64(ac.windowSentBytes)
+	ac.lossRate = ac.lossRate*0.8 + actualRatio*0.2
 }
 
 func (ac *AdaptiveCongestion) evaluateSwitch() {
@@ -214,8 +231,12 @@ func (ac *AdaptiveCongestion) ActiveName() string {
 func (ac *AdaptiveCongestion) Stats() map[string]interface{} {
 	ac.mu.Lock()
 	defer ac.mu.Unlock()
+	activeName := "bbr"
+	if ac.active == ac.brutal {
+		activeName = "brutal"
+	}
 	return map[string]interface{}{
-		"active":      ac.ActiveName(),
+		"active":      activeName,
 		"lossRate":    ac.lossRate,
 		"rttTrend":    ac.rttTrend,
 		"switchCount": ac.switchCount,
