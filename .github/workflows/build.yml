@@ -107,6 +107,7 @@ jobs:
   build-gui:
     needs: [test, build-frontend]
     strategy:
+      fail-fast: false
       matrix:
         include:
           - os: ubuntu-22.04
@@ -140,6 +141,7 @@ jobs:
       - name: Build shuttle-gui
         env:
           CGO_ENABLED: '1'
+          CGO_LDFLAGS: ${{ matrix.goos == 'darwin' && '-framework UniformTypeIdentifiers' || '' }}
         run: go build -tags desktop,production -ldflags="-s -w" -o shuttle-gui-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }} ./cmd/shuttle-gui
       - uses: actions/upload-artifact@v4
         with:
