@@ -44,7 +44,7 @@ download_binary() {
     fi
 
     info "Downloading shuttled from ${url}..."
-    curl -fsSL -o "${INSTALL_DIR}/shuttled" "$url"
+    curl -fsSL -o "${INSTALL_DIR}/shuttled" "$url" || error "Download failed. Check your network or the release URL."
     chmod +x "${INSTALL_DIR}/shuttled"
     info "Installed to ${INSTALL_DIR}/shuttled"
 }
@@ -60,8 +60,8 @@ configure() {
 
     info "Generating key pair..."
     KEYS=$("${INSTALL_DIR}/shuttled" genkey 2>&1)
-    PRIVATE_KEY=$(echo "$KEYS" | grep "Private Key:" | awk '{print $3}')
-    PUBLIC_KEY=$(echo "$KEYS" | grep "Public Key:" | awk '{print $3}')
+    PRIVATE_KEY=$(echo "$KEYS" | grep "Private Key:" | awk -F': ' '{print $2}')
+    PUBLIC_KEY=$(echo "$KEYS" | grep "Public Key:" | awk -F': ' '{print $2}')
 
     mkdir -p "$CONFIG_DIR"
 

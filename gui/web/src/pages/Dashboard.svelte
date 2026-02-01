@@ -21,8 +21,12 @@
   })
 
   async function refresh() {
-    status = await api.status()
-    connected = status.state === 'running'
+    try {
+      status = await api.status()
+      connected = status.state === 'running'
+    } catch {
+      // API unavailable, keep last state
+    }
   }
 
   async function toggle() {

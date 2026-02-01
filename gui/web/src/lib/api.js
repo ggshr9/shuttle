@@ -7,7 +7,9 @@ async function request(method, path, body) {
   }
   if (body) opts.body = JSON.stringify(body)
   const res = await fetch(BASE + path, opts)
-  return res.json()
+  const data = await res.json()
+  if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`)
+  return data
 }
 
 export const api = {
@@ -18,6 +20,8 @@ export const api = {
   putConfig: (cfg) => request('PUT', '/api/config', cfg),
   getServers: () => request('GET', '/api/config/servers'),
   putServers: (srv) => request('PUT', '/api/config/servers', srv),
+  addServer: (srv) => request('POST', '/api/config/servers', srv),
+  deleteServer: (addr) => request('DELETE', '/api/config/servers', { addr }),
   getRouting: () => request('GET', '/api/routing/rules'),
   putRouting: (r) => request('PUT', '/api/routing/rules', r),
 }
