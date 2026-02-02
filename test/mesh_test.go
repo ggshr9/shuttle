@@ -185,3 +185,216 @@ func (sw *syncFrameWriter) Write(p []byte) (int, error) {
 }
 
 func (sw *syncFrameWriter) Close() error { return sw.stream.Close() }
+
+// connectClient creates a stream pair, starts handlePeer in a goroutine, and returns a connected MeshClient.
+func connectClient(t *testing.T, ctx context.Context, ms *meshServer) *mesh.MeshClient {
+	t.Helper()
+	clientStream, serverStream := newStreamPair()
+	errCh := make(chan error, 1)
+	go func() {
+		_, err := ms.handlePeer(serverStream)
+		errCh <- err
+	}()
+	mc, err := mesh.NewMeshClient(ctx, func(ctx context.Context) (io.ReadWriteCloser, error) {
+		return clientStream, nil
+	})
+	if err != nil {
+		t.Fatalf("client handshake: %v", err)
+	}
+	if err := <-errCh; err != nil {
+		t.Fatalf("server handlePeer: %v", err)
+	}
+	return mc
+}
+
+// meshServer is a reusable test helper that runs the server-side mesh logic.
+type meshServer struct {
+	allocator *mesh.IPAllocator
+	peerTable *mesh.PeerTable
+}
+
+func newMeshServer(cidr string) *meshServer {
+	alloc, _ := mesh.NewIPAllocator(cidr)
+	return &meshServer{
+		allocator: alloc,
+		peerTable: mesh.NewPeerTable(slog.Default()),
+	}
+}
+
+func (ms *meshServer) handlePeer(stream io.ReadWriteCloser) (net.IP, error) {
+	magic := make([]byte, len(mesh.MeshMagic))
+	if _, err := io.ReadFull(stream, magic); err != nil {
+		return nil, err
+	}
+	ip, err := ms.allocator.Allocate()
+	if err != nil {
+		return nil, err
+	}
+	hs := mesh.EncodeHandshake(ip, ms.allocator.Mask(), ms.allocator.Gateway())
+	if _, err := stream.Write(hs); err != nil {
+		ms.allocator.Release(ip)
+		return nil, err
+	}
+	fw := &syncFrameWriter{stream: stream}
+	ms.peerTable.Register(ip, fw)
+
+	go func() {
+		defer ms.peerTable.Unregister(ip)
+		defer ms.allocator.Release(ip)
+		for {
+			pkt, err := mesh.ReadFrame(stream)
+			if err != nil {
+				return
+			}
+			ms.peerTable.Forward(pkt)
+		}
+	}()
+
+	return ip, nil
+}
+
+// TestMeshRelayMultipleClients tests 4 clients relaying through server.
+func TestMeshRelayMultipleClients(t *testing.T) {
+	ms := newMeshServer("10.7.0.0/24")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	const numClients = 4
+	clients := make([]*mesh.MeshClient, numClients)
+	for i := 0; i < numClients; i++ {
+		clients[i] = connectClient(t, ctx, ms)
+		t.Logf("client %d: %v", i, clients[i].VirtualIP())
+	}
+	defer func() {
+		for _, mc := range clients {
+			mc.Close()
+		}
+	}()
+
+	// Each client sends to the next one
+	for i := 0; i < numClients; i++ {
+		src := clients[i]
+		dst := clients[(i+1)%numClients]
+		payload := []byte("from-" + src.VirtualIP().String())
+		pkt := buildFakeIPv4Packet(src.VirtualIP(), dst.VirtualIP(), payload)
+
+		if err := src.Send(pkt); err != nil {
+			t.Fatalf("client %d send: %v", i, err)
+		}
+
+		got, err := dst.Receive()
+		if err != nil {
+			t.Fatalf("client %d receive: %v", (i+1)%numClients, err)
+		}
+		if !bytes.Equal(got, pkt) {
+			t.Fatalf("relay %d->%d: packet mismatch", i, (i+1)%numClients)
+		}
+	}
+}
+
+// TestMeshClientSendAfterClose verifies Send returns error after Close.
+func TestMeshClientSendAfterClose(t *testing.T) {
+	ms := newMeshServer("10.7.0.0/24")
+	ctx := context.Background()
+
+	mc := connectClient(t, ctx, ms)
+	mc.Close()
+
+	pkt := buildFakeIPv4Packet(mc.VirtualIP(), net.IPv4(10, 7, 0, 99), []byte("test"))
+	err := mc.Send(pkt)
+	if err == nil {
+		t.Fatal("expected error sending after close")
+	}
+}
+
+// TestMeshRelayStress sends many packets concurrently between two clients.
+func TestMeshRelayStress(t *testing.T) {
+	ms := newMeshServer("10.7.0.0/24")
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	mc1 := connectClient(t, ctx, ms)
+	mc2 := connectClient(t, ctx, ms)
+	defer mc1.Close()
+	defer mc2.Close()
+
+	const numPackets = 100
+	var wg sync.WaitGroup
+
+	// c1 -> c2
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for i := 0; i < numPackets; i++ {
+			pkt := buildFakeIPv4Packet(mc1.VirtualIP(), mc2.VirtualIP(), []byte{byte(i)})
+			if err := mc1.Send(pkt); err != nil {
+				t.Errorf("c1 send %d: %v", i, err)
+				return
+			}
+		}
+	}()
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for i := 0; i < numPackets; i++ {
+			_, err := mc2.Receive()
+			if err != nil {
+				t.Errorf("c2 receive %d: %v", i, err)
+				return
+			}
+		}
+	}()
+
+	wg.Wait()
+}
+
+// TestMeshRelayToNonexistentPeer verifies packets to unknown IPs are dropped.
+func TestMeshRelayToNonexistentPeer(t *testing.T) {
+	ms := newMeshServer("10.7.0.0/24")
+	ctx := context.Background()
+
+	mc1 := connectClient(t, ctx, ms)
+	defer mc1.Close()
+
+	// Send to an IP that has no peer
+	pkt := buildFakeIPv4Packet(mc1.VirtualIP(), net.IPv4(10, 7, 0, 99), []byte("void"))
+	// Should not error — packet is just dropped by server
+	if err := mc1.Send(pkt); err != nil {
+		t.Fatalf("send: %v", err)
+	}
+}
+
+// TestMeshClientVirtualIPAndCIDR verifies accessor methods.
+func TestMeshClientVirtualIPAndCIDR(t *testing.T) {
+	ms := newMeshServer("10.7.0.0/24")
+	ctx := context.Background()
+
+	mc := connectClient(t, ctx, ms)
+	defer mc.Close()
+
+	if mc.VirtualIP() == nil {
+		t.Fatal("VirtualIP should not be nil")
+	}
+	cidr := mc.MeshCIDR()
+	if cidr == "" {
+		t.Fatal("MeshCIDR should not be empty")
+	}
+	// Should be parseable
+	_, _, err := net.ParseCIDR(cidr)
+	if err != nil {
+		t.Fatalf("MeshCIDR not parseable: %v", err)
+	}
+	t.Logf("VirtualIP=%v, MeshCIDR=%s", mc.VirtualIP(), cidr)
+}
+
+// TestMeshClientOpenStreamError verifies error when openStream fails.
+func TestMeshClientOpenStreamError(t *testing.T) {
+	ctx := context.Background()
+	_, err := mesh.NewMeshClient(ctx, func(ctx context.Context) (io.ReadWriteCloser, error) {
+		return nil, io.ErrClosedPipe
+	})
+	if err == nil {
+		t.Fatal("expected error when openStream fails")
+	}
+}

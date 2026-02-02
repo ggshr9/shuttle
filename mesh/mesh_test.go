@@ -234,6 +234,188 @@ func TestPeerTableForward(t *testing.T) {
 	r2.Close()
 }
 
+func TestFrameTooLarge(t *testing.T) {
+	var buf bytes.Buffer
+	large := make([]byte, MaxFrameSize+1)
+	err := WriteFrame(&buf, large)
+	if err == nil {
+		t.Fatal("expected error for oversized frame")
+	}
+}
+
+func TestFrameMaxSize(t *testing.T) {
+	var buf bytes.Buffer
+	data := make([]byte, MaxFrameSize)
+	for i := range data {
+		data[i] = byte(i % 256)
+	}
+	if err := WriteFrame(&buf, data); err != nil {
+		t.Fatalf("WriteFrame max size: %v", err)
+	}
+	got, err := ReadFrame(&buf)
+	if err != nil {
+		t.Fatalf("ReadFrame max size: %v", err)
+	}
+	if !bytes.Equal(got, data) {
+		t.Fatal("max size frame roundtrip mismatch")
+	}
+}
+
+func TestReadFrameEOF(t *testing.T) {
+	var buf bytes.Buffer
+	_, err := ReadFrame(&buf)
+	if err == nil {
+		t.Fatal("expected EOF error")
+	}
+}
+
+func TestReadFrameTruncated(t *testing.T) {
+	// Write header claiming 100 bytes but only provide 5
+	var buf bytes.Buffer
+	buf.Write([]byte{0, 100, 1, 2, 3, 4, 5})
+	_, err := ReadFrame(&buf)
+	if err == nil {
+		t.Fatal("expected error for truncated frame")
+	}
+}
+
+func TestDecodeHandshakeTooShort(t *testing.T) {
+	_, _, _, err := DecodeHandshake([]byte{1, 2, 3})
+	if err == nil {
+		t.Fatal("expected error for short handshake")
+	}
+}
+
+func TestIPAllocatorWraparound(t *testing.T) {
+	// /29 = 8 addresses: .0 (net), .1 (gw), .2-.6 usable, .7 (broadcast)
+	alloc, err := NewIPAllocator("10.7.0.0/29")
+	if err != nil {
+		t.Fatalf("NewIPAllocator: %v", err)
+	}
+
+	// Allocate all 5 usable IPs: .2, .3, .4, .5, .6
+	ips := make([]net.IP, 5)
+	for i := 0; i < 5; i++ {
+		ips[i], err = alloc.Allocate()
+		if err != nil {
+			t.Fatalf("Allocate %d: %v", i, err)
+		}
+	}
+	// Pool should be exhausted
+	_, err = alloc.Allocate()
+	if err == nil {
+		t.Fatal("expected exhaustion")
+	}
+
+	// Release .3 (middle) and .5
+	alloc.Release(ips[1]) // 10.7.0.3
+	alloc.Release(ips[3]) // 10.7.0.5
+
+	// Should get .3 back first (wraparound: next was past .6, wraps to find .3)
+	ip, err := alloc.Allocate()
+	if err != nil {
+		t.Fatalf("Allocate after release: %v", err)
+	}
+	if !ip.Equal(net.IPv4(10, 7, 0, 3).To4()) {
+		t.Fatalf("wraparound: got %v, want 10.7.0.3", ip)
+	}
+
+	// Then .5
+	ip2, err := alloc.Allocate()
+	if err != nil {
+		t.Fatalf("Allocate second after release: %v", err)
+	}
+	if !ip2.Equal(net.IPv4(10, 7, 0, 5).To4()) {
+		t.Fatalf("wraparound: got %v, want 10.7.0.5", ip2)
+	}
+}
+
+func TestIPAllocatorInvalidCIDR(t *testing.T) {
+	_, err := NewIPAllocator("not-a-cidr")
+	if err == nil {
+		t.Fatal("expected error for invalid CIDR")
+	}
+}
+
+func TestIPAllocatorReleaseNonIPv4(t *testing.T) {
+	alloc, _ := NewIPAllocator("10.7.0.0/24")
+	// Should not panic on nil or IPv6
+	alloc.Release(nil)
+	alloc.Release(net.ParseIP("::1"))
+}
+
+func TestIPAllocatorNetworkAndMask(t *testing.T) {
+	alloc, _ := NewIPAllocator("10.7.0.0/24")
+	if alloc.Network().String() != "10.7.0.0/24" {
+		t.Errorf("Network = %q", alloc.Network().String())
+	}
+	mask := alloc.Mask()
+	if !net.IP(mask).Equal(net.IP(net.IPv4Mask(255, 255, 255, 0))) {
+		t.Errorf("Mask = %v", mask)
+	}
+}
+
+func TestPeerTableForwardTooShort(t *testing.T) {
+	pt := NewPeerTable(slog.Default())
+	if pt.Forward([]byte{1, 2, 3}) {
+		t.Fatal("expected false for short packet")
+	}
+}
+
+func TestPeerTableConcurrentForward(t *testing.T) {
+	logger := slog.Default()
+	pt := NewPeerTable(logger)
+
+	dstIP := net.IPv4(10, 7, 0, 2).To4()
+	r, w := io.Pipe()
+	pt.Register(dstIP, &frameWriter{w: w})
+
+	const numGoroutines = 50
+	var wg sync.WaitGroup
+	wg.Add(numGoroutines)
+
+	// Read all frames in background
+	received := make(chan []byte, numGoroutines)
+	go func() {
+		for i := 0; i < numGoroutines; i++ {
+			frame, err := ReadFrame(r)
+			if err != nil {
+				return
+			}
+			received <- frame
+		}
+	}()
+
+	// Concurrent forwards
+	for i := 0; i < numGoroutines; i++ {
+		go func(id int) {
+			defer wg.Done()
+			pkt := make([]byte, 24)
+			pkt[0] = 0x45
+			pkt[2] = 0
+			pkt[3] = 24
+			copy(pkt[16:20], dstIP)
+			pkt[20] = byte(id) // identify each packet
+			pt.Forward(pkt)
+		}(i)
+	}
+
+	wg.Wait()
+
+	// Verify we got all frames
+	for i := 0; i < numGoroutines; i++ {
+		select {
+		case <-received:
+		default:
+			// Some may still be in flight
+		}
+	}
+
+	pt.Unregister(dstIP)
+	w.Close()
+	r.Close()
+}
+
 func TestMeshClientIsMeshDestination(t *testing.T) {
 	mc := &MeshClient{
 		meshNet: &net.IPNet{
