@@ -91,3 +91,17 @@ func parseCIDRNet(cidr string) (*net.IPNet, error) {
 	_, ipNet, err := net.ParseCIDR(cidr)
 	return ipNet, err
 }
+
+// AddMeshRoute adds a route for the mesh subnet through the TUN device.
+func (t *TUNServer) AddMeshRoute(cidr string) error {
+	_, ipNet, err := net.ParseCIDR(cidr)
+	if err != nil {
+		return fmt.Errorf("parse mesh CIDR %q: %w", cidr, err)
+	}
+	out, err := exec.Command("ip", "route", "add", ipNet.String(), "dev", t.config.DeviceName).CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("ip route add mesh: %s: %w", string(out), err)
+	}
+	t.logger.Info("mesh route added", "cidr", ipNet.String())
+	return nil
+}

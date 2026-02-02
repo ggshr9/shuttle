@@ -16,7 +16,13 @@ type ClientConfig struct {
 	Proxy      ProxyConfig      `yaml:"proxy" json:"proxy"`
 	Routing    RoutingConfig    `yaml:"routing" json:"routing"`
 	Congestion CongestionConfig `yaml:"congestion" json:"congestion"`
+	Mesh       MeshConfig       `yaml:"mesh" json:"mesh"`
 	Log        LogConfig        `yaml:"log" json:"log"`
+}
+
+// MeshConfig configures the client-side mesh virtual LAN.
+type MeshConfig struct {
+	Enabled bool `yaml:"enabled" json:"enabled"`
 }
 
 // CongestionConfig configures congestion control.
@@ -134,12 +140,19 @@ type LogConfig struct {
 
 // ServerConfig is the top-level server configuration.
 type ServerConfig struct {
-	Listen    string          `yaml:"listen" json:"listen"`
-	TLS       TLSConfig       `yaml:"tls" json:"tls"`
-	Auth      AuthConfig      `yaml:"auth" json:"auth"`
-	Cover     CoverSiteConfig `yaml:"cover" json:"cover"`
+	Listen    string               `yaml:"listen" json:"listen"`
+	TLS       TLSConfig            `yaml:"tls" json:"tls"`
+	Auth      AuthConfig           `yaml:"auth" json:"auth"`
+	Cover     CoverSiteConfig      `yaml:"cover" json:"cover"`
 	Transport ServerTransportConfig `yaml:"transport" json:"transport"`
-	Log       LogConfig       `yaml:"log" json:"log"`
+	Mesh      ServerMeshConfig     `yaml:"mesh" json:"mesh"`
+	Log       LogConfig            `yaml:"log" json:"log"`
+}
+
+// ServerMeshConfig configures the server-side mesh virtual LAN.
+type ServerMeshConfig struct {
+	Enabled bool   `yaml:"enabled" json:"enabled"`
+	CIDR    string `yaml:"cidr" json:"cidr"` // e.g. "10.7.0.0/24"
 }
 
 // TLSConfig configures TLS certificates.
@@ -303,5 +316,8 @@ func applyServerDefaults(cfg *ServerConfig) {
 	}
 	if cfg.Log.Level == "" {
 		cfg.Log.Level = "info"
+	}
+	if cfg.Mesh.CIDR == "" {
+		cfg.Mesh.CIDR = "10.7.0.0/24"
 	}
 }

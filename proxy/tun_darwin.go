@@ -113,3 +113,25 @@ func (t *TUNServer) teardownRoutes() {
 	}
 	exec.Command("route", "delete", "-net", ipNet.String()).Run()
 }
+
+// AddMeshRoute adds a route for the mesh subnet through the TUN device.
+func (t *TUNServer) AddMeshRoute(cidr string) error {
+	_, ipNet, err := net.ParseCIDR(cidr)
+	if err != nil {
+		return fmt.Errorf("parse mesh CIDR %q: %w", cidr, err)
+	}
+	localIP, _, err := net.ParseCIDR(t.config.CIDR)
+	if err != nil {
+		return err
+	}
+	gw := make(net.IP, len(localIP))
+	copy(gw, localIP)
+	gw[len(gw)-1]++
+
+	out, err := exec.Command("route", "add", "-net", ipNet.String(), gw.String()).CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("route add mesh: %s: %w", string(out), err)
+	}
+	t.logger.Info("mesh route added", "cidr", ipNet.String())
+	return nil
+}

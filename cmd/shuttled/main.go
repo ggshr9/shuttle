@@ -9,6 +9,7 @@ import (
 	"net"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
 	"time"
 
@@ -16,6 +17,7 @@ import (
 	"github.com/shuttle-proxy/shuttle/congestion"
 	"github.com/shuttle-proxy/shuttle/crypto"
 	"github.com/shuttle-proxy/shuttle/internal/sysopt"
+	"github.com/shuttle-proxy/shuttle/mesh"
 	"github.com/shuttle-proxy/shuttle/server"
 	"github.com/shuttle-proxy/shuttle/transport"
 	"github.com/shuttle-proxy/shuttle/transport/h3"
@@ -163,6 +165,20 @@ func run(configPath string) {
 	}
 	defer ml.Close()
 
+	// Setup mesh if enabled
+	var peerTable *mesh.PeerTable
+	var ipAllocator *mesh.IPAllocator
+	if cfg.Mesh.Enabled {
+		var err error
+		ipAllocator, err = mesh.NewIPAllocator(cfg.Mesh.CIDR)
+		if err != nil {
+			logger.Error("failed to create mesh IP allocator", "err", err)
+			os.Exit(1)
+		}
+		peerTable = mesh.NewPeerTable(logger)
+		logger.Info("mesh enabled", "cidr", cfg.Mesh.CIDR)
+	}
+
 	logger.Info("shuttled is running", "listen", cfg.Listen)
 
 	// Handle connections
@@ -176,7 +192,7 @@ func run(configPath string) {
 				logger.Error("accept error", "err", err)
 				continue
 			}
-			go handleConnection(ctx, conn, logger)
+			go handleConnection(ctx, conn, peerTable, ipAllocator, logger)
 		}
 	}()
 
@@ -184,7 +200,7 @@ func run(configPath string) {
 	logger.Info("shuttled stopped")
 }
 
-func handleConnection(ctx context.Context, conn transport.Connection, logger *slog.Logger) {
+func handleConnection(ctx context.Context, conn transport.Connection, peerTable *mesh.PeerTable, allocator *mesh.IPAllocator, logger *slog.Logger) {
 	defer conn.Close()
 
 	for {
@@ -195,11 +211,11 @@ func handleConnection(ctx context.Context, conn transport.Connection, logger *sl
 			}
 			return
 		}
-		go handleStream(ctx, stream, logger)
+		go handleStream(ctx, stream, peerTable, allocator, logger)
 	}
 }
 
-func handleStream(ctx context.Context, stream transport.Stream, logger *slog.Logger) {
+func handleStream(ctx context.Context, stream transport.Stream, peerTable *mesh.PeerTable, allocator *mesh.IPAllocator, logger *slog.Logger) {
 	defer stream.Close()
 
 	// Read target address (first line). Use a buffered approach to avoid
@@ -215,6 +231,13 @@ func handleStream(ctx context.Context, stream transport.Stream, logger *slog.Log
 		// Look for newline in what we've read so far.
 		if idx := findNewline(buf[:total]); idx >= 0 {
 			target := string(buf[:idx])
+
+			// Check for mesh magic
+			if target == "MESH" && peerTable != nil && allocator != nil {
+				handleMeshStream(ctx, stream, peerTable, allocator, logger)
+				return
+			}
+
 			residual := buf[idx+1 : total] // bytes after \n
 
 			logger.Debug("proxying", "target", target)
@@ -242,6 +265,64 @@ func handleStream(ctx context.Context, stream transport.Stream, logger *slog.Log
 			return
 		}
 	}
+}
+
+func handleMeshStream(ctx context.Context, stream transport.Stream, peerTable *mesh.PeerTable, allocator *mesh.IPAllocator, logger *slog.Logger) {
+	ip, err := allocator.Allocate()
+	if err != nil {
+		logger.Error("mesh: IP allocation failed", "err", err)
+		return
+	}
+	defer allocator.Release(ip)
+
+	// Send handshake: IP + mask + gateway
+	handshake := mesh.EncodeHandshake(ip, allocator.Mask(), allocator.Gateway())
+	if _, err := stream.Write(handshake); err != nil {
+		logger.Error("mesh: handshake write failed", "err", err)
+		return
+	}
+
+	// Register peer with a frame-writing wrapper
+	fw := &meshFrameWriter{stream: stream}
+	peerTable.Register(ip, fw)
+	defer peerTable.Unregister(ip)
+
+	logger.Info("mesh peer connected", "ip", ip)
+
+	// Read frames from this peer and forward to destination peers
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		default:
+		}
+
+		pkt, err := mesh.ReadFrame(stream)
+		if err != nil {
+			logger.Debug("mesh peer disconnected", "ip", ip, "err", err)
+			return
+		}
+
+		if !peerTable.Forward(pkt) {
+			logger.Debug("mesh: no route for packet", "src", ip)
+		}
+	}
+}
+
+// meshFrameWriter wraps a stream to write length-prefixed frames.
+type meshFrameWriter struct {
+	mu     sync.Mutex
+	stream io.WriteCloser
+}
+
+func (fw *meshFrameWriter) Write(p []byte) (int, error) {
+	fw.mu.Lock()
+	defer fw.mu.Unlock()
+	return len(p), mesh.WriteFrame(fw.stream, p)
+}
+
+func (fw *meshFrameWriter) Close() error {
+	return fw.stream.Close()
 }
 
 func findNewline(b []byte) int {

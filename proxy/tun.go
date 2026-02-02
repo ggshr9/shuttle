@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/shuttle-proxy/shuttle/internal/procnet"
+	"github.com/shuttle-proxy/shuttle/mesh"
 )
 
 // TUNConfig configures the TUN device for system-wide proxying.
@@ -30,6 +31,7 @@ type TUNServer struct {
 	closed       atomic.Bool
 	logger       *slog.Logger
 	ProcResolver *procnet.Resolver
+	MeshClient   *mesh.MeshClient
 
 	tunFile  *os.File
 	natTable natTable
@@ -254,6 +256,18 @@ func (t *TUNServer) handleIPv4(ctx context.Context, pkt []byte) {
 	if totalLen < ihl {
 		return
 	}
+
+	// Mesh interception: if destination is in the mesh subnet, send via mesh
+	if mc := t.MeshClient; mc != nil {
+		dstIP := net.IP(pkt[16:20])
+		if mc.IsMeshDestination(dstIP) {
+			if err := mc.Send(pkt[:totalLen]); err != nil {
+				t.logger.Debug("mesh send error", "err", err)
+			}
+			return
+		}
+	}
+
 	proto := pkt[9]
 
 	var srcIP, dstIP [4]byte
@@ -602,6 +616,30 @@ func checksumFold(sum uint32) uint16 {
 		sum = (sum >> 16) + (sum & 0xffff)
 	}
 	return uint16(sum)
+}
+
+// MeshReceiveLoop reads packets from the mesh stream and injects them into the TUN device.
+func (t *TUNServer) MeshReceiveLoop(ctx context.Context) {
+	mc := t.MeshClient
+	if mc == nil {
+		return
+	}
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		default:
+		}
+		pkt, err := mc.Receive()
+		if err != nil {
+			if t.closed.Load() || ctx.Err() != nil {
+				return
+			}
+			t.logger.Debug("mesh receive error", "err", err)
+			return
+		}
+		t.writeTUN(pkt)
+	}
 }
 
 // maskBits returns the prefix length of an IP mask.

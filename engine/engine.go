@@ -3,6 +3,7 @@ package engine
 import (
 	"context"
 	"fmt"
+	"io"
 	"log/slog"
 	"net"
 	"os"
@@ -11,6 +12,7 @@ import (
 
 	"github.com/quic-go/quic-go"
 	"github.com/shuttle-proxy/shuttle/config"
+	"github.com/shuttle-proxy/shuttle/mesh"
 	"github.com/shuttle-proxy/shuttle/congestion"
 	"github.com/shuttle-proxy/shuttle/internal/procnet"
 	"github.com/shuttle-proxy/shuttle/internal/sysopt"
@@ -358,7 +360,38 @@ func (e *Engine) startProxies(ctx context.Context, cfg *config.ClientConfig, dia
 			e.logger.Warn("TUN device failed", "err", err)
 		} else {
 			closers = append(closers, tunServer.Close)
+
+			// Mesh setup: requires TUN to be running
+			if cfg.Mesh.Enabled {
+				serverAddr := cfg.Server.Addr
+				curSel := e.selector()
+				if curSel == nil {
+					e.logger.Warn("mesh: no active selector, skipping")
+				} else {
+					conn, err := curSel.Dial(ctx, serverAddr)
+					if err != nil {
+						e.logger.Warn("mesh: dial failed", "err", err)
+					} else {
+						mc, err := mesh.NewMeshClient(ctx, func(ctx context.Context) (io.ReadWriteCloser, error) {
+							return conn.OpenStream(ctx)
+						})
+						if err != nil {
+							e.logger.Warn("mesh: handshake failed", "err", err)
+						} else {
+							tunServer.MeshClient = mc
+							if err := tunServer.AddMeshRoute(mc.MeshCIDR()); err != nil {
+								e.logger.Warn("mesh: add route failed", "err", err)
+							}
+							go tunServer.MeshReceiveLoop(ctx)
+							closers = append(closers, mc.Close)
+							e.logger.Info("mesh connected", "virtual_ip", mc.VirtualIP(), "cidr", mc.MeshCIDR())
+						}
+					}
+				}
+			}
 		}
+	} else if cfg.Mesh.Enabled {
+		e.logger.Warn("mesh requires TUN to be enabled, skipping mesh")
 	}
 
 	return closers, nil
