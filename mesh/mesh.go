@@ -11,8 +11,13 @@ const (
 	// MeshMagic is the handshake identifier sent by clients to request a mesh stream.
 	MeshMagic = "MESH\n"
 
-	// HandshakeSize is the size of the server's handshake response: IP(4) + mask(4) + gateway(4).
-	HandshakeSize = 12
+	// ProtocolVersion is the mesh protocol version. Bump this when the
+	// frame format or handshake layout changes.
+	ProtocolVersion = byte(1)
+
+	// HandshakeSize is the size of the server's handshake response:
+	// version(1) + reserved(1) + reserved(2) + IP(4) + mask(4) + gateway(4).
+	HandshakeSize = 16
 
 	// MaxFrameSize is the maximum payload size of a single mesh frame.
 	MaxFrameSize = 65535
@@ -50,11 +55,14 @@ func ReadFrame(r io.Reader) ([]byte, error) {
 }
 
 // EncodeHandshake encodes the server handshake response.
+// Layout: [version(1)][reserved(3)][IP(4)][mask(4)][gateway(4)] = 16 bytes.
 func EncodeHandshake(ip, mask, gateway net.IP) []byte {
 	buf := make([]byte, HandshakeSize)
-	copy(buf[0:4], ip.To4())
-	copy(buf[4:8], mask.To4())
-	copy(buf[8:12], gateway.To4())
+	buf[0] = ProtocolVersion
+	// buf[1..3] reserved
+	copy(buf[4:8], ip.To4())
+	copy(buf[8:12], mask.To4())
+	copy(buf[12:16], gateway.To4())
 	return buf
 }
 
@@ -63,11 +71,15 @@ func DecodeHandshake(data []byte) (ip, mask, gateway net.IP, err error) {
 	if len(data) < HandshakeSize {
 		return nil, nil, nil, fmt.Errorf("mesh: handshake too short: %d", len(data))
 	}
+	version := data[0]
+	if version != ProtocolVersion {
+		return nil, nil, nil, fmt.Errorf("mesh: unsupported protocol version %d (want %d)", version, ProtocolVersion)
+	}
 	ip = net.IP(make([]byte, 4))
 	mask = net.IP(make([]byte, 4))
 	gateway = net.IP(make([]byte, 4))
-	copy(ip, data[0:4])
-	copy(mask, data[4:8])
-	copy(gateway, data[8:12])
+	copy(ip, data[4:8])
+	copy(mask, data[8:12])
+	copy(gateway, data[12:16])
 	return
 }

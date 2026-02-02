@@ -49,7 +49,19 @@ func (a *IPAllocator) Allocate() (net.IP, error) {
 	defer a.mu.Unlock()
 
 	base := binary.BigEndian.Uint32(a.network.IP.To4())
+	const start = uint32(2) // first allocatable offset
+
+	// Search forward from a.next, then wrap around from start.
 	for offset := a.next; offset < a.max; offset++ {
+		if !a.used[offset] {
+			a.used[offset] = true
+			a.next = offset + 1
+			ip := make(net.IP, 4)
+			binary.BigEndian.PutUint32(ip, base+offset)
+			return ip, nil
+		}
+	}
+	for offset := start; offset < a.next; offset++ {
 		if !a.used[offset] {
 			a.used[offset] = true
 			a.next = offset + 1
@@ -134,13 +146,17 @@ func (pt *PeerTable) Forward(pkt []byte) bool {
 
 	pt.mu.RLock()
 	w, ok := pt.peers[dstIP]
-	pt.mu.RUnlock()
-
 	if !ok {
+		pt.mu.RUnlock()
 		return false
 	}
+	// Write under RLock to prevent Unregister from closing the writer
+	// while we're writing. The writer itself has its own mutex for
+	// serializing concurrent Forward calls.
+	_, err := w.Write(pkt)
+	pt.mu.RUnlock()
 
-	if _, err := w.Write(pkt); err != nil {
+	if err != nil {
 		pt.logger.Debug("mesh forward error", "dst", net.IP(dstIP[:]), "err", err)
 		return false
 	}

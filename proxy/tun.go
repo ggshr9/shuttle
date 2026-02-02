@@ -339,6 +339,8 @@ func (t *TUNServer) handleTCP(ctx context.Context, srcIP, dstIP [4]byte, tcpData
 				e.cancel()
 				e.conn.Close()
 				t.natTable.deleteTCP(key)
+				ack := seq + uint32(len(payload))
+				t.sendTCPReset(dstIP, srcIP, dstPort, srcPort, ack)
 			}
 		}
 	}
@@ -447,11 +449,12 @@ func (t *TUNServer) dialAndProxyUDP(ctx context.Context, key natKey, initialPayl
 			t.natTable.deleteUDP(key)
 		}()
 		buf := make([]byte, t.config.MTU-28) // IP(20)+UDP(8)
+		conn.SetReadDeadline(time.Now().Add(2 * time.Minute))
 		for {
-			conn.SetReadDeadline(time.Now().Add(2 * time.Minute))
 			n, err := conn.Read(buf)
 			if n > 0 {
 				t.injectUDPPacket(key.dstIP, key.srcIP, key.dstPort, key.srcPort, buf[:n])
+				conn.SetReadDeadline(time.Now().Add(2 * time.Minute))
 			}
 			if err != nil {
 				return
@@ -468,7 +471,9 @@ func (t *TUNServer) writeTUN(pkt []byte) {
 	t.wmu.Lock()
 	defer t.wmu.Unlock()
 	if t.tunFile != nil {
-		t.tunFile.Write(pkt)
+		if _, err := t.tunFile.Write(pkt); err != nil {
+			t.logger.Debug("tun write error", "err", err, "len", len(pkt))
+		}
 	}
 }
 

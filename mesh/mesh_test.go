@@ -57,6 +57,12 @@ func TestHandshakeEncodeDecode(t *testing.T) {
 	gw := net.IPv4(10, 7, 0, 1).To4()
 
 	data := EncodeHandshake(ip, mask, gw)
+	if len(data) != HandshakeSize {
+		t.Fatalf("handshake size: got %d, want %d", len(data), HandshakeSize)
+	}
+	if data[0] != ProtocolVersion {
+		t.Fatalf("version: got %d, want %d", data[0], ProtocolVersion)
+	}
 	gotIP, gotMask, gotGW, err := DecodeHandshake(data)
 	if err != nil {
 		t.Fatalf("DecodeHandshake: %v", err)
@@ -69,6 +75,15 @@ func TestHandshakeEncodeDecode(t *testing.T) {
 	}
 	if !gotGW.Equal(gw) {
 		t.Fatalf("gw: got %v, want %v", gotGW, gw)
+	}
+}
+
+func TestHandshakeVersionMismatch(t *testing.T) {
+	data := make([]byte, HandshakeSize)
+	data[0] = 99 // bad version
+	_, _, _, err := DecodeHandshake(data)
+	if err == nil {
+		t.Fatal("expected version mismatch error")
 	}
 }
 
@@ -150,7 +165,10 @@ type frameWriter struct {
 func (fw *frameWriter) Write(p []byte) (int, error) {
 	fw.mu.Lock()
 	defer fw.mu.Unlock()
-	return len(p), WriteFrame(fw.w, p)
+	if err := WriteFrame(fw.w, p); err != nil {
+		return 0, err
+	}
+	return len(p), nil
 }
 
 func (fw *frameWriter) Close() error { return fw.w.Close() }

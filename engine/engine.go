@@ -363,30 +363,8 @@ func (e *Engine) startProxies(ctx context.Context, cfg *config.ClientConfig, dia
 
 			// Mesh setup: requires TUN to be running
 			if cfg.Mesh.Enabled {
-				serverAddr := cfg.Server.Addr
-				curSel := e.selector()
-				if curSel == nil {
-					e.logger.Warn("mesh: no active selector, skipping")
-				} else {
-					conn, err := curSel.Dial(ctx, serverAddr)
-					if err != nil {
-						e.logger.Warn("mesh: dial failed", "err", err)
-					} else {
-						mc, err := mesh.NewMeshClient(ctx, func(ctx context.Context) (io.ReadWriteCloser, error) {
-							return conn.OpenStream(ctx)
-						})
-						if err != nil {
-							e.logger.Warn("mesh: handshake failed", "err", err)
-						} else {
-							tunServer.MeshClient = mc
-							if err := tunServer.AddMeshRoute(mc.MeshCIDR()); err != nil {
-								e.logger.Warn("mesh: add route failed", "err", err)
-							}
-							go tunServer.MeshReceiveLoop(ctx)
-							closers = append(closers, mc.Close)
-							e.logger.Info("mesh connected", "virtual_ip", mc.VirtualIP(), "cidr", mc.MeshCIDR())
-						}
-					}
+				if mc := e.connectMesh(ctx, cfg, tunServer); mc != nil {
+					closers = append(closers, mc.Close)
 				}
 			}
 		}
@@ -395,6 +373,50 @@ func (e *Engine) startProxies(ctx context.Context, cfg *config.ClientConfig, dia
 	}
 
 	return closers, nil
+}
+
+const meshMaxRetries = 3
+
+// connectMesh attempts to establish a mesh connection with retries.
+func (e *Engine) connectMesh(ctx context.Context, cfg *config.ClientConfig, tunServer *proxy.TUNServer) *mesh.MeshClient {
+	serverAddr := cfg.Server.Addr
+	var lastErr error
+	for attempt := 1; attempt <= meshMaxRetries; attempt++ {
+		if ctx.Err() != nil {
+			return nil
+		}
+		curSel := e.selector()
+		if curSel == nil {
+			e.logger.Warn("mesh: no active selector, skipping")
+			return nil
+		}
+		conn, err := curSel.Dial(ctx, serverAddr)
+		if err != nil {
+			lastErr = err
+			e.logger.Warn("mesh: dial failed, retrying", "attempt", attempt, "err", err)
+			time.Sleep(time.Duration(attempt) * time.Second)
+			continue
+		}
+		mc, err := mesh.NewMeshClient(ctx, func(ctx context.Context) (io.ReadWriteCloser, error) {
+			return conn.OpenStream(ctx)
+		})
+		if err != nil {
+			conn.Close()
+			lastErr = err
+			e.logger.Warn("mesh: handshake failed, retrying", "attempt", attempt, "err", err)
+			time.Sleep(time.Duration(attempt) * time.Second)
+			continue
+		}
+		tunServer.MeshClient = mc
+		if err := tunServer.AddMeshRoute(mc.MeshCIDR()); err != nil {
+			e.logger.Warn("mesh: add route failed", "err", err)
+		}
+		go tunServer.MeshReceiveLoop(ctx)
+		e.logger.Info("mesh connected", "virtual_ip", mc.VirtualIP(), "cidr", mc.MeshCIDR())
+		return mc
+	}
+	e.logger.Error("mesh: all attempts failed", "err", lastErr)
+	return nil
 }
 
 // selector returns the current selector under read lock.

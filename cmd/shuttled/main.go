@@ -24,7 +24,10 @@ import (
 	"github.com/shuttle-proxy/shuttle/transport/reality"
 )
 
-const version = "0.1.0"
+const (
+	version         = "0.1.0"
+	maxConcurrentStreams = 1024
+)
 
 func main() {
 	if len(os.Args) < 2 {
@@ -181,6 +184,8 @@ func run(configPath string) {
 
 	logger.Info("shuttled is running", "listen", cfg.Listen)
 
+	streamSem := make(chan struct{}, maxConcurrentStreams)
+
 	// Handle connections
 	go func() {
 		for {
@@ -192,7 +197,7 @@ func run(configPath string) {
 				logger.Error("accept error", "err", err)
 				continue
 			}
-			go handleConnection(ctx, conn, peerTable, ipAllocator, logger)
+			go handleConnection(ctx, conn, peerTable, ipAllocator, streamSem, logger)
 		}
 	}()
 
@@ -200,18 +205,30 @@ func run(configPath string) {
 	logger.Info("shuttled stopped")
 }
 
-func handleConnection(ctx context.Context, conn transport.Connection, peerTable *mesh.PeerTable, allocator *mesh.IPAllocator, logger *slog.Logger) {
+func handleConnection(ctx context.Context, conn transport.Connection, peerTable *mesh.PeerTable, allocator *mesh.IPAllocator, streamSem chan struct{}, logger *slog.Logger) {
 	defer conn.Close()
 
 	for {
 		stream, err := conn.AcceptStream(ctx)
 		if err != nil {
-			if ctx.Err() != nil {
-				return
+			if ctx.Err() == nil {
+				logger.Debug("accept stream error", "err", err)
 			}
 			return
 		}
-		go handleStream(ctx, stream, peerTable, allocator, logger)
+
+		select {
+		case streamSem <- struct{}{}:
+		default:
+			logger.Warn("stream limit reached, rejecting")
+			stream.Close()
+			continue
+		}
+
+		go func() {
+			defer func() { <-streamSem }()
+			handleStream(ctx, stream, peerTable, allocator, logger)
+		}()
 	}
 }
 
@@ -318,7 +335,10 @@ type meshFrameWriter struct {
 func (fw *meshFrameWriter) Write(p []byte) (int, error) {
 	fw.mu.Lock()
 	defer fw.mu.Unlock()
-	return len(p), mesh.WriteFrame(fw.stream, p)
+	if err := mesh.WriteFrame(fw.stream, p); err != nil {
+		return 0, err
+	}
+	return len(p), nil
 }
 
 func (fw *meshFrameWriter) Close() error {

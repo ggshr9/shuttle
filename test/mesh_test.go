@@ -178,7 +178,10 @@ type syncFrameWriter struct {
 func (sw *syncFrameWriter) Write(p []byte) (int, error) {
 	sw.mu.Lock()
 	defer sw.mu.Unlock()
-	return len(p), mesh.WriteFrame(sw.stream, p)
+	if err := mesh.WriteFrame(sw.stream, p); err != nil {
+		return 0, err
+	}
+	return len(p), nil
 }
 
 func (sw *syncFrameWriter) Close() error { return sw.stream.Close() }
