@@ -34,7 +34,7 @@
     adding = true
     msg = ''
     try {
-      const sub = await api.addSubscription(newSub)
+      const sub = await api.addSubscription(newSub.name, newSub.url)
       subscriptions = [...subscriptions, sub]
       newSub = { name: '', url: '' }
       showAdd = false

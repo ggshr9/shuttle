@@ -19,7 +19,7 @@ export const api = {
   getConfig: () => request('GET', '/api/config'),
   putConfig: (cfg) => request('PUT', '/api/config', cfg),
   getServers: () => request('GET', '/api/config/servers'),
-  putServers: (srv) => request('PUT', '/api/config/servers', srv),
+  setActiveServer: (srv) => request('PUT', '/api/config/servers', srv),
   addServer: (srv) => request('POST', '/api/config/servers', srv),
   deleteServer: (addr) => request('DELETE', '/api/config/servers', { addr }),
   autoSelectServer: () => request('POST', '/api/config/servers/auto-select'),
@@ -36,7 +36,7 @@ export const api = {
   speedtest: (addrs) => request('POST', '/api/speedtest', { addrs }),
   // Subscriptions
   getSubscriptions: () => request('GET', '/api/subscriptions'),
-  addSubscription: (sub) => request('POST', '/api/subscriptions', sub),
+  addSubscription: (name, url) => request('POST', '/api/subscriptions', { name, url }),
   refreshSubscription: (id) => request('PUT', `/api/subscriptions/${id}/refresh`),
   deleteSubscription: (id) => request('DELETE', `/api/subscriptions/${id}`),
   // Logs

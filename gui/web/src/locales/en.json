@@ -109,5 +109,43 @@
     "error": "Error",
     "success": "Success",
     "timeout": "timeout"
+  },
+  "onboarding": {
+    "welcome": "Welcome to Shuttle",
+    "subtitle": "Fast, secure proxy for unrestricted internet access",
+    "feature1": "Multiple protocols (H3, Reality, CDN)",
+    "feature2": "Advanced encryption & obfuscation",
+    "feature3": "Smart routing with GeoIP rules",
+    "getStarted": "Get Started",
+    "skip": "Skip setup",
+    "addServer": "Add a Server",
+    "addServerDesc": "Choose how to add your proxy server",
+    "subscription": "Subscription",
+    "import": "Import",
+    "manual": "Manual",
+    "subscriptionUrl": "Subscription URL",
+    "subscriptionHint": "Paste the subscription link from your provider",
+    "configuration": "Configuration",
+    "importHint": "Supports Base64, JSON, and URI formats",
+    "serverAddress": "Server Address",
+    "password": "Password",
+    "optional": "Optional",
+    "back": "Back",
+    "adding": "Adding...",
+    "addServerBtn": "Add Server",
+    "skipForNow": "Skip for now",
+    "ready": "Ready to Connect!",
+    "serversAdded": "{count} server(s) added successfully",
+    "enableSystemProxy": "Enable System Proxy",
+    "systemProxyDesc": "Automatically configure system proxy on connect",
+    "connecting": "Connecting...",
+    "connectNow": "Connect Now",
+    "configureLater": "Configure later"
+  },
+  "emptyState": {
+    "noServers": "No Servers Yet",
+    "addToStart": "Add a proxy server to get started",
+    "importConfig": "Import Config",
+    "orAddManually": "or add manually below"
   }
 }

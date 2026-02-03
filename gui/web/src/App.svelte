@@ -1,12 +1,34 @@
 <script>
   import { onMount } from 'svelte'
   import { t, subscribeLocale } from './lib/i18n/index.js'
+  import { api } from './lib/api.js'
+  import Onboarding from './lib/Onboarding.svelte'
 
   let tab = $state('dashboard')
   let locale = $state('en')
+  let showOnboarding = $state(false)
+  let initialized = $state(false)
+
+  // Check if user needs onboarding (no servers configured)
+  async function checkFirstRun() {
+    try {
+      const cfg = await api.getConfig()
+      const hasServers = cfg.server?.addr || (cfg.servers && cfg.servers.length > 0)
+      showOnboarding = !hasServers
+    } catch {
+      // If we can't load config, don't show onboarding
+      showOnboarding = false
+    }
+    initialized = true
+  }
+
+  function handleOnboardingComplete() {
+    showOnboarding = false
+  }
 
   // Subscribe to locale changes for reactivity
   onMount(() => {
+    checkFirstRun()
     return subscribeLocale((newLocale) => {
       locale = newLocale
     })
@@ -26,6 +48,11 @@
   $effect(() => { void locale })
 </script>
 
+{#if showOnboarding}
+  <Onboarding onComplete={handleOnboardingComplete} />
+{/if}
+
+{#if initialized}
 <div class="app">
   <nav class="tabs">
     {#each tabs as item}
@@ -66,6 +93,7 @@
     {/if}
   </main>
 </div>
+{/if}
 
 <style>
   :global(body) {

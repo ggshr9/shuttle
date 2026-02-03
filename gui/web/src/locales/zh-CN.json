@@ -109,5 +109,43 @@
     "error": "错误",
     "success": "成功",
     "timeout": "超时"
+  },
+  "onboarding": {
+    "welcome": "欢迎使用 Shuttle",
+    "subtitle": "快速、安全的代理工具，畅享无限制的网络访问",
+    "feature1": "多种协议支持（H3、Reality、CDN）",
+    "feature2": "高级加密与混淆技术",
+    "feature3": "智能路由与 GeoIP 规则",
+    "getStarted": "开始使用",
+    "skip": "跳过设置",
+    "addServer": "添加服务器",
+    "addServerDesc": "选择添加代理服务器的方式",
+    "subscription": "订阅",
+    "import": "导入",
+    "manual": "手动",
+    "subscriptionUrl": "订阅链接",
+    "subscriptionHint": "粘贴服务商提供的订阅链接",
+    "configuration": "配置内容",
+    "importHint": "支持 Base64、JSON 和 URI 格式",
+    "serverAddress": "服务器地址",
+    "password": "密码",
+    "optional": "可选",
+    "back": "返回",
+    "adding": "添加中...",
+    "addServerBtn": "添加服务器",
+    "skipForNow": "暂时跳过",
+    "ready": "准备就绪！",
+    "serversAdded": "已成功添加 {count} 个服务器",
+    "enableSystemProxy": "启用系统代理",
+    "systemProxyDesc": "连接时自动配置系统代理",
+    "connecting": "连接中...",
+    "connectNow": "立即连接",
+    "configureLater": "稍后配置"
+  },
+  "emptyState": {
+    "noServers": "暂无服务器",
+    "addToStart": "添加代理服务器以开始使用",
+    "importConfig": "导入配置",
+    "orAddManually": "或在下方手动添加"
   }
 }

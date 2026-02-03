@@ -213,7 +213,17 @@
       {/each}
     </div>
   {:else}
-    <p class="empty">No saved servers</p>
+    <div class="empty-state">
+      <div class="empty-icon">📡</div>
+      <h3>No Servers Yet</h3>
+      <p>Add a proxy server to get started</p>
+      <div class="empty-actions">
+        <button class="action-btn primary" onclick={() => showImport = true}>
+          Import Config
+        </button>
+        <span class="or">or add manually below</span>
+      </div>
+    </div>
   {/if}
 
   <h3>Add Server</h3>
@@ -321,7 +331,58 @@
   button:disabled { opacity: 0.5; }
 
   .msg { font-size: 13px; color: #8b949e; margin-top: 4px; }
-  .empty { font-size: 13px; color: #484f58; }
+  .empty-state {
+    text-align: center;
+    padding: 40px 20px;
+    background: #161b22;
+    border: 1px dashed #2d333b;
+    border-radius: 12px;
+    margin: 20px 0;
+  }
+
+  .empty-icon {
+    font-size: 48px;
+    margin-bottom: 16px;
+  }
+
+  .empty-state h3 {
+    font-size: 18px;
+    color: #e1e4e8;
+    margin: 0 0 8px;
+  }
+
+  .empty-state p {
+    font-size: 14px;
+    color: #8b949e;
+    margin: 0 0 20px;
+  }
+
+  .empty-actions {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .action-btn.primary {
+    background: #238636;
+    color: white;
+    border: none;
+    padding: 12px 24px;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+  }
+
+  .action-btn.primary:hover {
+    background: #2ea043;
+  }
+
+  .or {
+    font-size: 12px;
+    color: #8b949e;
+  }
 
   .server-list { display: flex; flex-direction: column; gap: 8px; }
 
