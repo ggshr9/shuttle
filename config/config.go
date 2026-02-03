@@ -22,7 +22,18 @@ type ClientConfig struct {
 
 // MeshConfig configures the client-side mesh virtual LAN.
 type MeshConfig struct {
-	Enabled bool `yaml:"enabled" json:"enabled"`
+	Enabled    bool      `yaml:"enabled" json:"enabled"`
+	P2PEnabled bool      `yaml:"p2p_enabled" json:"p2p_enabled"`
+	P2P        P2PConfig `yaml:"p2p" json:"p2p"`
+}
+
+// P2PConfig configures peer-to-peer NAT traversal.
+type P2PConfig struct {
+	STUNServers         []string `yaml:"stun_servers" json:"stun_servers"`
+	HolePunchTimeout    string   `yaml:"hole_punch_timeout" json:"hole_punch_timeout"`       // e.g. "10s"
+	DirectRetryInterval string   `yaml:"direct_retry_interval" json:"direct_retry_interval"` // e.g. "60s"
+	KeepAliveInterval   string   `yaml:"keep_alive_interval" json:"keep_alive_interval"`     // e.g. "30s"
+	FallbackThreshold   float64  `yaml:"fallback_threshold" json:"fallback_threshold"`       // packet loss rate, e.g. 0.3
 }
 
 // CongestionConfig configures congestion control.
@@ -151,8 +162,9 @@ type ServerConfig struct {
 
 // ServerMeshConfig configures the server-side mesh virtual LAN.
 type ServerMeshConfig struct {
-	Enabled bool   `yaml:"enabled" json:"enabled"`
-	CIDR    string `yaml:"cidr" json:"cidr"` // e.g. "10.7.0.0/24"
+	Enabled    bool   `yaml:"enabled" json:"enabled"`
+	CIDR       string `yaml:"cidr" json:"cidr"`             // e.g. "10.7.0.0/24"
+	P2PEnabled bool   `yaml:"p2p_enabled" json:"p2p_enabled"` // Enable P2P signaling
 }
 
 // TLSConfig configures TLS certificates.
@@ -276,6 +288,26 @@ func applyClientDefaults(cfg *ClientConfig) {
 			cfg.Server.SNI = host
 		}
 	}
+	// P2P defaults
+	if len(cfg.Mesh.P2P.STUNServers) == 0 {
+		cfg.Mesh.P2P.STUNServers = []string{
+			"stun.l.google.com:19302",
+			"stun1.l.google.com:19302",
+			"stun.cloudflare.com:3478",
+		}
+	}
+	if cfg.Mesh.P2P.HolePunchTimeout == "" {
+		cfg.Mesh.P2P.HolePunchTimeout = "10s"
+	}
+	if cfg.Mesh.P2P.DirectRetryInterval == "" {
+		cfg.Mesh.P2P.DirectRetryInterval = "60s"
+	}
+	if cfg.Mesh.P2P.KeepAliveInterval == "" {
+		cfg.Mesh.P2P.KeepAliveInterval = "30s"
+	}
+	if cfg.Mesh.P2P.FallbackThreshold == 0 {
+		cfg.Mesh.P2P.FallbackThreshold = 0.3
+	}
 }
 
 // DeepCopy returns a fully independent copy of the config.
@@ -303,6 +335,10 @@ func (c *ClientConfig) DeepCopy() *ClientConfig {
 	if c.Proxy.TUN.AppList != nil {
 		cp.Proxy.TUN.AppList = make([]string, len(c.Proxy.TUN.AppList))
 		copy(cp.Proxy.TUN.AppList, c.Proxy.TUN.AppList)
+	}
+	if c.Mesh.P2P.STUNServers != nil {
+		cp.Mesh.P2P.STUNServers = make([]string, len(c.Mesh.P2P.STUNServers))
+		copy(cp.Mesh.P2P.STUNServers, c.Mesh.P2P.STUNServers)
 	}
 	return &cp
 }

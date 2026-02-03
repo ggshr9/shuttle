@@ -18,6 +18,7 @@ import (
 	"github.com/shuttle-proxy/shuttle/crypto"
 	"github.com/shuttle-proxy/shuttle/internal/sysopt"
 	"github.com/shuttle-proxy/shuttle/mesh"
+	meshsignal "github.com/shuttle-proxy/shuttle/mesh/signal"
 	"github.com/shuttle-proxy/shuttle/server"
 	"github.com/shuttle-proxy/shuttle/transport"
 	"github.com/shuttle-proxy/shuttle/transport/h3"
@@ -171,6 +172,7 @@ func run(configPath string) {
 	// Setup mesh if enabled
 	var peerTable *mesh.PeerTable
 	var ipAllocator *mesh.IPAllocator
+	var signalHub *meshsignal.Hub
 	if cfg.Mesh.Enabled {
 		var err error
 		ipAllocator, err = mesh.NewIPAllocator(cfg.Mesh.CIDR)
@@ -180,6 +182,12 @@ func run(configPath string) {
 		}
 		peerTable = mesh.NewPeerTable(logger)
 		logger.Info("mesh enabled", "cidr", cfg.Mesh.CIDR)
+
+		// Create signal hub for P2P signaling if enabled
+		if cfg.Mesh.P2PEnabled {
+			signalHub = meshsignal.NewHub(logger)
+			logger.Info("mesh P2P signaling enabled")
+		}
 	}
 
 	logger.Info("shuttled is running", "listen", cfg.Listen)
@@ -197,7 +205,7 @@ func run(configPath string) {
 				logger.Error("accept error", "err", err)
 				continue
 			}
-			go handleConnection(ctx, conn, peerTable, ipAllocator, streamSem, logger)
+			go handleConnection(ctx, conn, peerTable, ipAllocator, signalHub, streamSem, logger)
 		}
 	}()
 
@@ -205,7 +213,7 @@ func run(configPath string) {
 	logger.Info("shuttled stopped")
 }
 
-func handleConnection(ctx context.Context, conn transport.Connection, peerTable *mesh.PeerTable, allocator *mesh.IPAllocator, streamSem chan struct{}, logger *slog.Logger) {
+func handleConnection(ctx context.Context, conn transport.Connection, peerTable *mesh.PeerTable, allocator *mesh.IPAllocator, signalHub *meshsignal.Hub, streamSem chan struct{}, logger *slog.Logger) {
 	defer conn.Close()
 
 	for {
@@ -227,12 +235,12 @@ func handleConnection(ctx context.Context, conn transport.Connection, peerTable 
 
 		go func() {
 			defer func() { <-streamSem }()
-			handleStream(ctx, stream, peerTable, allocator, logger)
+			handleStream(ctx, stream, peerTable, allocator, signalHub, logger)
 		}()
 	}
 }
 
-func handleStream(ctx context.Context, stream transport.Stream, peerTable *mesh.PeerTable, allocator *mesh.IPAllocator, logger *slog.Logger) {
+func handleStream(ctx context.Context, stream transport.Stream, peerTable *mesh.PeerTable, allocator *mesh.IPAllocator, signalHub *meshsignal.Hub, logger *slog.Logger) {
 	defer stream.Close()
 
 	// Read target address (first line). Use a buffered approach to avoid
@@ -251,7 +259,7 @@ func handleStream(ctx context.Context, stream transport.Stream, peerTable *mesh.
 
 			// Check for mesh magic
 			if target == "MESH" && peerTable != nil && allocator != nil {
-				handleMeshStream(ctx, stream, peerTable, allocator, logger)
+				handleMeshStream(ctx, stream, peerTable, allocator, signalHub, logger)
 				return
 			}
 
@@ -284,7 +292,7 @@ func handleStream(ctx context.Context, stream transport.Stream, peerTable *mesh.
 	}
 }
 
-func handleMeshStream(ctx context.Context, stream transport.Stream, peerTable *mesh.PeerTable, allocator *mesh.IPAllocator, logger *slog.Logger) {
+func handleMeshStream(ctx context.Context, stream transport.Stream, peerTable *mesh.PeerTable, allocator *mesh.IPAllocator, signalHub *meshsignal.Hub, logger *slog.Logger) {
 	ip, err := allocator.Allocate()
 	if err != nil {
 		logger.Error("mesh: IP allocation failed", "err", err)
@@ -304,6 +312,12 @@ func handleMeshStream(ctx context.Context, stream transport.Stream, peerTable *m
 	peerTable.Register(ip, fw)
 	defer peerTable.Unregister(ip)
 
+	// Register peer with signal hub if P2P is enabled
+	if signalHub != nil {
+		signalHub.Register(ip, fw)
+		defer signalHub.Unregister(ip)
+	}
+
 	logger.Info("mesh peer connected", "ip", ip)
 
 	// Read frames from this peer and forward to destination peers
@@ -320,9 +334,44 @@ func handleMeshStream(ctx context.Context, stream transport.Stream, peerTable *m
 			return
 		}
 
+		// Check if this is a signaling message
+		if signalHub != nil && isSignalingPacket(pkt) {
+			if err := signalHub.HandleMessage(pkt); err != nil {
+				logger.Debug("mesh: signal handling failed", "err", err)
+			}
+			continue
+		}
+
+		// Regular mesh packet - forward to destination
 		if !peerTable.Forward(pkt) {
 			logger.Debug("mesh: no route for packet", "src", ip)
 		}
+	}
+}
+
+// isSignalingPacket checks if a packet is a signaling message.
+// Signaling messages have a specific format starting with a type byte
+// in the range 0x01-0xFF (non-IP packet).
+func isSignalingPacket(pkt []byte) bool {
+	if len(pkt) < meshsignal.HeaderSize {
+		return false
+	}
+	// Check if it looks like a signaling message by checking the type
+	// Valid signaling types are 0x01-0x08 and 0xFF
+	msgType := pkt[0]
+	switch msgType {
+	case meshsignal.SignalCandidate,
+		meshsignal.SignalConnect,
+		meshsignal.SignalConnectAck,
+		meshsignal.SignalDisconnect,
+		meshsignal.SignalPing,
+		meshsignal.SignalPong,
+		meshsignal.SignalError:
+		return true
+	default:
+		// Check if it starts with IPv4 version (0x4X)
+		// If not, it might be a signaling message
+		return (pkt[0] >> 4) != 4
 	}
 }
 

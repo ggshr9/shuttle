@@ -4,20 +4,50 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log/slog"
 	"net"
 	"sync"
+	"time"
+
+	"github.com/shuttle-proxy/shuttle/mesh/p2p"
+	"github.com/shuttle-proxy/shuttle/mesh/signal"
 )
 
 // MeshClient manages a mesh stream on the client side.
 type MeshClient struct {
-	stream   io.ReadWriteCloser
-	mu       sync.Mutex // protects writes
+	stream    io.ReadWriteCloser
+	mu        sync.Mutex // protects writes
 	virtualIP net.IP
-	meshNet  *net.IPNet
+	meshNet   *net.IPNet
+
+	// P2P support
+	p2pEnabled    bool
+	p2pManager    *p2p.Manager
+	signalClient  *signal.Client
+	fallbackCtrl  *p2p.FallbackController
+	logger        *slog.Logger
+}
+
+// MeshClientConfig configures the mesh client.
+type MeshClientConfig struct {
+	P2PEnabled          bool
+	STUNServers         []string
+	HolePunchTimeout    time.Duration
+	DirectRetryInterval time.Duration
+	KeepAliveInterval   time.Duration
+	FallbackThreshold   float64
+	LocalPrivateKey     [32]byte
+	LocalPublicKey      [32]byte
+	Logger              *slog.Logger
 }
 
 // NewMeshClient opens a mesh stream, performs the handshake, and returns a ready client.
 func NewMeshClient(ctx context.Context, openStream func(ctx context.Context) (io.ReadWriteCloser, error)) (*MeshClient, error) {
+	return NewMeshClientWithConfig(ctx, openStream, nil)
+}
+
+// NewMeshClientWithConfig opens a mesh stream with custom configuration.
+func NewMeshClientWithConfig(ctx context.Context, openStream func(ctx context.Context) (io.ReadWriteCloser, error), cfg *MeshClientConfig) (*MeshClient, error) {
 	stream, err := openStream(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("mesh: open stream: %w", err)
@@ -47,11 +77,58 @@ func NewMeshClient(ctx context.Context, openStream func(ctx context.Context) (io
 		Mask: net.IPMask(maskIP),
 	}
 
-	return &MeshClient{
+	mc := &MeshClient{
 		stream:    stream,
 		virtualIP: ip,
 		meshNet:   meshNet,
-	}, nil
+	}
+
+	// Initialize P2P if enabled
+	if cfg != nil && cfg.P2PEnabled {
+		mc.p2pEnabled = true
+		mc.logger = cfg.Logger
+		if mc.logger == nil {
+			mc.logger = slog.Default()
+		}
+
+		// Create signal client
+		mc.signalClient = signal.NewClient(ip, stream, mc.logger)
+
+		// Create fallback controller
+		fallbackCfg := &p2p.FallbackConfig{
+			HolePunchTimeout:    cfg.HolePunchTimeout,
+			DirectRetryInterval: cfg.DirectRetryInterval,
+			LossThreshold:       cfg.FallbackThreshold,
+		}
+		mc.fallbackCtrl = p2p.NewFallbackController(fallbackCfg, mc.logger)
+
+		// Create P2P manager
+		p2pCfg := &p2p.Config{
+			LocalVIP:            ip,
+			LocalPrivateKey:     cfg.LocalPrivateKey,
+			LocalPublicKey:      cfg.LocalPublicKey,
+			STUNServers:         cfg.STUNServers,
+			HolePunchTimeout:    cfg.HolePunchTimeout,
+			DirectRetryInterval: cfg.DirectRetryInterval,
+			KeepAliveInterval:   cfg.KeepAliveInterval,
+			RelayFunc:           mc.sendViaRelay,
+		}
+
+		mc.p2pManager, err = p2p.NewManager(p2pCfg, mc.signalClient, mc.logger)
+		if err != nil {
+			mc.logger.Warn("mesh: failed to create P2P manager", "err", err)
+			mc.p2pEnabled = false
+		} else {
+			if err := mc.p2pManager.Start(); err != nil {
+				mc.logger.Warn("mesh: failed to start P2P manager", "err", err)
+				mc.p2pEnabled = false
+			} else {
+				mc.logger.Info("mesh: P2P enabled", "vip", ip)
+			}
+		}
+	}
+
+	return mc, nil
 }
 
 // VirtualIP returns the assigned virtual IP.
@@ -65,8 +142,46 @@ func (mc *MeshClient) IsMeshDestination(ip net.IP) bool {
 	return mc.meshNet.Contains(ip)
 }
 
-// Send writes a raw IPv4 packet to the mesh stream (thread-safe).
+// Send writes a raw IPv4 packet to the mesh.
+// If P2P is enabled, tries direct connection first, then falls back to relay.
 func (mc *MeshClient) Send(pkt []byte) error {
+	if len(pkt) < 20 {
+		return fmt.Errorf("mesh: packet too short")
+	}
+
+	// Extract destination IP from IPv4 header
+	dstIP := net.IP(pkt[16:20])
+
+	// Try P2P first if enabled
+	if mc.p2pEnabled && mc.p2pManager != nil {
+		decision := mc.fallbackCtrl.GetDecision(dstIP)
+
+		if decision == p2p.DecisionDirect {
+			start := time.Now()
+			err := mc.p2pManager.SendPacket(dstIP, pkt)
+			if err == nil {
+				mc.fallbackCtrl.RecordSuccess(dstIP, time.Since(start))
+				return nil
+			}
+
+			// Record failure and get new decision
+			newDecision := mc.fallbackCtrl.RecordFailure(dstIP)
+			if newDecision == p2p.DecisionDirect {
+				// Still try relay this time but don't switch permanently
+				return mc.sendViaRelay(pkt)
+			}
+		}
+
+		// Use relay
+		return mc.sendViaRelay(pkt)
+	}
+
+	// No P2P, use relay directly
+	return mc.sendViaRelay(pkt)
+}
+
+// sendViaRelay sends packet through the server relay.
+func (mc *MeshClient) sendViaRelay(pkt []byte) error {
 	mc.mu.Lock()
 	defer mc.mu.Unlock()
 	return WriteFrame(mc.stream, pkt)
@@ -77,7 +192,47 @@ func (mc *MeshClient) Receive() ([]byte, error) {
 	return ReadFrame(mc.stream)
 }
 
-// Close closes the underlying stream.
+// Close closes the underlying stream and P2P manager.
 func (mc *MeshClient) Close() error {
+	if mc.p2pManager != nil {
+		mc.p2pManager.Stop()
+	}
 	return mc.stream.Close()
+}
+
+// ConnectPeer initiates a P2P connection to a peer.
+func (mc *MeshClient) ConnectPeer(ctx context.Context, peerVIP net.IP) error {
+	if !mc.p2pEnabled || mc.p2pManager == nil {
+		return fmt.Errorf("mesh: P2P not enabled")
+	}
+	return mc.p2pManager.Connect(ctx, peerVIP)
+}
+
+// GetPeerState returns the connection state for a peer.
+func (mc *MeshClient) GetPeerState(peerVIP net.IP) p2p.ConnectionState {
+	if !mc.p2pEnabled || mc.p2pManager == nil {
+		return p2p.StateDisconnected
+	}
+	return mc.p2pManager.GetPeerState(peerVIP)
+}
+
+// GetP2PStats returns P2P connection statistics.
+func (mc *MeshClient) GetP2PStats() *p2p.ManagerStats {
+	if !mc.p2pEnabled || mc.p2pManager == nil {
+		return &p2p.ManagerStats{}
+	}
+	return mc.p2pManager.GetStats()
+}
+
+// IsP2PEnabled returns whether P2P is enabled.
+func (mc *MeshClient) IsP2PEnabled() bool {
+	return mc.p2pEnabled
+}
+
+// GetLocalCandidates returns the local ICE candidates.
+func (mc *MeshClient) GetLocalCandidates() []*p2p.Candidate {
+	if !mc.p2pEnabled || mc.p2pManager == nil {
+		return nil
+	}
+	return mc.p2pManager.LocalCandidates()
 }
