@@ -19,6 +19,10 @@
 
   onMount(async () => {
     config = await api.getConfig()
+    // Ensure system_proxy exists in config
+    if (!config.proxy.system_proxy) {
+      config.proxy.system_proxy = { enabled: false }
+    }
     // Get current version and check for updates
     try {
       const v = await api.getVersion()
@@ -114,6 +118,13 @@
         TUN
       </label>
       <input bind:value={config.proxy.tun.device_name} placeholder="utun7" />
+    </div>
+    <div class="system-proxy-row">
+      <label class="system-proxy-label">
+        <input type="checkbox" bind:checked={config.proxy.system_proxy.enabled} />
+        <span class="label-text">Auto System Proxy</span>
+        <span class="hint">Automatically configure system proxy on connect</span>
+      </label>
     </div>
   </section>
 
@@ -312,6 +323,30 @@
     gap: 6px;
     font-size: 13px;
     color: #8b949e;
+  }
+
+  .system-proxy-row {
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid #2d333b;
+  }
+
+  .system-proxy-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+  }
+
+  .system-proxy-label .label-text {
+    font-size: 13px;
+    color: #e1e4e8;
+  }
+
+  .system-proxy-label .hint {
+    font-size: 11px;
+    color: #8b949e;
+    margin-left: auto;
   }
 
   input[type="text"], input:not([type]) {

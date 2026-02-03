@@ -90,9 +90,15 @@ type CDNConfig struct {
 
 // ProxyConfig configures local proxy listeners.
 type ProxyConfig struct {
-	SOCKS5 SOCKS5Config `yaml:"socks5" json:"socks5"`
-	HTTP   HTTPConfig  `yaml:"http" json:"http"`
-	TUN    TUNConfig   `yaml:"tun" json:"tun"`
+	SOCKS5      SOCKS5Config      `yaml:"socks5" json:"socks5"`
+	HTTP        HTTPConfig        `yaml:"http" json:"http"`
+	TUN         TUNConfig         `yaml:"tun" json:"tun"`
+	SystemProxy SystemProxyConfig `yaml:"system_proxy" json:"system_proxy"`
+}
+
+// SystemProxyConfig configures automatic system proxy setting.
+type SystemProxyConfig struct {
+	Enabled bool `yaml:"enabled" json:"enabled"` // Auto-set system proxy on connect
 }
 
 // SOCKS5Config configures the SOCKS5 listener.

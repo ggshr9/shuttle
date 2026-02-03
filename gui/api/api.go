@@ -13,6 +13,7 @@ import (
 	"github.com/shuttle-proxy/shuttle/speedtest"
 	"github.com/shuttle-proxy/shuttle/stats"
 	"github.com/shuttle-proxy/shuttle/subscription"
+	"github.com/shuttle-proxy/shuttle/sysproxy"
 	"github.com/shuttle-proxy/shuttle/update"
 )
 
@@ -40,10 +41,23 @@ func HandlerWithOptions(eng *engine.Engine, subMgr *subscription.Manager, statsS
 			writeError(w, http.StatusConflict, err.Error())
 			return
 		}
+
+		// Set system proxy if enabled
+		cfg := eng.Config()
+		if cfg.Proxy.SystemProxy.Enabled {
+			setSystemProxy(&cfg)
+		}
+
 		writeJSON(w, map[string]string{"status": "connected"})
 	})
 
 	mux.HandleFunc("POST /api/disconnect", func(w http.ResponseWriter, r *http.Request) {
+		// Clear system proxy first
+		cfg := eng.Config()
+		if cfg.Proxy.SystemProxy.Enabled {
+			sysproxy.Clear()
+		}
+
 		if err := eng.Stop(); err != nil {
 			writeError(w, http.StatusConflict, err.Error())
 			return
@@ -733,4 +747,42 @@ func writeError(w http.ResponseWriter, code int, msg string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(code)
 	json.NewEncoder(w).Encode(map[string]string{"error": msg})
+}
+
+// setSystemProxy configures the system proxy based on the current config.
+func setSystemProxy(cfg *config.ClientConfig) {
+	proxyCfg := sysproxy.ProxyConfig{
+		Enable: true,
+		Bypass: sysproxy.DefaultBypass(),
+	}
+
+	// Extract host:port from listen addresses
+	if cfg.Proxy.HTTP.Enabled && cfg.Proxy.HTTP.Listen != "" {
+		proxyCfg.HTTPAddr = normalizeListenAddr(cfg.Proxy.HTTP.Listen)
+	}
+	if cfg.Proxy.SOCKS5.Enabled && cfg.Proxy.SOCKS5.Listen != "" {
+		proxyCfg.SOCKSAddr = normalizeListenAddr(cfg.Proxy.SOCKS5.Listen)
+	}
+
+	sysproxy.Set(proxyCfg)
+}
+
+// normalizeListenAddr converts listen addresses like ":1080" or "0.0.0.0:1080" to "127.0.0.1:1080"
+func normalizeListenAddr(addr string) string {
+	host, port, err := splitHostPort(addr)
+	if err != nil {
+		return addr
+	}
+	if host == "" || host == "0.0.0.0" || host == "::" {
+		host = "127.0.0.1"
+	}
+	return host + ":" + port
+}
+
+func splitHostPort(addr string) (host, port string, err error) {
+	idx := strings.LastIndex(addr, ":")
+	if idx < 0 {
+		return "", "", fmt.Errorf("no port in address")
+	}
+	return addr[:idx], addr[idx+1:], nil
 }
