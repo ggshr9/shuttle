@@ -703,9 +703,17 @@ func HandlerWithOptions(eng *engine.Engine, subMgr *subscription.Manager, statsS
 }
 
 // corsMiddleware adds CORS headers for dev mode (Vite on different port).
+// Only allows localhost origins for security.
 func corsMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Access-Control-Allow-Origin", r.Header.Get("Origin"))
+		origin := r.Header.Get("Origin")
+		// Only allow localhost origins for security
+		if strings.HasPrefix(origin, "http://localhost:") ||
+			strings.HasPrefix(origin, "http://127.0.0.1:") ||
+			origin == "http://localhost" ||
+			origin == "http://127.0.0.1" {
+			w.Header().Set("Access-Control-Allow-Origin", origin)
+		}
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
 		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
 		if r.Method == http.MethodOptions {

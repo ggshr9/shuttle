@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"runtime"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -124,9 +125,8 @@ func (c *Checker) buildUpdateInfo(release Release) *UpdateInfo {
 		Changelog:      release.Body,
 	}
 
-	// Check if update is available (simple string comparison)
-	// In production, use semver comparison
-	info.Available = latestVersion != currentVersion && currentVersion != "dev"
+	// Check if update is available using proper version comparison
+	info.Available = currentVersion != "dev" && compareVersions(latestVersion, currentVersion) > 0
 
 	// Find appropriate asset for current platform
 	assetName := c.getAssetName()
@@ -159,4 +159,38 @@ func (c *Checker) getAssetName() string {
 // GetCurrentVersion returns the current version.
 func GetCurrentVersion() string {
 	return Version
+}
+
+// compareVersions compares two semantic versions.
+// Returns 1 if a > b, -1 if a < b, 0 if equal.
+func compareVersions(a, b string) int {
+	aParts := parseVersion(a)
+	bParts := parseVersion(b)
+
+	for i := 0; i < 3; i++ {
+		if aParts[i] > bParts[i] {
+			return 1
+		}
+		if aParts[i] < bParts[i] {
+			return -1
+		}
+	}
+	return 0
+}
+
+// parseVersion extracts major, minor, patch from version string.
+func parseVersion(v string) [3]int {
+	var parts [3]int
+	v = strings.TrimPrefix(v, "v")
+
+	// Split by dot and parse
+	segments := strings.Split(v, ".")
+	for i := 0; i < len(segments) && i < 3; i++ {
+		// Remove any suffix (e.g., "1.0.0-beta" -> "1.0.0")
+		num := strings.Split(segments[i], "-")[0]
+		if n, err := strconv.Atoi(num); err == nil {
+			parts[i] = n
+		}
+	}
+	return parts
 }

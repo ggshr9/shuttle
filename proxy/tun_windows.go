@@ -95,10 +95,10 @@ func (t *TUNServer) setupRoutes() error {
 		return err
 	}
 
-	// Calculate gateway (local IP)
-	localIP := make(net.IP, 4)
+	// Calculate gateway (local IP) - handle both IPv4 and IPv6
+	localIP := make(net.IP, len(ipNet.IP))
 	copy(localIP, ipNet.IP)
-	localIP[3]++
+	localIP[len(localIP)-1]++
 
 	// Calculate subnet mask
 	mask := net.IP(ipNet.Mask)

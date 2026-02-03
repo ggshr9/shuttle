@@ -24,13 +24,15 @@ type ConnTracker struct {
 type trackedConn struct {
 	id        string
 	target    string
-	rule      string
 	protocol  string
-	process   string
 	startTime time.Time
 	bytesIn   atomic.Int64
 	bytesOut  atomic.Int64
 	conn      net.Conn
+
+	mu      sync.RWMutex
+	rule    string
+	process string
 }
 
 // NewConnTracker creates a new connection tracker plugin.
@@ -54,19 +56,16 @@ func (ct *ConnTracker) OnConnect(conn net.Conn, target string) (net.Conn, error)
 		conn:      conn,
 	}
 
-	// Try to extract process name and rule from context if available
-	// These would be set by the router/dialer
-	if ctx := conn.RemoteAddr(); ctx != nil {
-		// Process name might be available via context in TUN mode
-		tc.process = "" // Will be populated if available
-	}
-
 	ct.conns.Store(connID, tc)
 
 	// Emit connection opened event
 	if ct.emitter != nil {
+		tc.mu.RLock()
+		rule := tc.rule
+		process := tc.process
+		tc.mu.RUnlock()
 		ct.emitter.EmitConnectionEvent(
-			connID, "opened", target, tc.rule, tc.protocol, tc.process,
+			connID, "opened", target, rule, tc.protocol, process,
 			0, 0, 0,
 		)
 	}
@@ -91,9 +90,15 @@ func (ct *ConnTracker) closeTracked(tc *trackedConn) {
 
 	duration := time.Since(tc.startTime).Milliseconds()
 
+	// Read rule and process with lock
+	tc.mu.RLock()
+	rule := tc.rule
+	process := tc.process
+	tc.mu.RUnlock()
+
 	if ct.emitter != nil {
 		ct.emitter.EmitConnectionEvent(
-			tc.id, "closed", tc.target, tc.rule, tc.protocol, tc.process,
+			tc.id, "closed", tc.target, rule, tc.protocol, process,
 			tc.bytesIn.Load(), tc.bytesOut.Load(), duration,
 		)
 	}
@@ -103,7 +108,9 @@ func (ct *ConnTracker) closeTracked(tc *trackedConn) {
 func (ct *ConnTracker) SetConnRule(connID, rule string) {
 	if v, ok := ct.conns.Load(connID); ok {
 		tc := v.(*trackedConn)
+		tc.mu.Lock()
 		tc.rule = rule
+		tc.mu.Unlock()
 	}
 }
 
@@ -111,7 +118,9 @@ func (ct *ConnTracker) SetConnRule(connID, rule string) {
 func (ct *ConnTracker) SetConnProcess(connID, process string) {
 	if v, ok := ct.conns.Load(connID); ok {
 		tc := v.(*trackedConn)
+		tc.mu.Lock()
 		tc.process = process
+		tc.mu.Unlock()
 	}
 }
 
