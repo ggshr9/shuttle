@@ -36,4 +36,6 @@ dependencies {
     // gomobile bind output: shuttle.aar
     implementation(fileTree(mapOf("dir" to "libs", "include" to listOf("*.aar"))))
     implementation("org.jetbrains.kotlin:kotlin-stdlib:1.9.22")
+    implementation("androidx.core:core-ktx:1.12.0")
+    implementation("androidx.appcompat:appcompat:1.6.1")
 }

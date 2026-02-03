@@ -1,0 +1,113 @@
+{
+  "_name": "English",
+  "nav": {
+    "dashboard": "Dashboard",
+    "servers": "Servers",
+    "subscriptions": "Subscriptions",
+    "routing": "Routing",
+    "logs": "Logs",
+    "settings": "Settings"
+  },
+  "dashboard": {
+    "upload": "Upload",
+    "download": "Download",
+    "totalUpload": "Total Upload",
+    "totalDownload": "Total Download",
+    "activeConnections": "Active Connections",
+    "totalConnections": "Total Connections",
+    "transport": "Transport",
+    "transports": "Transports",
+    "state": {
+      "stopped": "stopped",
+      "starting": "starting",
+      "running": "running",
+      "stopping": "stopping",
+      "loading": "loading..."
+    },
+    "unavailable": "unavailable"
+  },
+  "servers": {
+    "activeServer": "Active Server",
+    "serverAddress": "Server Address",
+    "name": "Name",
+    "password": "Password",
+    "saveReconnect": "Save & Reconnect",
+    "saving": "Saving...",
+    "savedServers": "Saved Servers",
+    "noSavedServers": "No saved servers",
+    "addServer": "Add Server",
+    "use": "Use",
+    "remove": "Remove",
+    "import": "Import",
+    "testAll": "Test All",
+    "testing": "Testing ({done}/{total})..."
+  },
+  "import": {
+    "title": "Import Servers",
+    "description": "Paste configuration data below. Supported formats:",
+    "formats": {
+      "uri": "shuttle:// URI (one per line)",
+      "json": "JSON (single server or array)",
+      "base64": "Base64 encoded JSON"
+    },
+    "placeholder": "shuttle://password@example.com:443?name=My Server",
+    "cancel": "Cancel",
+    "import": "Import",
+    "importing": "Importing...",
+    "added": "Added {added} of {total} server(s)"
+  },
+  "subscriptions": {
+    "title": "Subscriptions",
+    "add": "Add Subscription",
+    "noSubscriptions": "No subscriptions yet",
+    "noSubscriptionsHelp": "Add a subscription URL to automatically import servers",
+    "name": "Name (optional)",
+    "url": "Subscription URL",
+    "supportedFormats": "Supported formats: Shuttle JSON, SIP008, Base64",
+    "servers": "{count} servers",
+    "updated": "Updated: {date}",
+    "never": "Never",
+    "refresh": "Refresh",
+    "refreshing": "Refreshing...",
+    "delete": "Delete",
+    "moreServers": "+{count} more",
+    "error": "Error: {message}"
+  },
+  "routing": {
+    "title": "Routing Rules",
+    "defaultAction": "Default Action",
+    "proxy": "Proxy",
+    "direct": "Direct",
+    "addRule": "Add Rule",
+    "save": "Save",
+    "saving": "Saving..."
+  },
+  "logs": {
+    "title": "Logs",
+    "autoScroll": "Auto-scroll",
+    "clear": "Clear",
+    "export": "Export",
+    "waiting": "Waiting for log events..."
+  },
+  "settings": {
+    "title": "Settings",
+    "proxyListeners": "Proxy Listeners",
+    "log": "Log",
+    "logLevel": "Level",
+    "saveReload": "Save & Reload",
+    "saving": "Saving...",
+    "export": "Export Configuration",
+    "exportJson": "Export JSON",
+    "exportUri": "Export URIs",
+    "language": "Language"
+  },
+  "common": {
+    "cancel": "Cancel",
+    "save": "Save",
+    "delete": "Delete",
+    "loading": "Loading...",
+    "error": "Error",
+    "success": "Success",
+    "timeout": "timeout"
+  }
+}

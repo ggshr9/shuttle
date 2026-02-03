@@ -1,23 +1,39 @@
 <script>
-  let tab = $state('dashboard')
+  import { onMount } from 'svelte'
+  import { t, subscribeLocale } from './lib/i18n/index.js'
 
-  const tabs = [
-    { id: 'dashboard', label: 'Dashboard' },
-    { id: 'servers', label: 'Servers' },
-    { id: 'routing', label: 'Routing' },
-    { id: 'logs', label: 'Logs' },
-    { id: 'settings', label: 'Settings' },
-  ]
+  let tab = $state('dashboard')
+  let locale = $state('en')
+
+  // Subscribe to locale changes for reactivity
+  onMount(() => {
+    return subscribeLocale((newLocale) => {
+      locale = newLocale
+    })
+  })
+
+  // Reactive tabs that update when locale changes
+  const tabs = $derived([
+    { id: 'dashboard', label: t('nav.dashboard') },
+    { id: 'servers', label: t('nav.servers') },
+    { id: 'subscriptions', label: t('nav.subscriptions') },
+    { id: 'routing', label: t('nav.routing') },
+    { id: 'logs', label: t('nav.logs') },
+    { id: 'settings', label: t('nav.settings') },
+  ])
+
+  // Force dependency on locale for reactivity
+  $effect(() => { void locale })
 </script>
 
 <div class="app">
   <nav class="tabs">
-    {#each tabs as t}
+    {#each tabs as item}
       <button
-        class:active={tab === t.id}
-        onclick={() => (tab = t.id)}
+        class:active={tab === item.id}
+        onclick={() => (tab = item.id)}
       >
-        {t.label}
+        {item.label}
       </button>
     {/each}
   </nav>
@@ -30,6 +46,10 @@
     {:else if tab === 'servers'}
       {#await import('./pages/Servers.svelte') then { default: Servers }}
         <Servers />
+      {/await}
+    {:else if tab === 'subscriptions'}
+      {#await import('./pages/Subscriptions.svelte') then { default: Subscriptions }}
+        <Subscriptions />
       {/await}
     {:else if tab === 'routing'}
       {#await import('./pages/Routing.svelte') then { default: Routing }}

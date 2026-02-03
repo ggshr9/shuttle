@@ -597,6 +597,23 @@ func (e *Engine) emit(ev Event) {
 	}
 }
 
+// EmitConnectionEvent emits a connection event to all subscribers.
+// This is used by plugins to report connection open/close events.
+func (e *Engine) EmitConnectionEvent(connID, state, target, rule, protocol, processName string, bytesIn, bytesOut, durationMs int64) {
+	e.emit(Event{
+		Type:        EventConnection,
+		ConnID:      connID,
+		ConnState:   state,
+		Target:      target,
+		Rule:        rule,
+		Protocol:    protocol,
+		ProcessName: processName,
+		BytesIn:     bytesIn,
+		BytesOut:    bytesOut,
+		DurationMs:  durationMs,
+	})
+}
+
 func (e *Engine) speedLoop(ctx context.Context) {
 	ticker := time.NewTicker(1 * time.Second)
 	defer ticker.Stop()

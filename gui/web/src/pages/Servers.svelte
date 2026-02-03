@@ -1,5 +1,6 @@
 <script>
   import { api } from '../lib/api.js'
+  import { connectWS } from '../lib/ws.js'
   import { onMount } from 'svelte'
 
   let active = $state({ addr: '', name: '', password: '' })
@@ -7,6 +8,20 @@
   let saving = $state(false)
   let msg = $state('')
   let newServer = $state({ addr: '', name: '', password: '' })
+
+  // Import dialog state
+  let showImport = $state(false)
+  let importData = $state('')
+  let importing = $state(false)
+  let importResult = $state(null)
+
+  // Speedtest state
+  let testing = $state(false)
+  let testProgress = $state({ done: 0, total: 0 })
+  let testResults = $state({}) // addr -> result
+
+  // Auto-select state
+  let autoSelecting = $state(false)
 
   onMount(async () => {
     try {
@@ -55,6 +70,87 @@
       msg = e.message
     }
   }
+
+  async function doImport() {
+    if (!importData.trim()) return
+    importing = true
+    importResult = null
+    try {
+      const result = await api.importConfig(importData)
+      importResult = result
+      // Refresh server list
+      const data = await api.getServers()
+      servers = data.servers || []
+      if (result.added > 0) {
+        msg = `Imported ${result.added} server(s)`
+      }
+    } catch (e) {
+      importResult = { error: e.message }
+    } finally {
+      importing = false
+    }
+  }
+
+  function closeImport() {
+    showImport = false
+    importData = ''
+    importResult = null
+  }
+
+  function runSpeedtest() {
+    testing = true
+    testProgress = { done: 0, total: 0 }
+    testResults = {}
+
+    const ws = connectWS('/api/speedtest/stream', (data) => {
+      if (data.total) {
+        testProgress.total = data.total
+      }
+      if (data.result) {
+        testResults[data.result.server_addr] = data.result
+        testProgress.done++
+        testResults = { ...testResults } // trigger reactivity
+        testProgress = { ...testProgress }
+      }
+      if (data.done) {
+        testing = false
+        ws.close()
+      }
+      if (data.error) {
+        msg = data.error
+        testing = false
+        ws.close()
+      }
+    })
+  }
+
+  function getLatencyDisplay(addr) {
+    const result = testResults[addr]
+    if (!result) return null
+    if (!result.available) return { text: 'timeout', class: 'latency-error' }
+    const ms = result.latency
+    if (ms < 100) return { text: `${ms}ms`, class: 'latency-good' }
+    if (ms < 300) return { text: `${ms}ms`, class: 'latency-ok' }
+    return { text: `${ms}ms`, class: 'latency-slow' }
+  }
+
+  async function autoSelect() {
+    if (servers.length === 0) {
+      msg = 'No servers to select from'
+      return
+    }
+    autoSelecting = true
+    msg = ''
+    try {
+      const result = await api.autoSelectServer()
+      active = result.server
+      msg = `Selected ${result.server.name || result.server.addr} (${result.latency}ms)`
+    } catch (e) {
+      msg = e.message
+    } finally {
+      autoSelecting = false
+    }
+  }
 </script>
 
 <div class="page">
@@ -80,15 +176,34 @@
     {#if msg}<p class="msg">{msg}</p>{/if}
   </div>
 
-  <h2 class="section">Saved Servers</h2>
+  <div class="section-header">
+    <h2 class="section">Saved Servers</h2>
+    <div class="section-actions">
+      <button class="btn-auto" onclick={autoSelect} disabled={autoSelecting || testing || servers.length === 0}>
+        {autoSelecting ? 'Selecting...' : 'Auto Select'}
+      </button>
+      <button class="btn-test" onclick={runSpeedtest} disabled={testing || autoSelecting}>
+        {#if testing}
+          Testing ({testProgress.done}/{testProgress.total})...
+        {:else}
+          Test All
+        {/if}
+      </button>
+      <button class="btn-import" onclick={() => (showImport = true)}>Import</button>
+    </div>
+  </div>
 
   {#if servers.length}
     <div class="server-list">
       {#each servers as srv}
+        {@const latency = getLatencyDisplay(srv.addr)}
         <div class="server-item">
           <div class="server-info">
             <span class="server-name">{srv.name || srv.addr}</span>
             <span class="server-addr">{srv.addr}</span>
+            {#if latency}
+              <span class="latency {latency.class}">{latency.text}</span>
+            {/if}
           </div>
           <div class="server-actions">
             <button class="btn-sm" onclick={() => switchTo(srv)}>Use</button>
@@ -109,6 +224,54 @@
     <button onclick={addServer}>Add</button>
   </div>
 </div>
+
+{#if showImport}
+  <div class="modal-overlay" onclick={closeImport}>
+    <div class="modal" onclick={(e) => e.stopPropagation()}>
+      <div class="modal-header">
+        <h3>Import Servers</h3>
+        <button class="modal-close" onclick={closeImport}>&times;</button>
+      </div>
+      <div class="modal-body">
+        <p class="help-text">
+          Paste configuration data below. Supported formats:
+        </p>
+        <ul class="help-list">
+          <li>shuttle:// URI (one per line)</li>
+          <li>JSON (single server or array)</li>
+          <li>Base64 encoded JSON</li>
+        </ul>
+        <textarea
+          bind:value={importData}
+          placeholder="shuttle://password@example.com:443?name=My Server"
+          rows="6"
+        ></textarea>
+        {#if importResult}
+          {#if importResult.error}
+            <p class="import-error">{importResult.error}</p>
+          {:else}
+            <p class="import-success">
+              Added {importResult.added} of {importResult.total} server(s)
+            </p>
+            {#if importResult.errors?.length}
+              <ul class="import-errors">
+                {#each importResult.errors as err}
+                  <li>{err}</li>
+                {/each}
+              </ul>
+            {/if}
+          {/if}
+        {/if}
+      </div>
+      <div class="modal-footer">
+        <button class="btn-cancel" onclick={closeImport}>Cancel</button>
+        <button class="btn-primary" onclick={doImport} disabled={importing || !importData.trim()}>
+          {importing ? 'Importing...' : 'Import'}
+        </button>
+      </div>
+    </div>
+  </div>
+{/if}
 
 <style>
   .page { max-width: 560px; }
@@ -195,4 +358,205 @@
     grid-column: span 2;
     margin-top: 0;
   }
+
+  .section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .section-actions {
+    display: flex;
+    gap: 8px;
+  }
+
+  .btn-auto {
+    background: #238636;
+    color: #fff;
+    border: 1px solid #238636;
+    border-radius: 6px;
+    padding: 6px 14px;
+    cursor: pointer;
+    font-size: 13px;
+    margin-top: 0;
+  }
+  .btn-auto:hover { background: #2ea043; }
+  .btn-auto:disabled { opacity: 0.5; cursor: default; }
+
+  .btn-test {
+    background: #21262d;
+    color: #3fb950;
+    border: 1px solid #2d333b;
+    border-radius: 6px;
+    padding: 6px 14px;
+    cursor: pointer;
+    font-size: 13px;
+    margin-top: 0;
+  }
+  .btn-test:hover { background: #30363d; }
+  .btn-test:disabled { opacity: 0.7; cursor: default; }
+
+  .latency {
+    font-size: 12px;
+    padding: 2px 6px;
+    border-radius: 4px;
+    margin-left: 8px;
+  }
+
+  .latency-good {
+    background: rgba(63, 185, 80, 0.2);
+    color: #3fb950;
+  }
+
+  .latency-ok {
+    background: rgba(210, 153, 34, 0.2);
+    color: #d29922;
+  }
+
+  .latency-slow {
+    background: rgba(248, 81, 73, 0.2);
+    color: #f85149;
+  }
+
+  .latency-error {
+    background: rgba(248, 81, 73, 0.2);
+    color: #f85149;
+  }
+
+  .btn-import {
+    background: #21262d;
+    color: #58a6ff;
+    border: 1px solid #2d333b;
+    border-radius: 6px;
+    padding: 6px 14px;
+    cursor: pointer;
+    font-size: 13px;
+    margin-top: 0;
+  }
+  .btn-import:hover { background: #30363d; }
+
+  .modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.7);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+  }
+
+  .modal {
+    background: #161b22;
+    border: 1px solid #2d333b;
+    border-radius: 12px;
+    width: 90%;
+    max-width: 480px;
+    max-height: 90vh;
+    overflow: hidden;
+  }
+
+  .modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px;
+    border-bottom: 1px solid #2d333b;
+  }
+
+  .modal-header h3 {
+    margin: 0;
+    font-size: 16px;
+    color: #e1e4e8;
+  }
+
+  .modal-close {
+    background: none;
+    border: none;
+    color: #8b949e;
+    font-size: 24px;
+    cursor: pointer;
+    padding: 0;
+    line-height: 1;
+    margin-top: 0;
+  }
+  .modal-close:hover { color: #e1e4e8; }
+
+  .modal-body {
+    padding: 16px;
+  }
+
+  .help-text {
+    font-size: 13px;
+    color: #8b949e;
+    margin: 0 0 8px;
+  }
+
+  .help-list {
+    font-size: 12px;
+    color: #6e7681;
+    margin: 0 0 12px;
+    padding-left: 20px;
+  }
+
+  .modal-body textarea {
+    width: 100%;
+    background: #0d1117;
+    border: 1px solid #2d333b;
+    border-radius: 6px;
+    padding: 10px;
+    color: #e1e4e8;
+    font-size: 13px;
+    font-family: 'Cascadia Code', 'Fira Code', monospace;
+    resize: vertical;
+    box-sizing: border-box;
+  }
+
+  .modal-body textarea:focus {
+    outline: none;
+    border-color: #58a6ff;
+  }
+
+  .import-error {
+    color: #f85149;
+    font-size: 13px;
+    margin: 8px 0 0;
+  }
+
+  .import-success {
+    color: #3fb950;
+    font-size: 13px;
+    margin: 8px 0 0;
+  }
+
+  .import-errors {
+    color: #d29922;
+    font-size: 12px;
+    margin: 4px 0 0;
+    padding-left: 20px;
+  }
+
+  .modal-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    padding: 12px 16px;
+    border-top: 1px solid #2d333b;
+  }
+
+  .btn-cancel {
+    background: #21262d;
+    color: #e1e4e8;
+    margin-top: 0;
+  }
+  .btn-cancel:hover { background: #30363d; }
+
+  .btn-primary {
+    background: #238636;
+    margin-top: 0;
+  }
+  .btn-primary:hover { background: #2ea043; }
+  .btn-primary:disabled { opacity: 0.5; }
 </style>

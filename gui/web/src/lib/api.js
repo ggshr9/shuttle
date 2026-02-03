@@ -22,7 +22,31 @@ export const api = {
   putServers: (srv) => request('PUT', '/api/config/servers', srv),
   addServer: (srv) => request('POST', '/api/config/servers', srv),
   deleteServer: (addr) => request('DELETE', '/api/config/servers', { addr }),
+  autoSelectServer: () => request('POST', '/api/config/servers/auto-select'),
+  importConfig: (data) => request('POST', '/api/config/import', { data }),
+  exportConfig: (format = 'json') => `${BASE}/api/config/export?format=${format}`,
   getRouting: () => request('GET', '/api/routing/rules'),
   putRouting: (r) => request('PUT', '/api/routing/rules', r),
+  exportRouting: () => `${BASE}/api/routing/export`,
+  importRouting: (rules) => request('POST', '/api/routing/import', rules),
+  getRoutingTemplates: () => request('GET', '/api/routing/templates'),
+  applyRoutingTemplate: (id) => request('POST', `/api/routing/templates/${id}`),
   getProcesses: () => request('GET', '/api/processes'),
+  // Speedtest
+  speedtest: (addrs) => request('POST', '/api/speedtest', { addrs }),
+  // Subscriptions
+  getSubscriptions: () => request('GET', '/api/subscriptions'),
+  addSubscription: (sub) => request('POST', '/api/subscriptions', sub),
+  refreshSubscription: (id) => request('PUT', `/api/subscriptions/${id}/refresh`),
+  deleteSubscription: (id) => request('DELETE', `/api/subscriptions/${id}`),
+  // Logs
+  exportLogs: () => `${BASE}/api/logs/export`,
+  // Stats
+  getStatsHistory: (days = 7) => request('GET', `/api/stats/history?days=${days}`),
+  // Backup/Restore
+  backupUrl: () => `${BASE}/api/backup`,
+  restore: (backup) => request('POST', '/api/restore', backup),
+  // Update
+  checkUpdate: (force = false) => request('GET', `/api/update/check?force=${force}`),
+  getVersion: () => request('GET', '/api/version'),
 }

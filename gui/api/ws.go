@@ -7,6 +7,7 @@ import (
 	"nhooyr.io/websocket"
 
 	"github.com/shuttle-proxy/shuttle/engine"
+	"github.com/shuttle-proxy/shuttle/speedtest"
 )
 
 func handleEventWS(w http.ResponseWriter, r *http.Request, eng *engine.Engine, filter engine.EventType) {
@@ -39,4 +40,65 @@ func handleEventWS(w http.ResponseWriter, r *http.Request, eng *engine.Engine, f
 			}
 		}
 	}
+}
+
+func handleSpeedtestWS(w http.ResponseWriter, r *http.Request, eng *engine.Engine) {
+	c, err := websocket.Accept(w, r, &websocket.AcceptOptions{
+		InsecureSkipVerify: true,
+	})
+	if err != nil {
+		return
+	}
+	defer c.Close(websocket.StatusNormalClosure, "")
+
+	cfg := eng.Config()
+	ctx := r.Context()
+
+	// Collect all servers to test
+	var servers []speedtest.Server
+	if cfg.Server.Addr != "" {
+		servers = append(servers, speedtest.Server{
+			Addr:     cfg.Server.Addr,
+			Name:     cfg.Server.Name,
+			Password: cfg.Server.Password,
+			SNI:      cfg.Server.SNI,
+		})
+	}
+	for _, srv := range cfg.Servers {
+		servers = append(servers, speedtest.Server{
+			Addr:     srv.Addr,
+			Name:     srv.Name,
+			Password: srv.Password,
+			SNI:      srv.SNI,
+		})
+	}
+
+	if len(servers) == 0 {
+		data, _ := json.Marshal(map[string]string{"error": "no servers configured"})
+		c.Write(ctx, websocket.MessageText, data)
+		return
+	}
+
+	// Send total count first
+	data, _ := json.Marshal(map[string]int{"total": len(servers)})
+	if err := c.Write(ctx, websocket.MessageText, data); err != nil {
+		return
+	}
+
+	// Stream results as they complete
+	resultCh := make(chan speedtest.TestResult, len(servers))
+	tester := speedtest.NewTester(nil)
+
+	go tester.TestAllStream(ctx, servers, resultCh)
+
+	for result := range resultCh {
+		data, _ := json.Marshal(map[string]any{"result": result})
+		if err := c.Write(ctx, websocket.MessageText, data); err != nil {
+			return
+		}
+	}
+
+	// Send completion message
+	data, _ = json.Marshal(map[string]bool{"done": true})
+	c.Write(ctx, websocket.MessageText, data)
 }

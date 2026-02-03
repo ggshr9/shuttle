@@ -10,14 +10,22 @@ import (
 
 // ClientConfig is the top-level client configuration.
 type ClientConfig struct {
-	Server     ServerEndpoint   `yaml:"server" json:"server"`
-	Servers    []ServerEndpoint `yaml:"servers,omitempty" json:"servers,omitempty"` // saved server list
-	Transport  TransportConfig  `yaml:"transport" json:"transport"`
-	Proxy      ProxyConfig      `yaml:"proxy" json:"proxy"`
-	Routing    RoutingConfig    `yaml:"routing" json:"routing"`
-	Congestion CongestionConfig `yaml:"congestion" json:"congestion"`
-	Mesh       MeshConfig       `yaml:"mesh" json:"mesh"`
-	Log        LogConfig        `yaml:"log" json:"log"`
+	Server        ServerEndpoint       `yaml:"server" json:"server"`
+	Servers       []ServerEndpoint     `yaml:"servers,omitempty" json:"servers,omitempty"` // saved server list
+	Subscriptions []SubscriptionConfig `yaml:"subscriptions,omitempty" json:"subscriptions,omitempty"`
+	Transport     TransportConfig      `yaml:"transport" json:"transport"`
+	Proxy         ProxyConfig          `yaml:"proxy" json:"proxy"`
+	Routing       RoutingConfig        `yaml:"routing" json:"routing"`
+	Congestion    CongestionConfig     `yaml:"congestion" json:"congestion"`
+	Mesh          MeshConfig           `yaml:"mesh" json:"mesh"`
+	Log           LogConfig            `yaml:"log" json:"log"`
+}
+
+// SubscriptionConfig represents a subscription source.
+type SubscriptionConfig struct {
+	ID   string `yaml:"id" json:"id"`
+	Name string `yaml:"name" json:"name"`
+	URL  string `yaml:"url" json:"url"`
 }
 
 // MeshConfig configures the client-side mesh virtual LAN.
@@ -317,6 +325,10 @@ func (c *ClientConfig) DeepCopy() *ClientConfig {
 	if c.Servers != nil {
 		cp.Servers = make([]ServerEndpoint, len(c.Servers))
 		copy(cp.Servers, c.Servers)
+	}
+	if c.Subscriptions != nil {
+		cp.Subscriptions = make([]SubscriptionConfig, len(c.Subscriptions))
+		copy(cp.Subscriptions, c.Subscriptions)
 	}
 	if c.Routing.Rules != nil {
 		cp.Routing.Rules = make([]RouteRule, len(c.Routing.Rules))

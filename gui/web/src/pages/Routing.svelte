@@ -9,10 +9,24 @@
   let showProcessPicker = $state(false)
   let pickerTargetIndex = $state(-1)
 
+  // Templates
+  let templates = $state([])
+  let showTemplates = $state(false)
+  let applyingTemplate = $state(false)
+
+  // Import
+  let showImport = $state(false)
+  let importData = $state('')
+  let importing = $state(false)
+
   onMount(async () => {
     routing = await api.getRouting()
     // Normalize rules to have a 'type' field for the UI
     routing.rules = routing.rules.map(normalizeRule)
+    // Load templates
+    try {
+      templates = await api.getRoutingTemplates()
+    } catch {}
   })
 
   function normalizeRule(rule) {
@@ -92,10 +106,56 @@
       saving = false
     }
   }
+
+  async function applyTemplate(id) {
+    applyingTemplate = true
+    try {
+      await api.applyRoutingTemplate(id)
+      // Reload rules after template applied
+      routing = await api.getRouting()
+      routing.rules = routing.rules.map(normalizeRule)
+      showTemplates = false
+      msg = 'Template applied'
+    } catch (e) {
+      msg = e.message
+    } finally {
+      applyingTemplate = false
+    }
+  }
+
+  async function doImport() {
+    if (!importData.trim()) return
+    importing = true
+    try {
+      const parsed = JSON.parse(importData)
+      const result = await api.importRouting(parsed)
+      // Reload rules
+      routing = await api.getRouting()
+      routing.rules = routing.rules.map(normalizeRule)
+      showImport = false
+      importData = ''
+      msg = `Imported ${result.added} rule(s)`
+    } catch (e) {
+      msg = 'Import failed: ' + e.message
+    } finally {
+      importing = false
+    }
+  }
+
+  function exportRules() {
+    window.open(api.exportRouting(), '_blank')
+  }
 </script>
 
 <div class="page">
-  <h2>Routing Rules</h2>
+  <div class="header">
+    <h2>Routing Rules</h2>
+    <div class="header-actions">
+      <button class="btn-template" onclick={() => (showTemplates = true)}>Templates</button>
+      <button class="btn-import" onclick={() => (showImport = true)}>Import</button>
+      <button class="btn-export" onclick={exportRules}>Export</button>
+    </div>
+  </div>
 
   <label class="default-row">
     <span>Default Action</span>
@@ -150,6 +210,44 @@
   {#if msg}<p class="msg">{msg}</p>{/if}
 </div>
 
+{#if showTemplates}
+<div class="overlay" onclick={() => (showTemplates = false)} role="dialog" onkeydown={(e) => e.key === 'Escape' && (showTemplates = false)}>
+  <div class="modal" onclick={(e) => e.stopPropagation()} role="document">
+    <h3>Routing Templates</h3>
+    <p class="modal-hint">Choose a template to replace current rules</p>
+    <div class="template-list">
+      {#each templates as t}
+        <button class="template-item" onclick={() => applyTemplate(t.id)} disabled={applyingTemplate}>
+          <span class="template-name">{t.name}</span>
+          <span class="template-desc">{t.description}</span>
+        </button>
+      {/each}
+    </div>
+    <button class="close-btn" onclick={() => (showTemplates = false)}>Cancel</button>
+  </div>
+</div>
+{/if}
+
+{#if showImport}
+<div class="overlay" onclick={() => (showImport = false)} role="dialog" onkeydown={(e) => e.key === 'Escape' && (showImport = false)}>
+  <div class="modal" onclick={(e) => e.stopPropagation()} role="document">
+    <h3>Import Rules</h3>
+    <p class="modal-hint">Paste JSON rules configuration</p>
+    <textarea
+      bind:value={importData}
+      placeholder={'{"rules": [{"geosite": "cn", "action": "direct"}], "default": "proxy"}'}
+      rows="8"
+    ></textarea>
+    <div class="modal-actions">
+      <button class="close-btn" onclick={() => (showImport = false)}>Cancel</button>
+      <button class="apply-btn" onclick={doImport} disabled={importing || !importData.trim()}>
+        {importing ? 'Importing...' : 'Import'}
+      </button>
+    </div>
+  </div>
+</div>
+{/if}
+
 {#if showProcessPicker}
 <div class="overlay" onclick={closeProcessPicker}>
   <div class="picker" onclick={(e) => e.stopPropagation()}>
@@ -174,7 +272,39 @@
 
 <style>
   .page { max-width: 700px; }
-  h2 { font-size: 18px; margin-bottom: 20px; }
+
+  .header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+  }
+
+  .header h2 { margin: 0; font-size: 18px; }
+
+  .header-actions {
+    display: flex;
+    gap: 8px;
+  }
+
+  .btn-template, .btn-import, .btn-export {
+    background: #21262d;
+    color: #8b949e;
+    border: 1px solid #2d333b;
+    border-radius: 6px;
+    padding: 6px 12px;
+    cursor: pointer;
+    font-size: 12px;
+  }
+
+  .btn-template:hover, .btn-import:hover, .btn-export:hover {
+    background: #30363d;
+    color: #e1e4e8;
+  }
+
+  .btn-template { color: #a371f7; }
+  .btn-import { color: #58a6ff; }
+  .btn-export { color: #3fb950; }
 
   .default-row {
     display: flex;
@@ -337,4 +467,82 @@
   }
 
   .empty { font-size: 13px; color: #484f58; }
+
+  /* Modal styles */
+  .modal {
+    background: #161b22;
+    border: 1px solid #2d333b;
+    border-radius: 12px;
+    padding: 20px;
+    width: 450px;
+    max-height: 500px;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .modal h3 { font-size: 16px; margin: 0 0 4px; color: #e1e4e8; }
+  .modal-hint { font-size: 12px; color: #484f58; margin: 0 0 12px; }
+
+  .template-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    overflow-y: auto;
+    max-height: 300px;
+  }
+
+  .template-item {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    background: #0d1117;
+    border: 1px solid #2d333b;
+    border-radius: 6px;
+    padding: 12px;
+    cursor: pointer;
+    color: #e1e4e8;
+    text-align: left;
+    width: 100%;
+  }
+
+  .template-item:hover { border-color: #a371f7; }
+  .template-item:disabled { opacity: 0.5; cursor: default; }
+
+  .template-name { font-weight: 500; font-size: 14px; }
+  .template-desc { font-size: 12px; color: #8b949e; margin-top: 4px; }
+
+  .modal textarea {
+    width: 100%;
+    background: #0d1117;
+    border: 1px solid #2d333b;
+    border-radius: 6px;
+    padding: 10px;
+    color: #e1e4e8;
+    font-size: 12px;
+    font-family: 'Cascadia Code', 'Fira Code', monospace;
+    resize: vertical;
+    box-sizing: border-box;
+  }
+
+  .modal textarea:focus { outline: none; border-color: #58a6ff; }
+
+  .modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 12px;
+  }
+
+  .apply-btn {
+    background: #238636;
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    padding: 8px 16px;
+    cursor: pointer;
+    font-size: 13px;
+  }
+
+  .apply-btn:hover { background: #2ea043; }
+  .apply-btn:disabled { opacity: 0.5; }
 </style>

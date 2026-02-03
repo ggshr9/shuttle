@@ -12,6 +12,7 @@ const (
 	EventLog                               // Log message
 	EventTransportChanged                  // Active transport switched
 	EventError                             // Non-fatal error
+	EventConnection                        // Connection opened/closed
 )
 
 var eventTypeNames = [...]string{
@@ -21,6 +22,7 @@ var eventTypeNames = [...]string{
 	EventLog:              "log",
 	EventTransportChanged: "transport_changed",
 	EventError:            "error",
+	EventConnection:       "connection",
 }
 
 func (t EventType) String() string {
@@ -52,6 +54,17 @@ type Event struct {
 
 	// Error fields
 	Error string `json:"error,omitempty"`
+
+	// Connection fields (EventConnection)
+	ConnID      string `json:"conn_id,omitempty"`      // Unique connection identifier
+	ConnState   string `json:"conn_state,omitempty"`   // "opened" or "closed"
+	Target      string `json:"target,omitempty"`       // Destination address
+	Rule        string `json:"rule,omitempty"`         // Matched routing rule
+	Protocol    string `json:"protocol,omitempty"`     // tcp/udp
+	BytesIn     int64  `json:"bytes_in,omitempty"`     // Bytes received
+	BytesOut    int64  `json:"bytes_out,omitempty"`    // Bytes sent
+	DurationMs  int64  `json:"duration_ms,omitempty"`  // Connection duration in ms
+	ProcessName string `json:"process_name,omitempty"` // Source process name (if available)
 }
 
 // EngineState represents the engine's current state.

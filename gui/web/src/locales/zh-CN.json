@@ -1,0 +1,113 @@
+{
+  "_name": "简体中文",
+  "nav": {
+    "dashboard": "仪表板",
+    "servers": "服务器",
+    "subscriptions": "订阅",
+    "routing": "路由",
+    "logs": "日志",
+    "settings": "设置"
+  },
+  "dashboard": {
+    "upload": "上传",
+    "download": "下载",
+    "totalUpload": "总上传",
+    "totalDownload": "总下载",
+    "activeConnections": "活动连接",
+    "totalConnections": "总连接数",
+    "transport": "传输协议",
+    "transports": "传输协议",
+    "state": {
+      "stopped": "已停止",
+      "starting": "正在启动",
+      "running": "运行中",
+      "stopping": "正在停止",
+      "loading": "加载中..."
+    },
+    "unavailable": "不可用"
+  },
+  "servers": {
+    "activeServer": "当前服务器",
+    "serverAddress": "服务器地址",
+    "name": "名称",
+    "password": "密码",
+    "saveReconnect": "保存并重连",
+    "saving": "保存中...",
+    "savedServers": "已保存的服务器",
+    "noSavedServers": "没有已保存的服务器",
+    "addServer": "添加服务器",
+    "use": "使用",
+    "remove": "移除",
+    "import": "导入",
+    "testAll": "测试全部",
+    "testing": "测试中 ({done}/{total})..."
+  },
+  "import": {
+    "title": "导入服务器",
+    "description": "在下方粘贴配置数据。支持的格式：",
+    "formats": {
+      "uri": "shuttle:// URI（每行一个）",
+      "json": "JSON（单个服务器或数组）",
+      "base64": "Base64 编码的 JSON"
+    },
+    "placeholder": "shuttle://password@example.com:443?name=我的服务器",
+    "cancel": "取消",
+    "import": "导入",
+    "importing": "导入中...",
+    "added": "已添加 {added} / {total} 个服务器"
+  },
+  "subscriptions": {
+    "title": "订阅管理",
+    "add": "添加订阅",
+    "noSubscriptions": "暂无订阅",
+    "noSubscriptionsHelp": "添加订阅链接以自动导入服务器",
+    "name": "名称（可选）",
+    "url": "订阅链接",
+    "supportedFormats": "支持的格式：Shuttle JSON, SIP008, Base64",
+    "servers": "{count} 个服务器",
+    "updated": "更新时间：{date}",
+    "never": "从未更新",
+    "refresh": "刷新",
+    "refreshing": "刷新中...",
+    "delete": "删除",
+    "moreServers": "还有 {count} 个",
+    "error": "错误：{message}"
+  },
+  "routing": {
+    "title": "路由规则",
+    "defaultAction": "默认行为",
+    "proxy": "代理",
+    "direct": "直连",
+    "addRule": "添加规则",
+    "save": "保存",
+    "saving": "保存中..."
+  },
+  "logs": {
+    "title": "日志",
+    "autoScroll": "自动滚动",
+    "clear": "清除",
+    "export": "导出",
+    "waiting": "等待日志事件..."
+  },
+  "settings": {
+    "title": "设置",
+    "proxyListeners": "代理监听",
+    "log": "日志",
+    "logLevel": "级别",
+    "saveReload": "保存并重载",
+    "saving": "保存中...",
+    "export": "导出配置",
+    "exportJson": "导出 JSON",
+    "exportUri": "导出 URI",
+    "language": "语言"
+  },
+  "common": {
+    "cancel": "取消",
+    "save": "保存",
+    "delete": "删除",
+    "loading": "加载中...",
+    "error": "错误",
+    "success": "成功",
+    "timeout": "超时"
+  }
+}

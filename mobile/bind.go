@@ -134,3 +134,27 @@ func Status() string {
 	data, _ := json.Marshal(e.Status())
 	return string(data)
 }
+
+// Reload updates the configuration and restarts the engine if needed.
+func Reload(configJSON string) error {
+	mu.Lock()
+	defer mu.Unlock()
+
+	if eng == nil {
+		return fmt.Errorf("not running")
+	}
+
+	var cfg config.ClientConfig
+	if err := json.Unmarshal([]byte(configJSON), &cfg); err != nil {
+		return fmt.Errorf("parse config: %w", err)
+	}
+
+	return eng.Reload(&cfg)
+}
+
+// IsRunning returns whether the engine is currently running.
+func IsRunning() bool {
+	mu.Lock()
+	defer mu.Unlock()
+	return eng != nil
+}

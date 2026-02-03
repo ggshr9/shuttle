@@ -5,6 +5,7 @@ import (
 	"io/fs"
 	"log"
 	"os"
+	"path/filepath"
 
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"
@@ -16,13 +17,16 @@ import (
 	"github.com/shuttle-proxy/shuttle/gui"
 	"github.com/shuttle-proxy/shuttle/gui/api"
 	"github.com/shuttle-proxy/shuttle/gui/tray"
+	"github.com/shuttle-proxy/shuttle/stats"
+	"github.com/shuttle-proxy/shuttle/subscription"
 )
 
 // App wraps the engine for Wails bindings.
 type App struct {
-	ctx context.Context
-	eng *engine.Engine
-	srv *api.Server
+	ctx        context.Context
+	eng        *engine.Engine
+	srv        *api.Server
+	statsStore *stats.Storage
 }
 
 func (a *App) startup(ctx context.Context) {
@@ -42,6 +46,9 @@ func (a *App) shutdown(ctx context.Context) {
 	a.eng.Stop()
 	if a.srv != nil {
 		a.srv.Close()
+	}
+	if a.statsStore != nil {
+		a.statsStore.Close()
 	}
 }
 
@@ -93,31 +100,49 @@ func main() {
 	eng := engine.New(cfg)
 	app := &App{eng: eng}
 
+	// Initialize stats storage
+	dataDir := filepath.Join(os.Getenv("HOME"), ".shuttle")
+	statsStore, err := stats.NewStorage(dataDir)
+	if err != nil {
+		log.Printf("Failed to initialize stats storage: %v", err)
+	} else {
+		app.statsStore = statsStore
+	}
+
+	// Initialize subscription manager
+	subMgr := subscription.NewManager()
+	if len(cfg.Subscriptions) > 0 {
+		subMgr.LoadFromConfig(cfg.Subscriptions)
+	}
+
 	// Embedded SPA assets
 	webFS, err := fs.Sub(gui.WebAssets, "web/dist")
 	if err != nil {
 		log.Fatalf("Failed to load web assets: %v", err)
 	}
 
-	// System tray runs alongside Wails
-	go tray.Run(eng, tray.Callbacks{
-		OnShow: func() {
-			if app.ctx != nil {
-				wailsruntime.WindowShow(app.ctx)
-			}
-		},
-		OnConnect: func() {
-			eng.Start(context.Background())
-		},
-		OnDisconnect: func() {
-			eng.Stop()
-		},
-		OnQuit: func() {
-			if app.ctx != nil {
-				wailsruntime.Quit(app.ctx)
-			}
-		},
-	})
+	// System tray disabled on macOS due to Wails conflict
+	// On other platforms, systray runs alongside Wails
+	if false { // TODO: Enable on non-macOS platforms
+		go tray.Run(eng, tray.Callbacks{
+			OnShow: func() {
+				if app.ctx != nil {
+					wailsruntime.WindowShow(app.ctx)
+				}
+			},
+			OnConnect: func() {
+				eng.Start(context.Background())
+			},
+			OnDisconnect: func() {
+				eng.Stop()
+			},
+			OnQuit: func() {
+				if app.ctx != nil {
+					wailsruntime.Quit(app.ctx)
+				}
+			},
+		})
+	}
 
 	err = wails.Run(&options.App{
 		Title:     "Shuttle",
@@ -127,7 +152,7 @@ func main() {
 		MinHeight: 400,
 		AssetServer: &assetserver.Options{
 			Assets:  webFS,
-			Handler: api.Handler(eng),
+			Handler: api.HandlerWithOptions(eng, subMgr, statsStore),
 		},
 		OnStartup:  app.startup,
 		OnShutdown: app.shutdown,
