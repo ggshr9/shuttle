@@ -1,0 +1,65 @@
+# nFPM configuration for Linux packages (deb/rpm/apk)
+# https://nfpm.goreleaser.com/
+#
+# Usage:
+#   nfpm pkg --packager deb --target dist/
+#   nfpm pkg --packager rpm --target dist/
+#   nfpm pkg --packager apk --target dist/
+
+name: shuttle
+arch: ${GOARCH}
+platform: linux
+version: ${VERSION}
+maintainer: Shuttle Proxy <shuttle@example.com>
+description: |
+  Multi-transport proxy system for high-censorship environments.
+  Features H3/QUIC, Reality/TLS+Noise, and CDN transports with
+  adaptive congestion control and intelligent routing.
+vendor: Shuttle Proxy
+homepage: https://github.com/shuttle-proxy/shuttle
+license: MIT
+
+contents:
+  # Client binary
+  - src: ./dist/shuttle-linux-${GOARCH}
+    dst: /usr/bin/shuttle
+    file_info:
+      mode: 0755
+
+  # Server binary
+  - src: ./dist/shuttled-linux-${GOARCH}
+    dst: /usr/bin/shuttled
+    file_info:
+      mode: 0755
+
+  # Example configs
+  - src: ./config/client.example.yaml
+    dst: /etc/shuttle/client.example.yaml
+    type: config
+
+  - src: ./config/server.example.yaml
+    dst: /etc/shuttle/server.example.yaml
+    type: config
+
+  # Systemd service files
+  - src: ./build/package/linux/shuttle.service
+    dst: /lib/systemd/system/shuttle.service
+
+  - src: ./build/package/linux/shuttled.service
+    dst: /lib/systemd/system/shuttled.service
+
+scripts:
+  postinstall: ./build/package/linux/postinstall.sh
+  preremove: ./build/package/linux/preremove.sh
+
+overrides:
+  deb:
+    depends:
+      - libc6
+    recommends:
+      - iproute2
+  rpm:
+    depends:
+      - glibc
+    recommends:
+      - iproute

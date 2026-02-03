@@ -1,0 +1,18 @@
+# Shuttle Server Configuration for OpenWrt
+# Typically servers run on VPS, not routers, but included for completeness
+
+listen:
+  - addr: ":443"
+    transport: h3
+  - addr: ":8443"
+    transport: reality
+    reality:
+      server_name: "www.apple.com"
+      private_key: ""         # Generate with: shuttle genkey
+
+auth:
+  password: "your-secret-password"
+
+log:
+  level: "warn"
+  output: "syslog"

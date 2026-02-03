@@ -1,7 +1,18 @@
 # Build output
+dist/
 *.exe
 *.aar
 *.xcframework
+shuttle
+shuttled
+shuttle-gui
+*.deb
+*.rpm
+*.apk
+*.ipk
+*.dmg
+*.pkg
+*.msi
 
 # Frontend
 gui/web/node_modules/
@@ -14,3 +25,9 @@ gui/web/node_modules/
 # OS
 .DS_Store
 Thumbs.db
+
+# GoReleaser
+/dist/
+
+# Test binaries
+*.test

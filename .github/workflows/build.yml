@@ -72,9 +72,11 @@ jobs:
             ext: ''
           - goos: linux
             goarch: mipsle
+            gomips: softfloat
             ext: ''
           - goos: linux
             goarch: mips
+            gomips: softfloat
             ext: ''
           - goos: linux
             goarch: arm
@@ -96,12 +98,17 @@ jobs:
         env:
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
+          GOMIPS: ${{ matrix.gomips }}
           CGO_ENABLED: '0'
-        run: go build -ldflags="-s -w" -o shuttle-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }} ./cmd/shuttle
+        run: |
+          go build -ldflags="-s -w" -o shuttle-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }} ./cmd/shuttle
+          go build -ldflags="-s -w" -o shuttled-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }} ./cmd/shuttled
       - uses: actions/upload-artifact@v4
         with:
           name: cli-${{ matrix.goos }}-${{ matrix.goarch }}
-          path: shuttle-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }}
+          path: |
+            shuttle-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }}
+            shuttled-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }}
 
   # GUI desktop — requires CGo (Wails + systray), native build per OS
   build-gui:
@@ -148,33 +155,40 @@ jobs:
           name: gui-${{ matrix.goos }}-${{ matrix.goarch }}
           path: shuttle-gui-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }}
 
-  build-server:
-    needs: [test]
+  # Linux packages (deb/rpm)
+  package-linux:
+    needs: [build-cli]
+    if: startsWith(github.ref, 'refs/tags/')
     strategy:
       matrix:
         include:
-          - goos: linux
-            goarch: amd64
-          - goos: linux
-            goarch: arm64
-          - goos: linux
-            goarch: arm
+          - goarch: amd64
+            nfpm_arch: amd64
+          - goarch: arm64
+            nfpm_arch: arm64
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/download-artifact@v4
         with:
-          go-version: '1.24'
-      - name: Build shuttled
+          name: cli-linux-${{ matrix.goarch }}
+          path: dist/
+      - name: Install nFPM
+        run: |
+          curl -sfL https://github.com/goreleaser/nfpm/releases/latest/download/nfpm_linux_amd64.tar.gz | tar xz -C /usr/local/bin nfpm
+      - name: Build packages
         env:
-          GOOS: ${{ matrix.goos }}
-          GOARCH: ${{ matrix.goarch }}
-          CGO_ENABLED: '0'
-        run: go build -ldflags="-s -w" -o shuttled-${{ matrix.goos }}-${{ matrix.goarch }} ./cmd/shuttled
+          VERSION: ${{ github.ref_name }}
+          GOARCH: ${{ matrix.nfpm_arch }}
+        run: |
+          nfpm pkg --packager deb --target dist/shuttle-${{ matrix.goarch }}.deb -f build/package/nfpm.yaml
+          nfpm pkg --packager rpm --target dist/shuttle-${{ matrix.goarch }}.rpm -f build/package/nfpm.yaml
       - uses: actions/upload-artifact@v4
         with:
-          name: server-${{ matrix.goos }}-${{ matrix.goarch }}
-          path: shuttled-${{ matrix.goos }}-${{ matrix.goarch }}
+          name: packages-linux-${{ matrix.goarch }}
+          path: |
+            dist/*.deb
+            dist/*.rpm
 
   build-docker:
     needs: [test]
@@ -250,15 +264,28 @@ jobs:
           path: mobile/ios/Shuttle.xcframework/
 
   release:
-    needs: [build-cli, build-gui, build-server]
+    needs: [build-cli, build-gui, package-linux, build-android, build-ios]
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/')
     steps:
       - uses: actions/download-artifact@v4
         with:
           path: artifacts/
+      - name: Prepare release files
+        run: |
+          mkdir -p release
+          # CLI binaries
+          find artifacts/cli-* -type f -exec cp {} release/ \;
+          # GUI binaries
+          find artifacts/gui-* -type f -exec cp {} release/ \;
+          # Linux packages
+          find artifacts/packages-* -type f -exec cp {} release/ \;
+          # Mobile
+          cp artifacts/android-aar/shuttle.aar release/shuttle-android.aar || true
+          zip -r release/shuttle-ios.xcframework.zip artifacts/ios-xcframework/ || true
+          ls -la release/
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
-          files: artifacts/**/*
+          files: release/*
           generate_release_notes: true

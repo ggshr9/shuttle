@@ -30,6 +30,30 @@ Client                              Server
 +--------------------+              +--------------------+
 ```
 
+## Supported Platforms
+
+| Platform | Architecture | CLI | Server | GUI |
+|----------|-------------|-----|--------|-----|
+| Linux | amd64, arm64, arm | ✅ | ✅ | ✅ |
+| macOS | amd64, arm64 | ✅ | ✅ | ✅ |
+| Windows | amd64 | ✅ | ✅ | ✅ |
+| FreeBSD | amd64 | ✅ | ✅ | - |
+| OpenWrt | mips, mipsle, arm | ✅ | ✅ | - |
+| Android | arm64, arm | ✅ | - | ✅ |
+| iOS | arm64 | ✅ | - | ✅ |
+
+## Download
+
+Pre-built binaries available on [GitHub Releases](https://github.com/shuttle-proxy/shuttle/releases):
+
+- `shuttle-linux-amd64` / `shuttle-linux-arm64` - Linux CLI
+- `shuttle-linux-mipsle` - OpenWrt (MIPS soft-float)
+- `shuttle-darwin-arm64` - macOS CLI
+- `shuttle-windows-amd64.exe` - Windows CLI
+- `shuttle-gui-*` - Desktop GUI apps
+- `shuttle-amd64.deb` / `shuttle-amd64.rpm` - Linux packages
+- `shuttle-android.aar` / `shuttle-ios.xcframework.zip` - Mobile libraries
+
 ## Quick Start
 
 ### Client (CLI)
@@ -144,19 +168,47 @@ cover:
 - Node.js 22+ (for frontend)
 - CGo toolchain (for GUI: Wails + systray)
 
-### Build All
+### Build All Platforms
 
 ```bash
+# Build all platforms at once
+./build/scripts/build-all.sh v1.0.0
+
+# Or build individually:
+
 # Frontend
 cd gui/web && npm install && npm run build && cd ../..
 
 # CLI (no CGo needed)
-CGO_ENABLED=0 go build -o shuttle ./cmd/shuttle
-CGO_ENABLED=0 go build -o shuttled ./cmd/shuttled
+CGO_ENABLED=0 go build -ldflags="-s -w" -o shuttle ./cmd/shuttle
+CGO_ENABLED=0 go build -ldflags="-s -w" -o shuttled ./cmd/shuttled
 
 # GUI (needs CGo + Wails build tags)
 # Linux: apt install gcc libayatana-appindicator3-dev libgtk-3-dev libwebkit2gtk-4.0-dev
-CGO_ENABLED=1 go build -tags desktop,production -o shuttle-gui ./cmd/shuttle-gui
+CGO_ENABLED=1 go build -tags desktop,production -ldflags="-s -w" -o shuttle-gui ./cmd/shuttle-gui
+```
+
+### Cross-Compile for OpenWrt
+
+```bash
+# MIPS soft-float (MT7621, etc.)
+CGO_ENABLED=0 GOOS=linux GOARCH=mipsle GOMIPS=softfloat \
+  go build -ldflags="-s -w" -o shuttle ./cmd/shuttle
+
+# ARM (Raspberry Pi, etc.)
+CGO_ENABLED=0 GOOS=linux GOARCH=arm GOARM=7 \
+  go build -ldflags="-s -w" -o shuttle ./cmd/shuttle
+
+# Optional: compress with UPX (~3MB)
+upx --best shuttle
+```
+
+### Linux Packages (deb/rpm)
+
+```bash
+# Requires nFPM: go install github.com/goreleaser/nfpm/v2/cmd/nfpm@latest
+VERSION=v1.0.0 GOARCH=amd64 nfpm pkg --packager deb -f build/package/nfpm.yaml
+VERSION=v1.0.0 GOARCH=amd64 nfpm pkg --packager rpm -f build/package/nfpm.yaml
 ```
 
 ### Run Tests
@@ -164,6 +216,41 @@ CGO_ENABLED=1 go build -tags desktop,production -o shuttle-gui ./cmd/shuttle-gui
 ```bash
 go test -count=1 -v ./...
 ```
+
+## OpenWrt Installation
+
+### Quick Deploy (Pre-built Binary)
+
+```bash
+# Download and install
+scp shuttle-linux-mipsle root@192.168.1.1:/usr/bin/shuttle
+ssh root@192.168.1.1 "chmod +x /usr/bin/shuttle"
+
+# Create config
+ssh root@192.168.1.1 "mkdir -p /etc/shuttle"
+scp config/client.example.yaml root@192.168.1.1:/etc/shuttle/client.yaml
+
+# Create init script
+ssh root@192.168.1.1 'cat > /etc/init.d/shuttle << "EOF"
+#!/bin/sh /etc/rc.common
+START=99
+USE_PROCD=1
+start_service() {
+    procd_open_instance
+    procd_set_param command /usr/bin/shuttle run -c /etc/shuttle/client.yaml
+    procd_set_param respawn
+    procd_close_instance
+}
+EOF
+chmod +x /etc/init.d/shuttle'
+
+# Enable and start
+ssh root@192.168.1.1 "/etc/init.d/shuttle enable && /etc/init.d/shuttle start"
+```
+
+### OpenWrt SDK (ipk Package)
+
+See `build/package/openwrt/` for package definition and `build/README.md` for detailed instructions.
 
 ## GUI
 
@@ -217,6 +304,7 @@ plugin/              Logger, metrics, domain filter
 internal/            Buffer pools, rate limiter, sysopt
 quicfork/            Local fork of quic-go with CC hook
 mobile/              gomobile bindings (Android/iOS)
+build/               Build scripts & packaging (deb/rpm/openwrt)
 deploy/              install.sh, Dockerfile, systemd
 ```
 

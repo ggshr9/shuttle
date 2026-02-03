@@ -1,0 +1,51 @@
+# Shuttle Client Configuration for OpenWrt
+# Edit this file and restart: /etc/init.d/shuttle restart
+
+server:
+  addr: "your-server.com:443"
+  name: "my-server"
+  password: "your-secret-password"
+  sni: "your-server.com"
+
+transport:
+  preferred: "auto"
+  h3:
+    enabled: true
+  reality:
+    enabled: true
+    server_name: "www.apple.com"
+    short_id: ""
+    public_key: ""
+
+# Router mode: listen on LAN interface
+proxy:
+  socks5:
+    enabled: true
+    listen: "0.0.0.0:1080"    # Accessible from LAN
+  http:
+    enabled: true
+    listen: "0.0.0.0:8080"    # Accessible from LAN
+  tun:
+    enabled: false            # Enable for transparent proxy
+    device_name: "shuttle0"
+    cidr: "198.18.0.0/16"
+    mtu: 1400                 # Lower MTU for router
+    auto_route: false         # Manual iptables rules
+
+routing:
+  rules:
+    - domains: "geosite:cn"
+      action: direct
+    - geoip: CN
+      action: direct
+  default: proxy
+  dns:
+    domestic: "223.5.5.5"
+    remote:
+      server: "https://1.1.1.1/dns-query"
+      via: proxy
+    cache: true
+
+log:
+  level: "warn"               # Less verbose for router
+  output: "syslog"
