@@ -90,6 +90,7 @@ type CDNConfig struct {
 
 // ProxyConfig configures local proxy listeners.
 type ProxyConfig struct {
+	AllowLAN    bool              `yaml:"allow_lan" json:"allow_lan"` // Allow other devices on LAN to use this proxy (e.g., hotspot sharing)
 	SOCKS5      SOCKS5Config      `yaml:"socks5" json:"socks5"`
 	HTTP        HTTPConfig        `yaml:"http" json:"http"`
 	TUN         TUNConfig         `yaml:"tun" json:"tun"`
@@ -267,11 +268,16 @@ func applyClientDefaults(cfg *ClientConfig) {
 	if cfg.Transport.Preferred == "" {
 		cfg.Transport.Preferred = "auto"
 	}
+	// Determine bind address based on AllowLAN setting
+	bindHost := "127.0.0.1"
+	if cfg.Proxy.AllowLAN {
+		bindHost = "0.0.0.0"
+	}
 	if cfg.Proxy.SOCKS5.Listen == "" {
-		cfg.Proxy.SOCKS5.Listen = "127.0.0.1:1080"
+		cfg.Proxy.SOCKS5.Listen = bindHost + ":1080"
 	}
 	if cfg.Proxy.HTTP.Listen == "" {
-		cfg.Proxy.HTTP.Listen = "127.0.0.1:8080"
+		cfg.Proxy.HTTP.Listen = bindHost + ":8080"
 	}
 	if cfg.Routing.Default == "" {
 		cfg.Routing.Default = "proxy"

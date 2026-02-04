@@ -30,6 +30,42 @@ func TestApplyClientDefaults(t *testing.T) {
 	}
 }
 
+func TestAllowLAN(t *testing.T) {
+	// Default: AllowLAN false -> 127.0.0.1
+	cfg := &ClientConfig{}
+	applyClientDefaults(cfg)
+	if cfg.Proxy.SOCKS5.Listen != "127.0.0.1:1080" {
+		t.Errorf("Without AllowLAN, SOCKS5 listen = %q, want '127.0.0.1:1080'", cfg.Proxy.SOCKS5.Listen)
+	}
+	if cfg.Proxy.HTTP.Listen != "127.0.0.1:8080" {
+		t.Errorf("Without AllowLAN, HTTP listen = %q, want '127.0.0.1:8080'", cfg.Proxy.HTTP.Listen)
+	}
+
+	// AllowLAN true -> 0.0.0.0
+	cfg2 := &ClientConfig{
+		Proxy: ProxyConfig{AllowLAN: true},
+	}
+	applyClientDefaults(cfg2)
+	if cfg2.Proxy.SOCKS5.Listen != "0.0.0.0:1080" {
+		t.Errorf("With AllowLAN, SOCKS5 listen = %q, want '0.0.0.0:1080'", cfg2.Proxy.SOCKS5.Listen)
+	}
+	if cfg2.Proxy.HTTP.Listen != "0.0.0.0:8080" {
+		t.Errorf("With AllowLAN, HTTP listen = %q, want '0.0.0.0:8080'", cfg2.Proxy.HTTP.Listen)
+	}
+
+	// Custom listen should not be overwritten
+	cfg3 := &ClientConfig{
+		Proxy: ProxyConfig{
+			AllowLAN: true,
+			SOCKS5:   SOCKS5Config{Listen: "192.168.1.1:1081"},
+		},
+	}
+	applyClientDefaults(cfg3)
+	if cfg3.Proxy.SOCKS5.Listen != "192.168.1.1:1081" {
+		t.Errorf("Custom listen should be preserved, got %q", cfg3.Proxy.SOCKS5.Listen)
+	}
+}
+
 func TestApplyServerDefaults(t *testing.T) {
 	cfg := &ServerConfig{}
 	applyServerDefaults(cfg)

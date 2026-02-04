@@ -17,6 +17,13 @@
   let checkingUpdate = $state(false)
   let showChangelog = $state(false)
 
+  // Autostart state
+  let autostartEnabled = $state(false)
+  let autostartLoading = $state(false)
+
+  // LAN sharing state
+  let lanInfo = $state(null)
+
   onMount(async () => {
     config = await api.getConfig()
     // Ensure system_proxy exists in config
@@ -32,7 +39,24 @@
     } catch {
       currentVersion = 'unknown'
     }
+    // Load autostart status
+    try {
+      const as = await api.getAutostart()
+      autostartEnabled = as.enabled
+    } catch {
+      // Autostart may not be supported on this platform
+    }
+    // Load LAN info
+    loadLanInfo()
   })
+
+  async function loadLanInfo() {
+    try {
+      lanInfo = await api.getLanInfo()
+    } catch {
+      lanInfo = null
+    }
+  }
 
   async function checkForUpdate(force = true) {
     checkingUpdate = true
@@ -82,24 +106,37 @@
       const text = await file.text()
       const backup = JSON.parse(text)
       const res = await api.restore(backup)
-      msg = `Restored: ${res.servers} servers, ${res.subscriptions} subscriptions`
+      msg = t('settings.restored', { servers: res.servers, subscriptions: res.subscriptions })
       // Reload config after restore
       config = await api.getConfig()
     } catch (err) {
-      msg = 'Restore failed: ' + (err.message || err)
+      msg = t('settings.restoreFailed') + ': ' + (err.message || err)
     } finally {
       restoring = false
       e.target.value = ''
+    }
+  }
+
+  async function toggleAutostart() {
+    autostartLoading = true
+    try {
+      const newState = !autostartEnabled
+      await api.setAutostart(newState)
+      autostartEnabled = newState
+    } catch (err) {
+      msg = 'Autostart toggle failed: ' + (err.message || err)
+    } finally {
+      autostartLoading = false
     }
   }
 </script>
 
 {#if config}
 <div class="page">
-  <h2>Settings</h2>
+  <h2>{t('settings.title')}</h2>
 
   <section>
-    <h3>Proxy Listeners</h3>
+    <h3>{t('settings.proxyListeners')}</h3>
     <div class="grid">
       <label>
         <input type="checkbox" bind:checked={config.proxy.socks5.enabled} />
@@ -121,46 +158,84 @@
     </div>
     <div class="system-proxy-row">
       <label class="system-proxy-label">
+        <input type="checkbox" bind:checked={config.proxy.allow_lan} onchange={loadLanInfo} />
+        <span class="label-text">{t('settings.allowLan')}</span>
+        <span class="hint">{t('settings.allowLanHint')}</span>
+      </label>
+    </div>
+    {#if config.proxy.allow_lan && lanInfo?.addresses?.length > 0}
+      <div class="lan-info">
+        <div class="lan-info-title">{t('settings.lanAddresses')}</div>
+        <div class="lan-info-list">
+          {#each lanInfo.addresses as ip}
+            <div class="lan-address">
+              <span class="ip">{ip}</span>
+              {#if config.proxy.socks5.enabled}
+                <span class="port">SOCKS5: {ip}:{config.proxy.socks5.listen?.split(':')[1] || '1080'}</span>
+              {/if}
+              {#if config.proxy.http.enabled}
+                <span class="port">HTTP: {ip}:{config.proxy.http.listen?.split(':')[1] || '8080'}</span>
+              {/if}
+            </div>
+          {/each}
+        </div>
+        <div class="lan-info-hint">{t('settings.lanAddressesHint')}</div>
+      </div>
+    {/if}
+    <div class="system-proxy-row">
+      <label class="system-proxy-label">
         <input type="checkbox" bind:checked={config.proxy.system_proxy.enabled} />
-        <span class="label-text">Auto System Proxy</span>
-        <span class="hint">Automatically configure system proxy on connect</span>
+        <span class="label-text">{t('settings.autoSystemProxy')}</span>
+        <span class="hint">{t('settings.autoSystemProxyHint')}</span>
+      </label>
+    </div>
+    <div class="system-proxy-row">
+      <label class="system-proxy-label">
+        <input
+          type="checkbox"
+          checked={autostartEnabled}
+          onchange={toggleAutostart}
+          disabled={autostartLoading}
+        />
+        <span class="label-text">{t('settings.launchAtLogin')}</span>
+        <span class="hint">{t('settings.launchAtLoginHint')}</span>
       </label>
     </div>
   </section>
 
   <section>
-    <h3>DNS</h3>
+    <h3>{t('settings.dns')}</h3>
     <label class="row">
-      <span>Domestic DNS</span>
+      <span>{t('settings.domesticDns')}</span>
       <input bind:value={config.routing.dns.domestic} placeholder="223.5.5.5" />
     </label>
     <label class="row">
-      <span>Remote DNS</span>
+      <span>{t('settings.remoteDns')}</span>
       <input bind:value={config.routing.dns.remote.server} placeholder="https://1.1.1.1/dns-query" />
     </label>
     <label class="row">
-      <span>Remote Via</span>
+      <span>{t('settings.remoteVia')}</span>
       <select bind:value={config.routing.dns.remote.via}>
-        <option value="proxy">Proxy</option>
-        <option value="direct">Direct</option>
+        <option value="proxy">{t('routing.proxy')}</option>
+        <option value="direct">{t('routing.direct')}</option>
       </select>
     </label>
     <div class="checkbox-row">
       <label>
         <input type="checkbox" bind:checked={config.routing.dns.cache} />
-        Enable DNS Cache
+        {t('settings.enableDnsCache')}
       </label>
       <label>
         <input type="checkbox" bind:checked={config.routing.dns.prefetch} />
-        Enable DNS Prefetch
+        {t('settings.enableDnsPrefetch')}
       </label>
     </div>
   </section>
 
   <section>
-    <h3>Log</h3>
+    <h3>{t('settings.log')}</h3>
     <label class="row">
-      <span>Level</span>
+      <span>{t('settings.logLevel')}</span>
       <select bind:value={config.log.level}>
         <option value="debug">Debug</option>
         <option value="info">Info</option>
@@ -171,7 +246,7 @@
   </section>
 
   <button class="save" onclick={save} disabled={saving}>
-    {saving ? 'Saving...' : 'Save & Reload'}
+    {saving ? t('settings.saving') : t('settings.saveReload')}
   </button>
   {#if msg}<p class="msg">{msg}</p>{/if}
 
@@ -188,16 +263,16 @@
   </section>
 
   <section class="backup-section">
-    <h3>Backup & Restore</h3>
-    <p class="section-hint">Full backup includes servers, subscriptions, routing rules, and all settings.</p>
+    <h3>{t('settings.backup')}</h3>
+    <p class="section-hint">{t('settings.backupHint')}</p>
     <div class="backup-buttons">
       <a href={api.backupUrl()} download="shuttle-backup.json" class="backup-btn">
         <span class="btn-icon">📦</span>
-        Create Backup
+        {t('settings.createBackup')}
       </a>
       <button class="backup-btn restore" onclick={triggerRestore} disabled={restoring}>
         <span class="btn-icon">📥</span>
-        {restoring ? 'Restoring...' : 'Restore from Backup'}
+        {restoring ? t('settings.restoring') : t('settings.restoreBackup')}
       </button>
       <input
         type="file"
@@ -222,9 +297,9 @@
   </section>
 
   <section class="update-section">
-    <h3>Updates</h3>
+    <h3>{t('settings.updates')}</h3>
     <div class="version-info">
-      <span class="version-label">Current Version:</span>
+      <span class="version-label">{t('settings.currentVersion')}:</span>
       <span class="version-value">{currentVersion}</span>
     </div>
 
@@ -232,11 +307,11 @@
       <div class="update-available">
         <div class="update-badge">
           <span class="badge-icon">🎉</span>
-          New version available: {updateInfo.latest_version}
+          {t('settings.newVersion')}: {updateInfo.latest_version}
         </div>
         <div class="update-actions">
           <button class="changelog-btn" onclick={() => (showChangelog = !showChangelog)}>
-            {showChangelog ? 'Hide' : 'Show'} Changelog
+            {showChangelog ? t('settings.hideChangelog') : t('settings.showChangelog')}
           </button>
           <a
             href={updateInfo.release_url}
@@ -244,14 +319,14 @@
             rel="noopener noreferrer"
             class="download-btn"
           >
-            View Release
+            {t('settings.viewRelease')}
           </a>
           {#if updateInfo.download_url}
             <a
               href={updateInfo.download_url}
               class="download-btn primary"
             >
-              Download ({formatSize(updateInfo.asset_size)})
+              {t('settings.download')} ({formatSize(updateInfo.asset_size)})
             </a>
           {/if}
         </div>
@@ -262,7 +337,7 @@
         {/if}
       </div>
     {:else if updateInfo}
-      <p class="up-to-date">✓ You're running the latest version</p>
+      <p class="up-to-date">✓ {t('settings.upToDate')}</p>
     {/if}
 
     <button
@@ -270,7 +345,7 @@
       onclick={() => checkForUpdate(true)}
       disabled={checkingUpdate}
     >
-      {checkingUpdate ? 'Checking...' : 'Check for Updates'}
+      {checkingUpdate ? t('settings.checking') : t('settings.checkUpdates')}
     </button>
   </section>
 </div>
@@ -347,6 +422,54 @@
     font-size: 11px;
     color: #8b949e;
     margin-left: auto;
+  }
+
+  .lan-info {
+    margin-top: 12px;
+    padding: 12px;
+    background: rgba(56, 139, 253, 0.1);
+    border: 1px solid #388bfd;
+    border-radius: 6px;
+  }
+
+  .lan-info-title {
+    font-size: 12px;
+    font-weight: 500;
+    color: #58a6ff;
+    margin-bottom: 8px;
+  }
+
+  .lan-info-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .lan-address {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    font-size: 12px;
+    font-family: 'Cascadia Code', 'Fira Code', monospace;
+  }
+
+  .lan-address .ip {
+    color: #e1e4e8;
+    font-weight: 500;
+    min-width: 110px;
+  }
+
+  .lan-address .port {
+    color: #8b949e;
+    background: #21262d;
+    padding: 2px 6px;
+    border-radius: 4px;
+  }
+
+  .lan-info-hint {
+    font-size: 11px;
+    color: #8b949e;
+    margin-top: 8px;
   }
 
   input[type="text"], input:not([type]) {

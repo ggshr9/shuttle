@@ -49,4 +49,9 @@ export const api = {
   // Update
   checkUpdate: (force = false) => request('GET', `/api/update/check?force=${force}`),
   getVersion: () => request('GET', '/api/version'),
+  // Autostart
+  getAutostart: () => request('GET', '/api/autostart'),
+  setAutostart: (enabled) => request('PUT', '/api/autostart', { enabled }),
+  // Network/LAN
+  getLanInfo: () => request('GET', '/api/network/lan'),
 }

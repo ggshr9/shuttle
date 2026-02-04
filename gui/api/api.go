@@ -3,10 +3,12 @@ package api
 import (
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/http"
 	"strconv"
 	"strings"
 
+	"github.com/shuttle-proxy/shuttle/autostart"
 	"github.com/shuttle-proxy/shuttle/config"
 	"github.com/shuttle-proxy/shuttle/engine"
 	"github.com/shuttle-proxy/shuttle/internal/procnet"
@@ -713,6 +715,52 @@ func HandlerWithOptions(eng *engine.Engine, subMgr *subscription.Manager, statsS
 		})
 	})
 
+	// Auto-start endpoints
+	mux.HandleFunc("GET /api/autostart", func(w http.ResponseWriter, r *http.Request) {
+		enabled, err := autostart.IsEnabled()
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		writeJSON(w, map[string]bool{"enabled": enabled})
+	})
+
+	mux.HandleFunc("PUT /api/autostart", func(w http.ResponseWriter, r *http.Request) {
+		var req struct {
+			Enabled bool `json:"enabled"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		r.Body.Close()
+
+		var err error
+		if req.Enabled {
+			err = autostart.Enable()
+		} else {
+			err = autostart.Disable()
+		}
+
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		writeJSON(w, map[string]bool{"enabled": req.Enabled})
+	})
+
+	// Network info endpoint for LAN sharing
+	mux.HandleFunc("GET /api/network/lan", func(w http.ResponseWriter, r *http.Request) {
+		ips := getLANAddresses()
+		cfg := eng.Config()
+		writeJSON(w, map[string]any{
+			"allow_lan": cfg.Proxy.AllowLAN,
+			"addresses": ips,
+			"socks5":    cfg.Proxy.SOCKS5.Listen,
+			"http":      cfg.Proxy.HTTP.Listen,
+		})
+	})
+
 	return corsMiddleware(mux)
 }
 
@@ -785,4 +833,39 @@ func splitHostPort(addr string) (host, port string, err error) {
 		return "", "", fmt.Errorf("no port in address")
 	}
 	return addr[:idx], addr[idx+1:], nil
+}
+
+// getLANAddresses returns all non-loopback IPv4 addresses on the device.
+// Useful for displaying to users when AllowLAN is enabled.
+func getLANAddresses() []string {
+	var addrs []string
+	ifaces, err := net.Interfaces()
+	if err != nil {
+		return addrs
+	}
+	for _, iface := range ifaces {
+		// Skip loopback and down interfaces
+		if iface.Flags&net.FlagLoopback != 0 || iface.Flags&net.FlagUp == 0 {
+			continue
+		}
+		ifAddrs, err := iface.Addrs()
+		if err != nil {
+			continue
+		}
+		for _, addr := range ifAddrs {
+			var ip net.IP
+			switch v := addr.(type) {
+			case *net.IPNet:
+				ip = v.IP
+			case *net.IPAddr:
+				ip = v.IP
+			}
+			// Only include IPv4 addresses, skip loopback
+			if ip == nil || ip.IsLoopback() || ip.To4() == nil {
+				continue
+			}
+			addrs = append(addrs, ip.String())
+		}
+	}
+	return addrs
 }
