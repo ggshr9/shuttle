@@ -42,6 +42,18 @@ type P2PConfig struct {
 	DirectRetryInterval string   `yaml:"direct_retry_interval" json:"direct_retry_interval"` // e.g. "60s"
 	KeepAliveInterval   string   `yaml:"keep_alive_interval" json:"keep_alive_interval"`     // e.g. "30s"
 	FallbackThreshold   float64  `yaml:"fallback_threshold" json:"fallback_threshold"`       // packet loss rate, e.g. 0.3
+
+	// Port spoofing for bypassing restrictive firewalls
+	// Values: "none", "dns" (port 53), "https" (port 443), "ike" (port 500), or a port number
+	SpoofMode string `yaml:"spoof_mode" json:"spoof_mode"`
+	SpoofPort int    `yaml:"spoof_port" json:"spoof_port"` // Custom port when spoof_mode is a number
+
+	// UPnP/NAT-PMP configuration for automatic port mapping
+	// By default, port mapping is auto-enabled for best NAT traversal experience
+	// Set disable_upnp: true to disable automatic port mapping
+	EnableUPnP    bool `yaml:"enable_upnp" json:"enable_upnp"`       // Deprecated: UPnP is auto-enabled
+	DisableUPnP   bool `yaml:"disable_upnp" json:"disable_upnp"`     // Disable UPnP/NAT-PMP auto-detection
+	PreferredPort int  `yaml:"preferred_port" json:"preferred_port"` // Preferred external port (0 = same as local)
 }
 
 // CongestionConfig configures congestion control.
@@ -60,10 +72,12 @@ type ServerEndpoint struct {
 
 // TransportConfig configures available transports.
 type TransportConfig struct {
-	Preferred string      `yaml:"preferred" json:"preferred"` // "h3", "reality", "cdn", "auto"
-	H3        H3Config    `yaml:"h3" json:"h3"`
-	Reality   RealityConfig `yaml:"reality" json:"reality"`
-	CDN       CDNConfig   `yaml:"cdn" json:"cdn"`
+	Preferred         string        `yaml:"preferred" json:"preferred"`                   // "h3", "reality", "cdn", "webrtc", "auto", "multipath"
+	MultipathSchedule string        `yaml:"multipath_schedule" json:"multipath_schedule"` // "weighted" (default), "min-latency", "load-balance"
+	H3                H3Config      `yaml:"h3" json:"h3"`
+	Reality           RealityConfig `yaml:"reality" json:"reality"`
+	CDN               CDNConfig     `yaml:"cdn" json:"cdn"`
+	WebRTC            WebRTCConfig  `yaml:"webrtc" json:"webrtc"`
 }
 
 // H3Config configures HTTP/3 transport.
@@ -86,6 +100,17 @@ type CDNConfig struct {
 	Domain  string `yaml:"domain" json:"domain"`
 	Path    string `yaml:"path" json:"path"`
 	Mode    string `yaml:"mode" json:"mode"` // "h2", "grpc"
+}
+
+// WebRTCConfig configures WebRTC DataChannel transport.
+type WebRTCConfig struct {
+	Enabled     bool     `yaml:"enabled" json:"enabled"`
+	SignalURL   string   `yaml:"signal_url" json:"signal_url"`
+	STUNServers []string `yaml:"stun_servers" json:"stun_servers"`
+	TURNServers []string `yaml:"turn_servers" json:"turn_servers"`
+	TURNUser    string   `yaml:"turn_user" json:"turn_user"`
+	TURNPass    string   `yaml:"turn_pass" json:"turn_pass"`
+	ICEPolicy   string   `yaml:"ice_policy" json:"ice_policy"` // "all", "relay", "public" (default "all")
 }
 
 // ProxyConfig configures local proxy listeners.
@@ -206,6 +231,7 @@ type CoverSiteConfig struct {
 type ServerTransportConfig struct {
 	H3      ServerH3Config      `yaml:"h3" json:"h3"`
 	Reality ServerRealityConfig `yaml:"reality" json:"reality"`
+	WebRTC  ServerWebRTCConfig  `yaml:"webrtc" json:"webrtc"`
 }
 
 // ServerH3Config configures server H3.
@@ -220,6 +246,17 @@ type ServerRealityConfig struct {
 	TargetSNI  string   `yaml:"target_sni" json:"target_sni"`
 	TargetAddr string   `yaml:"target_addr" json:"target_addr"`
 	ShortIDs   []string `yaml:"short_ids" json:"short_ids"`
+}
+
+// ServerWebRTCConfig configures server-side WebRTC DataChannel transport.
+type ServerWebRTCConfig struct {
+	Enabled      bool     `yaml:"enabled" json:"enabled"`
+	SignalListen string   `yaml:"signal_listen" json:"signal_listen"`
+	STUNServers  []string `yaml:"stun_servers" json:"stun_servers"`
+	TURNServers  []string `yaml:"turn_servers" json:"turn_servers"`
+	TURNUser     string   `yaml:"turn_user" json:"turn_user"`
+	TURNPass     string   `yaml:"turn_pass" json:"turn_pass"`
+	ICEPolicy    string   `yaml:"ice_policy" json:"ice_policy"` // "all", "relay", "public" (default "all")
 }
 
 // LoadClientConfig loads client config from a YAML file.
@@ -363,6 +400,14 @@ func (c *ClientConfig) DeepCopy() *ClientConfig {
 	if c.Mesh.P2P.STUNServers != nil {
 		cp.Mesh.P2P.STUNServers = make([]string, len(c.Mesh.P2P.STUNServers))
 		copy(cp.Mesh.P2P.STUNServers, c.Mesh.P2P.STUNServers)
+	}
+	if c.Transport.WebRTC.STUNServers != nil {
+		cp.Transport.WebRTC.STUNServers = make([]string, len(c.Transport.WebRTC.STUNServers))
+		copy(cp.Transport.WebRTC.STUNServers, c.Transport.WebRTC.STUNServers)
+	}
+	if c.Transport.WebRTC.TURNServers != nil {
+		cp.Transport.WebRTC.TURNServers = make([]string, len(c.Transport.WebRTC.TURNServers))
+		copy(cp.Transport.WebRTC.TURNServers, c.Transport.WebRTC.TURNServers)
 	}
 	return &cp
 }

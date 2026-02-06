@@ -78,7 +78,11 @@ func (c *Client) Dial(ctx context.Context, addr string) (transport.Connection, e
 		copy(remotePub[:], pubBytes)
 	}
 
-	hs := crypto.NewInitiator(localPriv, localPub, remotePub)
+	hs, err := crypto.NewInitiator(localPriv, localPub, remotePub)
+	if err != nil {
+		raw.Close()
+		return nil, fmt.Errorf("noise init: %w", err)
+	}
 
 	// Send handshake message 1 (-> e, es, s, ss)
 	msg1, err := hs.WriteMessage(nil)

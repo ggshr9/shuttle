@@ -25,6 +25,7 @@ import (
 	"github.com/shuttle-proxy/shuttle/transport/h3"
 	"github.com/shuttle-proxy/shuttle/transport/reality"
 	"github.com/shuttle-proxy/shuttle/transport/selector"
+	rtcTransport "github.com/shuttle-proxy/shuttle/transport/webrtc"
 )
 
 const eventChannelBuffer = 64
@@ -110,8 +111,20 @@ func (e *Engine) Start(ctx context.Context) error {
 		return fail(fmt.Errorf("no transports enabled"))
 	}
 
+	strategy := selector.StrategyAuto
+	switch cfgSnap.Transport.Preferred {
+	case "multipath":
+		strategy = selector.StrategyMultipath
+	case "latency":
+		strategy = selector.StrategyLatency
+	case "priority":
+		strategy = selector.StrategyPriority
+	}
+
 	sel := selector.New(transports, &selector.Config{
-		Strategy: selector.StrategyAuto,
+		Strategy:          strategy,
+		ServerAddr:        cfgSnap.Server.Addr,
+		MultipathSchedule: cfgSnap.Transport.MultipathSchedule,
 	}, e.logger)
 	sel.Start(ctx)
 
@@ -198,6 +211,18 @@ func (e *Engine) buildTransports(cfg *config.ClientConfig, ccAdapter quic.Conges
 				Password:   cfg.Server.Password,
 			}))
 		}
+	}
+
+	if cfg.Transport.WebRTC.Enabled {
+		transports = append(transports, rtcTransport.NewClient(&rtcTransport.ClientConfig{
+			SignalURL:   cfg.Transport.WebRTC.SignalURL,
+			Password:    cfg.Server.Password,
+			STUNServers: cfg.Transport.WebRTC.STUNServers,
+			TURNServers: cfg.Transport.WebRTC.TURNServers,
+			TURNUser:    cfg.Transport.WebRTC.TURNUser,
+			TURNPass:    cfg.Transport.WebRTC.TURNPass,
+			ICEPolicy:   cfg.Transport.WebRTC.ICEPolicy,
+		}))
 	}
 
 	return transports
@@ -467,7 +492,7 @@ func ValidateConfig(cfg *config.ClientConfig) error {
 	if cfg.Server.Addr == "" {
 		return fmt.Errorf("server address is required")
 	}
-	if !cfg.Transport.H3.Enabled && !cfg.Transport.Reality.Enabled && !cfg.Transport.CDN.Enabled {
+	if !cfg.Transport.H3.Enabled && !cfg.Transport.Reality.Enabled && !cfg.Transport.CDN.Enabled && !cfg.Transport.WebRTC.Enabled {
 		return fmt.Errorf("at least one transport must be enabled")
 	}
 	return nil
@@ -543,6 +568,18 @@ func (e *Engine) Status() EngineStatus {
 				Available: probe.Available,
 				Latency:   probe.Latency.Milliseconds(),
 			})
+		}
+		if paths := sel.ActivePaths(); len(paths) > 0 {
+			for _, sp := range paths {
+				status.MultipathPaths = append(status.MultipathPaths, PathInfo{
+					Transport:    sp.Transport,
+					Latency:      sp.Latency,
+					ActiveStreams: sp.ActiveStreams,
+					TotalStreams:  sp.TotalStreams,
+					Available:    sp.Available,
+					Failures:     sp.Failures,
+				})
+			}
 		}
 	}
 

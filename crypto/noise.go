@@ -38,27 +38,33 @@ func GenerateKeyPair() (pub, priv [32]byte, err error) {
 	return
 }
 
-func NewInitiator(localPriv, localPub, remotePub [32]byte) *NoiseHandshake {
+func NewInitiator(localPriv, localPub, remotePub [32]byte) (*NoiseHandshake, error) {
 	staticKey := noise.DHKey{Private: localPriv[:], Public: localPub[:]}
-	hs, _ := noise.NewHandshakeState(noise.Config{
+	hs, err := noise.NewHandshakeState(noise.Config{
 		CipherSuite:   cipherSuite,
 		Pattern:       noise.HandshakeIK,
 		Initiator:     true,
 		StaticKeypair: staticKey,
 		PeerStatic:    remotePub[:],
 	})
-	return &NoiseHandshake{hs: hs, isInitiator: true}
+	if err != nil {
+		return nil, fmt.Errorf("noise initiator handshake state: %w", err)
+	}
+	return &NoiseHandshake{hs: hs, isInitiator: true}, nil
 }
 
-func NewResponder(localPriv, localPub [32]byte) *NoiseHandshake {
+func NewResponder(localPriv, localPub [32]byte) (*NoiseHandshake, error) {
 	staticKey := noise.DHKey{Private: localPriv[:], Public: localPub[:]}
-	hs, _ := noise.NewHandshakeState(noise.Config{
+	hs, err := noise.NewHandshakeState(noise.Config{
 		CipherSuite:   cipherSuite,
 		Pattern:       noise.HandshakeIK,
 		Initiator:     false,
 		StaticKeypair: staticKey,
 	})
-	return &NoiseHandshake{hs: hs, isInitiator: false}
+	if err != nil {
+		return nil, fmt.Errorf("noise responder handshake state: %w", err)
+	}
+	return &NoiseHandshake{hs: hs, isInitiator: false}, nil
 }
 
 // WriteMessage writes the next handshake message, optionally with payload.

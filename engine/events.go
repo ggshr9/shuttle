@@ -94,15 +94,26 @@ func (s EngineState) String() string {
 
 // EngineStatus is a snapshot of engine state for the API.
 type EngineStatus struct {
-	State         string          `json:"state"`
-	ActiveConns   int64           `json:"active_conns"`
-	TotalConns    int64           `json:"total_conns"`
-	BytesSent     int64           `json:"bytes_sent"`
-	BytesReceived int64           `json:"bytes_received"`
-	UploadSpeed   int64           `json:"upload_speed"`
-	DownloadSpeed int64           `json:"download_speed"`
-	Transport     string          `json:"transport"`
-	Transports    []TransportInfo `json:"transports"`
+	State          string          `json:"state"`
+	ActiveConns    int64           `json:"active_conns"`
+	TotalConns     int64           `json:"total_conns"`
+	BytesSent      int64           `json:"bytes_sent"`
+	BytesReceived  int64           `json:"bytes_received"`
+	UploadSpeed    int64           `json:"upload_speed"`
+	DownloadSpeed  int64           `json:"download_speed"`
+	Transport      string          `json:"transport"`
+	Transports     []TransportInfo `json:"transports"`
+	MultipathPaths []PathInfo      `json:"multipath_paths,omitempty"`
+}
+
+// PathInfo describes a single multipath transport path status.
+type PathInfo struct {
+	Transport     string `json:"transport"`
+	Latency       int64  `json:"latency_ms"`
+	ActiveStreams int64  `json:"active_streams"`
+	TotalStreams  int64  `json:"total_streams"`
+	Available     bool   `json:"available"`
+	Failures      int64  `json:"failures"`
 }
 
 // TransportInfo describes a transport's health.

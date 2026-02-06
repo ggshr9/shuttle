@@ -23,6 +23,7 @@ import (
 	"github.com/shuttle-proxy/shuttle/transport"
 	"github.com/shuttle-proxy/shuttle/transport/h3"
 	"github.com/shuttle-proxy/shuttle/transport/reality"
+	rtcTransport "github.com/shuttle-proxy/shuttle/transport/webrtc"
 )
 
 const (
@@ -160,6 +161,21 @@ func run(configPath string) {
 			KeyFile:    cfg.TLS.KeyFile,
 		}, logger)
 		ml.AddTransport(realityServer)
+	}
+
+	if cfg.Transport.WebRTC.Enabled {
+		webrtcServer := rtcTransport.NewServer(&rtcTransport.ServerConfig{
+			SignalListen: cfg.Transport.WebRTC.SignalListen,
+			CertFile:     cfg.TLS.CertFile,
+			KeyFile:      cfg.TLS.KeyFile,
+			Password:     cfg.Auth.Password,
+			STUNServers:  cfg.Transport.WebRTC.STUNServers,
+			TURNServers:  cfg.Transport.WebRTC.TURNServers,
+			TURNUser:     cfg.Transport.WebRTC.TURNUser,
+			TURNPass:     cfg.Transport.WebRTC.TURNPass,
+			ICEPolicy:    cfg.Transport.WebRTC.ICEPolicy,
+		}, logger)
+		ml.AddTransport(webrtcServer)
 	}
 
 	// Start listening
