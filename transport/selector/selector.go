@@ -14,20 +14,24 @@ import (
 type Strategy string
 
 const (
-	StrategyAuto     Strategy = "auto"     // Automatically select best transport
-	StrategyPriority Strategy = "priority" // Use first available in priority order
-	StrategyLatency  Strategy = "latency"  // Use lowest latency transport
+	StrategyAuto      Strategy = "auto"      // Automatically select best transport
+	StrategyPriority  Strategy = "priority"  // Use first available in priority order
+	StrategyLatency   Strategy = "latency"   // Use lowest latency transport
+	StrategyMultipath Strategy = "multipath" // Use all transports simultaneously
 )
 
 // Selector manages multiple transports and selects the best one.
 type Selector struct {
-	transports []transport.ClientTransport
-	active     transport.ClientTransport
-	strategy   Strategy
-	probes     map[string]*ProbeResult
-	migrator   *Migrator
-	mu         sync.RWMutex
-	logger     *slog.Logger
+	transports        []transport.ClientTransport
+	active            transport.ClientTransport
+	strategy          Strategy
+	probes            map[string]*ProbeResult
+	migrator          *Migrator
+	multipathPool     *MultipathPool
+	serverAddr        string
+	multipathSchedule string
+	mu                sync.RWMutex
+	logger            *slog.Logger
 }
 
 // ProbeResult stores health check results for a transport.
@@ -41,8 +45,10 @@ type ProbeResult struct {
 
 // Config configures the transport selector.
 type Config struct {
-	Strategy      Strategy
-	ProbeInterval time.Duration
+	Strategy          Strategy
+	ProbeInterval     time.Duration
+	MultipathSchedule string // "weighted" (default), "min-latency", "load-balance"
+	ServerAddr        string // needed by multipath pool to dial persistent connections
 }
 
 // New creates a new transport selector.
@@ -57,10 +63,12 @@ func New(transports []transport.ClientTransport, cfg *Config, logger *slog.Logge
 		logger = slog.Default()
 	}
 	s := &Selector{
-		transports: transports,
-		strategy:   cfg.Strategy,
-		probes:     make(map[string]*ProbeResult),
-		logger:     logger,
+		transports:        transports,
+		strategy:          cfg.Strategy,
+		probes:            make(map[string]*ProbeResult),
+		serverAddr:        cfg.ServerAddr,
+		multipathSchedule: cfg.MultipathSchedule,
+		logger:            logger,
 	}
 	s.migrator = NewMigrator(s, logger)
 	for _, t := range transports {
@@ -73,8 +81,27 @@ func New(transports []transport.ClientTransport, cfg *Config, logger *slog.Logge
 }
 
 // Start begins periodic probing of all transports.
+// For multipath strategy, it also creates the MultipathPool with persistent connections.
 func (s *Selector) Start(ctx context.Context) {
+	if s.strategy == StrategyMultipath {
+		sched := newScheduler(s.multipathSchedule)
+		pool := NewMultipathPool(ctx, s.transports, s.serverAddr, sched, s.logger)
+		s.mu.Lock()
+		s.multipathPool = pool
+		s.mu.Unlock()
+	}
 	go s.probeLoop(ctx)
+}
+
+func newScheduler(schedule string) StreamScheduler {
+	switch schedule {
+	case "min-latency":
+		return &MinLatencyScheduler{}
+	case "load-balance":
+		return &LoadBalanceScheduler{}
+	default:
+		return &WeightedLatencyScheduler{}
+	}
 }
 
 func (s *Selector) probeLoop(ctx context.Context) {
@@ -97,6 +124,14 @@ func (s *Selector) probeAll(ctx context.Context) {
 		s.probes[t.Type()] = result
 		s.mu.Unlock()
 	}
+
+	s.mu.RLock()
+	pool := s.multipathPool
+	s.mu.RUnlock()
+	if pool != nil {
+		pool.UpdateMetrics(s.Probes())
+	}
+
 	s.maybeSwitch()
 }
 
@@ -170,10 +205,16 @@ func (s *Selector) autoSelect() transport.ClientTransport {
 }
 
 // Dial connects using the currently selected transport.
+// In multipath mode, it returns a virtual connection that distributes streams.
 func (s *Selector) Dial(ctx context.Context, addr string) (transport.Connection, error) {
 	s.mu.RLock()
+	pool := s.multipathPool
 	active := s.active
 	s.mu.RUnlock()
+
+	if s.strategy == StrategyMultipath && pool != nil {
+		return pool.VirtualConn(), nil
+	}
 
 	if active == nil {
 		// Try each transport in order
@@ -232,15 +273,38 @@ func (s *Selector) Probes() map[string]*ProbeResult {
 }
 
 // ActiveTransport returns the type name of the currently active transport.
+// In multipath mode it returns "multipath".
 func (s *Selector) ActiveTransport() string {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
+	if s.strategy == StrategyMultipath && s.multipathPool != nil {
+		return "multipath"
+	}
 	return s.activeType()
+}
+
+// ActivePaths returns a snapshot of all multipath paths.
+// Returns nil when not in multipath mode.
+func (s *Selector) ActivePaths() []PathInfo {
+	s.mu.RLock()
+	pool := s.multipathPool
+	s.mu.RUnlock()
+	if pool == nil {
+		return nil
+	}
+	return pool.PathInfos()
 }
 
 func (s *Selector) Type() string { return "selector" }
 
 func (s *Selector) Close() error {
+	s.mu.Lock()
+	pool := s.multipathPool
+	s.multipathPool = nil
+	s.mu.Unlock()
+	if pool != nil {
+		pool.Close()
+	}
 	for _, t := range s.transports {
 		t.Close()
 	}
