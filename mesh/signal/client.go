@@ -72,6 +72,42 @@ func (c *Client) SendPing(dstVIP net.IP) error {
 	return c.send(msg)
 }
 
+// SendICERestart sends an ICE restart notification to a peer.
+func (c *Client) SendICERestart(dstVIP net.IP, info *ICERestartInfo) error {
+	msg := NewICERestartMessage(c.localVIP, dstVIP, info)
+	return c.send(msg)
+}
+
+// SendTrickleCandidate sends a single trickled candidate to a peer.
+func (c *Client) SendTrickleCandidate(dstVIP net.IP, info *TrickleCandidateInfo) error {
+	msg := NewTrickleCandidateMessage(c.localVIP, dstVIP, info)
+	return c.send(msg)
+}
+
+// SendEndOfCandidates sends an end-of-candidates signal to a peer.
+func (c *Client) SendEndOfCandidates(dstVIP net.IP, info *EndOfCandidatesInfo) error {
+	msg := NewEndOfCandidatesMessage(c.localVIP, dstVIP, info)
+	return c.send(msg)
+}
+
+// SendWebRTCOffer sends a WebRTC SDP offer to a peer.
+func (c *Client) SendWebRTCOffer(dstVIP net.IP, sdp string) error {
+	msg := NewWebRTCOfferMessage(c.localVIP, dstVIP, sdp)
+	return c.send(msg)
+}
+
+// SendWebRTCAnswer sends a WebRTC SDP answer to a peer.
+func (c *Client) SendWebRTCAnswer(dstVIP net.IP, sdp string) error {
+	msg := NewWebRTCAnswerMessage(c.localVIP, dstVIP, sdp)
+	return c.send(msg)
+}
+
+// SendWebRTCICECandidate sends a WebRTC ICE candidate to a peer.
+func (c *Client) SendWebRTCICECandidate(dstVIP net.IP, info *WebRTCICECandidateInfo) error {
+	msg := NewWebRTCICECandidateMessage(c.localVIP, dstVIP, info)
+	return c.send(msg)
+}
+
 // send writes a message to the stream.
 func (c *Client) send(msg *Message) error {
 	data := msg.Encode()

@@ -45,6 +45,12 @@ type PeerConnection struct {
 	LastAttempt   time.Time
 	FailCount     int
 	UseRelay      bool // Whether to use relay instead of direct
+
+	// ICE restart tracking
+	ICEGeneration   int       // Current ICE credential generation
+	LastICERestart  time.Time // When the last ICE restart occurred
+	RestartCount    int       // Number of ICE restarts for this peer
+	QualityMonitor  *ConnectionQuality // Monitor connection quality
 }
 
 // Manager manages P2P connections to peers.
@@ -67,6 +73,28 @@ type Manager struct {
 	directRetryInterval time.Duration
 	keepAliveInterval time.Duration
 
+	// Port spoofing
+	spoofConfig *SpoofConfig
+	spoofInfo   *SpoofInfo
+
+	// UPnP/NAT-PMP port mapping
+	portMapper  *PortMapper
+	upnpEnabled bool
+	upnpPort    int // The externally mapped port
+
+	// Connection optimization
+	pathCache *PathCache // Remember successful paths
+
+	// ICE restart configuration
+	iceRestartCooldown    time.Duration
+	iceQualityThreshold   float64 // Restart if quality drops below this (0-100)
+	iceRestartEnabled     bool
+
+	// Trickle ICE configuration
+	trickleEnabled    bool
+	trickleGatherer   *TrickleICEGatherer
+	iceGeneration     int // Current ICE credential generation
+
 	ctx    context.Context
 	cancel context.CancelFunc
 }
@@ -81,14 +109,66 @@ type Config struct {
 	DirectRetryInterval time.Duration
 	KeepAliveInterval   time.Duration
 	RelayFunc           func([]byte) error
+
+	// Port spoofing configuration
+	// Use SpoofDNS (port 53) to bypass firewalls that only allow DNS traffic
+	SpoofConfig *SpoofConfig
+
+	// UPnP/NAT-PMP configuration
+	// By default, the manager will automatically try UPnP/NAT-PMP for best NAT traversal
+	EnableUPnP     bool // Explicitly enable UPnP (auto-enabled by default)
+	DisableUPnP    bool // Explicitly disable UPnP/NAT-PMP auto-detection
+	PreferredPort  int  // Preferred external port (0 = same as local)
+	SamePortPunch  bool // Try to use same port on both sides for hole punching
+
+	// ICE restart configuration
+	EnableICERestart    bool          // Enable ICE restart support (default: true)
+	ICERestartCooldown  time.Duration // Minimum time between restarts (default: 10s)
+	ICEQualityThreshold float64       // Quality score below which to trigger restart (default: 30.0)
+
+	// Trickle ICE configuration (RFC 8838)
+	EnableTrickleICE bool // Enable Trickle ICE for faster connection establishment
 }
 
 // NewManager creates a new P2P connection manager.
 func NewManager(cfg *Config, signalClient *signal.Client, logger *slog.Logger) (*Manager, error) {
-	// Create UDP socket
-	udpConn, err := net.ListenUDP("udp4", &net.UDPAddr{IP: net.IPv4zero, Port: 0})
-	if err != nil {
-		return nil, fmt.Errorf("p2p: listen: %w", err)
+	// Create UDP socket with optional port spoofing
+	var udpConn *net.UDPConn
+	var err error
+	var spoofInfo *SpoofInfo
+
+	if cfg.SpoofConfig != nil && cfg.SpoofConfig.Mode != SpoofNone {
+		// Validate spoof config
+		if err := ValidateSpoofConfig(cfg.SpoofConfig); err != nil {
+			logger.Warn("p2p: spoof config validation failed, falling back to random port",
+				"mode", cfg.SpoofConfig.Mode,
+				"err", err)
+			cfg.SpoofConfig = nil
+		}
+	}
+
+	if cfg.SpoofConfig != nil && cfg.SpoofConfig.Mode != SpoofNone {
+		udpConn, err = CreateSpoofedConn(cfg.SpoofConfig)
+		if err != nil {
+			logger.Warn("p2p: failed to create spoofed connection, falling back to random port",
+				"mode", cfg.SpoofConfig.Mode,
+				"err", err)
+			// Fall back to random port
+			udpConn, err = net.ListenUDP("udp4", &net.UDPAddr{IP: net.IPv4zero, Port: 0})
+			if err != nil {
+				return nil, fmt.Errorf("p2p: listen: %w", err)
+			}
+		} else {
+			spoofInfo = GetSpoofInfo(udpConn, cfg.SpoofConfig.Mode)
+			logger.Info("p2p: using spoofed port",
+				"mode", cfg.SpoofConfig.Mode,
+				"port", spoofInfo.LocalPort)
+		}
+	} else {
+		udpConn, err = net.ListenUDP("udp4", &net.UDPAddr{IP: net.IPv4zero, Port: 0})
+		if err != nil {
+			return nil, fmt.Errorf("p2p: listen: %w", err)
+		}
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -106,6 +186,13 @@ func NewManager(cfg *Config, signalClient *signal.Client, logger *slog.Logger) (
 		holePunchTimeout:    cfg.HolePunchTimeout,
 		directRetryInterval: cfg.DirectRetryInterval,
 		keepAliveInterval:   cfg.KeepAliveInterval,
+		spoofConfig:         cfg.SpoofConfig,
+		spoofInfo:           spoofInfo,
+		pathCache:           NewPathCache(24 * time.Hour),
+		iceRestartEnabled:   !cfg.EnableICERestart || true, // Enable by default unless explicitly disabled
+		iceRestartCooldown:  cfg.ICERestartCooldown,
+		iceQualityThreshold: cfg.ICEQualityThreshold,
+		trickleEnabled:      cfg.EnableTrickleICE,
 		ctx:                 ctx,
 		cancel:              cancel,
 	}
@@ -123,6 +210,39 @@ func NewManager(cfg *Config, signalClient *signal.Client, logger *slog.Logger) (
 	if len(m.stunServers) == 0 {
 		m.stunServers = DefaultSTUNServers()
 	}
+	if m.iceRestartCooldown == 0 {
+		m.iceRestartCooldown = 10 * time.Second
+	}
+	if m.iceQualityThreshold == 0 {
+		m.iceQualityThreshold = 30.0
+	}
+
+	// Auto-try UPnP/NAT-PMP unless explicitly disabled
+	// This provides the best out-of-box experience for NAT traversal
+	if !cfg.DisableUPnP {
+		m.portMapper = NewPortMapper(logger)
+		localPort := udpConn.LocalAddr().(*net.UDPAddr).Port
+		preferredPort := cfg.PreferredPort
+		if preferredPort == 0 {
+			preferredPort = localPort
+		}
+
+		mappedPort, err := m.portMapper.MapPort(ctx, localPort, preferredPort)
+		if err != nil {
+			// This is expected on networks without UPnP/NAT-PMP support
+			// Fall back to STUN-based NAT traversal silently
+			logger.Debug("p2p: port mapping unavailable (UPnP/NAT-PMP not supported)", "err", err)
+		} else {
+			m.upnpEnabled = true
+			m.upnpPort = mappedPort
+			protocol := m.portMapper.Protocol()
+			logger.Info("p2p: port mapping created",
+				"protocol", protocol,
+				"local_port", localPort,
+				"external_port", mappedPort,
+				"external_ip", m.portMapper.GetExternalAddr().IP)
+		}
+	}
 
 	return m, nil
 }
@@ -136,10 +256,23 @@ func (m *Manager) Start() error {
 		m.logger.Warn("p2p: gather candidates failed", "err", err)
 	} else {
 		m.candidates = result.Candidates
-		m.logger.Info("p2p: gathered candidates", "count", len(m.candidates))
-		for _, c := range m.candidates {
-			m.logger.Debug("p2p: candidate", "type", c.Type, "addr", c.Addr)
+	}
+
+	// Add UPnP candidate if available (highest priority for direct connection)
+	if m.upnpEnabled && m.portMapper != nil {
+		upnpAddr := m.portMapper.GetExternalAddr()
+		if upnpAddr != nil {
+			upnpCandidate := NewCandidate(CandidateUPnP, upnpAddr)
+			upnpCandidate.Base = m.udpConn.LocalAddr().(*net.UDPAddr)
+			// Insert at the beginning (highest priority)
+			m.candidates = append([]*Candidate{upnpCandidate}, m.candidates...)
+			m.logger.Info("p2p: added UPnP candidate", "addr", upnpAddr)
 		}
+	}
+
+	m.logger.Info("p2p: gathered candidates", "count", len(m.candidates))
+	for _, c := range m.candidates {
+		m.logger.Debug("p2p: candidate", "type", c.Type, "addr", c.Addr)
 	}
 
 	// Set up signal handlers
@@ -147,6 +280,9 @@ func (m *Manager) Start() error {
 		m.signalClient.OnMessage(signal.SignalCandidate, m.handleCandidates)
 		m.signalClient.OnMessage(signal.SignalConnect, m.handleConnect)
 		m.signalClient.OnMessage(signal.SignalDisconnect, m.handleDisconnect)
+		m.signalClient.OnMessage(signal.SignalICERestart, m.handleICERestart)
+		m.signalClient.OnMessage(signal.SignalTrickleCandidate, m.handleTrickleCandidate)
+		m.signalClient.OnMessage(signal.SignalEndOfCandidates, m.handleEndOfCandidates)
 	}
 
 	// Start receive loop
@@ -157,6 +293,19 @@ func (m *Manager) Start() error {
 
 	// Start retry loop
 	go m.retryLoop()
+
+	// Start UPnP refresh loop if enabled
+	if m.upnpEnabled && m.portMapper != nil {
+		go m.upnpRefreshLoop()
+	}
+
+	// Start path cache cleanup loop
+	go m.pathCacheCleanupLoop()
+
+	// Start connection quality monitoring loop
+	if m.iceRestartEnabled {
+		go m.qualityMonitorLoop()
+	}
 
 	return nil
 }
@@ -174,7 +323,314 @@ func (m *Manager) Stop() error {
 	m.peers = make(map[[4]byte]*PeerConnection)
 	m.mu.Unlock()
 
+	// Clean up UPnP port mapping
+	if m.portMapper != nil {
+		if err := m.portMapper.Close(); err != nil {
+			m.logger.Warn("p2p: failed to remove UPnP mapping", "err", err)
+		}
+	}
+
 	return m.udpConn.Close()
+}
+
+// upnpRefreshLoop periodically refreshes UPnP port mappings.
+func (m *Manager) upnpRefreshLoop() {
+	ticker := time.NewTicker(30 * time.Minute)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-m.ctx.Done():
+			return
+		case <-ticker.C:
+			if m.portMapper != nil {
+				if err := m.portMapper.Refresh(); err != nil {
+					m.logger.Warn("p2p: failed to refresh UPnP mapping", "err", err)
+				}
+			}
+		}
+	}
+}
+
+// pathCacheCleanupLoop periodically cleans up expired path cache entries.
+func (m *Manager) pathCacheCleanupLoop() {
+	ticker := time.NewTicker(1 * time.Hour)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-m.ctx.Done():
+			return
+		case <-ticker.C:
+			if m.pathCache != nil {
+				m.pathCache.Cleanup()
+			}
+		}
+	}
+}
+
+// qualityMonitorLoop monitors connection quality and triggers ICE restart if needed.
+func (m *Manager) qualityMonitorLoop() {
+	ticker := time.NewTicker(5 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-m.ctx.Done():
+			return
+		case <-ticker.C:
+			m.checkConnectionQuality()
+		}
+	}
+}
+
+// checkConnectionQuality checks all peer connections and triggers restart if needed.
+func (m *Manager) checkConnectionQuality() {
+	m.mu.RLock()
+	var peersToRestart []net.IP
+	for _, peer := range m.peers {
+		if peer.State == StateConnected && peer.QualityMonitor != nil {
+			metrics := peer.QualityMonitor.GetMetrics()
+			if float64(metrics.Score) < m.iceQualityThreshold {
+				peersToRestart = append(peersToRestart, peer.VIP)
+			}
+		}
+	}
+	m.mu.RUnlock()
+
+	// Trigger restarts outside the lock
+	for _, vip := range peersToRestart {
+		m.logger.Info("p2p: connection quality degraded, triggering ICE restart",
+			"peer", vip)
+		go m.TriggerICERestart(vip, signal.ICERestartReasonQualityDegraded)
+	}
+}
+
+// handleICERestart handles incoming ICE restart messages.
+func (m *Manager) handleICERestart(msg *signal.Message) {
+	restartInfo, err := signal.DecodeICERestartInfo(msg.Payload)
+	if err != nil {
+		m.logger.Debug("p2p: decode ICE restart info failed", "err", err)
+		return
+	}
+
+	var key [4]byte
+	copy(key[:], msg.SrcVIP.To4())
+
+	m.logger.Info("p2p: received ICE restart request",
+		"peer", msg.SrcVIP,
+		"reason", restartInfo.Reason,
+		"generation", restartInfo.Generation)
+
+	m.mu.Lock()
+	peer, exists := m.peers[key]
+	if !exists {
+		peer = &PeerConnection{
+			VIP:   msg.SrcVIP,
+			State: StateDisconnected,
+		}
+		m.peers[key] = peer
+	}
+
+	// Update ICE credentials from remote
+	peer.ICEGeneration = int(restartInfo.Generation)
+
+	// Mark connection as disconnected to trigger reconnection
+	oldState := peer.State
+	if peer.P2PConn != nil {
+		peer.P2PConn.Close()
+		peer.P2PConn = nil
+	}
+	peer.State = StateDisconnected
+	peer.UseRelay = false
+	m.mu.Unlock()
+
+	// If we were connected, initiate reconnection
+	if oldState == StateConnected {
+		go func() {
+			// Wait a bit to allow the remote side to be ready
+			time.Sleep(500 * time.Millisecond)
+			if err := m.Connect(m.ctx, msg.SrcVIP); err != nil {
+				m.logger.Debug("p2p: reconnect after ICE restart failed",
+					"peer", msg.SrcVIP,
+					"err", err)
+			}
+		}()
+	}
+}
+
+// TriggerICERestart triggers an ICE restart for a specific peer.
+func (m *Manager) TriggerICERestart(peerVIP net.IP, reason byte) error {
+	if !m.iceRestartEnabled {
+		return fmt.Errorf("p2p: ICE restart is disabled")
+	}
+
+	var key [4]byte
+	copy(key[:], peerVIP.To4())
+
+	m.mu.Lock()
+	peer, exists := m.peers[key]
+	if !exists {
+		m.mu.Unlock()
+		return fmt.Errorf("p2p: peer not found: %s", peerVIP)
+	}
+
+	// Check cooldown
+	if time.Since(peer.LastICERestart) < m.iceRestartCooldown {
+		m.mu.Unlock()
+		return fmt.Errorf("p2p: ICE restart cooldown not elapsed")
+	}
+
+	// Update restart tracking
+	peer.LastICERestart = time.Now()
+	peer.RestartCount++
+	peer.ICEGeneration++
+	generation := peer.ICEGeneration
+
+	// Close existing connection
+	if peer.P2PConn != nil {
+		peer.P2PConn.Close()
+		peer.P2PConn = nil
+	}
+	peer.State = StateDisconnected
+	peer.UseRelay = false
+	m.mu.Unlock()
+
+	m.logger.Info("p2p: initiating ICE restart",
+		"peer", peerVIP,
+		"reason", reason,
+		"generation", generation)
+
+	// Create new ICE credentials
+	creds := NewICECredentials()
+	creds.Generation = generation
+
+	// Send ICE restart signal
+	if m.signalClient != nil {
+		restartInfo := &signal.ICERestartInfo{
+			Reason:           reason,
+			Generation:       uint16(generation),
+			UsernameFragment: creds.UsernameFragment,
+			Password:         creds.Password,
+		}
+
+		if err := m.signalClient.SendICERestart(peerVIP, restartInfo); err != nil {
+			m.logger.Debug("p2p: failed to send ICE restart signal",
+				"peer", peerVIP,
+				"err", err)
+		}
+	}
+
+	// Re-gather candidates and reconnect
+	go func() {
+		// Wait a bit to allow the signal to be delivered
+		time.Sleep(500 * time.Millisecond)
+		if err := m.Connect(m.ctx, peerVIP); err != nil {
+			m.logger.Debug("p2p: reconnect after ICE restart failed",
+				"peer", peerVIP,
+				"err", err)
+		}
+	}()
+
+	return nil
+}
+
+// OnNetworkChange should be called when network conditions change.
+// This triggers ICE restart for all connected peers.
+func (m *Manager) OnNetworkChange() {
+	if !m.iceRestartEnabled {
+		return
+	}
+
+	m.logger.Info("p2p: network change detected, checking connections")
+
+	m.mu.RLock()
+	var connectedPeers []net.IP
+	for _, peer := range m.peers {
+		if peer.State == StateConnected {
+			connectedPeers = append(connectedPeers, peer.VIP)
+		}
+	}
+	m.mu.RUnlock()
+
+	// Trigger ICE restart for all connected peers
+	for _, vip := range connectedPeers {
+		go m.TriggerICERestart(vip, signal.ICERestartReasonNetworkChange)
+	}
+}
+
+// RecordRTT records an RTT sample for a peer's quality monitor.
+func (m *Manager) RecordRTT(peerVIP net.IP, rtt time.Duration) {
+	var key [4]byte
+	copy(key[:], peerVIP.To4())
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if peer, ok := m.peers[key]; ok {
+		if peer.QualityMonitor == nil {
+			peer.QualityMonitor = NewConnectionQuality()
+		}
+		peer.QualityMonitor.RecordRTT(rtt)
+	}
+}
+
+// RecordPacketLoss records packet loss for a peer's quality monitor.
+func (m *Manager) RecordPacketLoss(peerVIP net.IP) {
+	var key [4]byte
+	copy(key[:], peerVIP.To4())
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if peer, ok := m.peers[key]; ok {
+		if peer.QualityMonitor == nil {
+			peer.QualityMonitor = NewConnectionQuality()
+		}
+		peer.QualityMonitor.RecordPacketLost()
+	}
+}
+
+// GetPeerQuality returns quality metrics for a peer.
+func (m *Manager) GetPeerQuality(peerVIP net.IP) *QualityMetrics {
+	var key [4]byte
+	copy(key[:], peerVIP.To4())
+
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	if peer, ok := m.peers[key]; ok && peer.QualityMonitor != nil {
+		metrics := peer.QualityMonitor.GetMetrics()
+		return &metrics
+	}
+	return nil
+}
+
+// GetICERestartStats returns ICE restart statistics for a peer.
+func (m *Manager) GetICERestartStats(peerVIP net.IP) *ICERestartStats {
+	var key [4]byte
+	copy(key[:], peerVIP.To4())
+
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	if peer, ok := m.peers[key]; ok {
+		return &ICERestartStats{
+			Generation:     peer.ICEGeneration,
+			RestartCount:   peer.RestartCount,
+			LastRestart:    peer.LastICERestart,
+			CooldownActive: time.Since(peer.LastICERestart) < m.iceRestartCooldown,
+		}
+	}
+	return nil
+}
+
+// ICERestartStats contains ICE restart statistics.
+type ICERestartStats struct {
+	Generation     int
+	RestartCount   int
+	LastRestart    time.Time
+	CooldownActive bool
 }
 
 // SendPacket sends a packet to a peer.
@@ -291,18 +747,78 @@ func (m *Manager) Connect(ctx context.Context, dstVIP net.IP) error {
 	peer.UseRelay = false
 	m.mu.Unlock()
 
-	m.logger.Info("p2p: connection established", "peer", dstVIP)
+	// Record successful path for faster reconnection
+	method := m.detectConnectionMethod(punchResult)
+	m.pathCache.RecordSuccess(dstVIP, punchResult.RemoteAddr, method, punchResult.RTT)
+
+	m.logger.Info("p2p: connection established", "peer", dstVIP, "method", method)
 	return nil
+}
+
+// detectConnectionMethod determines how the connection was established
+func (m *Manager) detectConnectionMethod(result *HolePunchResult) ConnectionMethod {
+	if result == nil || result.RemoteAddr == nil {
+		return MethodUnknown
+	}
+
+	// Check if we used UPnP/NAT-PMP
+	if m.upnpEnabled && m.portMapper != nil {
+		protocol := m.portMapper.Protocol()
+		if protocol == "upnp" {
+			return MethodUPnP
+		}
+		if protocol == "nat-pmp" {
+			return MethodNATPMP
+		}
+	}
+
+	// Check if it's a direct LAN connection
+	if isPrivateIP(result.RemoteAddr.IP) && isPrivateIP(m.udpConn.LocalAddr().(*net.UDPAddr).IP) {
+		localNet := getNetworkPrefix(m.udpConn.LocalAddr().(*net.UDPAddr).IP)
+		remoteNet := getNetworkPrefix(result.RemoteAddr.IP)
+		if localNet == remoteNet {
+			return MethodDirect
+		}
+	}
+
+	return MethodSTUN
+}
+
+// isPrivateIP checks if an IP is in a private range
+func isPrivateIP(ip net.IP) bool {
+	ip = ip.To4()
+	if ip == nil {
+		return false
+	}
+	return ip[0] == 10 ||
+		(ip[0] == 172 && ip[1] >= 16 && ip[1] <= 31) ||
+		(ip[0] == 192 && ip[1] == 168)
+}
+
+// getNetworkPrefix returns a string representing the /24 network
+func getNetworkPrefix(ip net.IP) string {
+	ip = ip.To4()
+	if ip == nil {
+		return ""
+	}
+	return fmt.Sprintf("%d.%d.%d", ip[0], ip[1], ip[2])
 }
 
 // markFailed marks a peer connection as failed.
 func (m *Manager) markFailed(key [4]byte) {
 	m.mu.Lock()
+	var peerVIP net.IP
 	if peer, ok := m.peers[key]; ok {
 		peer.State = StateFailed
 		peer.FailCount++
+		peerVIP = peer.VIP
 	}
 	m.mu.Unlock()
+
+	// Record failure in path cache
+	if peerVIP != nil {
+		m.pathCache.RecordFailure(peerVIP)
+	}
 }
 
 // handleCandidates handles incoming candidate messages.
@@ -422,6 +938,129 @@ func (m *Manager) handleDisconnect(msg *signal.Message) {
 	m.mu.Unlock()
 
 	m.logger.Info("p2p: peer disconnected", "peer", msg.SrcVIP)
+}
+
+// handleTrickleCandidate handles incoming trickle candidate messages.
+func (m *Manager) handleTrickleCandidate(msg *signal.Message) {
+	info, err := signal.DecodeTrickleCandidate(msg.Payload)
+	if err != nil {
+		m.logger.Debug("p2p: decode trickle candidate failed", "err", err)
+		return
+	}
+
+	var key [4]byte
+	copy(key[:], msg.SrcVIP.To4())
+
+	m.mu.Lock()
+	peer, exists := m.peers[key]
+	if !exists {
+		peer = &PeerConnection{
+			VIP:   msg.SrcVIP,
+			State: StateDisconnected,
+		}
+		m.peers[key] = peer
+	}
+
+	// Convert to internal candidate type
+	candidate := &Candidate{
+		Type:     CandidateType(info.Candidate.Type),
+		Addr:     &net.UDPAddr{IP: info.Candidate.IP, Port: int(info.Candidate.Port)},
+		Priority: info.Candidate.Priority,
+	}
+	if info.Candidate.RelatedIP != nil {
+		candidate.RelatedIP = info.Candidate.RelatedIP
+		candidate.RelatedPort = int(info.Candidate.RelatedPort)
+	}
+
+	// Check for duplicates
+	isDuplicate := false
+	for _, c := range peer.Candidates {
+		if c.Addr.String() == candidate.Addr.String() {
+			isDuplicate = true
+			break
+		}
+	}
+
+	if !isDuplicate {
+		peer.Candidates = append(peer.Candidates, candidate)
+	}
+	m.mu.Unlock()
+
+	if !isDuplicate {
+		m.logger.Debug("p2p: received trickle candidate",
+			"peer", msg.SrcVIP,
+			"type", candidate.Type,
+			"addr", candidate.Addr,
+			"generation", info.Generation)
+	}
+}
+
+// handleEndOfCandidates handles end-of-candidates signals.
+func (m *Manager) handleEndOfCandidates(msg *signal.Message) {
+	info, err := signal.DecodeEndOfCandidates(msg.Payload)
+	if err != nil {
+		m.logger.Debug("p2p: decode end-of-candidates failed", "err", err)
+		return
+	}
+
+	var key [4]byte
+	copy(key[:], msg.SrcVIP.To4())
+
+	m.mu.Lock()
+	peer, exists := m.peers[key]
+	if exists {
+		peer.ICEGeneration = int(info.Generation)
+	}
+	m.mu.Unlock()
+
+	m.logger.Debug("p2p: received end-of-candidates",
+		"peer", msg.SrcVIP,
+		"generation", info.Generation,
+		"total_candidates", info.TotalCandidates)
+}
+
+// SendTrickleCandidate sends a trickle candidate to a peer.
+func (m *Manager) SendTrickleCandidate(dstVIP net.IP, candidate *Candidate) error {
+	if m.signalClient == nil {
+		return fmt.Errorf("p2p: no signal client")
+	}
+
+	info := &signal.TrickleCandidateInfo{
+		Candidate: &signal.CandidateInfo{
+			Type:     byte(candidate.Type),
+			IP:       candidate.Addr.IP,
+			Port:     uint16(candidate.Addr.Port),
+			Priority: candidate.Priority,
+		},
+		Generation: uint16(m.iceGeneration),
+		MLineIndex: 0,
+	}
+
+	if candidate.RelatedIP != nil {
+		info.Candidate.RelatedIP = candidate.RelatedIP
+		info.Candidate.RelatedPort = uint16(candidate.RelatedPort)
+	}
+
+	return m.signalClient.SendTrickleCandidate(dstVIP, info)
+}
+
+// SendEndOfCandidates sends an end-of-candidates signal to a peer.
+func (m *Manager) SendEndOfCandidates(dstVIP net.IP) error {
+	if m.signalClient == nil {
+		return fmt.Errorf("p2p: no signal client")
+	}
+
+	info := &signal.EndOfCandidatesInfo{
+		Generation:     uint16(m.iceGeneration),
+		TotalCandidates: uint8(len(m.candidates)),
+	}
+
+	return m.signalClient.SendEndOfCandidates(dstVIP, info)
+}
+
+// IsTrickleEnabled returns whether Trickle ICE is enabled.
+func (m *Manager) IsTrickleEnabled() bool {
+	return m.trickleEnabled
 }
 
 // receiveLoop handles incoming UDP packets.
@@ -653,4 +1292,168 @@ func (m *Manager) LocalCandidates() []*Candidate {
 func (m *Manager) SetDataHandler(handler func(srcVIP net.IP, data []byte)) {
 	// This would be called when P2P data is received
 	// Implementation would store the handler and call it from handleP2PPacket
+}
+
+// GetSpoofInfo returns information about port spoofing configuration.
+// Returns nil if spoofing is not enabled.
+func (m *Manager) GetSpoofInfo() *SpoofInfo {
+	return m.spoofInfo
+}
+
+// IsSpoofEnabled returns whether port spoofing is enabled.
+func (m *Manager) IsSpoofEnabled() bool {
+	return m.spoofInfo != nil && m.spoofConfig != nil && m.spoofConfig.Mode != SpoofNone
+}
+
+// PortMappingInfo contains port mapping status information.
+type PortMappingInfo struct {
+	Enabled      bool
+	Protocol     string // "upnp" or "nat-pmp"
+	ExternalIP   net.IP
+	ExternalPort int
+	LocalPort    int
+}
+
+// GetPortMappingInfo returns port mapping information (UPnP or NAT-PMP).
+// Returns nil if port mapping is not active.
+func (m *Manager) GetPortMappingInfo() *PortMappingInfo {
+	if !m.upnpEnabled || m.portMapper == nil {
+		return nil
+	}
+
+	extAddr := m.portMapper.GetExternalAddr()
+	if extAddr == nil {
+		return nil
+	}
+
+	return &PortMappingInfo{
+		Enabled:      true,
+		Protocol:     m.portMapper.Protocol(),
+		ExternalIP:   extAddr.IP,
+		ExternalPort: extAddr.Port,
+		LocalPort:    m.udpConn.LocalAddr().(*net.UDPAddr).Port,
+	}
+}
+
+// GetUPnPInfo returns UPnP port mapping information.
+// Deprecated: Use GetPortMappingInfo instead.
+func (m *Manager) GetUPnPInfo() *PortMappingInfo {
+	return m.GetPortMappingInfo()
+}
+
+// IsUPnPEnabled returns whether UPnP port mapping is active.
+func (m *Manager) IsUPnPEnabled() bool {
+	return m.upnpEnabled
+}
+
+// GetExternalEndpoint returns the best known external endpoint.
+// Prioritizes UPnP > STUN > local address.
+func (m *Manager) GetExternalEndpoint() *net.UDPAddr {
+	// Try UPnP first
+	if m.upnpEnabled && m.portMapper != nil {
+		if addr := m.portMapper.GetExternalAddr(); addr != nil {
+			return addr
+		}
+	}
+
+	// Look for server-reflexive or UPnP candidate
+	for _, c := range m.candidates {
+		if c.Type == CandidateUPnP || c.Type == CandidateServerReflexive {
+			return c.Addr
+		}
+	}
+
+	// Fall back to local address
+	return m.udpConn.LocalAddr().(*net.UDPAddr)
+}
+
+// NATStatus contains comprehensive NAT traversal status information.
+type NATStatus struct {
+	// Local endpoint
+	LocalAddr *net.UDPAddr
+
+	// External endpoint (best known)
+	ExternalAddr *net.UDPAddr
+
+	// Port mapping status
+	PortMappingEnabled  bool
+	PortMappingProtocol string // "upnp", "nat-pmp", or ""
+
+	// Candidates gathered
+	CandidateCount     int
+	HasHostCandidate   bool
+	HasSTUNCandidate   bool
+	HasUPnPCandidate   bool
+
+	// Connection stats
+	TotalPeers   int
+	DirectPeers  int
+	RelayPeers   int
+
+	// Path cache stats
+	CachedPaths int
+}
+
+// GetNATStatus returns comprehensive NAT traversal status.
+func (m *Manager) GetNATStatus() *NATStatus {
+	status := &NATStatus{
+		LocalAddr:    m.udpConn.LocalAddr().(*net.UDPAddr),
+		ExternalAddr: m.GetExternalEndpoint(),
+	}
+
+	// Port mapping info
+	if m.upnpEnabled && m.portMapper != nil {
+		status.PortMappingEnabled = true
+		status.PortMappingProtocol = m.portMapper.Protocol()
+	}
+
+	// Candidates
+	status.CandidateCount = len(m.candidates)
+	for _, c := range m.candidates {
+		switch c.Type {
+		case CandidateHost:
+			status.HasHostCandidate = true
+		case CandidateServerReflexive:
+			status.HasSTUNCandidate = true
+		case CandidateUPnP:
+			status.HasUPnPCandidate = true
+		}
+	}
+
+	// Connection stats
+	stats := m.GetStats()
+	status.TotalPeers = stats.TotalPeers
+	status.DirectPeers = stats.DirectPeers
+	status.RelayPeers = stats.RelayPeers
+
+	// Path cache
+	if m.pathCache != nil {
+		cacheStats := m.pathCache.Stats()
+		status.CachedPaths = cacheStats.TotalEntries
+	}
+
+	return status
+}
+
+// GetPathCacheStats returns path cache statistics.
+func (m *Manager) GetPathCacheStats() PathCacheStats {
+	if m.pathCache == nil {
+		return PathCacheStats{}
+	}
+	return m.pathCache.Stats()
+}
+
+// GetCachedPath returns the cached path info for a peer.
+func (m *Manager) GetCachedPath(peerVIP net.IP) *PathEntry {
+	if m.pathCache == nil {
+		return nil
+	}
+	return m.pathCache.Get(peerVIP)
+}
+
+// ClearPathCache clears all cached paths.
+func (m *Manager) ClearPathCache() {
+	if m.pathCache != nil {
+		m.pathCache.Clear()
+	}
 }

@@ -440,3 +440,133 @@ func TestMeshClientIsMeshDestination(t *testing.T) {
 		}
 	}
 }
+
+func TestIPv6Allocator(t *testing.T) {
+	alloc, err := NewIPv6Allocator("fd00:7::/64")
+	if err != nil {
+		t.Fatalf("NewIPv6Allocator: %v", err)
+	}
+
+	// First allocation should be ::2
+	ip1, err := alloc.Allocate()
+	if err != nil {
+		t.Fatalf("Allocate: %v", err)
+	}
+	expected1 := net.ParseIP("fd00:7::2")
+	if !ip1.Equal(expected1) {
+		t.Fatalf("first IP: got %v, want %v", ip1, expected1)
+	}
+
+	// Second allocation should be ::3
+	ip2, err := alloc.Allocate()
+	if err != nil {
+		t.Fatalf("Allocate: %v", err)
+	}
+	expected2 := net.ParseIP("fd00:7::3")
+	if !ip2.Equal(expected2) {
+		t.Fatalf("second IP: got %v, want %v", ip2, expected2)
+	}
+
+	// Release first and reallocate
+	alloc.Release(ip1)
+	ip3, err := alloc.Allocate()
+	if err != nil {
+		t.Fatalf("Allocate after release: %v", err)
+	}
+	if !ip3.Equal(ip1) {
+		t.Fatalf("reallocated IP: got %v, want %v", ip3, ip1)
+	}
+
+	// Gateway should be ::1
+	gw := alloc.Gateway()
+	expectedGW := net.ParseIP("fd00:7::1")
+	if !gw.Equal(expectedGW) {
+		t.Fatalf("gateway: got %v, want %v", gw, expectedGW)
+	}
+}
+
+func TestIPv6AllocatorInvalidCIDR(t *testing.T) {
+	// Not a valid CIDR
+	_, err := NewIPv6Allocator("not-a-cidr")
+	if err == nil {
+		t.Fatal("expected error for invalid CIDR")
+	}
+
+	// IPv4 CIDR (should fail)
+	_, err = NewIPv6Allocator("10.0.0.0/24")
+	if err == nil {
+		t.Fatal("expected error for IPv4 CIDR")
+	}
+
+	// Prefix too long (> /64)
+	_, err = NewIPv6Allocator("fd00::/96")
+	if err == nil {
+		t.Fatal("expected error for prefix > /64")
+	}
+}
+
+func TestIPv6AllocatorNetwork(t *testing.T) {
+	alloc, _ := NewIPv6Allocator("fd00:7::/64")
+	if alloc.Network().String() != "fd00:7::/64" {
+		t.Errorf("Network = %q", alloc.Network().String())
+	}
+}
+
+func TestDualStackAllocator(t *testing.T) {
+	alloc, err := NewDualStackAllocator("10.7.0.0/24", "fd00:7::/64")
+	if err != nil {
+		t.Fatalf("NewDualStackAllocator: %v", err)
+	}
+
+	// Allocate IPv4
+	v4, err := alloc.AllocateV4()
+	if err != nil {
+		t.Fatalf("AllocateV4: %v", err)
+	}
+	if !v4.Equal(net.IPv4(10, 7, 0, 2).To4()) {
+		t.Fatalf("IPv4: got %v", v4)
+	}
+
+	// Allocate IPv6
+	v6, err := alloc.AllocateV6()
+	if err != nil {
+		t.Fatalf("AllocateV6: %v", err)
+	}
+	if !v6.Equal(net.ParseIP("fd00:7::2")) {
+		t.Fatalf("IPv6: got %v", v6)
+	}
+
+	// Allocate dual stack
+	v4b, v6b, err := alloc.AllocateDualStack()
+	if err != nil {
+		t.Fatalf("AllocateDualStack: %v", err)
+	}
+	if !v4b.Equal(net.IPv4(10, 7, 0, 3).To4()) {
+		t.Fatalf("DualStack IPv4: got %v", v4b)
+	}
+	if !v6b.Equal(net.ParseIP("fd00:7::3")) {
+		t.Fatalf("DualStack IPv6: got %v", v6b)
+	}
+
+	// Test gateways
+	if !alloc.GatewayV4().Equal(net.IPv4(10, 7, 0, 1).To4()) {
+		t.Fatalf("GatewayV4: got %v", alloc.GatewayV4())
+	}
+	if !alloc.GatewayV6().Equal(net.ParseIP("fd00:7::1")) {
+		t.Fatalf("GatewayV6: got %v", alloc.GatewayV6())
+	}
+
+	// Test release
+	alloc.ReleaseV4(v4)
+	alloc.ReleaseV6(v6)
+
+	// Should get released IPs back
+	v4c, _ := alloc.AllocateV4()
+	if !v4c.Equal(v4) {
+		t.Fatalf("after release V4: got %v, want %v", v4c, v4)
+	}
+	v6c, _ := alloc.AllocateV6()
+	if !v6c.Equal(v6) {
+		t.Fatalf("after release V6: got %v, want %v", v6c, v6)
+	}
+}

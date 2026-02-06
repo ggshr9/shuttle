@@ -1,6 +1,7 @@
 package p2p
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"sort"
@@ -15,6 +16,7 @@ const (
 	CandidateServerReflexive                      // Address from STUN (NAT public address)
 	CandidatePeerReflexive                        // Discovered during connectivity checks
 	CandidateRelay                                // TURN relay address
+	CandidateUPnP                                 // UPnP mapped address (high priority)
 )
 
 func (c CandidateType) String() string {
@@ -27,6 +29,8 @@ func (c CandidateType) String() string {
 		return "prflx"
 	case CandidateRelay:
 		return "relay"
+	case CandidateUPnP:
+		return "upnp"
 	default:
 		return "unknown"
 	}
@@ -38,6 +42,8 @@ func (c CandidateType) Priority() int {
 	switch c {
 	case CandidateHost:
 		return 126
+	case CandidateUPnP:
+		return 120 // Higher priority than STUN, we control the port
 	case CandidateServerReflexive:
 		return 100
 	case CandidatePeerReflexive:
@@ -49,15 +55,24 @@ func (c CandidateType) Priority() int {
 	}
 }
 
+// AddressFamily represents the IP address family.
+type AddressFamily int
+
+const (
+	AddressFamilyIPv4 AddressFamily = 4
+	AddressFamilyIPv6 AddressFamily = 6
+)
+
 // Candidate represents an ICE candidate.
 type Candidate struct {
-	Type       CandidateType
-	Addr       *net.UDPAddr
-	Base       *net.UDPAddr // For srflx, the local address behind NAT
-	Priority   uint32
-	Foundation string
-	RelatedIP  net.IP
+	Type        CandidateType
+	Addr        *net.UDPAddr
+	Base        *net.UDPAddr // For srflx, the local address behind NAT
+	Priority    uint32
+	Foundation  string
+	RelatedIP   net.IP
 	RelatedPort int
+	Family      AddressFamily // IPv4 or IPv6
 }
 
 // NewCandidate creates a new candidate.
@@ -65,6 +80,14 @@ func NewCandidate(typ CandidateType, addr *net.UDPAddr) *Candidate {
 	c := &Candidate{
 		Type: typ,
 		Addr: addr,
+	}
+	// Determine address family
+	if addr != nil && addr.IP != nil {
+		if addr.IP.To4() != nil {
+			c.Family = AddressFamilyIPv4
+		} else {
+			c.Family = AddressFamilyIPv6
+		}
 	}
 	c.computePriority()
 	c.computeFoundation()
@@ -160,8 +183,18 @@ func (g *ICEGatherer) Gather() (*GatherResult, error) {
 	return result, nil
 }
 
-// gatherHostCandidates gathers local network addresses.
+// gatherHostCandidates gathers local IPv4 network addresses.
 func (g *ICEGatherer) gatherHostCandidates(port int) []*Candidate {
+	return g.gatherHostCandidatesFamily(port, AddressFamilyIPv4)
+}
+
+// gatherHostCandidatesIPv6 gathers local IPv6 network addresses.
+func (g *ICEGatherer) gatherHostCandidatesIPv6(port int) []*Candidate {
+	return g.gatherHostCandidatesFamily(port, AddressFamilyIPv6)
+}
+
+// gatherHostCandidatesFamily gathers local network addresses of the specified family.
+func (g *ICEGatherer) gatherHostCandidatesFamily(port int, family AddressFamily) []*Candidate {
 	candidates := make([]*Candidate, 0)
 
 	interfaces, err := net.Interfaces()
@@ -198,25 +231,52 @@ func (g *ICEGatherer) gatherHostCandidates(port int) []*Candidate {
 				continue
 			}
 
-			// Only IPv4 for now
-			ip4 := ip.To4()
-			if ip4 == nil {
-				continue
+			// Filter by address family
+			if family == AddressFamilyIPv4 {
+				ip4 := ip.To4()
+				if ip4 == nil {
+					continue
+				}
+				// Skip loopback
+				if ip4.IsLoopback() {
+					continue
+				}
+				candidate := NewCandidate(CandidateHost, &net.UDPAddr{
+					IP:   ip4,
+					Port: port,
+				})
+				candidates = append(candidates, candidate)
+			} else if family == AddressFamilyIPv6 {
+				// Skip if this is actually IPv4
+				if ip.To4() != nil {
+					continue
+				}
+				// Skip loopback
+				if ip.IsLoopback() {
+					continue
+				}
+				// Skip link-local for IPv6 (fe80::/10)
+				// These are not routable across networks
+				if ip.IsLinkLocalUnicast() {
+					continue
+				}
+				candidate := NewCandidate(CandidateHost, &net.UDPAddr{
+					IP:   ip,
+					Port: port,
+				})
+				candidates = append(candidates, candidate)
 			}
-
-			// Skip loopback and link-local for host candidates
-			if ip4.IsLoopback() {
-				continue
-			}
-
-			candidate := NewCandidate(CandidateHost, &net.UDPAddr{
-				IP:   ip4,
-				Port: port,
-			})
-			candidates = append(candidates, candidate)
 		}
 	}
 
+	return candidates
+}
+
+// gatherHostCandidatesDualStack gathers both IPv4 and IPv6 host candidates.
+func (g *ICEGatherer) gatherHostCandidatesDualStack(portV4, portV6 int) []*Candidate {
+	candidates := make([]*Candidate, 0)
+	candidates = append(candidates, g.gatherHostCandidatesFamily(portV4, AddressFamilyIPv4)...)
+	candidates = append(candidates, g.gatherHostCandidatesFamily(portV6, AddressFamilyIPv6)...)
 	return candidates
 }
 
@@ -335,4 +395,150 @@ func SortCandidatePairs(pairs []*CandidatePair) {
 	sort.Slice(pairs, func(i, j int) bool {
 		return pairs[i].Priority > pairs[j].Priority
 	})
+}
+
+// DualStackGatherResult contains gathered candidates for both IPv4 and IPv6.
+type DualStackGatherResult struct {
+	Candidates  []*Candidate
+	LocalConnV4 *net.UDPConn
+	LocalConnV6 *net.UDPConn
+	NATInfoV4   *NATInfo
+	NATInfoV6   *NATInfo
+}
+
+// GatherDualStack collects both IPv4 and IPv6 ICE candidates.
+func (g *ICEGatherer) GatherDualStack(ctx context.Context) (*DualStackGatherResult, error) {
+	result := &DualStackGatherResult{
+		Candidates: make([]*Candidate, 0),
+	}
+
+	// Create IPv4 UDP socket
+	connV4, err := net.ListenUDP("udp4", &net.UDPAddr{IP: net.IPv4zero, Port: 0})
+	if err != nil {
+		return nil, fmt.Errorf("ice: listen ipv4: %w", err)
+	}
+	result.LocalConnV4 = connV4
+	localAddrV4 := connV4.LocalAddr().(*net.UDPAddr)
+
+	// Create IPv6 UDP socket
+	connV6, err := net.ListenUDP("udp6", &net.UDPAddr{IP: net.IPv6zero, Port: 0})
+	if err != nil {
+		// IPv6 may not be available, continue with IPv4 only
+		connV6 = nil
+	} else {
+		result.LocalConnV6 = connV6
+	}
+
+	// Gather IPv4 host candidates
+	hostV4 := g.gatherHostCandidatesFamily(localAddrV4.Port, AddressFamilyIPv4)
+	result.Candidates = append(result.Candidates, hostV4...)
+
+	// Gather IPv6 host candidates
+	if connV6 != nil {
+		localAddrV6 := connV6.LocalAddr().(*net.UDPAddr)
+		hostV6 := g.gatherHostCandidatesFamily(localAddrV6.Port, AddressFamilyIPv6)
+		result.Candidates = append(result.Candidates, hostV6...)
+	}
+
+	// Gather server-reflexive candidates (IPv4)
+	srflxV4, natInfoV4 := g.gatherServerReflexiveCandidates(connV4)
+	result.Candidates = append(result.Candidates, srflxV4...)
+	result.NATInfoV4 = natInfoV4
+
+	// Gather server-reflexive candidates (IPv6)
+	if connV6 != nil {
+		srflxV6, natInfoV6 := g.gatherServerReflexiveCandidatesIPv6(ctx, connV6)
+		result.Candidates = append(result.Candidates, srflxV6...)
+		result.NATInfoV6 = natInfoV6
+	}
+
+	// Sort candidates by priority (highest first)
+	sort.Slice(result.Candidates, func(i, j int) bool {
+		return result.Candidates[i].Priority > result.Candidates[j].Priority
+	})
+
+	return result, nil
+}
+
+// gatherServerReflexiveCandidatesIPv6 gathers IPv6 STUN reflexive addresses.
+func (g *ICEGatherer) gatherServerReflexiveCandidatesIPv6(ctx context.Context, conn *net.UDPConn) ([]*Candidate, *NATInfo) {
+	candidates := make([]*Candidate, 0)
+
+	if len(g.stunServers) == 0 {
+		return candidates, nil
+	}
+
+	// Use IPv6 STUN servers
+	stunClient := NewSTUNClient(g.stunServers, g.timeout)
+
+	result, err := stunClient.QueryParallelIPv6(ctx)
+	if err != nil {
+		return candidates, nil
+	}
+
+	// Add server-reflexive candidate
+	localAddr := conn.LocalAddr().(*net.UDPAddr)
+	if result.PublicAddr != nil && !result.PublicAddr.IP.Equal(localAddr.IP) {
+		candidate := NewCandidate(CandidateServerReflexive, result.PublicAddr)
+		candidate.Base = localAddr
+		candidate.RelatedIP = localAddr.IP
+		candidate.RelatedPort = localAddr.Port
+		candidates = append(candidates, candidate)
+	}
+
+	// For IPv6, NAT is less common, but we still return info
+	natInfo := &NATInfo{
+		Type:       NATNone, // IPv6 typically doesn't have NAT
+		PublicAddr: result.PublicAddr,
+		LocalAddr:  localAddr,
+	}
+
+	// Check if addresses differ (indicating NAT66)
+	if result.PublicAddr != nil && !result.PublicAddr.IP.Equal(localAddr.IP) {
+		natInfo.Type = NATSymmetric // NAT66 behaves like symmetric NAT
+	}
+
+	return candidates, natInfo
+}
+
+// GatherIPv6 collects IPv6 ICE candidates only.
+func (g *ICEGatherer) GatherIPv6(ctx context.Context) (*GatherResult, error) {
+	result := &GatherResult{
+		Candidates: make([]*Candidate, 0),
+	}
+
+	// Create IPv6 UDP socket
+	conn, err := net.ListenUDP("udp6", &net.UDPAddr{IP: net.IPv6zero, Port: 0})
+	if err != nil {
+		return nil, fmt.Errorf("ice: listen ipv6: %w", err)
+	}
+	result.LocalConn = conn
+
+	localAddr := conn.LocalAddr().(*net.UDPAddr)
+
+	// Gather IPv6 host candidates
+	hostCandidates := g.gatherHostCandidatesIPv6(localAddr.Port)
+	result.Candidates = append(result.Candidates, hostCandidates...)
+
+	// Gather server-reflexive candidates via STUN
+	srflxCandidates, natInfo := g.gatherServerReflexiveCandidatesIPv6(ctx, conn)
+	result.Candidates = append(result.Candidates, srflxCandidates...)
+	result.NATInfo = natInfo
+
+	// Sort candidates by priority (highest first)
+	sort.Slice(result.Candidates, func(i, j int) bool {
+		return result.Candidates[i].Priority > result.Candidates[j].Priority
+	})
+
+	return result, nil
+}
+
+// IsIPv6 returns true if the candidate is an IPv6 address.
+func (c *Candidate) IsIPv6() bool {
+	return c.Family == AddressFamilyIPv6
+}
+
+// IsIPv4 returns true if the candidate is an IPv4 address.
+func (c *Candidate) IsIPv4() bool {
+	return c.Family == AddressFamilyIPv4
 }

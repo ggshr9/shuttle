@@ -101,6 +101,200 @@ func (a *IPAllocator) Mask() net.IP {
 	return net.IP(a.network.Mask)
 }
 
+// IPv6Allocator allocates virtual IPv6 addresses from a prefix.
+// Designed for Unique Local Address (ULA) ranges like fd00::/8.
+type IPv6Allocator struct {
+	mu      sync.Mutex
+	network *net.IPNet
+	prefix  []byte // 8 or 16 bytes depending on prefix length
+	next    uint64
+	max     uint64
+	used    map[uint64]bool
+}
+
+// NewIPv6Allocator creates an allocator from an IPv6 CIDR string.
+// Recommended: use a /64 ULA prefix like "fd00:1234:5678:abcd::/64"
+func NewIPv6Allocator(cidr string) (*IPv6Allocator, error) {
+	_, ipNet, err := net.ParseCIDR(cidr)
+	if err != nil {
+		return nil, fmt.Errorf("mesh: parse IPv6 CIDR %q: %w", cidr, err)
+	}
+
+	// Ensure it's IPv6
+	if ipNet.IP.To4() != nil {
+		return nil, fmt.Errorf("mesh: %q is not an IPv6 CIDR", cidr)
+	}
+
+	ones, _ := ipNet.Mask.Size()
+	if ones > 64 {
+		return nil, fmt.Errorf("mesh: IPv6 prefix must be /64 or shorter, got /%d", ones)
+	}
+
+	// Copy the prefix bytes
+	prefix := make([]byte, 16)
+	copy(prefix, ipNet.IP.To16())
+
+	// For /64 prefix, we have 64 bits for host part
+	// We'll use the lower 64 bits for allocation
+	hostBits := 128 - ones
+	var maxVal uint64
+	if hostBits >= 64 {
+		maxVal = ^uint64(0) // max uint64
+	} else {
+		maxVal = uint64(1)<<hostBits - 1
+	}
+
+	return &IPv6Allocator{
+		network: ipNet,
+		prefix:  prefix,
+		next:    2, // skip ::0 (network) and ::1 (gateway)
+		max:     maxVal,
+		used:    make(map[uint64]bool),
+	}, nil
+}
+
+// Allocate returns the next available IPv6 address.
+func (a *IPv6Allocator) Allocate() (net.IP, error) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+
+	const start = uint64(2) // first allocatable offset
+
+	// Search forward from a.next, then wrap around
+	for offset := a.next; offset < a.max && offset < a.next+10000; offset++ {
+		if !a.used[offset] {
+			a.used[offset] = true
+			a.next = offset + 1
+			return a.makeIP(offset), nil
+		}
+	}
+	for offset := start; offset < a.next; offset++ {
+		if !a.used[offset] {
+			a.used[offset] = true
+			a.next = offset + 1
+			return a.makeIP(offset), nil
+		}
+	}
+	return nil, fmt.Errorf("mesh: IPv6 pool exhausted")
+}
+
+// makeIP creates an IPv6 address from the prefix and offset.
+func (a *IPv6Allocator) makeIP(offset uint64) net.IP {
+	ip := make(net.IP, 16)
+	copy(ip, a.prefix)
+
+	// Add offset to lower 64 bits
+	ip[8] |= byte(offset >> 56)
+	ip[9] |= byte(offset >> 48)
+	ip[10] |= byte(offset >> 40)
+	ip[11] |= byte(offset >> 32)
+	ip[12] |= byte(offset >> 24)
+	ip[13] |= byte(offset >> 16)
+	ip[14] |= byte(offset >> 8)
+	ip[15] |= byte(offset)
+
+	return ip
+}
+
+// Release returns an IPv6 address to the pool.
+func (a *IPv6Allocator) Release(ip net.IP) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+
+	ip16 := ip.To16()
+	if ip16 == nil {
+		return
+	}
+
+	// Extract offset from lower 64 bits
+	offset := uint64(ip16[8])<<56 | uint64(ip16[9])<<48 |
+		uint64(ip16[10])<<40 | uint64(ip16[11])<<32 |
+		uint64(ip16[12])<<24 | uint64(ip16[13])<<16 |
+		uint64(ip16[14])<<8 | uint64(ip16[15])
+
+	delete(a.used, offset)
+	if offset < a.next {
+		a.next = offset
+	}
+}
+
+// Gateway returns the gateway IPv6 address (::1 in the prefix).
+func (a *IPv6Allocator) Gateway() net.IP {
+	return a.makeIP(1)
+}
+
+// Network returns the mesh IPv6 network.
+func (a *IPv6Allocator) Network() *net.IPNet { return a.network }
+
+// DualStackAllocator manages both IPv4 and IPv6 address allocation.
+type DualStackAllocator struct {
+	v4 *IPAllocator
+	v6 *IPv6Allocator
+}
+
+// NewDualStackAllocator creates an allocator for both IPv4 and IPv6.
+// v4CIDR example: "10.7.0.0/24"
+// v6CIDR example: "fd00:7::/64"
+func NewDualStackAllocator(v4CIDR, v6CIDR string) (*DualStackAllocator, error) {
+	v4, err := NewIPAllocator(v4CIDR)
+	if err != nil {
+		return nil, err
+	}
+
+	v6, err := NewIPv6Allocator(v6CIDR)
+	if err != nil {
+		return nil, err
+	}
+
+	return &DualStackAllocator{v4: v4, v6: v6}, nil
+}
+
+// AllocateV4 returns the next available IPv4 address.
+func (d *DualStackAllocator) AllocateV4() (net.IP, error) {
+	return d.v4.Allocate()
+}
+
+// AllocateV6 returns the next available IPv6 address.
+func (d *DualStackAllocator) AllocateV6() (net.IP, error) {
+	return d.v6.Allocate()
+}
+
+// AllocateDualStack returns both IPv4 and IPv6 addresses.
+func (d *DualStackAllocator) AllocateDualStack() (v4, v6 net.IP, err error) {
+	v4, err = d.v4.Allocate()
+	if err != nil {
+		return nil, nil, err
+	}
+	v6, err = d.v6.Allocate()
+	if err != nil {
+		d.v4.Release(v4) // rollback v4 allocation
+		return nil, nil, err
+	}
+	return v4, v6, nil
+}
+
+// ReleaseV4 returns an IPv4 address to the pool.
+func (d *DualStackAllocator) ReleaseV4(ip net.IP) {
+	d.v4.Release(ip)
+}
+
+// ReleaseV6 returns an IPv6 address to the pool.
+func (d *DualStackAllocator) ReleaseV6(ip net.IP) {
+	d.v6.Release(ip)
+}
+
+// GatewayV4 returns the IPv4 gateway.
+func (d *DualStackAllocator) GatewayV4() net.IP { return d.v4.Gateway() }
+
+// GatewayV6 returns the IPv6 gateway.
+func (d *DualStackAllocator) GatewayV6() net.IP { return d.v6.Gateway() }
+
+// NetworkV4 returns the IPv4 network.
+func (d *DualStackAllocator) NetworkV4() *net.IPNet { return d.v4.Network() }
+
+// NetworkV6 returns the IPv6 network.
+func (d *DualStackAllocator) NetworkV6() *net.IPNet { return d.v6.Network() }
+
 // PeerTable maps virtual IPs to their mesh streams and handles forwarding.
 type PeerTable struct {
 	mu     sync.RWMutex

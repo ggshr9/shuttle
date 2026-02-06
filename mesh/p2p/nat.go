@@ -1,6 +1,7 @@
 package p2p
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"time"
@@ -212,6 +213,102 @@ func (d *NATDetector) QuickDetect() (*net.UDPAddr, error) {
 func GetPublicEndpoint(conn *net.UDPConn, stunServers []string) (*net.UDPAddr, error) {
 	client := NewSTUNClient(stunServers, 3*time.Second)
 	result, err := client.Query(conn)
+	if err != nil {
+		return nil, err
+	}
+	return result.PublicAddr, nil
+}
+
+// DetectParallel performs NAT detection using parallel STUN queries.
+// This is faster and more reliable than sequential detection.
+func (d *NATDetector) DetectParallel(ctx context.Context) (*NATInfo, error) {
+	info := &NATInfo{
+		Type: NATUnknown,
+	}
+
+	// Create a UDP connection for all tests
+	conn, err := net.ListenUDP("udp4", nil)
+	if err != nil {
+		return nil, fmt.Errorf("nat: listen: %w", err)
+	}
+	defer conn.Close()
+
+	localAddr := conn.LocalAddr().(*net.UDPAddr)
+	info.LocalAddr = localAddr
+
+	// Query all servers in parallel using the same connection
+	results, err := d.stunClient.QueryParallelWithConn(ctx, conn)
+	if err != nil {
+		return nil, fmt.Errorf("nat: parallel stun query: %w", err)
+	}
+
+	if len(results) == 0 {
+		return nil, ErrSTUNNoResponse
+	}
+
+	// Use first result as primary
+	info.PublicAddr = results[0].PublicAddr
+
+	// Check if we have a public IP (no NAT)
+	if results[0].PublicAddr.IP.Equal(localAddr.IP) {
+		info.Type = NATNone
+		info.PortPreserved = true
+		return info, nil
+	}
+
+	// Check port preservation
+	info.PortPreserved = results[0].PublicAddr.Port == localAddr.Port
+
+	// Check for symmetric NAT by comparing results from different servers
+	if len(results) > 1 {
+		for i := 1; i < len(results); i++ {
+			// If we get different public addresses from different servers,
+			// it's symmetric NAT
+			if !results[0].PublicAddr.IP.Equal(results[i].PublicAddr.IP) ||
+				results[0].PublicAddr.Port != results[i].PublicAddr.Port {
+				info.Type = NATSymmetric
+				return info, nil
+			}
+		}
+	}
+
+	// At this point, we know it's some form of cone NAT
+	if info.PortPreserved {
+		info.Type = NATPortRestricted
+	} else {
+		info.Type = NATPortRestricted
+	}
+
+	return info, nil
+}
+
+// QuickDetectParallel performs fast parallel NAT detection.
+func (d *NATDetector) QuickDetectParallel(ctx context.Context) (*net.UDPAddr, error) {
+	result, err := d.stunClient.QueryParallel(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return result.PublicAddr, nil
+}
+
+// GetPublicEndpointParallel returns the public endpoint using parallel STUN queries.
+func GetPublicEndpointParallel(ctx context.Context, conn *net.UDPConn, stunServers []string) (*net.UDPAddr, error) {
+	client := NewSTUNClient(stunServers, 3*time.Second)
+
+	if conn != nil {
+		// Use the provided connection
+		results, err := client.QueryParallelWithConn(ctx, conn)
+		if err != nil {
+			return nil, err
+		}
+		if len(results) > 0 {
+			return results[0].PublicAddr, nil
+		}
+		return nil, ErrSTUNNoResponse
+	}
+
+	// Create new connections for parallel query
+	result, err := client.QueryParallel(ctx)
 	if err != nil {
 		return nil, err
 	}

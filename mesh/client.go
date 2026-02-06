@@ -39,6 +39,17 @@ type MeshClientConfig struct {
 	LocalPrivateKey     [32]byte
 	LocalPublicKey      [32]byte
 	Logger              *slog.Logger
+
+	// Port spoofing for bypassing firewalls
+	// Use "dns" for port 53, "https" for port 443, or a custom port number
+	SpoofMode string
+	SpoofPort int // Custom port when SpoofMode is "custom"
+
+	// UPnP/NAT-PMP configuration
+	// By default, port mapping is auto-enabled for best NAT traversal
+	EnableUPnP    bool // Deprecated: UPnP is auto-enabled by default
+	DisableUPnP   bool // Set to true to disable UPnP/NAT-PMP auto-detection
+	PreferredPort int  // Preferred external port (0 = same as local)
 }
 
 // NewMeshClient opens a mesh stream, performs the handshake, and returns a ready client.
@@ -102,7 +113,17 @@ func NewMeshClientWithConfig(ctx context.Context, openStream func(ctx context.Co
 		}
 		mc.fallbackCtrl = p2p.NewFallbackController(fallbackCfg, mc.logger)
 
-		// Create P2P manager
+		// Create P2P manager with optional port spoofing
+		var spoofCfg *p2p.SpoofConfig
+		if cfg.SpoofMode != "" {
+			mode := p2p.ParseSpoofMode(cfg.SpoofMode)
+			spoofCfg = &p2p.SpoofConfig{
+				Mode:       mode,
+				CustomPort: cfg.SpoofPort,
+			}
+			mc.logger.Info("mesh: port spoofing configured", "mode", mode, "port", spoofCfg.GetPort())
+		}
+
 		p2pCfg := &p2p.Config{
 			LocalVIP:            ip,
 			LocalPrivateKey:     cfg.LocalPrivateKey,
@@ -112,6 +133,9 @@ func NewMeshClientWithConfig(ctx context.Context, openStream func(ctx context.Co
 			DirectRetryInterval: cfg.DirectRetryInterval,
 			KeepAliveInterval:   cfg.KeepAliveInterval,
 			RelayFunc:           mc.sendViaRelay,
+			SpoofConfig:         spoofCfg,
+			DisableUPnP:         cfg.DisableUPnP,
+			PreferredPort:       cfg.PreferredPort,
 		}
 
 		mc.p2pManager, err = p2p.NewManager(p2pCfg, mc.signalClient, mc.logger)

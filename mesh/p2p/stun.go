@@ -1,11 +1,13 @@
 package p2p
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/binary"
 	"errors"
 	"fmt"
 	"net"
+	"sync"
 	"time"
 )
 
@@ -60,6 +62,7 @@ type STUNResult struct {
 
 // Query sends STUN Binding Request to discover public endpoint.
 // Uses the provided UDP connection or creates a new one.
+// This method queries servers sequentially. Use QueryParallel for concurrent queries.
 func (c *STUNClient) Query(conn *net.UDPConn) (*STUNResult, error) {
 	if conn == nil {
 		var err error
@@ -79,6 +82,303 @@ func (c *STUNClient) Query(conn *net.UDPConn) (*STUNResult, error) {
 	}
 
 	return nil, ErrSTUNNoResponse
+}
+
+// QueryParallel sends STUN Binding Requests to all servers in parallel.
+// Returns the first successful response, cancelling remaining queries.
+// This provides faster results and better reliability through redundancy.
+func (c *STUNClient) QueryParallel(ctx context.Context) (*STUNResult, error) {
+	if len(c.servers) == 0 {
+		return nil, ErrSTUNNoResponse
+	}
+
+	// Create a context with timeout if not already set
+	if _, hasDeadline := ctx.Deadline(); !hasDeadline {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, c.timeout)
+		defer cancel()
+	}
+
+	resultCh := make(chan *STUNResult, len(c.servers))
+	errCh := make(chan error, len(c.servers))
+
+	// Query all servers in parallel
+	var wg sync.WaitGroup
+	for _, server := range c.servers {
+		wg.Add(1)
+		go func(srv string) {
+			defer wg.Done()
+
+			// Each goroutine gets its own connection to avoid interference
+			conn, err := net.ListenUDP("udp4", nil)
+			if err != nil {
+				select {
+				case errCh <- err:
+				default:
+				}
+				return
+			}
+			defer conn.Close()
+
+			result, err := c.queryServerWithContext(ctx, conn, srv)
+			if err != nil {
+				select {
+				case errCh <- err:
+				default:
+				}
+				return
+			}
+
+			select {
+			case resultCh <- result:
+			default:
+			}
+		}(server)
+	}
+
+	// Close channels when all goroutines complete
+	go func() {
+		wg.Wait()
+		close(resultCh)
+		close(errCh)
+	}()
+
+	// Wait for first successful result or all failures
+	select {
+	case result := <-resultCh:
+		if result != nil {
+			return result, nil
+		}
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+
+	return nil, ErrSTUNNoResponse
+}
+
+// QueryAllParallel queries all servers in parallel and returns all successful results.
+// This is useful for NAT detection where we need responses from multiple servers.
+func (c *STUNClient) QueryAllParallel(ctx context.Context) ([]*STUNResult, error) {
+	if len(c.servers) == 0 {
+		return nil, ErrSTUNNoResponse
+	}
+
+	// Create a context with timeout if not already set
+	if _, hasDeadline := ctx.Deadline(); !hasDeadline {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, c.timeout)
+		defer cancel()
+	}
+
+	results := make([]*STUNResult, 0, len(c.servers))
+	var mu sync.Mutex
+	var wg sync.WaitGroup
+
+	for _, server := range c.servers {
+		wg.Add(1)
+		go func(srv string) {
+			defer wg.Done()
+
+			// Each goroutine gets its own connection
+			conn, err := net.ListenUDP("udp4", nil)
+			if err != nil {
+				return
+			}
+			defer conn.Close()
+
+			result, err := c.queryServerWithContext(ctx, conn, srv)
+			if err != nil {
+				return
+			}
+
+			mu.Lock()
+			results = append(results, result)
+			mu.Unlock()
+		}(server)
+	}
+
+	wg.Wait()
+
+	if len(results) == 0 {
+		return nil, ErrSTUNNoResponse
+	}
+
+	return results, nil
+}
+
+// QueryParallelWithConn sends STUN requests to all servers using the same connection.
+// This is useful for NAT type detection where we need consistent local port.
+func (c *STUNClient) QueryParallelWithConn(ctx context.Context, conn *net.UDPConn) ([]*STUNResult, error) {
+	if len(c.servers) == 0 {
+		return nil, ErrSTUNNoResponse
+	}
+
+	if conn == nil {
+		var err error
+		conn, err = net.ListenUDP("udp4", nil)
+		if err != nil {
+			return nil, fmt.Errorf("stun: listen: %w", err)
+		}
+		defer conn.Close()
+	}
+
+	// Create a context with timeout if not already set
+	if _, hasDeadline := ctx.Deadline(); !hasDeadline {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, c.timeout)
+		defer cancel()
+	}
+
+	// For shared connection, we need to coordinate reads
+	// Send all requests first, then collect responses
+	type pendingQuery struct {
+		txID   []byte
+		server string
+		addr   *net.UDPAddr
+	}
+
+	pending := make([]pendingQuery, 0, len(c.servers))
+
+	// Send all requests
+	for _, server := range c.servers {
+		addr, err := net.ResolveUDPAddr("udp4", server)
+		if err != nil {
+			continue
+		}
+
+		txID := make([]byte, 12)
+		if _, err := rand.Read(txID); err != nil {
+			continue
+		}
+
+		req := buildBindingRequest(txID)
+		if _, err := conn.WriteToUDP(req, addr); err != nil {
+			continue
+		}
+
+		pending = append(pending, pendingQuery{
+			txID:   txID,
+			server: server,
+			addr:   addr,
+		})
+	}
+
+	if len(pending) == 0 {
+		return nil, ErrSTUNNoResponse
+	}
+
+	// Collect responses
+	results := make([]*STUNResult, 0, len(pending))
+	buf := make([]byte, 1024)
+	localAddr := conn.LocalAddr().(*net.UDPAddr)
+
+	deadline, _ := ctx.Deadline()
+	conn.SetReadDeadline(deadline)
+	defer conn.SetReadDeadline(time.Time{})
+
+	responded := make(map[string]bool)
+
+	for len(responded) < len(pending) {
+		select {
+		case <-ctx.Done():
+			if len(results) > 0 {
+				return results, nil
+			}
+			return nil, ctx.Err()
+		default:
+		}
+
+		n, from, err := conn.ReadFromUDP(buf)
+		if err != nil {
+			break
+		}
+
+		// Find matching pending query
+		for _, p := range pending {
+			if responded[p.server] {
+				continue
+			}
+
+			if from.IP.Equal(p.addr.IP) && from.Port == p.addr.Port {
+				publicAddr, err := parseBindingResponse(buf[:n], p.txID)
+				if err == nil {
+					results = append(results, &STUNResult{
+						PublicAddr: publicAddr,
+						LocalAddr:  localAddr,
+						Server:     p.server,
+					})
+					responded[p.server] = true
+				}
+				break
+			}
+		}
+	}
+
+	if len(results) == 0 {
+		return nil, ErrSTUNNoResponse
+	}
+
+	return results, nil
+}
+
+// queryServerWithContext queries a single server with context support.
+func (c *STUNClient) queryServerWithContext(ctx context.Context, conn *net.UDPConn, server string) (*STUNResult, error) {
+	addr, err := net.ResolveUDPAddr("udp4", server)
+	if err != nil {
+		return nil, fmt.Errorf("stun: resolve %s: %w", server, err)
+	}
+
+	// Generate transaction ID (12 bytes)
+	txID := make([]byte, 12)
+	if _, err := rand.Read(txID); err != nil {
+		return nil, fmt.Errorf("stun: generate txid: %w", err)
+	}
+
+	// Build Binding Request
+	req := buildBindingRequest(txID)
+
+	// Set deadline from context or use default timeout
+	deadline := time.Now().Add(c.timeout)
+	if d, ok := ctx.Deadline(); ok && d.Before(deadline) {
+		deadline = d
+	}
+	conn.SetDeadline(deadline)
+	defer conn.SetDeadline(time.Time{})
+
+	// Send request
+	if _, err := conn.WriteToUDP(req, addr); err != nil {
+		return nil, fmt.Errorf("stun: send: %w", err)
+	}
+
+	// Read response with context check
+	buf := make([]byte, 1024)
+	for {
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		default:
+		}
+
+		n, _, err := conn.ReadFromUDP(buf)
+		if err != nil {
+			return nil, fmt.Errorf("stun: recv: %w", err)
+		}
+
+		// Parse response
+		publicAddr, err := parseBindingResponse(buf[:n], txID)
+		if err != nil {
+			// Maybe a response for a different transaction, keep reading
+			continue
+		}
+
+		localAddr := conn.LocalAddr().(*net.UDPAddr)
+
+		return &STUNResult{
+			PublicAddr: publicAddr,
+			LocalAddr:  localAddr,
+			Server:     server,
+		}, nil
+	}
 }
 
 // queryServer sends a STUN request to a single server.
@@ -288,4 +588,252 @@ func DefaultSTUNServers() []string {
 		"stun.cloudflare.com:3478",
 		"stun.stunprotocol.org:3478",
 	}
+}
+
+// DefaultSTUNServersIPv6 returns a list of public STUN servers that support IPv6.
+func DefaultSTUNServersIPv6() []string {
+	return []string{
+		"stun.l.google.com:19302",
+		"stun1.l.google.com:19302",
+		"stun.cloudflare.com:3478",
+	}
+}
+
+// QueryIPv6 sends STUN Binding Request to discover IPv6 public endpoint.
+func (c *STUNClient) QueryIPv6(conn *net.UDPConn) (*STUNResult, error) {
+	if conn == nil {
+		var err error
+		conn, err = net.ListenUDP("udp6", nil)
+		if err != nil {
+			return nil, fmt.Errorf("stun: listen ipv6: %w", err)
+		}
+		defer conn.Close()
+	}
+
+	// Try each server until one responds
+	for _, server := range c.servers {
+		result, err := c.queryServerIPv6(conn, server)
+		if err == nil {
+			return result, nil
+		}
+	}
+
+	return nil, ErrSTUNNoResponse
+}
+
+// queryServerIPv6 sends a STUN request to a single server over IPv6.
+func (c *STUNClient) queryServerIPv6(conn *net.UDPConn, server string) (*STUNResult, error) {
+	addr, err := net.ResolveUDPAddr("udp6", server)
+	if err != nil {
+		return nil, fmt.Errorf("stun: resolve ipv6 %s: %w", server, err)
+	}
+
+	// Generate transaction ID (12 bytes)
+	txID := make([]byte, 12)
+	if _, err := rand.Read(txID); err != nil {
+		return nil, fmt.Errorf("stun: generate txid: %w", err)
+	}
+
+	// Build Binding Request
+	req := buildBindingRequest(txID)
+
+	// Set deadline
+	conn.SetDeadline(time.Now().Add(c.timeout))
+	defer conn.SetDeadline(time.Time{})
+
+	// Send request
+	if _, err := conn.WriteToUDP(req, addr); err != nil {
+		return nil, fmt.Errorf("stun: send ipv6: %w", err)
+	}
+
+	// Read response
+	buf := make([]byte, 1024)
+	n, _, err := conn.ReadFromUDP(buf)
+	if err != nil {
+		return nil, fmt.Errorf("stun: recv ipv6: %w", err)
+	}
+
+	// Parse response
+	publicAddr, err := parseBindingResponse(buf[:n], txID)
+	if err != nil {
+		return nil, err
+	}
+
+	localAddr := conn.LocalAddr().(*net.UDPAddr)
+
+	return &STUNResult{
+		PublicAddr: publicAddr,
+		LocalAddr:  localAddr,
+		Server:     server,
+	}, nil
+}
+
+// QueryParallelIPv6 sends STUN Binding Requests to all servers in parallel over IPv6.
+func (c *STUNClient) QueryParallelIPv6(ctx context.Context) (*STUNResult, error) {
+	if len(c.servers) == 0 {
+		return nil, ErrSTUNNoResponse
+	}
+
+	if _, hasDeadline := ctx.Deadline(); !hasDeadline {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, c.timeout)
+		defer cancel()
+	}
+
+	resultCh := make(chan *STUNResult, len(c.servers))
+	errCh := make(chan error, len(c.servers))
+
+	var wg sync.WaitGroup
+	for _, server := range c.servers {
+		wg.Add(1)
+		go func(srv string) {
+			defer wg.Done()
+
+			conn, err := net.ListenUDP("udp6", nil)
+			if err != nil {
+				select {
+				case errCh <- err:
+				default:
+				}
+				return
+			}
+			defer conn.Close()
+
+			result, err := c.queryServerIPv6WithContext(ctx, conn, srv)
+			if err != nil {
+				select {
+				case errCh <- err:
+				default:
+				}
+				return
+			}
+
+			select {
+			case resultCh <- result:
+			default:
+			}
+		}(server)
+	}
+
+	go func() {
+		wg.Wait()
+		close(resultCh)
+		close(errCh)
+	}()
+
+	select {
+	case result := <-resultCh:
+		if result != nil {
+			return result, nil
+		}
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+
+	return nil, ErrSTUNNoResponse
+}
+
+// queryServerIPv6WithContext queries a single server over IPv6 with context support.
+func (c *STUNClient) queryServerIPv6WithContext(ctx context.Context, conn *net.UDPConn, server string) (*STUNResult, error) {
+	addr, err := net.ResolveUDPAddr("udp6", server)
+	if err != nil {
+		return nil, fmt.Errorf("stun: resolve ipv6 %s: %w", server, err)
+	}
+
+	txID := make([]byte, 12)
+	if _, err := rand.Read(txID); err != nil {
+		return nil, fmt.Errorf("stun: generate txid: %w", err)
+	}
+
+	req := buildBindingRequest(txID)
+
+	deadline := time.Now().Add(c.timeout)
+	if d, ok := ctx.Deadline(); ok && d.Before(deadline) {
+		deadline = d
+	}
+	conn.SetDeadline(deadline)
+	defer conn.SetDeadline(time.Time{})
+
+	if _, err := conn.WriteToUDP(req, addr); err != nil {
+		return nil, fmt.Errorf("stun: send ipv6: %w", err)
+	}
+
+	buf := make([]byte, 1024)
+	for {
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		default:
+		}
+
+		n, _, err := conn.ReadFromUDP(buf)
+		if err != nil {
+			return nil, fmt.Errorf("stun: recv ipv6: %w", err)
+		}
+
+		publicAddr, err := parseBindingResponse(buf[:n], txID)
+		if err != nil {
+			continue
+		}
+
+		localAddr := conn.LocalAddr().(*net.UDPAddr)
+
+		return &STUNResult{
+			PublicAddr: publicAddr,
+			LocalAddr:  localAddr,
+			Server:     server,
+		}, nil
+	}
+}
+
+// QueryDualStack queries both IPv4 and IPv6 in parallel.
+// Returns results for both address families if available.
+type DualStackSTUNResult struct {
+	IPv4 *STUNResult
+	IPv6 *STUNResult
+}
+
+// QueryDualStack queries STUN servers for both IPv4 and IPv6 addresses in parallel.
+func (c *STUNClient) QueryDualStack(ctx context.Context) (*DualStackSTUNResult, error) {
+	if _, hasDeadline := ctx.Deadline(); !hasDeadline {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, c.timeout)
+		defer cancel()
+	}
+
+	result := &DualStackSTUNResult{}
+	var mu sync.Mutex
+	var wg sync.WaitGroup
+
+	// Query IPv4
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		r, err := c.QueryParallel(ctx)
+		if err == nil {
+			mu.Lock()
+			result.IPv4 = r
+			mu.Unlock()
+		}
+	}()
+
+	// Query IPv6
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		r, err := c.QueryParallelIPv6(ctx)
+		if err == nil {
+			mu.Lock()
+			result.IPv6 = r
+			mu.Unlock()
+		}
+	}()
+
+	wg.Wait()
+
+	if result.IPv4 == nil && result.IPv6 == nil {
+		return nil, ErrSTUNNoResponse
+	}
+
+	return result, nil
 }
