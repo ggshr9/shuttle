@@ -104,6 +104,28 @@ type EngineStatus struct {
 	Transport      string          `json:"transport"`
 	Transports     []TransportInfo `json:"transports"`
 	MultipathPaths []PathInfo      `json:"multipath_paths,omitempty"`
+	Mesh           *MeshStatus     `json:"mesh,omitempty"`
+}
+
+// MeshStatus describes the mesh VPN connection status.
+type MeshStatus struct {
+	Enabled   bool       `json:"enabled"`
+	VirtualIP string     `json:"virtual_ip,omitempty"`
+	CIDR      string     `json:"cidr,omitempty"`
+	Peers     []MeshPeer `json:"peers,omitempty"`
+}
+
+// MeshPeer describes a mesh peer and its connection quality.
+type MeshPeer struct {
+	VirtualIP   string  `json:"virtual_ip"`
+	State       string  `json:"state"` // "connected", "connecting", "disconnected"
+	Method      string  `json:"method,omitempty"` // "direct", "relay", "p2p"
+	AvgRTT      int64   `json:"avg_rtt_ms"`
+	MinRTT      int64   `json:"min_rtt_ms"`
+	MaxRTT      int64   `json:"max_rtt_ms"`
+	Jitter      int64   `json:"jitter_ms"`
+	PacketLoss  float64 `json:"packet_loss"` // 0.0 - 1.0
+	Score       int     `json:"score"`       // 0-100, higher is better
 }
 
 // PathInfo describes a single multipath transport path status.

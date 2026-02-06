@@ -248,6 +248,14 @@ func (mc *MeshClient) GetP2PStats() *p2p.ManagerStats {
 	return mc.p2pManager.GetStats()
 }
 
+// ListPeers returns information about all known peers with quality metrics.
+func (mc *MeshClient) ListPeers() []p2p.PeerInfo {
+	if !mc.p2pEnabled || mc.p2pManager == nil {
+		return nil
+	}
+	return mc.p2pManager.ListPeers()
+}
+
 // IsP2PEnabled returns whether P2P is enabled.
 func (mc *MeshClient) IsP2PEnabled() bool {
 	return mc.p2pEnabled

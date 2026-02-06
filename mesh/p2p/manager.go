@@ -1283,6 +1283,41 @@ type ManagerStats struct {
 	FailedPeers     int
 }
 
+// PeerInfo contains information about a peer including quality metrics.
+type PeerInfo struct {
+	VirtualIP string          `json:"virtual_ip"`
+	State     string          `json:"state"`
+	Method    string          `json:"method,omitempty"`
+	Quality   *QualityMetrics `json:"quality,omitempty"`
+}
+
+// ListPeers returns information about all known peers.
+func (m *Manager) ListPeers() []PeerInfo {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	peers := make([]PeerInfo, 0, len(m.peers))
+	for _, peer := range m.peers {
+		method := "direct"
+		if peer.UseRelay {
+			method = "relay"
+		} else if peer.P2PConn != nil {
+			method = "p2p"
+		}
+		info := PeerInfo{
+			VirtualIP: peer.VIP.String(),
+			State:     peer.State.String(),
+			Method:    method,
+		}
+		if peer.QualityMonitor != nil {
+			metrics := peer.QualityMonitor.GetMetrics()
+			info.Quality = &metrics
+		}
+		peers = append(peers, info)
+	}
+	return peers
+}
+
 // LocalCandidates returns the local ICE candidates.
 func (m *Manager) LocalCandidates() []*Candidate {
 	return m.candidates
