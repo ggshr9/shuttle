@@ -1,6 +1,6 @@
 <script>
-  import { api } from './api.js'
-  import { t } from './i18n/index.js'
+  import { api } from './api'
+  import { t } from './i18n/index'
 
   let { onComplete } = $props()
 
@@ -116,7 +116,13 @@
   }
 </script>
 
-<div class="overlay">
+<div
+  class="overlay"
+  role="dialog"
+  aria-modal="true"
+  aria-labelledby="onboarding-title"
+  onkeydown={(e) => e.key === 'Escape' && skip()}
+>
   <div class="wizard">
     <!-- Progress indicator -->
     <div class="progress">
@@ -131,7 +137,7 @@
     {#if step === 1}
       <div class="content">
         <div class="icon">🚀</div>
-        <h2>Welcome to Shuttle</h2>
+        <h2 id="onboarding-title">Welcome to Shuttle</h2>
         <p class="subtitle">Fast, secure proxy for unrestricted internet access</p>
 
         <div class="features">

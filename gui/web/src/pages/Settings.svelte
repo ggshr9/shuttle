@@ -1,6 +1,6 @@
 <script>
-  import { api } from '../lib/api.js'
-  import { t, getLocale, setLocale, getLocales } from '../lib/i18n/index.js'
+  import { api } from '../lib/api'
+  import { t, getLocale, setLocale, getLocales } from '../lib/i18n/index'
   import { onMount } from 'svelte'
 
   let config = $state(null)

@@ -1,5 +1,5 @@
 <script>
-  import { api } from '../lib/api.js'
+  import { api } from '../lib/api'
   import { onMount } from 'svelte'
 
   let routing = $state({ rules: [], default: 'proxy', dns: {} })
@@ -211,9 +211,9 @@
 </div>
 
 {#if showTemplates}
-<div class="overlay" onclick={() => (showTemplates = false)} role="dialog" onkeydown={(e) => e.key === 'Escape' && (showTemplates = false)}>
-  <div class="modal" onclick={(e) => e.stopPropagation()} role="document">
-    <h3>Routing Templates</h3>
+<div class="overlay" onclick={() => (showTemplates = false)} role="dialog" aria-modal="true" aria-labelledby="templates-dialog-title" onkeydown={(e) => e.key === 'Escape' && (showTemplates = false)}>
+  <div class="modal" onclick={(e) => e.stopPropagation()}>
+    <h3 id="templates-dialog-title">Routing Templates</h3>
     <p class="modal-hint">Choose a template to replace current rules</p>
     <div class="template-list">
       {#each templates as t}
@@ -229,9 +229,9 @@
 {/if}
 
 {#if showImport}
-<div class="overlay" onclick={() => (showImport = false)} role="dialog" onkeydown={(e) => e.key === 'Escape' && (showImport = false)}>
-  <div class="modal" onclick={(e) => e.stopPropagation()} role="document">
-    <h3>Import Rules</h3>
+<div class="overlay" onclick={() => (showImport = false)} role="dialog" aria-modal="true" aria-labelledby="import-rules-dialog-title" onkeydown={(e) => e.key === 'Escape' && (showImport = false)}>
+  <div class="modal" onclick={(e) => e.stopPropagation()}>
+    <h3 id="import-rules-dialog-title">Import Rules</h3>
     <p class="modal-hint">Paste JSON rules configuration</p>
     <textarea
       bind:value={importData}
@@ -249,9 +249,9 @@
 {/if}
 
 {#if showProcessPicker}
-<div class="overlay" onclick={closeProcessPicker}>
+<div class="overlay" onclick={closeProcessPicker} role="dialog" aria-modal="true" aria-labelledby="process-picker-dialog-title" onkeydown={(e) => e.key === 'Escape' && closeProcessPicker()}>
   <div class="picker" onclick={(e) => e.stopPropagation()}>
-    <h3>Select Process</h3>
+    <h3 id="process-picker-dialog-title">Select Process</h3>
     <p class="picker-hint">Click a process to add it to the rule</p>
     {#if processes.length}
       <div class="proc-list">

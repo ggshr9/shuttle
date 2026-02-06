@@ -1,8 +1,9 @@
 <script>
   import { onMount } from 'svelte'
-  import { t, subscribeLocale } from './lib/i18n/index.js'
-  import { api } from './lib/api.js'
+  import { t, subscribeLocale } from './lib/i18n/index'
+  import { api } from './lib/api'
   import Onboarding from './lib/Onboarding.svelte'
+  import Toast from './lib/Toast.svelte'
 
   let tab = $state('dashboard')
   let locale = $state('en')
@@ -47,6 +48,8 @@
   // Force dependency on locale for reactivity
   $effect(() => { void locale })
 </script>
+
+<Toast />
 
 {#if showOnboarding}
   <Onboarding onComplete={handleOnboardingComplete} />

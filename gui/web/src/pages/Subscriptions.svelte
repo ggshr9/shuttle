@@ -1,10 +1,10 @@
 <script>
-  import { api } from '../lib/api.js'
+  import { api } from '../lib/api'
   import { onMount } from 'svelte'
+  import { toast } from '../lib/toast'
 
   let subscriptions = $state([])
   let loading = $state(true)
-  let msg = $state('')
 
   // Add subscription dialog
   let showAdd = $state(false)
@@ -23,7 +23,7 @@
     try {
       subscriptions = await api.getSubscriptions()
     } catch (e) {
-      msg = 'Failed to load: ' + e.message
+      toast.error('Failed to load subscriptions: ' + (e as Error).message)
     } finally {
       loading = false
     }
@@ -32,15 +32,14 @@
   async function addSubscription() {
     if (!newSub.url.trim()) return
     adding = true
-    msg = ''
     try {
       const sub = await api.addSubscription(newSub.name, newSub.url)
       subscriptions = [...subscriptions, sub]
       newSub = { name: '', url: '' }
       showAdd = false
-      msg = `Added subscription with ${sub.servers?.length || 0} servers`
+      toast.success(`Added subscription with ${sub.servers?.length || 0} servers`)
     } catch (e) {
-      msg = e.message
+      toast.error((e as Error).message)
     } finally {
       adding = false
     }
@@ -49,13 +48,12 @@
   async function refreshSubscription(id) {
     refreshing[id] = true
     refreshing = { ...refreshing }
-    msg = ''
     try {
       const updated = await api.refreshSubscription(id)
       subscriptions = subscriptions.map(s => s.id === id ? updated : s)
-      msg = `Refreshed: ${updated.servers?.length || 0} servers`
+      toast.success(`Refreshed: ${updated.servers?.length || 0} servers`)
     } catch (e) {
-      msg = e.message
+      toast.error((e as Error).message)
     } finally {
       refreshing[id] = false
       refreshing = { ...refreshing }
@@ -66,8 +64,9 @@
     try {
       await api.deleteSubscription(id)
       subscriptions = subscriptions.filter(s => s.id !== id)
+      toast.success('Subscription deleted')
     } catch (e) {
-      msg = e.message
+      toast.error((e as Error).message)
     }
   }
 
@@ -83,10 +82,6 @@
     <h2>Subscriptions</h2>
     <button class="btn-add" onclick={() => (showAdd = true)}>Add Subscription</button>
   </div>
-
-  {#if msg}
-    <p class="msg">{msg}</p>
-  {/if}
 
   {#if loading}
     <p class="loading">Loading...</p>
@@ -148,10 +143,17 @@
 </div>
 
 {#if showAdd}
-  <div class="modal-overlay" onclick={() => (showAdd = false)}>
+  <div
+    class="modal-overlay"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="add-sub-dialog-title"
+    onclick={() => (showAdd = false)}
+    onkeydown={(e) => e.key === 'Escape' && (showAdd = false)}
+  >
     <div class="modal" onclick={(e) => e.stopPropagation()}>
       <div class="modal-header">
-        <h3>Add Subscription</h3>
+        <h3 id="add-sub-dialog-title">Add Subscription</h3>
         <button class="modal-close" onclick={() => (showAdd = false)}>&times;</button>
       </div>
       <div class="modal-body">

@@ -1,13 +1,33 @@
 // Keyboard shortcuts manager
 
-const shortcuts = new Map()
+export interface ShortcutModifiers {
+  ctrl?: boolean
+  meta?: boolean // Command key on macOS
+  shift?: boolean
+  alt?: boolean
+}
+
+interface ShortcutEntry {
+  callback: (e: KeyboardEvent) => void
+  key: string
+  ctrl: boolean
+  meta: boolean
+  shift: boolean
+  alt: boolean
+}
+
+const shortcuts = new Map<string, ShortcutEntry>()
 let initialized = false
 
 // Register a keyboard shortcut
-export function registerShortcut(key, callback, options = {}) {
+export function registerShortcut(
+  key: string,
+  callback: (e: KeyboardEvent) => void,
+  options: ShortcutModifiers = {}
+): () => void {
   const {
     ctrl = false,
-    meta = false, // Command key on macOS
+    meta = false,
     shift = false,
     alt = false,
   } = options
@@ -17,8 +37,8 @@ export function registerShortcut(key, callback, options = {}) {
   return () => shortcuts.delete(id)
 }
 
-function buildId(key, mods) {
-  const parts = []
+function buildId(key: string, mods: ShortcutModifiers): string {
+  const parts: string[] = []
   if (mods.ctrl) parts.push('ctrl')
   if (mods.meta) parts.push('meta')
   if (mods.shift) parts.push('shift')
@@ -27,7 +47,7 @@ function buildId(key, mods) {
   return parts.join('+')
 }
 
-function handleKeydown(e) {
+function handleKeydown(e: KeyboardEvent): void {
   const id = buildId(e.key, {
     ctrl: e.ctrlKey,
     meta: e.metaKey,
@@ -43,14 +63,14 @@ function handleKeydown(e) {
 }
 
 // Initialize the shortcut listener
-export function initShortcuts() {
+export function initShortcuts(): void {
   if (initialized) return
   initialized = true
   window.addEventListener('keydown', handleKeydown)
 }
 
 // Cleanup
-export function destroyShortcuts() {
+export function destroyShortcuts(): void {
   if (!initialized) return
   initialized = false
   window.removeEventListener('keydown', handleKeydown)
@@ -61,12 +81,12 @@ export function destroyShortcuts() {
 export const isMac = typeof navigator !== 'undefined' && /Mac/.test(navigator.platform)
 
 // Get display text for a shortcut
-export function getShortcutDisplay(key, mods = {}) {
-  const parts = []
+export function getShortcutDisplay(key: string, mods: ShortcutModifiers = {}): string {
+  const parts: string[] = []
   if (mods.ctrl) parts.push(isMac ? '^' : 'Ctrl')
-  if (mods.meta) parts.push(isMac ? '⌘' : 'Win')
-  if (mods.shift) parts.push(isMac ? '⇧' : 'Shift')
-  if (mods.alt) parts.push(isMac ? '⌥' : 'Alt')
+  if (mods.meta) parts.push(isMac ? '\u2318' : 'Win')
+  if (mods.shift) parts.push(isMac ? '\u21E7' : 'Shift')
+  if (mods.alt) parts.push(isMac ? '\u2325' : 'Alt')
   parts.push(key.toUpperCase())
   return parts.join(isMac ? '' : '+')
 }

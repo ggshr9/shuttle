@@ -1,10 +1,11 @@
 <script>
-  import { api } from '../lib/api.js'
-  import { connectWS } from '../lib/ws.js'
+  import { api } from '../lib/api'
+  import { connectWS } from '../lib/ws'
   import { onMount } from 'svelte'
-  import { requestPermission, notifyConnected, notifyDisconnected } from '../lib/notify.js'
-  import { initShortcuts, registerShortcut, destroyShortcuts, getShortcutDisplay, isMac } from '../lib/shortcuts.js'
+  import { requestPermission, notifyConnected, notifyDisconnected } from '../lib/notify'
+  import { initShortcuts, registerShortcut, destroyShortcuts, getShortcutDisplay, isMac } from '../lib/shortcuts'
   import SpeedChart from '../lib/SpeedChart.svelte'
+  import { t } from '../lib/i18n/index'
 
   let status = $state(null)
   let connected = $state(false)
@@ -124,24 +125,24 @@
     <button class="toggle" class:on={connected} onclick={toggle} disabled={loading} title="Toggle connection ({toggleShortcut})">
       <span class="icon">{connected ? '⬤' : '○'}</span>
     </button>
-    <p class="state">{status?.state ?? 'loading...'}</p>
+    <p class="state">{status?.state ? t('dashboard.state.' + status.state) : t('dashboard.state.loading')}</p>
     <p class="shortcut-hint">Press {toggleShortcut} to toggle</p>
   </div>
 
   <div class="speed-cards">
     <div class="card">
-      <span class="label">Upload</span>
+      <span class="label">{t('dashboard.upload')}</span>
       <span class="value">{fmt(speed.upload)}</span>
     </div>
     <div class="card">
-      <span class="label">Download</span>
+      <span class="label">{t('dashboard.download')}</span>
       <span class="value">{fmt(speed.download)}</span>
     </div>
   </div>
 
   {#if uploadHistory.length > 1 || downloadHistory.length > 1}
     <div class="realtime-chart">
-      <h3>Real-time Traffic</h3>
+      <h3>{t('dashboard.realtimeTraffic')}</h3>
       <SpeedChart
         uploadData={uploadHistory}
         downloadData={downloadHistory}
@@ -149,8 +150,8 @@
         height={120}
       />
       <div class="chart-legend inline">
-        <span class="legend-item"><span class="legend-color upload"></span> Upload</span>
-        <span class="legend-item"><span class="legend-color download"></span> Download</span>
+        <span class="legend-item"><span class="legend-color upload"></span> {t('dashboard.upload')}</span>
+        <span class="legend-item"><span class="legend-color download"></span> {t('dashboard.download')}</span>
       </div>
     </div>
   {/if}
@@ -158,11 +159,11 @@
   {#if status}
     <div class="traffic-cards">
       <div class="card traffic">
-        <span class="label">Total Upload</span>
+        <span class="label">{t('dashboard.totalUpload')}</span>
         <span class="value">{formatBytes(status.bytes_sent || 0)}</span>
       </div>
       <div class="card traffic">
-        <span class="label">Total Download</span>
+        <span class="label">{t('dashboard.totalDownload')}</span>
         <span class="value">{formatBytes(status.bytes_received || 0)}</span>
       </div>
     </div>
@@ -171,26 +172,26 @@
   {#if status}
     <div class="stats">
       <div class="stat">
-        <span>Active Connections</span>
+        <span>{t('dashboard.activeConnections')}</span>
         <span>{status.active_conns}</span>
       </div>
       <div class="stat">
-        <span>Total Connections</span>
+        <span>{t('dashboard.totalConnections')}</span>
         <span>{status.total_conns}</span>
       </div>
       <div class="stat">
-        <span>Transport</span>
+        <span>{t('dashboard.transport')}</span>
         <span>{status.transport || 'none'}</span>
       </div>
     </div>
 
     {#if status.transports?.length}
-      <h3>Transports</h3>
+      <h3>{t('dashboard.transports')}</h3>
       <div class="transports">
-        {#each status.transports as t}
-          <div class="transport" class:available={t.available}>
-            <span>{t.type}</span>
-            <span>{t.available ? `${t.latency_ms}ms` : 'unavailable'}</span>
+        {#each status.transports as tr}
+          <div class="transport" class:available={tr.available}>
+            <span>{tr.type}</span>
+            <span>{tr.available ? `${tr.latency_ms}ms` : t('dashboard.unavailable')}</span>
           </div>
         {/each}
       </div>
@@ -198,7 +199,7 @@
   {/if}
 
   {#if history.length > 0}
-    <h3>Traffic History (7 days)</h3>
+    <h3>{t('dashboard.trafficHistory')}</h3>
     <div class="history-chart">
       {#each history as day}
         {@const maxTraffic = getMaxTraffic(history)}
@@ -215,8 +216,8 @@
       {/each}
     </div>
     <div class="chart-legend">
-      <span class="legend-item"><span class="legend-color upload"></span> Upload</span>
-      <span class="legend-item"><span class="legend-color download"></span> Download</span>
+      <span class="legend-item"><span class="legend-color upload"></span> {t('dashboard.upload')}</span>
+      <span class="legend-item"><span class="legend-color download"></span> {t('dashboard.download')}</span>
     </div>
   {/if}
 </div>

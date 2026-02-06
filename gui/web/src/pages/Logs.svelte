@@ -1,7 +1,8 @@
 <script>
-  import { connectWS } from '../lib/ws.js'
-  import { api } from '../lib/api.js'
+  import { connectWS } from '../lib/ws'
+  import { api } from '../lib/api'
   import { onMount } from 'svelte'
+  import { t } from '../lib/i18n/index'
 
   let logs = $state([])
   let connections = $state({}) // Map of connID -> connection details
@@ -149,19 +150,19 @@
 
 <div class="page">
   <div class="header">
-    <h2>Logs</h2>
+    <h2>{t('logs.title')}</h2>
     <div class="status-badge" class:active={getActiveCount() > 0}>
-      {getActiveCount()} active connections
+      {t('logs.activeConnections', { count: getActiveCount() })}
     </div>
     <div class="controls">
       <label>
-        <input type="checkbox" bind:checked={showConnections} /> Show Connections
+        <input type="checkbox" bind:checked={showConnections} /> {t('logs.showConnections')}
       </label>
       <label>
-        <input type="checkbox" bind:checked={autoScroll} /> Auto-scroll
+        <input type="checkbox" bind:checked={autoScroll} /> {t('logs.autoScroll')}
       </label>
-      <button onclick={clear}>Clear</button>
-      <button onclick={exportLogs} disabled={logs.length === 0}>Export</button>
+      <button onclick={clear}>{t('logs.clear')}</button>
+      <button onclick={exportLogs} disabled={logs.length === 0}>{t('logs.export')}</button>
     </div>
   </div>
 

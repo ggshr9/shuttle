@@ -1,12 +1,12 @@
 <script>
-  import { api } from '../lib/api.js'
-  import { connectWS } from '../lib/ws.js'
+  import { api } from '../lib/api'
+  import { connectWS } from '../lib/ws'
+  import { toast } from '../lib/toast'
   import { onMount } from 'svelte'
 
   let active = $state({ addr: '', name: '', password: '' })
   let servers = $state([])
   let saving = $state(false)
-  let msg = $state('')
   let newServer = $state({ addr: '', name: '', password: '' })
 
   // Import dialog state
@@ -29,18 +29,17 @@
       active = data.active || { addr: '', name: '', password: '' }
       servers = data.servers || []
     } catch (e) {
-      msg = 'Failed to load: ' + e.message
+      toast.error('Failed to load servers: ' + (e as Error).message)
     }
   })
 
   async function save() {
     saving = true
-    msg = ''
     try {
       await api.putServers(active)
-      msg = 'Saved & reconnecting...'
+      toast.success('Saved & reconnecting...')
     } catch (e) {
-      msg = e.message
+      toast.error((e as Error).message)
     } finally {
       saving = false
     }
@@ -57,8 +56,9 @@
       await api.addServer(newServer)
       servers = [...servers, { ...newServer }]
       newServer = { addr: '', name: '', password: '' }
+      toast.success('Server added')
     } catch (e) {
-      msg = e.message
+      toast.error((e as Error).message)
     }
   }
 
@@ -66,8 +66,9 @@
     try {
       await api.deleteServer(addr)
       servers = servers.filter(s => s.addr !== addr)
+      toast.success('Server removed')
     } catch (e) {
-      msg = e.message
+      toast.error((e as Error).message)
     }
   }
 
@@ -82,7 +83,7 @@
       const data = await api.getServers()
       servers = data.servers || []
       if (result.added > 0) {
-        msg = `Imported ${result.added} server(s)`
+        toast.success(`Imported ${result.added} server(s)`)
       }
     } catch (e) {
       importResult = { error: e.message }
@@ -117,7 +118,7 @@
         ws.close()
       }
       if (data.error) {
-        msg = data.error
+        toast.error(data.error)
         testing = false
         ws.close()
       }
@@ -136,17 +137,16 @@
 
   async function autoSelect() {
     if (servers.length === 0) {
-      msg = 'No servers to select from'
+      toast.warning('No servers to select from')
       return
     }
     autoSelecting = true
-    msg = ''
     try {
       const result = await api.autoSelectServer()
       active = result.server
-      msg = `Selected ${result.server.name || result.server.addr} (${result.latency}ms)`
+      toast.success(`Selected ${result.server.name || result.server.addr} (${result.latency}ms)`)
     } catch (e) {
-      msg = e.message
+      toast.error((e as Error).message)
     } finally {
       autoSelecting = false
     }
@@ -173,8 +173,7 @@
     <button onclick={save} disabled={saving}>
       {saving ? 'Saving...' : 'Save & Reconnect'}
     </button>
-    {#if msg}<p class="msg">{msg}</p>{/if}
-  </div>
+      </div>
 
   <div class="section-header">
     <h2 class="section">Saved Servers</h2>
@@ -236,10 +235,17 @@
 </div>
 
 {#if showImport}
-  <div class="modal-overlay" onclick={closeImport}>
+  <div
+    class="modal-overlay"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="import-dialog-title"
+    onclick={closeImport}
+    onkeydown={(e) => e.key === 'Escape' && closeImport()}
+  >
     <div class="modal" onclick={(e) => e.stopPropagation()}>
       <div class="modal-header">
-        <h3>Import Servers</h3>
+        <h3 id="import-dialog-title">Import Servers</h3>
         <button class="modal-close" onclick={closeImport}>&times;</button>
       </div>
       <div class="modal-body">
