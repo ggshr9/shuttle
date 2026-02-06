@@ -1,0 +1,16 @@
+# Shuttle Test Runner Container
+FROM golang:1.24-alpine
+
+RUN apk add --no-cache \
+    curl \
+    bash \
+    bind-tools \
+    iproute2
+
+WORKDIR /tests
+
+# Copy test files
+COPY sandbox/tests/ /tests/
+
+# Default: run tests
+CMD ["bash", "-c", "echo 'Tester ready'"]

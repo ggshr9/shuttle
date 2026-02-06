@@ -1,0 +1,48 @@
+# Shuttle Server Configuration (Sandbox)
+#
+# This configuration is for sandbox testing only.
+# Do not use in production.
+
+# Listen address
+listen: "0.0.0.0:443"
+
+# TLS certificates (auto-generated if empty)
+tls:
+  cert_file: ""
+  key_file: ""
+
+# Authentication
+auth:
+  password: "sandbox-test-password"
+  private_key: ""
+  public_key: ""
+
+# Cover site (masquerading)
+cover:
+  mode: "default"
+  static_dir: ""
+  reverse_url: ""
+
+# Transport configuration
+transport:
+  # H3/QUIC (primary) - only transport enabled for sandbox
+  h3:
+    enabled: true
+    path_prefix: "/shuttle"
+
+  # Reality/TLS - disabled (requires certificates)
+  reality:
+    enabled: false
+
+  # WebRTC DataChannel - disabled for sandbox simplicity
+  webrtc:
+    enabled: false
+
+# Mesh VPN - disabled for sandbox simplicity
+mesh:
+  enabled: false
+
+# Logging
+log:
+  level: "debug"
+  format: "text"

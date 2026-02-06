@@ -1,0 +1,50 @@
+# Shuttle Client A Configuration (Sandbox)
+#
+# This configuration is for sandbox testing only.
+
+# Server connection
+server:
+  addr: "10.100.0.10:443"  # Server on net-server (routed via router)
+  name: "sandbox-server"
+  password: "sandbox-test-password"
+  sni: ""
+
+# Transport preference
+transport:
+  preferred: "h3"
+  h3:
+    enabled: true
+    path_prefix: "/shuttle"
+  reality:
+    enabled: false
+  webrtc:
+    enabled: false
+
+# Proxy listeners
+proxy:
+  allow_lan: true
+  socks5:
+    enabled: true
+    listen: "0.0.0.0:1080"
+  http:
+    enabled: true
+    listen: "0.0.0.0:8080"
+  tun:
+    enabled: false
+
+# Routing
+routing:
+  mode: "proxy_all"
+
+# Congestion control
+congestion:
+  mode: "adaptive"
+
+# Mesh VPN - disabled for sandbox simplicity
+mesh:
+  enabled: false
+
+# Logging
+log:
+  level: "debug"
+  format: "text"

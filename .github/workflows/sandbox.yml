@@ -1,0 +1,76 @@
+name: Sandbox Tests
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '**.go'
+      - 'sandbox/**'
+      - '.github/workflows/sandbox.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - '**.go'
+      - 'sandbox/**'
+  workflow_dispatch:
+
+jobs:
+  sandbox-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+
+      - name: Build binaries for sandbox
+        run: |
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o sandbox/shuttle ./cmd/shuttle
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o sandbox/shuttled ./cmd/shuttled
+
+      - name: Build Docker images
+        working-directory: sandbox
+        run: docker compose build
+
+      - name: Start sandbox environment
+        working-directory: sandbox
+        run: |
+          docker compose up -d server router client-a client-b
+          sleep 10
+
+      - name: Check service health
+        working-directory: sandbox
+        run: |
+          echo "Checking server..."
+          docker compose exec -T server pgrep -x shuttled || exit 1
+          echo "Checking client-a..."
+          docker compose exec -T client-a pgrep -x shuttle || exit 1
+          echo "Checking client-b..."
+          docker compose exec -T client-b pgrep -x shuttle || exit 1
+          echo "All services healthy!"
+
+      - name: Run connectivity tests
+        working-directory: sandbox
+        run: |
+          echo "Testing client-a -> router (net-a)..."
+          docker compose exec -T client-a ping -c 1 -W 2 10.100.1.1
+          echo "Testing client-b -> router (net-b)..."
+          docker compose exec -T client-b ping -c 1 -W 2 10.100.2.1
+          echo "Connectivity tests passed!"
+
+      - name: Collect logs on failure
+        if: failure()
+        working-directory: sandbox
+        run: |
+          docker compose logs server
+          docker compose logs client-a
+          docker compose logs client-b
+          docker compose logs router
+
+      - name: Cleanup
+        if: always()
+        working-directory: sandbox
+        run: docker compose down -v

@@ -1,0 +1,164 @@
+# Shuttle Sandbox Test Environment
+#
+# Network Topology:
+#   client-a (10.100.1.10) --[net-a]--> router (10.100.0.1) --[net-server]--> server (10.100.0.10)
+#   client-b (10.100.2.10) --[net-b]--> router (10.100.0.1) --[net-server]--> server (10.100.0.10)
+
+services:
+  # ============================================
+  # Server - shuttled
+  # ============================================
+  server:
+    build:
+      context: ..
+      dockerfile: sandbox/Dockerfile
+    container_name: shuttle-server
+    hostname: server
+    command: ["shuttled", "run", "-c", "/etc/shuttle/server.yaml"]
+    volumes:
+      - ./configs/server.yaml:/etc/shuttle/server.yaml:ro
+    networks:
+      net-server:
+        ipv4_address: 10.100.0.10
+    ports:
+      - "19443:443"    # H3/QUIC
+      - "19080:9090"   # API (for debugging)
+    healthcheck:
+      test: ["CMD", "pgrep", "-x", "shuttled"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+
+  # ============================================
+  # Router - NAT/Firewall simulation
+  # ============================================
+  router:
+    image: alpine:3.19
+    container_name: shuttle-router
+    hostname: router
+    cap_add:
+      - NET_ADMIN
+    command: >
+      sh -c "
+        apk add --no-cache iptables iproute2 bash &&
+        echo 1 > /proc/sys/net/ipv4/ip_forward &&
+        iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE &&
+        iptables -A FORWARD -i eth1 -o eth0 -j ACCEPT &&
+        iptables -A FORWARD -i eth2 -o eth0 -j ACCEPT &&
+        iptables -A FORWARD -m state --state ESTABLISHED,RELATED -j ACCEPT &&
+        echo 'Router ready' &&
+        tail -f /dev/null
+      "
+    networks:
+      net-server:
+        ipv4_address: 10.100.0.1
+      net-a:
+        ipv4_address: 10.100.1.1
+      net-b:
+        ipv4_address: 10.100.2.1
+    restart: unless-stopped
+
+  # ============================================
+  # Client A
+  # ============================================
+  client-a:
+    build:
+      context: ..
+      dockerfile: sandbox/Dockerfile
+    container_name: shuttle-client-a
+    hostname: client-a
+    command:
+      - sh
+      - -c
+      - |
+        ip route add 10.100.0.0/24 via 10.100.1.1
+        exec shuttle run -c /etc/shuttle/client.yaml
+    volumes:
+      - ./configs/client-a.yaml:/etc/shuttle/client.yaml:ro
+    networks:
+      net-a:
+        ipv4_address: 10.100.1.10
+    depends_on:
+      server:
+        condition: service_healthy
+      router:
+        condition: service_started
+    cap_add:
+      - NET_ADMIN
+    restart: unless-stopped
+
+  # ============================================
+  # Client B
+  # ============================================
+  client-b:
+    build:
+      context: ..
+      dockerfile: sandbox/Dockerfile
+    container_name: shuttle-client-b
+    hostname: client-b
+    command:
+      - sh
+      - -c
+      - |
+        ip route add 10.100.0.0/24 via 10.100.2.1
+        exec shuttle run -c /etc/shuttle/client.yaml
+    volumes:
+      - ./configs/client-b.yaml:/etc/shuttle/client.yaml:ro
+    networks:
+      net-b:
+        ipv4_address: 10.100.2.10
+    depends_on:
+      server:
+        condition: service_healthy
+      router:
+        condition: service_started
+    cap_add:
+      - NET_ADMIN
+    restart: unless-stopped
+
+  # ============================================
+  # Test Runner
+  # ============================================
+  tester:
+    build:
+      context: ..
+      dockerfile: sandbox/Dockerfile.tester
+    container_name: shuttle-tester
+    hostname: tester
+    volumes:
+      - ./tests:/tests:ro
+      - ./results:/results
+    networks:
+      net-server:
+        ipv4_address: 10.100.0.100
+    depends_on:
+      - client-a
+      - client-b
+    profiles:
+      - test
+
+# ============================================
+# Networks
+# ============================================
+networks:
+  net-server:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 10.100.0.0/24
+          gateway: 10.100.0.254
+
+  net-a:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 10.100.1.0/24
+          gateway: 10.100.1.254
+
+  net-b:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 10.100.2.0/24
+          gateway: 10.100.2.254
