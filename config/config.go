@@ -16,6 +16,7 @@ type ClientConfig struct {
 	Transport     TransportConfig      `yaml:"transport" json:"transport"`
 	Proxy         ProxyConfig          `yaml:"proxy" json:"proxy"`
 	Routing       RoutingConfig        `yaml:"routing" json:"routing"`
+	QoS           QoSConfig            `yaml:"qos" json:"qos"`
 	Congestion    CongestionConfig     `yaml:"congestion" json:"congestion"`
 	Mesh          MeshConfig           `yaml:"mesh" json:"mesh"`
 	Log           LogConfig            `yaml:"log" json:"log"`
@@ -60,6 +61,26 @@ type P2PConfig struct {
 type CongestionConfig struct {
 	Mode       string `yaml:"mode" json:"mode"`               // "adaptive", "bbr", "brutal"
 	BrutalRate uint64 `yaml:"brutal_rate" json:"brutal_rate"` // bytes/sec for brutal mode (default 100MB/s)
+}
+
+// QoSConfig configures Quality of Service marking.
+type QoSConfig struct {
+	Enabled bool      `yaml:"enabled" json:"enabled"`
+	Rules   []QoSRule `yaml:"rules" json:"rules"`
+}
+
+// QoSRule defines a traffic classification rule for QoS marking.
+// Priority levels: critical (0), high (1), normal (2), bulk (3), low (4)
+// DSCP values: EF (46), AF41 (34), AF21 (18), AF11 (10), BE (0)
+type QoSRule struct {
+	// Match conditions (any match triggers the rule)
+	Ports    []uint16 `yaml:"ports,omitempty" json:"ports,omitempty"`       // Destination ports
+	Protocol string   `yaml:"protocol,omitempty" json:"protocol,omitempty"` // "tcp", "udp"
+	Domains  []string `yaml:"domains,omitempty" json:"domains,omitempty"`   // Domain patterns
+	Process  []string `yaml:"process,omitempty" json:"process,omitempty"`   // Process names
+
+	// Priority assignment
+	Priority string `yaml:"priority" json:"priority"` // "critical", "high", "normal", "bulk", "low"
 }
 
 // ServerEndpoint defines a remote server.
@@ -408,6 +429,24 @@ func (c *ClientConfig) DeepCopy() *ClientConfig {
 	if c.Transport.WebRTC.TURNServers != nil {
 		cp.Transport.WebRTC.TURNServers = make([]string, len(c.Transport.WebRTC.TURNServers))
 		copy(cp.Transport.WebRTC.TURNServers, c.Transport.WebRTC.TURNServers)
+	}
+	if c.QoS.Rules != nil {
+		cp.QoS.Rules = make([]QoSRule, len(c.QoS.Rules))
+		for i, r := range c.QoS.Rules {
+			cp.QoS.Rules[i] = r
+			if r.Ports != nil {
+				cp.QoS.Rules[i].Ports = make([]uint16, len(r.Ports))
+				copy(cp.QoS.Rules[i].Ports, r.Ports)
+			}
+			if r.Domains != nil {
+				cp.QoS.Rules[i].Domains = make([]string, len(r.Domains))
+				copy(cp.QoS.Rules[i].Domains, r.Domains)
+			}
+			if r.Process != nil {
+				cp.QoS.Rules[i].Process = make([]string, len(r.Process))
+				copy(cp.QoS.Rules[i].Process, r.Process)
+			}
+		}
 	}
 	return &cp
 }

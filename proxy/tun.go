@@ -13,6 +13,7 @@ import (
 
 	"github.com/shuttle-proxy/shuttle/internal/procnet"
 	"github.com/shuttle-proxy/shuttle/mesh"
+	"github.com/shuttle-proxy/shuttle/qos"
 )
 
 // TUNConfig configures the TUN device for system-wide proxying.
@@ -32,6 +33,7 @@ type TUNServer struct {
 	logger       *slog.Logger
 	ProcResolver *procnet.Resolver
 	MeshClient   *mesh.MeshClient
+	QoSClassifier *qos.Classifier
 
 	tunFile  *os.File
 	natTable natTable
@@ -77,6 +79,7 @@ type natKey struct {
 type natEntry struct {
 	conn   net.Conn
 	cancel context.CancelFunc
+	tos    uint8 // QoS TOS byte for response packets
 }
 
 type natTable struct {
@@ -353,8 +356,10 @@ func (t *TUNServer) dialAndProxyTCP(ctx context.Context, key natKey, clientISN u
 	)
 
 	dialCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	var procName string
 	if t.ProcResolver != nil {
-		if procName := t.ProcResolver.Resolve(key.srcPort); procName != "" {
+		procName = t.ProcResolver.Resolve(key.srcPort)
+		if procName != "" {
 			dialCtx = WithProcess(dialCtx, procName)
 		}
 	}
@@ -366,7 +371,10 @@ func (t *TUNServer) dialAndProxyTCP(ctx context.Context, key natKey, clientISN u
 		return
 	}
 
-	entry := &natEntry{conn: conn, cancel: cancel}
+	// Calculate QoS TOS byte
+	tos := t.calculateTOS(key.dstPort, "tcp", procName)
+
+	entry := &natEntry{conn: conn, cancel: cancel, tos: tos}
 	t.natTable.putTCP(key, entry)
 
 	// Send SYN-ACK back to TUN.
@@ -384,7 +392,7 @@ func (t *TUNServer) dialAndProxyTCP(ctx context.Context, key natKey, clientISN u
 		for {
 			n, err := conn.Read(buf)
 			if n > 0 {
-				t.injectTCPData(key.dstIP, key.srcIP, key.dstPort, key.srcPort, seq, buf[:n])
+				t.injectTCPData(key.dstIP, key.srcIP, key.dstPort, key.srcPort, seq, buf[:n], tos)
 				seq += uint32(n)
 			}
 			if err != nil {
@@ -424,8 +432,10 @@ func (t *TUNServer) dialAndProxyUDP(ctx context.Context, key natKey, initialPayl
 	)
 
 	dialCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	var procName string
 	if t.ProcResolver != nil {
-		if procName := t.ProcResolver.Resolve(key.srcPort); procName != "" {
+		procName = t.ProcResolver.Resolve(key.srcPort)
+		if procName != "" {
 			dialCtx = WithProcess(dialCtx, procName)
 		}
 	}
@@ -436,7 +446,10 @@ func (t *TUNServer) dialAndProxyUDP(ctx context.Context, key natKey, initialPayl
 		return
 	}
 
-	entry := &natEntry{conn: conn, cancel: cancel}
+	// Calculate QoS TOS byte
+	tos := t.calculateTOS(key.dstPort, "udp", procName)
+
+	entry := &natEntry{conn: conn, cancel: cancel, tos: tos}
 	t.natTable.putUDP(key, entry)
 
 	conn.SetWriteDeadline(time.Now().Add(15 * time.Second))
@@ -453,7 +466,7 @@ func (t *TUNServer) dialAndProxyUDP(ctx context.Context, key natKey, initialPayl
 		for {
 			n, err := conn.Read(buf)
 			if n > 0 {
-				t.injectUDPPacket(key.dstIP, key.srcIP, key.dstPort, key.srcPort, buf[:n])
+				t.injectUDPPacket(key.dstIP, key.srcIP, key.dstPort, key.srcPort, buf[:n], tos)
 				conn.SetReadDeadline(time.Now().Add(2 * time.Minute))
 			}
 			if err != nil {
@@ -461,6 +474,19 @@ func (t *TUNServer) dialAndProxyUDP(ctx context.Context, key natKey, initialPayl
 			}
 		}
 	}()
+}
+
+// ---------------------------------------------------------------------------
+// QoS helpers
+// ---------------------------------------------------------------------------
+
+// calculateTOS returns the TOS byte based on QoS classification.
+func (t *TUNServer) calculateTOS(dstPort uint16, protocol, process string) uint8 {
+	if t.QoSClassifier == nil || !t.QoSClassifier.Enabled() {
+		return 0
+	}
+	priority := t.QoSClassifier.Classify(dstPort, protocol, "", process)
+	return t.QoSClassifier.GetTOS(priority)
 }
 
 // ---------------------------------------------------------------------------
@@ -487,24 +513,30 @@ func (t *TUNServer) sendTCPReset(srcIP, dstIP [4]byte, srcPort, dstPort uint16, 
 	t.writeTUN(pkt)
 }
 
-func (t *TUNServer) injectTCPData(srcIP, dstIP [4]byte, srcPort, dstPort uint16, seq uint32, data []byte) {
-	pkt := buildTCPPacket(srcIP, dstIP, srcPort, dstPort, seq, 0, tcpFlagACK, data)
+func (t *TUNServer) injectTCPData(srcIP, dstIP [4]byte, srcPort, dstPort uint16, seq uint32, data []byte, tos uint8) {
+	pkt := buildTCPPacketWithTOS(srcIP, dstIP, srcPort, dstPort, seq, 0, tcpFlagACK, data, tos)
 	t.writeTUN(pkt)
 }
 
-func (t *TUNServer) injectUDPPacket(srcIP, dstIP [4]byte, srcPort, dstPort uint16, data []byte) {
-	pkt := buildUDPPacket(srcIP, dstIP, srcPort, dstPort, data)
+func (t *TUNServer) injectUDPPacket(srcIP, dstIP [4]byte, srcPort, dstPort uint16, data []byte, tos uint8) {
+	pkt := buildUDPPacketWithTOS(srcIP, dstIP, srcPort, dstPort, data, tos)
 	t.writeTUN(pkt)
 }
 
-// buildTCPPacket constructs a raw IPv4+TCP packet.
+// buildTCPPacket constructs a raw IPv4+TCP packet with optional TOS marking.
 func buildTCPPacket(srcIP, dstIP [4]byte, srcPort, dstPort uint16, seq, ack uint32, flags byte, payload []byte) []byte {
+	return buildTCPPacketWithTOS(srcIP, dstIP, srcPort, dstPort, seq, ack, flags, payload, 0)
+}
+
+// buildTCPPacketWithTOS constructs a raw IPv4+TCP packet with TOS/DSCP marking.
+func buildTCPPacketWithTOS(srcIP, dstIP [4]byte, srcPort, dstPort uint16, seq, ack uint32, flags byte, payload []byte, tos uint8) []byte {
 	tcpLen := 20 + len(payload)
 	totalLen := 20 + tcpLen
 	pkt := make([]byte, totalLen)
 
 	// IPv4 header
-	pkt[0] = 0x45 // version=4, IHL=5
+	pkt[0] = 0x45      // version=4, IHL=5
+	pkt[1] = tos       // TOS/DSCP byte
 	binary.BigEndian.PutUint16(pkt[2:4], uint16(totalLen))
 	pkt[8] = 64 // TTL
 	pkt[9] = protoTCP
@@ -538,12 +570,18 @@ func buildTCPPacket(srcIP, dstIP [4]byte, srcPort, dstPort uint16, seq, ack uint
 
 // buildUDPPacket constructs a raw IPv4+UDP packet.
 func buildUDPPacket(srcIP, dstIP [4]byte, srcPort, dstPort uint16, payload []byte) []byte {
+	return buildUDPPacketWithTOS(srcIP, dstIP, srcPort, dstPort, payload, 0)
+}
+
+// buildUDPPacketWithTOS constructs a raw IPv4+UDP packet with TOS/DSCP marking.
+func buildUDPPacketWithTOS(srcIP, dstIP [4]byte, srcPort, dstPort uint16, payload []byte, tos uint8) []byte {
 	udpLen := 8 + len(payload)
 	totalLen := 20 + udpLen
 	pkt := make([]byte, totalLen)
 
 	// IPv4 header
 	pkt[0] = 0x45
+	pkt[1] = tos // TOS/DSCP byte
 	binary.BigEndian.PutUint16(pkt[2:4], uint16(totalLen))
 	pkt[8] = 64
 	pkt[9] = protoUDP

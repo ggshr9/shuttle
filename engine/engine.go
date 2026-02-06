@@ -21,6 +21,7 @@ import (
 	"github.com/shuttle-proxy/shuttle/router"
 	"github.com/shuttle-proxy/shuttle/router/geodata"
 	"github.com/shuttle-proxy/shuttle/transport"
+	"github.com/shuttle-proxy/shuttle/qos"
 	"github.com/shuttle-proxy/shuttle/transport/cdn"
 	"github.com/shuttle-proxy/shuttle/transport/h3"
 	"github.com/shuttle-proxy/shuttle/transport/reality"
@@ -44,6 +45,9 @@ type Engine struct {
 
 	// Closers for local proxy servers
 	closers []func() error
+
+	// Mesh client for P2P VPN
+	meshClient *mesh.MeshClient
 
 	// Event subscribers — stores bidirectional channels, Subscribe returns receive-only view
 	subMu sync.Mutex
@@ -381,6 +385,7 @@ func (e *Engine) startProxies(ctx context.Context, cfg *config.ClientConfig, dia
 			TunFD:      cfg.Proxy.TUN.TunFD,
 		}, dialer, e.logger)
 		tunServer.ProcResolver = procResolver
+		tunServer.QoSClassifier = qos.NewClassifier(&cfg.QoS)
 		if err := tunServer.Start(ctx); err != nil {
 			e.logger.Warn("TUN device failed", "err", err)
 		} else {
@@ -433,6 +438,7 @@ func (e *Engine) connectMesh(ctx context.Context, cfg *config.ClientConfig, tunS
 			continue
 		}
 		tunServer.MeshClient = mc
+		e.meshClient = mc // Store in engine for stats access
 		if err := tunServer.AddMeshRoute(mc.MeshCIDR()); err != nil {
 			e.logger.Warn("mesh: add route failed", "err", err)
 		}
@@ -545,6 +551,8 @@ func (e *Engine) Status() EngineStatus {
 	e.mu.RLock()
 	state := e.state
 	sel := e.sel
+	mc := e.meshClient
+	cfg := e.cfg
 	e.mu.RUnlock()
 
 	stats := e.metrics.Stats()
@@ -581,6 +589,32 @@ func (e *Engine) Status() EngineStatus {
 				})
 			}
 		}
+	}
+
+	// Add mesh status
+	if cfg != nil && cfg.Mesh.Enabled {
+		meshStatus := &MeshStatus{Enabled: true}
+		if mc != nil {
+			meshStatus.VirtualIP = mc.VirtualIP().String()
+			meshStatus.CIDR = mc.MeshCIDR()
+			for _, peer := range mc.ListPeers() {
+				mp := MeshPeer{
+					VirtualIP: peer.VirtualIP,
+					State:     peer.State,
+					Method:    peer.Method,
+				}
+				if peer.Quality != nil {
+					mp.AvgRTT = peer.Quality.AvgRTT.Milliseconds()
+					mp.MinRTT = peer.Quality.MinRTT.Milliseconds()
+					mp.MaxRTT = peer.Quality.MaxRTT.Milliseconds()
+					mp.Jitter = peer.Quality.Jitter.Milliseconds()
+					mp.PacketLoss = peer.Quality.LossRate
+					mp.Score = peer.Quality.Score
+				}
+				meshStatus.Peers = append(meshStatus.Peers, mp)
+			}
+		}
+		status.Mesh = meshStatus
 	}
 
 	return status
