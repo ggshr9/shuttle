@@ -7,6 +7,7 @@ A multi-transport proxy system with adaptive congestion control, designed for hi
 - **Multi-Transport**: HTTP/3 (QUIC), Reality (TLS + Noise IK), CDN (HTTP/2 + gRPC)
 - **Adaptive Congestion Control**: BBR, Brutal, and Adaptive modes that auto-switch based on network conditions
 - **Smart Routing**: Domain trie, GeoIP/GeoSite matching, process-based rules, DNS anti-pollution (DoH)
+- **Mesh VPN**: Layer 3 virtual network with advanced P2P NAT traversal (STUN, UPnP, NAT-PMP, PCP, mDNS, TURN relay)
 - **Traffic Obfuscation**: Packet padding, timing jitter, idle noise, cuckoo filter replay protection
 - **Cross-Platform GUI**: Native desktop (Wails v2), Android, iOS -- all sharing one Svelte SPA
 - **System Tray**: Connect/disconnect, show/hide window from tray icon
@@ -260,11 +261,19 @@ The desktop app uses Wails v2 to render a Svelte SPA in a native WebView window.
 
 | Page | Description |
 |------|-------------|
-| Dashboard | Connect/disconnect toggle, live speed, transport status |
-| Servers | Active server config, saved server list (add/remove/switch) |
-| Routing | Visual rule editor, default action, DNS settings |
-| Logs | Real-time log viewer with auto-scroll |
-| Settings | Proxy modes, transport selection, congestion control, log level |
+| Dashboard | Connect/disconnect toggle, live speed chart, transport status, traffic stats |
+| Servers | Server list management, speed test, import/export (base64/JSON/URI) |
+| Subscriptions | Subscription management (SIP008), auto-refresh |
+| Routing | Visual rule editor, rule templates, DNS settings |
+| Logs | Real-time log viewer with expandable details (target, rule, protocol, traffic) |
+| Settings | Proxy modes, transport selection, congestion control, i18n (中/EN), backup/restore |
+
+**Additional Features:**
+- **Auto-Update**: Check GitHub Releases with changelog display
+- **Keyboard Shortcuts**: Cmd/Ctrl+K for quick connect toggle
+- **Browser Notifications**: Connection status alerts
+- **Traffic Charts**: Real-time Canvas-based bandwidth curves (no external deps)
+- **Configuration Backup/Restore**: Full backup including servers, subscriptions, rules
 
 **REST API** (also usable standalone at `http://127.0.0.1:{port}`):
 
@@ -279,6 +288,65 @@ The desktop app uses Wails v2 to render a Svelte SPA in a native WebView window.
 | `/api/logs` | WebSocket | Real-time log stream |
 | `/api/speed` | WebSocket | Real-time speed stream |
 
+## Mesh VPN
+
+Shuttle includes an optional Mesh VPN that creates a virtual Layer 3 network between clients. All clients get a virtual IP (e.g., `10.7.0.x`) and can communicate directly with each other.
+
+### Features
+
+- **Hub-and-Spoke + P2P**: Server relays traffic by default, with automatic P2P upgrade when possible
+- **Zero-Config NAT Traversal**: Automatically tries UPnP, NAT-PMP, PCP, and STUN for best connectivity
+- **mDNS Local Discovery**: Automatically discover other Shuttle clients on the same LAN
+- **TURN Relay Fallback**: RFC 5766/8656 compliant relay when direct P2P fails
+- **Port Spoofing**: Use privileged ports (53, 443, 500) to bypass restrictive firewalls
+- **Connection Quality Monitoring**: Auto-switches between P2P and relay based on packet loss/RTT
+- **Path Caching**: Remembers successful connection methods for faster reconnection
+- **Parallel Protocol Discovery**: Tries UPnP/NAT-PMP/PCP simultaneously, uses first success
+
+### Mesh Config Example
+
+```yaml
+mesh:
+  enabled: true
+  p2p_enabled: true    # Enable P2P NAT traversal
+  p2p:
+    # All settings below are optional (auto-configured by default)
+    stun_servers:
+      - "stun.l.google.com:19302"
+    hole_punch_timeout: "10s"
+    fallback_threshold: 0.3    # Switch to relay if >30% packet loss
+
+    # Port spoofing (optional, for restrictive networks)
+    spoof_mode: "dns"          # "dns" (53), "https" (443), "ike" (500)
+
+    # UPnP/NAT-PMP (auto-enabled, set to disable)
+    disable_upnp: false
+    preferred_port: 0          # 0 = same as local port
+```
+
+### NAT Traversal Strategy
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                     Automatic NAT Traversal                      │
+├─────────────────────────────────────────────────────────────────┤
+│  1. mDNS Discovery     →  Find peers on local network            │
+│  2. UPnP / NAT-PMP / PCP →  Creates port mapping (parallel)      │
+│  3. STUN               →  Discovers external IP:port             │
+│  4. ICE Candidates     →  Gathers all possible endpoints         │
+│  5. Hole Punching      →  Attempts direct UDP connection         │
+│  6. TURN Relay         →  RFC 5766 relay if direct fails         │
+│  7. Server Relay       →  Final fallback via Shuttle server      │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### Use Cases
+
+- **Remote Desktop**: VNC/RDP between mesh clients
+- **File Sharing**: SMB/NFS/SSH between clients
+- **Gaming**: LAN games over the internet
+- **Development**: Access services on other clients (databases, APIs)
+
 ## Project Structure
 
 ```
@@ -291,7 +359,10 @@ crypto/              Noise IK, ChaCha20/AES-GCM, cuckoo replay filter
 engine/              Core lifecycle (Start/Stop/Reload/Status/Subscribe)
 gui/api/             REST + WebSocket API
 gui/tray/            System tray (desktop only)
-gui/web/             Svelte 5 SPA frontend
+gui/web/             Svelte 5 SPA frontend (i18n, speed charts, backup)
+mesh/                Mesh VPN virtual network layer
+mesh/p2p/            NAT traversal (STUN, UPnP, NAT-PMP, PCP, mDNS, TURN)
+mesh/signal/         P2P signaling protocol
 transport/h3/        HTTP/3 over QUIC (Chrome fingerprint, HMAC auth)
 transport/reality/   TLS + Noise IK + yamux (SNI impersonation)
 transport/cdn/       HTTP/2 + gRPC through CDN
@@ -301,11 +372,17 @@ proxy/               SOCKS5, HTTP CONNECT, TUN
 server/              Multi-protocol listener, cover site
 obfs/                Packet padding, timing jitter, idle noise
 plugin/              Logger, metrics, domain filter
-internal/            Buffer pools, rate limiter, sysopt
+stats/               Persistent traffic statistics storage
+subscription/        SIP008 subscription management
+speedtest/           TCP+TLS speed testing utilities
+sysproxy/            System proxy auto-config (macOS/Linux/Windows)
+update/              Auto-update checker (GitHub Releases)
+internal/            Buffer pools, rate limiter, sysopt, procnet
 quicfork/            Local fork of quic-go with CC hook
 mobile/              gomobile bindings (Android/iOS)
 build/               Build scripts & packaging (deb/rpm/openwrt)
 deploy/              install.sh, Dockerfile, systemd
+test/                E2E, transport, mesh, router, benchmark tests
 ```
 
 ## License
