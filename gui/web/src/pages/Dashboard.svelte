@@ -5,6 +5,7 @@
   import { requestPermission, notifyConnected, notifyDisconnected } from '../lib/notify'
   import { initShortcuts, registerShortcut, destroyShortcuts, getShortcutDisplay, isMac } from '../lib/shortcuts'
   import SpeedChart from '../lib/SpeedChart.svelte'
+  import ConnectionQualityChart from '../lib/ConnectionQualityChart.svelte'
   import { t } from '../lib/i18n/index'
 
   let status = $state(null)
@@ -195,6 +196,23 @@
           </div>
         {/each}
       </div>
+    {/if}
+
+    {#if status.mesh?.enabled}
+      <h3>{t('dashboard.meshVPN') || 'Mesh VPN'}</h3>
+      <div class="mesh-info">
+        {#if status.mesh.virtual_ip}
+          <div class="mesh-status">
+            <span class="mesh-label">Virtual IP</span>
+            <span class="mesh-value">{status.mesh.virtual_ip}</span>
+          </div>
+          <div class="mesh-status">
+            <span class="mesh-label">Network</span>
+            <span class="mesh-value">{status.mesh.cidr}</span>
+          </div>
+        {/if}
+      </div>
+      <ConnectionQualityChart peers={status.mesh.peers || []} height={150} />
     {/if}
   {/if}
 
@@ -436,5 +454,32 @@
 
   .chart-legend.inline {
     margin-top: 8px;
+  }
+
+  .mesh-info {
+    display: flex;
+    gap: 16px;
+    margin-bottom: 12px;
+  }
+
+  .mesh-status {
+    background: #161b22;
+    border: 1px solid #2d333b;
+    border-radius: 6px;
+    padding: 10px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .mesh-label {
+    font-size: 11px;
+    color: #8b949e;
+  }
+
+  .mesh-value {
+    font-size: 14px;
+    font-family: monospace;
+    color: #58a6ff;
   }
 </style>

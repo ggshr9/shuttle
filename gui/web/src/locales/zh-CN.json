@@ -17,6 +17,7 @@
     "totalConnections": "总连接数",
     "transport": "传输协议",
     "transports": "传输协议",
+    "meshVPN": "Mesh 组网",
     "realtimeTraffic": "实时流量",
     "trafficHistory": "流量历史 (7天)",
     "state": {
@@ -142,7 +143,25 @@
     "showChangelog": "显示更新日志",
     "hideChangelog": "隐藏更新日志",
     "viewRelease": "查看发布",
-    "download": "下载"
+    "download": "下载",
+    "qos": "QoS (服务质量)",
+    "qosEnabled": "启用 QoS",
+    "qosEnabledHint": "使用 DSCP 标记数据包以实现流量优先级（仅限 TUN 模式）",
+    "qosRules": "QoS 规则",
+    "qosAddRule": "添加规则",
+    "qosNoRules": "无自定义规则。使用默认端口优先级。",
+    "qosPriority": "优先级",
+    "qosPorts": "端口",
+    "qosProtocol": "协议",
+    "qosDomains": "域名",
+    "qosProcess": "进程",
+    "qosPriorities": {
+      "critical": "关键 (SSH, RDP)",
+      "high": "高 (流媒体)",
+      "normal": "普通 (网页)",
+      "bulk": "批量 (下载)",
+      "low": "低 (BitTorrent)"
+    }
   },
   "common": {
     "cancel": "取消",

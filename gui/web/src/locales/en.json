@@ -17,6 +17,7 @@
     "totalConnections": "Total Connections",
     "transport": "Transport",
     "transports": "Transports",
+    "meshVPN": "Mesh VPN",
     "realtimeTraffic": "Real-time Traffic",
     "trafficHistory": "Traffic History (7 days)",
     "state": {
@@ -142,7 +143,25 @@
     "showChangelog": "Show Changelog",
     "hideChangelog": "Hide Changelog",
     "viewRelease": "View Release",
-    "download": "Download"
+    "download": "Download",
+    "qos": "QoS (Quality of Service)",
+    "qosEnabled": "Enable QoS",
+    "qosEnabledHint": "Mark packets with DSCP for traffic prioritization (TUN mode only)",
+    "qosRules": "QoS Rules",
+    "qosAddRule": "Add Rule",
+    "qosNoRules": "No custom rules. Default port-based priorities are used.",
+    "qosPriority": "Priority",
+    "qosPorts": "Ports",
+    "qosProtocol": "Protocol",
+    "qosDomains": "Domains",
+    "qosProcess": "Process",
+    "qosPriorities": {
+      "critical": "Critical (SSH, RDP)",
+      "high": "High (Streaming)",
+      "normal": "Normal (Web)",
+      "bulk": "Bulk (Downloads)",
+      "low": "Low (BitTorrent)"
+    }
   },
   "common": {
     "cancel": "Cancel",
