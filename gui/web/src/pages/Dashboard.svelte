@@ -6,6 +6,7 @@
   import { initShortcuts, registerShortcut, destroyShortcuts, getShortcutDisplay, isMac } from '../lib/shortcuts'
   import SpeedChart from '../lib/SpeedChart.svelte'
   import ConnectionQualityChart from '../lib/ConnectionQualityChart.svelte'
+  import MeshTopologyChart from '../lib/MeshTopologyChart.svelte'
   import { t } from '../lib/i18n/index'
 
   let status = $state(null)
@@ -212,6 +213,14 @@
           </div>
         {/if}
       </div>
+      {#if status.mesh.peers?.length > 0}
+        <h4 class="subsection-title">{t('dashboard.topology') || 'Network Topology'}</h4>
+        <MeshTopologyChart
+          peers={status.mesh.peers}
+          selfIP={status.mesh.virtual_ip}
+        />
+        <h4 class="subsection-title">{t('dashboard.connectionQuality') || 'Connection Quality'}</h4>
+      {/if}
       <ConnectionQualityChart peers={status.mesh.peers || []} height={150} />
     {/if}
   {/if}
@@ -481,5 +490,13 @@
     font-size: 14px;
     font-family: monospace;
     color: #58a6ff;
+  }
+
+  .subsection-title {
+    font-size: 12px;
+    color: #6e7681;
+    margin: 12px 0 8px;
+    text-align: left;
+    font-weight: normal;
   }
 </style>

@@ -18,6 +18,8 @@
     "transport": "Transport",
     "transports": "Transports",
     "meshVPN": "Mesh VPN",
+    "topology": "Network Topology",
+    "connectionQuality": "Connection Quality",
     "realtimeTraffic": "Real-time Traffic",
     "trafficHistory": "Traffic History (7 days)",
     "state": {

@@ -18,6 +18,8 @@
     "transport": "传输协议",
     "transports": "传输协议",
     "meshVPN": "Mesh 组网",
+    "topology": "网络拓扑",
+    "connectionQuality": "连接质量",
     "realtimeTraffic": "实时流量",
     "trafficHistory": "流量历史 (7天)",
     "state": {
