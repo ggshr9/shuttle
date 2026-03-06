@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"flag"
 	"fmt"
@@ -261,6 +262,10 @@ func handleStream(ctx context.Context, stream transport.Stream, peerTable *mesh.
 
 	// Read target address (first line). Use a buffered approach to avoid
 	// losing bytes that come after the \n delimiter in the same read.
+	// Set a deadline so a slow/malicious client cannot hold a goroutine forever.
+	if dl, ok := stream.(interface{ SetReadDeadline(time.Time) error }); ok {
+		dl.SetReadDeadline(time.Now().Add(10 * time.Second))
+	}
 	buf := make([]byte, 512)
 	total := 0
 	for {
@@ -280,6 +285,11 @@ func handleStream(ctx context.Context, stream transport.Stream, peerTable *mesh.
 			}
 
 			residual := buf[idx+1 : total] // bytes after \n
+
+			// Clear the header-read deadline before relaying data.
+			if dl, ok := stream.(interface{ SetReadDeadline(time.Time) error }); ok {
+				dl.SetReadDeadline(time.Time{})
+			}
 
 			logger.Debug("proxying", "target", target)
 
@@ -411,12 +421,7 @@ func (fw *meshFrameWriter) Close() error {
 }
 
 func findNewline(b []byte) int {
-	for i, c := range b {
-		if c == '\n' {
-			return i
-		}
-	}
-	return -1
+	return bytes.IndexByte(b, '\n')
 }
 
 func relay(a io.ReadWriter, b io.ReadWriter) {
@@ -429,5 +434,6 @@ func relay(a io.ReadWriter, b io.ReadWriter) {
 		io.Copy(a, b)
 		done <- struct{}{}
 	}()
+	<-done
 	<-done
 }

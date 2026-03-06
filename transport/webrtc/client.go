@@ -145,7 +145,7 @@ func (c *Client) dialWS(ctx context.Context) (transport.Connection, error) {
 	wsConn, _, err := websocket.Dial(ctx, c.config.SignalURL, &websocket.DialOptions{
 		HTTPClient: &http.Client{
 			Transport: &http.Transport{
-				TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+				TLSClientConfig: &tls.Config{MinVersion: tls.VersionTLS12},
 			},
 		},
 	})
@@ -385,7 +385,7 @@ func (c *Client) dialHTTP(ctx context.Context) (transport.Connection, error) {
 
 	httpClient := &http.Client{
 		Transport: &http.Transport{
-			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+			TLSClientConfig: &tls.Config{MinVersion: tls.VersionTLS12},
 		},
 	}
 	resp, err := httpClient.Do(httpReq)
@@ -400,7 +400,7 @@ func (c *Client) dialHTTP(ctx context.Context) (transport.Connection, error) {
 		return nil, fmt.Errorf("webrtc signal status: %d", resp.StatusCode)
 	}
 
-	body, err := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20)) // 1MB limit
 	if err != nil {
 		pc.Close()
 		return nil, fmt.Errorf("webrtc read response: %w", err)

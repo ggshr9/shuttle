@@ -164,7 +164,13 @@ func (rf *ReplayFilter) CheckBytes(nonce []byte) bool {
 	if len(nonce) < 8 {
 		return false
 	}
-	n := binary.LittleEndian.Uint64(nonce[:8])
+	// Hash all available bytes into a uint64 by XOR-folding 8-byte chunks.
+	// This ensures all 32 bytes of a nonce contribute to the fingerprint,
+	// not just the first 8.
+	var n uint64
+	for i := 0; i+8 <= len(nonce); i += 8 {
+		n ^= binary.LittleEndian.Uint64(nonce[i : i+8])
+	}
 	return rf.Check(n)
 }
 

@@ -97,6 +97,9 @@ type Manager struct {
 	trickleGatherer   *TrickleICEGatherer
 	iceGeneration     int // Current ICE credential generation
 
+	// Incoming data handler
+	dataHandler func(srcVIP net.IP, data []byte)
+
 	// Goroutine lifecycle
 	wg sync.WaitGroup
 
@@ -1154,8 +1157,14 @@ func (m *Manager) handleP2PPacket(data []byte, from *net.UDPAddr) {
 
 	switch typ {
 	case P2PData:
-		// TODO: Forward to TUN device or mesh handler
-		m.logger.Debug("p2p: received data", "len", len(plaintext), "peer", peer.VIP)
+		m.mu.RLock()
+		handler := m.dataHandler
+		m.mu.RUnlock()
+		if handler != nil {
+			handler(peer.VIP, plaintext)
+		} else {
+			m.logger.Debug("p2p: received data but no handler set", "len", len(plaintext), "peer", peer.VIP)
+		}
 	case P2PKeepAlive:
 		m.logger.Debug("p2p: received keepalive", "peer", peer.VIP)
 	case P2PClose:
@@ -1350,8 +1359,9 @@ func (m *Manager) LocalCandidates() []*Candidate {
 
 // SetDataHandler sets the handler for incoming P2P data.
 func (m *Manager) SetDataHandler(handler func(srcVIP net.IP, data []byte)) {
-	// This would be called when P2P data is received
-	// Implementation would store the handler and call it from handleP2PPacket
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.dataHandler = handler
 }
 
 // GetSpoofInfo returns information about port spoofing configuration.

@@ -418,7 +418,9 @@ func (t *TUNServer) handleUDP(ctx context.Context, srcIP, dstIP [4]byte, udpData
 
 	if e := t.natTable.getUDP(key); e != nil {
 		e.conn.SetWriteDeadline(time.Now().Add(15 * time.Second))
-		e.conn.Write(payload)
+		if _, err := e.conn.Write(payload); err != nil {
+			t.logger.Debug("tun: udp write error", "err", err)
+		}
 		return
 	}
 
@@ -453,7 +455,9 @@ func (t *TUNServer) dialAndProxyUDP(ctx context.Context, key natKey, initialPayl
 	t.natTable.putUDP(key, entry)
 
 	conn.SetWriteDeadline(time.Now().Add(15 * time.Second))
-	conn.Write(initialPayload)
+	if _, err := conn.Write(initialPayload); err != nil {
+		t.logger.Debug("tun: udp initial write error", "addr", addr, "err", err)
+	}
 
 	go func() {
 		defer func() {

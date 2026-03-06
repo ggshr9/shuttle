@@ -2,6 +2,7 @@ package router
 
 import (
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -219,7 +220,12 @@ func (r *DNSResolver) queryRemote(ctx context.Context, domain string) ([]net.IP,
 	}
 	req.Header.Set("Accept", "application/dns-json")
 
-	client := &http.Client{Timeout: 5 * time.Second}
+	client := &http.Client{
+		Timeout: 5 * time.Second,
+		Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{MinVersion: tls.VersionTLS12},
+		},
+	}
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("doh query: %w", err)
@@ -268,12 +274,22 @@ type dohAnswer struct {
 // Cache methods
 func (c *dnsCache) get(domain string) ([]net.IP, bool) {
 	c.mu.RLock()
-	defer c.mu.RUnlock()
 	entry, ok := c.entries[domain]
-	if !ok || time.Now().After(entry.expiresAt) {
+	if !ok {
+		c.mu.RUnlock()
 		return nil, false
 	}
-	return entry.ips, true
+	if time.Now().After(entry.expiresAt) {
+		c.mu.RUnlock()
+		// Upgrade to write lock to delete expired entry.
+		c.mu.Lock()
+		delete(c.entries, domain)
+		c.mu.Unlock()
+		return nil, false
+	}
+	ips := entry.ips
+	c.mu.RUnlock()
+	return ips, true
 }
 
 func (c *dnsCache) put(domain string, ips []net.IP, ttl time.Duration, domestic bool) {

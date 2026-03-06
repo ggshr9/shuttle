@@ -13,6 +13,13 @@ linters:
     - govet
     - ineffassign
     - typecheck
+    - gosec
+    - bodyclose
+    - durationcheck
+    - exportloopref
+    - nilerr
+    - prealloc
+    - unconvert
 
 linters-settings:
   errcheck:

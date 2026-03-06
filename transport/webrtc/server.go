@@ -313,7 +313,9 @@ func (s *Server) newPeerConnection() (*webrtc.PeerConnection, error) {
 
 func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 	wsConn, err := websocket.Accept(w, r, &websocket.AcceptOptions{
-		InsecureSkipVerify: true,
+		// Origin checking is not needed — connections are authenticated
+		// via HMAC in the first message, and WebSocket is not cookie-based.
+		InsecureSkipVerify: true, //nolint:gosec // auth via HMAC, not origin
 	})
 	if err != nil {
 		s.logger.Error("webrtc ws accept failed", "err", err)

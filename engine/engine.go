@@ -155,7 +155,8 @@ func (e *Engine) startInternal(ctx context.Context) error {
 
 	closers, err := e.startProxies(ctx, cfgSnap, dialer, sel, cancel)
 	if err != nil {
-		return err
+		sel.Close()
+		return fail(err)
 	}
 
 	e.mu.Lock()
