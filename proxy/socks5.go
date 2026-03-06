@@ -2,6 +2,7 @@ package proxy
 
 import (
 	"context"
+	"crypto/subtle"
 	"encoding/binary"
 	"fmt"
 	"io"
@@ -188,7 +189,9 @@ func (s *SOCKS5Server) handleAuth(conn net.Conn) error {
 	// Select auth method
 	if s.config.Username != "" {
 		// Require password auth
-		conn.Write([]byte{socks5Version, authPassword})
+		if _, err := conn.Write([]byte{socks5Version, authPassword}); err != nil {
+			return fmt.Errorf("write auth method: %w", err)
+		}
 		return s.handlePasswordAuth(conn)
 	}
 
@@ -218,9 +221,11 @@ func (s *SOCKS5Server) handlePasswordAuth(conn net.Conn) error {
 		return err
 	}
 
-	if string(username) == s.config.Username && string(password) == s.config.Password {
-		conn.Write([]byte{0x01, 0x00}) // success
-		return nil
+	usernameOK := subtle.ConstantTimeCompare(username, []byte(s.config.Username))
+	passwordOK := subtle.ConstantTimeCompare(password, []byte(s.config.Password))
+	if usernameOK&passwordOK == 1 {
+		_, err := conn.Write([]byte{0x01, 0x00}) // success
+		return err
 	}
 	conn.Write([]byte{0x01, 0x01}) // failure
 	return fmt.Errorf("auth failed")
@@ -280,7 +285,7 @@ func (s *SOCKS5Server) handleRequest(conn net.Conn) (string, error) {
 	return fmt.Sprintf("%s:%d", host, port), nil
 }
 
-func (s *SOCKS5Server) sendReply(conn net.Conn, rep byte, addr net.Addr) {
+func (s *SOCKS5Server) sendReply(conn net.Conn, rep byte, addr net.Addr) error {
 	reply := []byte{socks5Version, rep, 0x00, atypIPv4, 0, 0, 0, 0, 0, 0}
 	if addr != nil {
 		if tcpAddr, ok := addr.(*net.TCPAddr); ok {
@@ -291,18 +296,23 @@ func (s *SOCKS5Server) sendReply(conn net.Conn, rep byte, addr net.Addr) {
 			}
 		}
 	}
-	conn.Write(reply)
+	_, err := conn.Write(reply)
+	return err
 }
 
 // relay copies data bidirectionally between two connections.
 func relay(a, b net.Conn) {
 	done := make(chan struct{}, 2)
 	go func() {
-		io.Copy(b, a)
+		if _, err := io.Copy(b, a); err != nil {
+			slog.Debug("relay copy error", "dir", "a→b", "err", err)
+		}
 		done <- struct{}{}
 	}()
 	go func() {
-		io.Copy(a, b)
+		if _, err := io.Copy(a, b); err != nil {
+			slog.Debug("relay copy error", "dir", "b→a", "err", err)
+		}
 		done <- struct{}{}
 	}()
 	<-done

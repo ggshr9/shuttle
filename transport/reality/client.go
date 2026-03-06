@@ -62,17 +62,23 @@ func (c *Client) Dial(ctx context.Context, addr string) (transport.Connection, e
 		return nil, fmt.Errorf("reality dial: %w", err)
 	}
 
+	// Ensure raw is closed on any error below.
+	success := false
+	defer func() {
+		if !success {
+			raw.Close()
+		}
+	}()
+
 	// Step 2: Noise IK handshake
 	localPub, localPriv, err := crypto.DeriveKeysFromPassword(c.config.Password)
 	if err != nil {
-		raw.Close()
 		return nil, fmt.Errorf("derive keys: %w", err)
 	}
 	var remotePub [32]byte
 	if c.config.PublicKey != "" {
 		pubBytes, err := hex.DecodeString(c.config.PublicKey)
 		if err != nil || len(pubBytes) != 32 {
-			raw.Close()
 			return nil, fmt.Errorf("invalid server public key")
 		}
 		copy(remotePub[:], pubBytes)
@@ -80,45 +86,39 @@ func (c *Client) Dial(ctx context.Context, addr string) (transport.Connection, e
 
 	hs, err := crypto.NewInitiator(localPriv, localPub, remotePub)
 	if err != nil {
-		raw.Close()
 		return nil, fmt.Errorf("noise init: %w", err)
 	}
 
 	// Send handshake message 1 (-> e, es, s, ss)
 	msg1, err := hs.WriteMessage(nil)
 	if err != nil {
-		raw.Close()
 		return nil, fmt.Errorf("noise write msg1: %w", err)
 	}
 	if err := writeFrame(raw, msg1); err != nil {
-		raw.Close()
 		return nil, fmt.Errorf("send msg1: %w", err)
 	}
 
 	// Read handshake message 2 (<- e, ee, se)
 	msg2, err := readFrame(raw)
 	if err != nil {
-		raw.Close()
 		return nil, fmt.Errorf("read msg2: %w", err)
 	}
 	_, err = hs.ReadMessage(msg2)
 	if err != nil {
-		raw.Close()
 		return nil, fmt.Errorf("noise read msg2: %w", err)
 	}
 
 	if !hs.Completed() {
-		raw.Close()
 		return nil, fmt.Errorf("noise handshake incomplete")
 	}
 
 	// Step 3: yamux multiplexed session over the TLS connection
 	sess, err := yamux.Client(raw, yamux.DefaultConfig())
 	if err != nil {
-		raw.Close()
 		return nil, fmt.Errorf("yamux client: %w", err)
 	}
 
+	success = true
 	return &realityConnection{rawConn: raw, session: sess}, nil
 }
 
@@ -146,6 +146,10 @@ func readFrame(r io.Reader) ([]byte, error) {
 		return nil, err
 	}
 	length := binary.BigEndian.Uint16(header)
+	const maxFrameSize = 64 * 1024 // 64 KB
+	if int(length) > maxFrameSize {
+		return nil, fmt.Errorf("reality frame too large: %d bytes (max %d)", length, maxFrameSize)
+	}
 	data := make([]byte, length)
 	if _, err := io.ReadFull(r, data); err != nil {
 		return nil, err

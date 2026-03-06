@@ -8,6 +8,8 @@ import (
 	"sync"
 	"time"
 
+	"golang.org/x/crypto/curve25519"
+
 	"github.com/shuttle-proxy/shuttle/mesh/signal"
 )
 
@@ -94,6 +96,9 @@ type Manager struct {
 	trickleEnabled    bool
 	trickleGatherer   *TrickleICEGatherer
 	iceGeneration     int // Current ICE credential generation
+
+	// Goroutine lifecycle
+	wg sync.WaitGroup
 
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -189,7 +194,7 @@ func NewManager(cfg *Config, signalClient *signal.Client, logger *slog.Logger) (
 		spoofConfig:         cfg.SpoofConfig,
 		spoofInfo:           spoofInfo,
 		pathCache:           NewPathCache(24 * time.Hour),
-		iceRestartEnabled:   !cfg.EnableICERestart || true, // Enable by default unless explicitly disabled
+		iceRestartEnabled:   cfg.EnableICERestart,
 		iceRestartCooldown:  cfg.ICERestartCooldown,
 		iceQualityThreshold: cfg.ICEQualityThreshold,
 		trickleEnabled:      cfg.EnableTrickleICE,
@@ -207,7 +212,9 @@ func NewManager(cfg *Config, signalClient *signal.Client, logger *slog.Logger) (
 	if m.keepAliveInterval == 0 {
 		m.keepAliveInterval = 30 * time.Second
 	}
-	if len(m.stunServers) == 0 {
+	// Only fill defaults when stunServers is nil (not explicitly set).
+	// An explicit empty slice []string{} means "no STUN servers".
+	if m.stunServers == nil {
 		m.stunServers = DefaultSTUNServers()
 	}
 	if m.iceRestartCooldown == 0 {
@@ -286,33 +293,42 @@ func (m *Manager) Start() error {
 	}
 
 	// Start receive loop
-	go m.receiveLoop()
+	m.wg.Add(1)
+	go func() { defer m.wg.Done(); m.receiveLoop() }()
 
 	// Start keep-alive loop
-	go m.keepAliveLoop()
+	m.wg.Add(1)
+	go func() { defer m.wg.Done(); m.keepAliveLoop() }()
 
 	// Start retry loop
-	go m.retryLoop()
+	m.wg.Add(1)
+	go func() { defer m.wg.Done(); m.retryLoop() }()
 
 	// Start UPnP refresh loop if enabled
 	if m.upnpEnabled && m.portMapper != nil {
-		go m.upnpRefreshLoop()
+		m.wg.Add(1)
+		go func() { defer m.wg.Done(); m.upnpRefreshLoop() }()
 	}
 
 	// Start path cache cleanup loop
-	go m.pathCacheCleanupLoop()
+	m.wg.Add(1)
+	go func() { defer m.wg.Done(); m.pathCacheCleanupLoop() }()
 
 	// Start connection quality monitoring loop
 	if m.iceRestartEnabled {
-		go m.qualityMonitorLoop()
+		m.wg.Add(1)
+		go func() { defer m.wg.Done(); m.qualityMonitorLoop() }()
 	}
 
 	return nil
 }
 
-// Stop stops the manager.
+// Stop stops the manager and waits for all goroutines to exit.
 func (m *Manager) Stop() error {
 	m.cancel()
+
+	// Wait for all background goroutines to exit before closing resources.
+	m.wg.Wait()
 
 	m.mu.Lock()
 	for _, peer := range m.peers {
@@ -730,7 +746,11 @@ func (m *Manager) Connect(ctx context.Context, dstVIP net.IP) error {
 		"rtt", punchResult.RTT)
 
 	// Derive keys
-	sharedSecret := m.deriveSharedSecret(result.RemotePublicKey)
+	sharedSecret, err := m.deriveSharedSecret(result.RemotePublicKey)
+	if err != nil {
+		m.markFailed(key)
+		return fmt.Errorf("p2p: derive shared secret: %w", err)
+	}
 	sendKey, recvKey := DeriveP2PKeys(sharedSecret, true)
 
 	// Create P2P connection
@@ -881,7 +901,9 @@ func (m *Manager) handleConnect(msg *signal.Message) {
 	}
 
 	// Start hole punching in background
+	m.wg.Add(1)
 	go func() {
+		defer m.wg.Done()
 		puncher := NewHolePuncher(m.udpConn, m.localVIP, m.holePunchTimeout, m.logger)
 
 		m.mu.RLock()
@@ -893,7 +915,9 @@ func (m *Manager) handleConnect(msg *signal.Message) {
 			return
 		}
 
-		punchResult, err := puncher.Punch(m.ctx, msg.SrcVIP, candidates)
+		punchCtx, punchCancel := context.WithTimeout(m.ctx, m.holePunchTimeout)
+		defer punchCancel()
+		punchResult, err := puncher.Punch(punchCtx, msg.SrcVIP, candidates)
 		if err != nil {
 			m.logger.Debug("p2p: hole punch failed", "peer", msg.SrcVIP, "err", err)
 			m.markFailed(key)
@@ -901,7 +925,12 @@ func (m *Manager) handleConnect(msg *signal.Message) {
 		}
 
 		// Derive keys (as responder)
-		sharedSecret := m.deriveSharedSecret(connectInfo.PublicKey)
+		sharedSecret, err := m.deriveSharedSecret(connectInfo.PublicKey)
+		if err != nil {
+			m.logger.Debug("p2p: derive shared secret failed", "peer", msg.SrcVIP, "err", err)
+			m.markFailed(key)
+			return
+		}
 		sendKey, recvKey := DeriveP2PKeys(sharedSecret, false)
 
 		// Create P2P connection
@@ -1220,17 +1249,13 @@ func (m *Manager) infoCandidates(infos []*signal.CandidateInfo) []*Candidate {
 	return candidates
 }
 
-// deriveSharedSecret derives a shared secret from the remote public key.
-// This is a simplified version - in production use proper DH.
-func (m *Manager) deriveSharedSecret(remotePub [32]byte) []byte {
-	// XOR local private with remote public (simplified)
-	// In production, use proper X25519 DH
-	secret := make([]byte, 64)
-	for i := 0; i < 32; i++ {
-		secret[i] = m.localPriv[i] ^ remotePub[i]
-		secret[32+i] = m.localPub[i] ^ remotePub[i]
+// deriveSharedSecret derives a shared secret from the remote public key using X25519 ECDH.
+func (m *Manager) deriveSharedSecret(remotePub [32]byte) ([]byte, error) {
+	shared, err := curve25519.X25519(m.localPriv[:], remotePub[:])
+	if err != nil {
+		return nil, fmt.Errorf("x25519: %w", err)
 	}
-	return secret
+	return shared, nil
 }
 
 // GetPeerState returns the state of a peer connection.

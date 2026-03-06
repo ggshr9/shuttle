@@ -12,6 +12,29 @@ permissions:
   packages: write
 
 jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+      - uses: golangci/golangci-lint-action@v6
+        with:
+          version: latest
+
+  security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+      - name: Run gosec
+        uses: securego/gosec@master
+        with:
+          args: -exclude-dir=quicfork ./...
+
   test:
     strategy:
       matrix:
@@ -33,7 +56,18 @@ jobs:
         run: ${{ matrix.deps }}
       - run: go build ./...
       - run: go vet ./...
-      - run: go test -count=1 -v ./...
+      - name: Run tests
+        run: go test -count=1 -v ${{ matrix.os == 'ubuntu-latest' && '-race' || '' }} ./...
+      - name: Run tests with coverage
+        if: matrix.os == 'ubuntu-latest'
+        run: go test -race -coverprofile=coverage.out ./...
+      - name: Upload coverage
+        if: matrix.os == 'ubuntu-latest'
+        uses: codecov/codecov-action@v4
+        with:
+          files: coverage.out
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
   build-frontend:
     runs-on: ubuntu-latest

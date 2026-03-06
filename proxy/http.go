@@ -149,7 +149,9 @@ func (s *HTTPServer) handleHTTP(ctx context.Context, conn net.Conn, req *http.Re
 	}
 
 	// Relay response back
-	io.Copy(conn, remote)
+	if _, err := io.Copy(conn, remote); err != nil {
+		s.logger.Debug("http relay copy error", "target", target, "err", err)
+	}
 }
 
 // Close shuts down the HTTP proxy server.

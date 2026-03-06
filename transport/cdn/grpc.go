@@ -6,6 +6,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
+	"log/slog"
 	"net"
 	"net/http"
 	"sync"
@@ -28,18 +29,20 @@ type GRPCConfig struct {
 type GRPCClient struct {
 	config *GRPCConfig
 	client *http.Client
+	logger *slog.Logger
 	closed atomic.Bool
 }
 
-func NewGRPCClient(cfg *GRPCConfig) *GRPCClient {
+func NewGRPCClient(cfg *GRPCConfig, opts ...GRPCOption) *GRPCClient {
 	if cfg.ServiceName == "" {
 		cfg.ServiceName = "tunnel.Relay"
 	}
 	if cfg.CDNDomain == "" {
 		cfg.CDNDomain = cfg.ServerAddr
 	}
-	return &GRPCClient{
+	c := &GRPCClient{
 		config: cfg,
+		logger: slog.Default(),
 		client: &http.Client{
 			Transport: &http.Transport{
 				TLSClientConfig: &tls.Config{
@@ -49,6 +52,18 @@ func NewGRPCClient(cfg *GRPCConfig) *GRPCClient {
 			},
 		},
 	}
+	for _, o := range opts {
+		o(c)
+	}
+	return c
+}
+
+// GRPCOption configures a GRPCClient.
+type GRPCOption func(*GRPCClient)
+
+// WithGRPCLogger sets the logger for the gRPC CDN client.
+func WithGRPCLogger(l *slog.Logger) GRPCOption {
+	return func(c *GRPCClient) { c.logger = l }
 }
 
 func (c *GRPCClient) Type() string { return "cdn-grpc" }
@@ -57,6 +72,7 @@ func (c *GRPCClient) Dial(ctx context.Context, addr string) (transport.Connectio
 	if c.closed.Load() {
 		return nil, fmt.Errorf("grpc client closed")
 	}
+	c.logger.Debug("cdn-grpc: dialing", "addr", addr)
 
 	pr, pw := io.Pipe()
 
@@ -112,6 +128,7 @@ func (c *GRPCClient) Dial(ctx context.Context, addr string) (transport.Connectio
 		fmt.Sscanf(port, "%d", &cdnAddr.Port)
 	}
 
+	c.logger.Debug("cdn-grpc: connected", "addr", addr)
 	return &cdnGRPCConnection{
 		session:    session,
 		remoteAddr: cdnAddr,
@@ -119,6 +136,7 @@ func (c *GRPCClient) Dial(ctx context.Context, addr string) (transport.Connectio
 }
 
 func (c *GRPCClient) Close() error {
+	c.logger.Debug("cdn-grpc: closing")
 	c.closed.Store(true)
 	c.client.CloseIdleConnections()
 	return nil
@@ -171,6 +189,10 @@ func (d *grpcDuplex) Read(p []byte) (int, error) {
 	length := binary.BigEndian.Uint32(hdr[1:5])
 	if length == 0 {
 		return 0, nil
+	}
+	const maxFrameSize = 16 << 20 // 16 MB
+	if length > maxFrameSize {
+		return 0, fmt.Errorf("grpc frame too large: %d bytes (max %d)", length, maxFrameSize)
 	}
 
 	// Read the frame payload.

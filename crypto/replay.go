@@ -2,7 +2,7 @@ package crypto
 
 import (
 	"encoding/binary"
-	"math/rand"
+	"math/rand/v2"
 	"sync"
 	"time"
 )
@@ -94,11 +94,11 @@ func (cf *cuckooFilter) Insert(x uint64) bool {
 	}
 
 	idx := i1
-	if rand.Intn(2) == 0 {
+	if rand.IntN(2) == 0 {
 		idx = i2
 	}
 	for k := 0; k < maxKicks; k++ {
-		slot := rand.Intn(bucketSize)
+		slot := rand.IntN(bucketSize)
 		old := cf.buckets[idx][slot]
 		cf.buckets[idx][slot] = fp
 		fp = old
