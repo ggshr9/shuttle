@@ -1,0 +1,24 @@
+# Go test runner for sandbox integration tests.
+# Runs go test with -tags sandbox inside Docker network.
+FROM golang:1.24-alpine
+
+RUN apk add --no-cache \
+    bash \
+    iproute2 \
+    bind-tools \
+    curl \
+    gcc \
+    musl-dev
+
+WORKDIR /src
+
+# Copy full source first (quicfork is a local replace, needed for go mod download)
+COPY . .
+
+# Download dependencies
+RUN go mod download
+
+# Pre-compile test binary to speed up repeated runs
+RUN go test -tags sandbox -c -o /dev/null ./mesh/p2p/ 2>/dev/null || true
+
+CMD ["go", "test", "-tags", "sandbox", "-count=1", "-v", "-timeout", "120s", "./mesh/p2p/", "-run", "TestSandbox"]

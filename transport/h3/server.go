@@ -2,8 +2,6 @@ package h3
 
 import (
 	"context"
-	"crypto/hmac"
-	"crypto/sha256"
 	"crypto/tls"
 	"fmt"
 	"io"
@@ -16,6 +14,7 @@ import (
 	"github.com/shuttle-proxy/shuttle/crypto"
 	"github.com/shuttle-proxy/shuttle/obfs"
 	"github.com/shuttle-proxy/shuttle/transport"
+	"github.com/shuttle-proxy/shuttle/transport/auth"
 )
 
 type ServerConfig struct {
@@ -148,10 +147,7 @@ func (s *Server) handleConn(ctx context.Context, qconn *quic.Conn) {
 	}
 
 	// Validate HMAC.
-	mac := hmac.New(sha256.New, []byte(s.config.Password))
-	mac.Write(nonce)
-	expectedMAC := mac.Sum(nil)
-	if !hmac.Equal(clientMAC, expectedMAC) {
+	if !auth.VerifyHMAC(nonce, clientMAC, s.config.Password) {
 		s.logger.Debug("auth failed", "remote", qconn.RemoteAddr())
 		s.serveCover(ctrlStream, qconn)
 		return

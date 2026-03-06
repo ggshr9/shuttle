@@ -183,15 +183,15 @@ func (a *IPv6Allocator) makeIP(offset uint64) net.IP {
 	ip := make(net.IP, 16)
 	copy(ip, a.prefix)
 
-	// Add offset to lower 64 bits
-	ip[8] |= byte(offset >> 56)
-	ip[9] |= byte(offset >> 48)
-	ip[10] |= byte(offset >> 40)
-	ip[11] |= byte(offset >> 32)
-	ip[12] |= byte(offset >> 24)
-	ip[13] |= byte(offset >> 16)
-	ip[14] |= byte(offset >> 8)
-	ip[15] |= byte(offset)
+	// Set offset in lower 64 bits (overwrite, don't OR, to avoid prefix residue)
+	ip[8] = byte(offset >> 56)
+	ip[9] = byte(offset >> 48)
+	ip[10] = byte(offset >> 40)
+	ip[11] = byte(offset >> 32)
+	ip[12] = byte(offset >> 24)
+	ip[13] = byte(offset >> 16)
+	ip[14] = byte(offset >> 8)
+	ip[15] = byte(offset)
 
 	return ip
 }

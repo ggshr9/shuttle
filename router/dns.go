@@ -284,6 +284,9 @@ func (c *dnsCache) put(domain string, ips []net.IP, ttl time.Duration, domestic 
 		now := time.Now()
 		evicted := 0
 		target := c.maxSize / 10
+		if target < 1 {
+			target = 1
+		}
 		for k, v := range c.entries {
 			if now.After(v.expiresAt) {
 				delete(c.entries, k)

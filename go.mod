@@ -8,6 +8,8 @@ require (
 	fyne.io/systray v1.12.0
 	github.com/flynn/noise v1.1.0
 	github.com/hashicorp/yamux v0.1.2
+	github.com/pion/ice/v4 v4.2.0
+	github.com/pion/webrtc/v4 v4.2.3
 	github.com/quic-go/quic-go v0.59.0
 	github.com/wailsapp/wails/v2 v2.11.0
 	golang.org/x/crypto v0.47.0
@@ -33,7 +35,6 @@ require (
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/pion/datachannel v1.6.0 // indirect
 	github.com/pion/dtls/v3 v3.0.10 // indirect
-	github.com/pion/ice/v4 v4.2.0 // indirect
 	github.com/pion/interceptor v0.1.43 // indirect
 	github.com/pion/logging v0.2.4 // indirect
 	github.com/pion/mdns/v2 v2.1.0 // indirect
@@ -46,7 +47,6 @@ require (
 	github.com/pion/stun/v3 v3.1.1 // indirect
 	github.com/pion/transport/v4 v4.0.1 // indirect
 	github.com/pion/turn/v4 v4.1.4 // indirect
-	github.com/pion/webrtc/v4 v4.2.3 // indirect
 	github.com/pkg/browser v0.0.0-20240102092130-5ac0b6a4141c // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/rivo/uniseg v0.4.7 // indirect

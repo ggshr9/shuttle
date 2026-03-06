@@ -39,6 +39,10 @@ type Engine struct {
 	logger  *slog.Logger
 	metrics *plugin.Metrics
 
+	// lifecycleMu serialises Start/Stop/Reload so that concurrent callers
+	// cannot interleave their long-running init/shutdown sequences.
+	lifecycleMu sync.Mutex
+
 	sel       *selector.Selector
 	cancel    context.CancelFunc
 	parentCtx context.Context // stored for Reload
@@ -53,6 +57,8 @@ type Engine struct {
 	subMu sync.Mutex
 	subs  map[chan Event]struct{}
 }
+
+const stopTimeout = 10 * time.Second
 
 // New creates a new Engine from the given config.
 func New(cfg *config.ClientConfig) *Engine {
@@ -78,6 +84,13 @@ func New(cfg *config.ClientConfig) *Engine {
 
 // Start initializes all subsystems and begins proxying.
 func (e *Engine) Start(ctx context.Context) error {
+	e.lifecycleMu.Lock()
+	defer e.lifecycleMu.Unlock()
+	return e.startInternal(ctx)
+}
+
+// startInternal is the lock-free core of Start; the caller must hold lifecycleMu.
+func (e *Engine) startInternal(ctx context.Context) error {
 	e.mu.Lock()
 	if e.state == StateRunning || e.state == StateStarting {
 		st := e.state
@@ -206,14 +219,14 @@ func (e *Engine) buildTransports(cfg *config.ClientConfig, ccAdapter quic.Conges
 			transports = append(transports, cdn.NewGRPCClient(&cdn.GRPCConfig{
 				CDNDomain: cfg.Transport.CDN.Domain,
 				Password:  cfg.Server.Password,
-			}))
+			}, cdn.WithGRPCLogger(e.logger)))
 		default:
 			transports = append(transports, cdn.NewH2Client(&cdn.H2Config{
 				ServerAddr: cfg.Server.Addr,
 				CDNDomain:  cfg.Transport.CDN.Domain,
 				Path:       cfg.Transport.CDN.Path,
 				Password:   cfg.Server.Password,
-			}))
+			}, cdn.WithH2Logger(e.logger)))
 		}
 	}
 
@@ -459,6 +472,13 @@ func (e *Engine) selector() *selector.Selector {
 
 // Stop shuts down the engine gracefully.
 func (e *Engine) Stop() error {
+	e.lifecycleMu.Lock()
+	defer e.lifecycleMu.Unlock()
+	return e.stopInternal()
+}
+
+// stopInternal is the lock-free core of Stop; the caller must hold lifecycleMu.
+func (e *Engine) stopInternal() error {
 	e.mu.Lock()
 	if e.state != StateRunning {
 		st := e.state
@@ -471,11 +491,21 @@ func (e *Engine) Stop() error {
 	sel := e.sel
 	e.mu.Unlock()
 
-	for _, c := range closers {
-		c()
-	}
-	if sel != nil {
-		sel.Close()
+	// Close subsystems with a timeout to prevent infinite blocking.
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		for _, c := range closers {
+			c()
+		}
+		if sel != nil {
+			sel.Close()
+		}
+	}()
+	select {
+	case <-done:
+	case <-time.After(stopTimeout):
+		e.logger.Warn("engine stop timed out, forcing shutdown")
 	}
 	if cancel != nil {
 		cancel()
@@ -511,6 +541,9 @@ func (e *Engine) Reload(cfg *config.ClientConfig) error {
 		return fmt.Errorf("invalid config: %w", err)
 	}
 
+	e.lifecycleMu.Lock()
+	defer e.lifecycleMu.Unlock()
+
 	e.mu.RLock()
 	oldCfg := e.cfg
 	running := e.state == StateRunning
@@ -522,7 +555,7 @@ func (e *Engine) Reload(cfg *config.ClientConfig) error {
 	}
 
 	if running {
-		if err := e.Stop(); err != nil {
+		if err := e.stopInternal(); err != nil {
 			return fmt.Errorf("stop for reload: %w", err)
 		}
 	}
@@ -531,14 +564,16 @@ func (e *Engine) Reload(cfg *config.ClientConfig) error {
 	e.cfg = cfg
 	e.mu.Unlock()
 
-	if err := e.Start(parentCtx); err != nil {
+	if err := e.startInternal(parentCtx); err != nil {
 		// Rollback: restore old config and try to restart
 		e.mu.Lock()
 		e.cfg = oldCfg
 		e.mu.Unlock()
 		if running {
-			if startErr := e.Start(parentCtx); startErr != nil {
-				e.logger.Error("rollback restart failed", "err", startErr)
+			if rollbackErr := e.startInternal(parentCtx); rollbackErr != nil {
+				e.logger.Error("rollback restart failed", "err", rollbackErr)
+				e.emit(Event{Type: EventError, Error: fmt.Sprintf("reload rollback failed: %v", rollbackErr)})
+				return fmt.Errorf("new config: %w; rollback failed: %v", err, rollbackErr)
 			}
 		}
 		return fmt.Errorf("start with new config: %w", err)

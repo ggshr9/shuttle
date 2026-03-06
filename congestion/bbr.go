@@ -205,10 +205,13 @@ func (b *BBRController) cwndGain() float64 {
 	case BBRStartup:
 		return bbrHighGain
 	case BBRDrain:
-		return 1.0
+		// During Drain, cwnd should shrink to BDP so the queue drains.
+		// Using 1/bbrHighGain matches the Linux kernel BBR implementation.
+		return bbrDrainGain
 	case BBRProbeRTT:
 		return 1.0
 	default:
+		// ProbeBW: keep 2x BDP headroom for bandwidth probing bursts.
 		return bbrCwndGain
 	}
 }

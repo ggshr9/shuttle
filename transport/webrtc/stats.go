@@ -67,7 +67,7 @@ func (sc *statsCollector) collect() {
 		case webrtc.ICECandidateStats:
 			if v.Type == webrtc.StatsTypeLocalCandidate {
 				stats.CandidateLocal = v.IP + ":" + fmt.Sprint(v.Port)
-				stats.CandidateType = string(v.CandidateType)
+				stats.CandidateType = v.CandidateType.String()
 			}
 		}
 	}

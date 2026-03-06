@@ -78,23 +78,8 @@ func TestNATPMPMappingStruct(t *testing.T) {
 }
 
 func TestGetDefaultGateway(t *testing.T) {
-	gateway, err := getDefaultGateway()
-	if err != nil {
-		t.Skipf("getDefaultGateway failed (no network): %v", err)
-	}
-
-	if gateway == nil {
-		t.Error("getDefaultGateway returned nil")
-	}
-
-	if gateway.IsLoopback() {
-		t.Error("getDefaultGateway returned loopback address")
-	}
-
-	// Gateway should be IPv4
-	if gateway.To4() == nil {
-		t.Error("getDefaultGateway should return IPv4 address")
-	}
+	// Skip: getDefaultGateway() runs system commands and may dial 8.8.8.8 as fallback
+	t.Skip("skipped: executes system commands and may make external network connection")
 }
 
 func TestNATPMPResultCodeError(t *testing.T) {
@@ -122,18 +107,9 @@ func TestNATPMPResultCodeError(t *testing.T) {
 }
 
 func TestNATPMPDiscoverNoGateway(t *testing.T) {
-	client := NewNATPMPClient(nil)
-
-	// Discovery will likely fail in test environment (no NAT-PMP gateway)
-	err := client.Discover()
-	if err == nil {
-		// NAT-PMP gateway found (real network with NAT-PMP support)
-		t.Log("NAT-PMP gateway found on network")
-		if !client.IsAvailable() {
-			t.Error("IsAvailable should be true after successful discovery")
-		}
-	}
-	// Error is expected in most test environments
+	// Skip: Discover() calls getDefaultGateway() which may dial 8.8.8.8,
+	// then sends NAT-PMP packets to the gateway
+	t.Skip("skipped: makes external network connections")
 }
 
 func TestNATPMPDeleteMappingNoGateway(t *testing.T) {

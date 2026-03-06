@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"fmt"
 	"io"
+	"log/slog"
 	"net"
 	"net/http"
 	"sync/atomic"
@@ -26,15 +27,17 @@ type H2Config struct {
 type H2Client struct {
 	config *H2Config
 	client *http.Client
+	logger *slog.Logger
 	closed atomic.Bool
 }
 
-func NewH2Client(cfg *H2Config) *H2Client {
+func NewH2Client(cfg *H2Config, opts ...H2Option) *H2Client {
 	if cfg.Path == "" {
 		cfg.Path = "/ws"
 	}
-	return &H2Client{
+	c := &H2Client{
 		config: cfg,
+		logger: slog.Default(),
 		client: &http.Client{
 			Transport: &http.Transport{
 				TLSClientConfig: &tls.Config{
@@ -44,6 +47,18 @@ func NewH2Client(cfg *H2Config) *H2Client {
 			},
 		},
 	}
+	for _, o := range opts {
+		o(c)
+	}
+	return c
+}
+
+// H2Option configures an H2Client.
+type H2Option func(*H2Client)
+
+// WithH2Logger sets the logger for the H2 CDN client.
+func WithH2Logger(l *slog.Logger) H2Option {
+	return func(c *H2Client) { c.logger = l }
 }
 
 func (c *H2Client) Type() string { return "cdn-h2" }
@@ -52,6 +67,7 @@ func (c *H2Client) Dial(ctx context.Context, addr string) (transport.Connection,
 	if c.closed.Load() {
 		return nil, fmt.Errorf("cdn client closed")
 	}
+	c.logger.Debug("cdn-h2: dialing", "addr", addr)
 
 	// Create a bidirectional channel over HTTP/2:
 	// - Client writes into io.Pipe -> becomes request body (upload)
@@ -107,6 +123,7 @@ func (c *H2Client) Dial(ctx context.Context, addr string) (transport.Connection,
 		fmt.Sscanf(port, "%d", &cdnAddr.Port)
 	}
 
+	c.logger.Debug("cdn-h2: connected", "addr", addr)
 	return &cdnH2Connection{
 		session:    session,
 		remoteAddr: cdnAddr,
@@ -114,6 +131,7 @@ func (c *H2Client) Dial(ctx context.Context, addr string) (transport.Connection,
 }
 
 func (c *H2Client) Close() error {
+	c.logger.Debug("cdn-h2: closing")
 	c.closed.Store(true)
 	c.client.CloseIdleConnections()
 	return nil

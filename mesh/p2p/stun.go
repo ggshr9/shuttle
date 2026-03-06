@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"os"
 	"sync"
 	"time"
 )
@@ -581,7 +582,12 @@ func parseMappedAddress(data []byte, xorKey []byte) *net.UDPAddr {
 }
 
 // DefaultSTUNServers returns a list of public STUN servers.
+// When SHUTTLE_TEST_NO_EXTERNAL is set, returns an empty list to prevent
+// external network access during tests.
 func DefaultSTUNServers() []string {
+	if os.Getenv("SHUTTLE_TEST_NO_EXTERNAL") != "" {
+		return []string{}
+	}
 	return []string{
 		"stun.l.google.com:19302",
 		"stun1.l.google.com:19302",
@@ -591,7 +597,12 @@ func DefaultSTUNServers() []string {
 }
 
 // DefaultSTUNServersIPv6 returns a list of public STUN servers that support IPv6.
+// When SHUTTLE_TEST_NO_EXTERNAL is set, returns an empty list to prevent
+// external network access during tests.
 func DefaultSTUNServersIPv6() []string {
+	if os.Getenv("SHUTTLE_TEST_NO_EXTERNAL") != "" {
+		return []string{}
+	}
 	return []string{
 		"stun.l.google.com:19302",
 		"stun1.l.google.com:19302",

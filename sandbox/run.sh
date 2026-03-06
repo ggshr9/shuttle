@@ -3,11 +3,12 @@
 # Shuttle Sandbox Test Runner
 #
 # Usage:
-#   ./run.sh              # Run all tests
+#   ./run.sh              # Run all tests (shell)
 #   ./run.sh build        # Build only
 #   ./run.sh up           # Start environment
 #   ./run.sh down         # Stop environment
-#   ./run.sh test         # Run tests only
+#   ./run.sh test         # Run shell tests only
+#   ./run.sh gotest       # Run Go integration tests in Docker
 #   ./run.sh logs         # View logs
 #   ./run.sh shell <name> # Shell into container
 
@@ -52,7 +53,7 @@ build_images() {
 # Start environment
 start_env() {
     log "Starting sandbox environment..."
-    docker compose up -d server router client-a client-b
+    docker compose up -d server router httpbin client-a client-b stun
 
     log "Waiting for services to be ready..."
     sleep 5
@@ -66,17 +67,24 @@ start_env() {
         exit 1
     fi
 
+    # Check STUN server
+    if docker compose exec -T stun pgrep -x stunserver > /dev/null 2>&1; then
+        success "STUN server is healthy"
+    else
+        warn "STUN server not running (gotest tests may fail)"
+    fi
+
     success "Environment ready"
 }
 
 # Stop environment
 stop_env() {
     log "Stopping sandbox environment..."
-    docker compose down -v
+    docker compose --profile gotest --profile test down -v
     success "Environment stopped"
 }
 
-# Run tests
+# Run shell tests
 run_tests() {
     log "Running tests..."
     echo ""
@@ -147,24 +155,24 @@ run_tests() {
         ((failed++))
     fi
 
-    # Test 8: Proxy through server (SOCKS5) - external connectivity
+    # Test 8: Proxy through server (SOCKS5) - via local httpbin
     ((total++))
-    if docker compose exec -T client-a curl -sf --socks5 127.0.0.1:1080 --max-time 10 http://httpbin.org/ip > /dev/null 2>&1; then
+    if docker compose exec -T client-a curl -sf --socks5 127.0.0.1:1080 --max-time 10 http://10.100.0.20/ip > /dev/null 2>&1; then
         success "test_socks5_proxy"
         ((passed++))
     else
-        warn "test_socks5_proxy (may need internet)"
-        ((passed++))  # Don't fail on external connectivity
+        error "test_socks5_proxy"
+        ((failed++))
     fi
 
-    # Test 9: Proxy through server (HTTP) - external connectivity
+    # Test 9: Proxy through server (HTTP) - via local httpbin
     ((total++))
-    if docker compose exec -T client-a curl -sf --proxy http://127.0.0.1:8080 --max-time 10 http://httpbin.org/ip > /dev/null 2>&1; then
+    if docker compose exec -T client-a curl -sf --proxy http://127.0.0.1:8080 --max-time 10 http://10.100.0.20/ip > /dev/null 2>&1; then
         success "test_http_proxy"
         ((passed++))
     else
-        warn "test_http_proxy (may need internet)"
-        ((passed++))  # Don't fail on external connectivity
+        error "test_http_proxy"
+        ((failed++))
     fi
 
     echo ""
@@ -177,6 +185,34 @@ run_tests() {
     echo ""
 
     return $failed
+}
+
+# Run Go integration tests inside Docker
+run_gotest() {
+    log "Running Go integration tests in Docker..."
+    echo ""
+    echo "========== Go Sandbox Tests =========="
+    echo ""
+
+    # Ensure stun + router are up
+    docker compose up -d stun router
+    sleep 2
+
+    # Build and run gotest container
+    docker compose --profile gotest build gotest
+    docker compose --profile gotest run --rm gotest
+    result=$?
+
+    echo ""
+    echo "======================================"
+    if [ $result -eq 0 ]; then
+        success "Go sandbox tests PASSED"
+    else
+        error "Go sandbox tests FAILED"
+    fi
+    echo ""
+
+    return $result
 }
 
 # View logs
@@ -194,7 +230,7 @@ shell_into() {
 cleanup() {
     log "Cleaning up..."
     rm -f shuttle shuttled
-    docker compose down -v --remove-orphans 2>/dev/null || true
+    docker compose --profile gotest --profile test down -v --remove-orphans 2>/dev/null || true
     success "Cleaned up"
 }
 
@@ -214,6 +250,9 @@ case "${1:-all}" in
         ;;
     test)
         run_tests
+        ;;
+    gotest)
+        run_gotest
         ;;
     logs)
         shift
@@ -236,7 +275,7 @@ case "${1:-all}" in
         exit $result
         ;;
     *)
-        echo "Usage: $0 {build|up|down|test|logs|shell|clean|all}"
+        echo "Usage: $0 {build|up|down|test|gotest|logs|shell|clean|all}"
         exit 1
         ;;
 esac

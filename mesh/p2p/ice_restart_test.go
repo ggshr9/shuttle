@@ -6,6 +6,19 @@ import (
 	"time"
 )
 
+// noSTUNAgent returns an ICEAgentConfig with empty STUN servers
+// to prevent any external network access during tests.
+func noSTUNAgent() *ICEAgentConfig {
+	return &ICEAgentConfig{
+		STUNServers:      []string{},
+		IsControlling:    true,
+		GatherTimeout:    5 * time.Second,
+		CheckTimeout:     30 * time.Second,
+		RestartCooldown:  10 * time.Second,
+		QualityThreshold: 30.0,
+	}
+}
+
 func TestICEGatheringState_String(t *testing.T) {
 	tests := []struct {
 		state    ICEGatheringState
@@ -141,8 +154,9 @@ func TestDefaultICEAgentConfig(t *testing.T) {
 		t.Fatal("DefaultICEAgentConfig returned nil")
 	}
 
-	if len(cfg.STUNServers) == 0 {
-		t.Error("STUNServers should not be empty")
+	// STUNServers may be empty when SHUTTLE_TEST_NO_EXTERNAL is set
+	if cfg.STUNServers == nil {
+		t.Error("STUNServers should not be nil (may be empty slice)")
 	}
 
 	if cfg.GatherTimeout == 0 {
@@ -159,7 +173,7 @@ func TestDefaultICEAgentConfig(t *testing.T) {
 }
 
 func TestNewICEAgent(t *testing.T) {
-	agent := NewICEAgent(nil) // Use default config
+	agent := NewICEAgent(noSTUNAgent()) // Use default config
 
 	if agent == nil {
 		t.Fatal("NewICEAgent returned nil")
@@ -186,7 +200,7 @@ func TestNewICEAgent(t *testing.T) {
 
 func TestNewICEAgentWithConfig(t *testing.T) {
 	cfg := &ICEAgentConfig{
-		STUNServers:      []string{"stun.example.com:3478"},
+		STUNServers:      []string{}, // no external STUN in tests
 		IsControlling:    false,
 		GatherTimeout:    10 * time.Second,
 		CheckTimeout:     60 * time.Second,
@@ -212,7 +226,7 @@ func TestNewICEAgentWithConfig(t *testing.T) {
 }
 
 func TestICEAgent_GetLocalCredentials(t *testing.T) {
-	agent := NewICEAgent(nil)
+	agent := NewICEAgent(noSTUNAgent())
 	defer agent.Close()
 
 	creds := agent.GetLocalCredentials()
@@ -227,7 +241,7 @@ func TestICEAgent_GetLocalCredentials(t *testing.T) {
 }
 
 func TestICEAgent_SetRemoteCredentials(t *testing.T) {
-	agent := NewICEAgent(nil)
+	agent := NewICEAgent(noSTUNAgent())
 	defer agent.Close()
 
 	remoteCreds := &ICECredentials{
@@ -247,7 +261,7 @@ func TestICEAgent_SetRemoteCredentials(t *testing.T) {
 }
 
 func TestICEAgent_GetGatheringState(t *testing.T) {
-	agent := NewICEAgent(nil)
+	agent := NewICEAgent(noSTUNAgent())
 	defer agent.Close()
 
 	state := agent.GetGatheringState()
@@ -258,7 +272,7 @@ func TestICEAgent_GetGatheringState(t *testing.T) {
 }
 
 func TestICEAgent_GetConnectionState(t *testing.T) {
-	agent := NewICEAgent(nil)
+	agent := NewICEAgent(noSTUNAgent())
 	defer agent.Close()
 
 	state := agent.GetConnectionState()
@@ -269,7 +283,7 @@ func TestICEAgent_GetConnectionState(t *testing.T) {
 }
 
 func TestICEAgent_AddRemoteCandidate(t *testing.T) {
-	agent := NewICEAgent(nil)
+	agent := NewICEAgent(noSTUNAgent())
 	defer agent.Close()
 
 	// First add a local candidate (needed for pairing)
@@ -309,6 +323,7 @@ func TestICEAgent_AddRemoteCandidate(t *testing.T) {
 
 func TestICEAgent_RestartCooldown(t *testing.T) {
 	cfg := &ICEAgentConfig{
+		STUNServers:     []string{},
 		RestartCooldown: 100 * time.Millisecond,
 	}
 	agent := NewICEAgent(cfg)
@@ -342,6 +357,7 @@ func TestICEAgent_RestartCooldown(t *testing.T) {
 
 func TestICEAgent_RestartCount(t *testing.T) {
 	cfg := &ICEAgentConfig{
+		STUNServers:     []string{},
 		RestartCooldown: 1 * time.Millisecond,
 	}
 	agent := NewICEAgent(cfg)
@@ -367,7 +383,7 @@ func TestICEAgent_RestartCount(t *testing.T) {
 }
 
 func TestICEAgent_NeedsRestart(t *testing.T) {
-	agent := NewICEAgent(nil)
+	agent := NewICEAgent(noSTUNAgent())
 	defer agent.Close()
 
 	// In new state, no restart needed
@@ -404,7 +420,7 @@ func TestICEAgent_NeedsRestart(t *testing.T) {
 }
 
 func TestICEAgent_Callbacks(t *testing.T) {
-	agent := NewICEAgent(nil)
+	agent := NewICEAgent(noSTUNAgent())
 	defer agent.Close()
 
 	agent.OnStateChange(func(state ICEConnectionState) {
@@ -441,7 +457,7 @@ func TestICEAgent_Callbacks(t *testing.T) {
 }
 
 func TestICEAgent_RecordRTT(t *testing.T) {
-	agent := NewICEAgent(nil)
+	agent := NewICEAgent(noSTUNAgent())
 	defer agent.Close()
 
 	// Should not panic
@@ -450,7 +466,7 @@ func TestICEAgent_RecordRTT(t *testing.T) {
 }
 
 func TestICEAgent_RecordPacketLoss(t *testing.T) {
-	agent := NewICEAgent(nil)
+	agent := NewICEAgent(noSTUNAgent())
 	defer agent.Close()
 
 	// Should not panic
@@ -459,7 +475,7 @@ func TestICEAgent_RecordPacketLoss(t *testing.T) {
 }
 
 func TestICEAgent_GetSelectedPair(t *testing.T) {
-	agent := NewICEAgent(nil)
+	agent := NewICEAgent(noSTUNAgent())
 	defer agent.Close()
 
 	// Initially nil
@@ -489,7 +505,7 @@ func TestICEAgent_GetSelectedPair(t *testing.T) {
 }
 
 func TestICEAgent_GetConnection(t *testing.T) {
-	agent := NewICEAgent(nil)
+	agent := NewICEAgent(noSTUNAgent())
 	defer agent.Close()
 
 	// Initially nil
@@ -500,7 +516,7 @@ func TestICEAgent_GetConnection(t *testing.T) {
 }
 
 func TestICEAgent_GetLocalCandidates(t *testing.T) {
-	agent := NewICEAgent(nil)
+	agent := NewICEAgent(noSTUNAgent())
 	defer agent.Close()
 
 	// Initially empty
@@ -524,7 +540,7 @@ func TestICEAgent_GetLocalCandidates(t *testing.T) {
 }
 
 func TestICEAgent_GetQualityMetrics(t *testing.T) {
-	agent := NewICEAgent(nil)
+	agent := NewICEAgent(noSTUNAgent())
 	defer agent.Close()
 
 	metrics := agent.GetQualityMetrics()
@@ -533,7 +549,7 @@ func TestICEAgent_GetQualityMetrics(t *testing.T) {
 }
 
 func TestICEAgent_Close(t *testing.T) {
-	agent := NewICEAgent(nil)
+	agent := NewICEAgent(noSTUNAgent())
 
 	// First close should succeed
 	err := agent.Close()
@@ -555,7 +571,7 @@ func TestICEAgent_Close(t *testing.T) {
 }
 
 func TestICEAgent_CloseWithConnection(t *testing.T) {
-	agent := NewICEAgent(nil)
+	agent := NewICEAgent(noSTUNAgent())
 
 	// Create a mock connection
 	conn, err := net.ListenUDP("udp", &net.UDPAddr{IP: net.ParseIP("127.0.0.1"), Port: 0})
@@ -581,7 +597,7 @@ func TestICEAgent_CloseWithConnection(t *testing.T) {
 }
 
 func TestICEAgent_HandleNetworkChange(t *testing.T) {
-	agent := NewICEAgent(nil)
+	agent := NewICEAgent(noSTUNAgent())
 	defer agent.Close()
 
 	restartReason := ICERestartReason(-1)
@@ -618,6 +634,7 @@ func TestICEAgent_HandleNetworkChange(t *testing.T) {
 
 func TestICEAgent_PendingRestart(t *testing.T) {
 	cfg := &ICEAgentConfig{
+		STUNServers:     []string{},
 		RestartCooldown: 1 * time.Millisecond,
 	}
 	agent := NewICEAgent(cfg)
@@ -636,6 +653,7 @@ func TestICEAgent_PendingRestart(t *testing.T) {
 
 func TestICEAgent_CredentialsRegeneration(t *testing.T) {
 	cfg := &ICEAgentConfig{
+		STUNServers:     []string{},
 		RestartCooldown: 1 * time.Millisecond,
 	}
 	agent := NewICEAgent(cfg)
@@ -658,7 +676,7 @@ func TestICEAgent_CredentialsRegeneration(t *testing.T) {
 }
 
 func TestICEAgent_StartConnectivityChecksInvalidState(t *testing.T) {
-	agent := NewICEAgent(nil)
+	agent := NewICEAgent(noSTUNAgent())
 	defer agent.Close()
 
 	// Set invalid state
@@ -673,7 +691,7 @@ func TestICEAgent_StartConnectivityChecksInvalidState(t *testing.T) {
 }
 
 func TestICEAgent_StartConnectivityChecksNoConnection(t *testing.T) {
-	agent := NewICEAgent(nil)
+	agent := NewICEAgent(noSTUNAgent())
 	defer agent.Close()
 
 	// conn is nil
@@ -684,7 +702,7 @@ func TestICEAgent_StartConnectivityChecksNoConnection(t *testing.T) {
 }
 
 func TestICEAgent_StateChangeCallback(t *testing.T) {
-	agent := NewICEAgent(nil)
+	agent := NewICEAgent(noSTUNAgent())
 	defer agent.Close()
 
 	stateChanges := make([]ICEConnectionState, 0)
@@ -709,7 +727,7 @@ func TestICEAgent_StateChangeCallback(t *testing.T) {
 }
 
 func TestICEAgent_CandidatePairsSorted(t *testing.T) {
-	agent := NewICEAgent(nil)
+	agent := NewICEAgent(noSTUNAgent())
 	defer agent.Close()
 
 	// Add local candidates with different priorities
@@ -854,6 +872,7 @@ func TestICEConnectionStateTransitions(t *testing.T) {
 
 func TestICEAgentMultipleRestarts(t *testing.T) {
 	cfg := &ICEAgentConfig{
+		STUNServers:     []string{},
 		RestartCooldown: 1 * time.Millisecond,
 	}
 	agent := NewICEAgent(cfg)
@@ -883,6 +902,7 @@ func TestICEAgentMultipleRestarts(t *testing.T) {
 
 func TestICEAgentQualityBasedRestart(t *testing.T) {
 	cfg := &ICEAgentConfig{
+		STUNServers:      []string{},
 		QualityThreshold: 50.0,
 	}
 	agent := NewICEAgent(cfg)

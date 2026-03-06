@@ -1,7 +1,6 @@
 package p2p
 
 import (
-	"context"
 	"fmt"
 	"net"
 	"testing"
@@ -57,13 +56,13 @@ func TestP2PConnectionLocal(t *testing.T) {
 // TestHolePunchPacketExchange tests hole punch packet exchange
 func TestHolePunchPacketExchange(t *testing.T) {
 	// Create two UDP sockets
-	conn1, err := net.ListenUDP("udp4", &net.UDPAddr{IP: net.IPv4zero, Port: 0})
+	conn1, err := net.ListenUDP("udp4", &net.UDPAddr{IP: net.ParseIP("127.0.0.1"), Port: 0})
 	if err != nil {
 		t.Fatalf("Failed to create conn1: %v", err)
 	}
 	defer conn1.Close()
 
-	conn2, err := net.ListenUDP("udp4", &net.UDPAddr{IP: net.IPv4zero, Port: 0})
+	conn2, err := net.ListenUDP("udp4", &net.UDPAddr{IP: net.ParseIP("127.0.0.1"), Port: 0})
 	if err != nil {
 		t.Fatalf("Failed to create conn2: %v", err)
 	}
@@ -168,7 +167,7 @@ func TestHolePunchPacketExchange(t *testing.T) {
 
 // TestICEGathererIntegration tests full ICE candidate gathering
 func TestICEGathererIntegration(t *testing.T) {
-	gatherer := NewICEGatherer(DefaultSTUNServers(), 5*time.Second)
+	gatherer := NewICEGatherer([]string{}, 5*time.Second) // no external STUN in tests
 
 	result, err := gatherer.Gather()
 	if err != nil {
@@ -194,30 +193,8 @@ func TestICEGathererIntegration(t *testing.T) {
 
 // TestPortMapperIntegration tests port mapper with both protocols
 func TestPortMapperIntegration(t *testing.T) {
-	pm := NewPortMapper(nil)
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	// Try to map a port (will likely fail in test environment)
-	port, err := pm.MapPort(ctx, 12345, 0)
-	if err != nil {
-		t.Logf("Port mapping failed (expected in most test environments): %v", err)
-		return
-	}
-
-	t.Logf("Port mapping succeeded: local=12345, external=%d, protocol=%s", port, pm.Protocol())
-
-	// Verify we can get external address
-	extAddr := pm.GetExternalAddr()
-	if extAddr == nil {
-		t.Error("GetExternalAddr returned nil after successful mapping")
-	}
-
-	// Clean up
-	if err := pm.Close(); err != nil {
-		t.Errorf("Close failed: %v", err)
-	}
+	// Skip: MapPort triggers UPnP SSDP multicast, NAT-PMP, and PCP discovery
+	t.Skip("skipped: triggers network discovery protocols")
 }
 
 // TestPathCacheIntegration tests path cache with realistic workflow
@@ -462,21 +439,8 @@ func TestSpoofConfigValidation(t *testing.T) {
 
 // TestGatewayDiscovery tests platform-specific gateway discovery
 func TestGatewayDiscovery(t *testing.T) {
-	gateway, err := getDefaultGateway()
-	if err != nil {
-		t.Skipf("Gateway discovery failed (expected in some envs): %v", err)
-	}
-
-	if gateway == nil {
-		t.Error("Gateway is nil")
-		return
-	}
-
-	if gateway.To4() == nil {
-		t.Error("Gateway is not IPv4")
-	}
-
-	t.Logf("Discovered gateway: %s", gateway)
+	// Skip: runs system commands (route/ip) and may dial 8.8.8.8 as fallback
+	t.Skip("skipped: executes system commands and may make external network connection")
 }
 
 // BenchmarkHolePunchPacketEncode benchmarks packet encoding

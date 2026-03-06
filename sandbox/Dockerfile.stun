@@ -1,0 +1,10 @@
+# Lightweight STUN server for sandbox testing.
+FROM golang:1.24-alpine AS builder
+WORKDIR /src
+COPY sandbox/cmd/stunserver/main.go .
+RUN CGO_ENABLED=0 go build -o /stunserver main.go
+
+FROM alpine:3.19
+COPY --from=builder /stunserver /usr/local/bin/stunserver
+ENTRYPOINT ["stunserver"]
+CMD ["-addr", "0.0.0.0:3478"]

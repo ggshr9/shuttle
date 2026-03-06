@@ -1,0 +1,7 @@
+.git
+.github
+.claude
+gui/web/node_modules
+sandbox/shuttle
+sandbox/shuttled
+sandbox/results

@@ -191,15 +191,8 @@ func TestPCPResultString(t *testing.T) {
 }
 
 func TestPCPClientDiscoverNoGateway(t *testing.T) {
-	// Create client with invalid gateway
-	client := NewPCPClient(net.ParseIP("0.0.0.0"), nil)
-
-	err := client.Discover()
-	// Should fail - either no route or timeout
-	if err == nil {
-		// In rare cases where 0.0.0.0 somehow works, this is acceptable
-		t.Log("Discover unexpectedly succeeded")
-	}
+	// Skip: Discover() sends PCP packets to gateway address over UDP
+	t.Skip("skipped: sends network packets to gateway")
 }
 
 func TestPCPClientAddMappingNotDiscovered(t *testing.T) {

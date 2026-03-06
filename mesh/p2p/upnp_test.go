@@ -1,7 +1,6 @@
 package p2p
 
 import (
-	"context"
 	"net"
 	"testing"
 	"time"
@@ -28,18 +27,8 @@ func TestUPnPClientIsAvailable(t *testing.T) {
 }
 
 func TestGetOutboundIP(t *testing.T) {
-	ip, err := getOutboundIP()
-	if err != nil {
-		t.Skipf("getOutboundIP failed (no network): %v", err)
-	}
-
-	if ip == nil {
-		t.Error("getOutboundIP returned nil IP")
-	}
-
-	if ip.IsLoopback() {
-		t.Error("getOutboundIP returned loopback address")
-	}
+	// Skip: getOutboundIP() dials 8.8.8.8 which affects local network
+	t.Skip("skipped: makes external network connection to 8.8.8.8")
 }
 
 func TestPortMapper(t *testing.T) {
@@ -103,32 +92,13 @@ func TestGatewayStruct(t *testing.T) {
 }
 
 func TestUPnPDiscoverTimeout(t *testing.T) {
-	client := NewUPnPClient(nil)
-
-	// Discovery with very short timeout should fail or timeout
-	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
-	defer cancel()
-
-	err := client.Discover(ctx)
-	// We expect either timeout or "not found" - both are acceptable
-	if err == nil {
-		// UPnP device was found (running on real network with UPnP router)
-		t.Log("UPnP device found on network")
-	}
+	// Skip: Discover() sends SSDP multicast to 239.255.255.250:1900
+	t.Skip("skipped: sends UPnP SSDP multicast on local network")
 }
 
 func TestPortMapperMapPortNoGateway(t *testing.T) {
-	pm := NewPortMapper(nil)
-
-	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
-	defer cancel()
-
-	_, err := pm.MapPort(ctx, 12345, 0)
-	if err == nil {
-		// Mapping succeeded (real UPnP router on network)
-		t.Log("Port mapping succeeded on real network")
-		pm.Close()
-	}
+	// Skip: MapPort triggers UPnP/NAT-PMP/PCP discovery on local network
+	t.Skip("skipped: triggers network discovery protocols")
 }
 
 func TestUPnPClientGetMappings(t *testing.T) {

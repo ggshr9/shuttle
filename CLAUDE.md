@@ -16,12 +16,29 @@ CGO_ENABLED=0 go build -o shuttled ./cmd/shuttled
 # Build GUI (requires CGo, Wails, and frontend assets)
 cd gui/web && npm install && npm run build
 CGO_ENABLED=1 go build -tags desktop,production -o shuttle-gui ./cmd/shuttle-gui
+```
 
-# Run tests
-go test -count=1 -v ./...
+## Running Tests
 
-# Run a single test
-go test -count=1 -v ./test -run TestName
+**IMPORTANT: NEVER run `go test ./...` directly — always use `scripts/test.sh`.**
+Direct `go test` is host-safe but misses network integration tests. The unified script
+handles both tiers automatically and manages Docker lifecycle.
+
+```bash
+# Host-safe unit tests only (fast, no network impact)
+./scripts/test.sh
+
+# Host tests + Docker sandbox integration tests (full suite)
+./scripts/test.sh --all
+
+# Docker sandbox tests only (STUN, NAT, mDNS, hole punch)
+./scripts/test.sh --sandbox
+
+# Test a specific package
+./scripts/test.sh --pkg ./mesh/p2p/
+
+# Run specific test(s) by regex
+./scripts/test.sh --run TestRouter
 ```
 
 ## Architecture
@@ -81,29 +98,42 @@ Client and server configs are YAML. Key structures in `config/config.go`:
 
 ## Testing
 
-### Unit Tests
-Tests are in `test/` directory:
-- `e2e_test.go` - End-to-end integration
-- `h3_test.go`, `reality_test.go` - Transport protocols
-- `congestion_test.go` - CC algorithms
-- `mesh_test.go` - Mesh VPN
-- `router_test.go` - Routing logic
-- `bench_test.go` - Performance benchmarks
+### Two-Tier Test Architecture
 
-### Sandbox Testing
-Docker-based isolated test environment in `sandbox/`:
+**Tier 1 — Host-safe unit tests** (`go test ./...`):
+- Run directly on the host machine, zero network impact
+- All external network operations (STUN, UPnP, mDNS, gateway discovery) are `t.Skip()`-ed
+- Tests in `test/`, `mesh/p2p/*_test.go`, `transport/`, etc.
+
+**Tier 2 — Docker sandbox integration tests** (`//go:build sandbox`):
+- Run inside Docker containers with isolated virtual networks
+- Real STUN queries, NAT detection, hole punching, mDNS — all within Docker
+- Test file: `mesh/p2p/sandbox_test.go`
+- Docker topology: STUN server + NAT router + gotest container on 3 subnets
+
+### Running Tests
 ```bash
-# Run all sandbox tests
-./sandbox/run.sh
-
-# Or step by step:
-./sandbox/run.sh build   # Build binaries and images
-./sandbox/run.sh up      # Start environment
-./sandbox/run.sh test    # Run tests
-./sandbox/run.sh down    # Stop environment
+# Recommended: unified test runner
+./scripts/test.sh          # Host tests only (fast)
+./scripts/test.sh --all    # Host + Docker sandbox (full)
+./scripts/test.sh --sandbox # Docker sandbox only
 ```
 
-Network topology: 2 clients + 1 server + 1 router (NAT simulation)
+### Sandbox Environment
+Docker-based isolated test environment in `sandbox/`:
+```bash
+./sandbox/run.sh              # Shell integration tests (server/client/proxy)
+./sandbox/run.sh gotest       # Go integration tests (STUN/NAT/P2P)
+./sandbox/run.sh build        # Build binaries and images
+./sandbox/run.sh up           # Start environment
+./sandbox/run.sh down         # Stop environment
+```
+
+Network topology:
+- `net-server` (10.100.0.0/24): server, STUN, httpbin, router
+- `net-a` (10.100.1.0/24): client-a, router, gotest
+- `net-b` (10.100.2.0/24): client-b, router, gotest
+- `gotest` container connects to all 3 networks for cross-NAT testing
 
 ## Platform Build Requirements
 

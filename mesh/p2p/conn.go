@@ -3,6 +3,7 @@ package p2p
 import (
 	"crypto/cipher"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -13,6 +14,7 @@ import (
 	"time"
 
 	"golang.org/x/crypto/chacha20poly1305"
+	"golang.org/x/crypto/hkdf"
 )
 
 // P2P packet magic
@@ -205,30 +207,24 @@ func IsP2PPacket(data []byte) bool {
 	return data[0] == 'P' && data[1] == '2' && data[2] == 'P' && data[3] == '1'
 }
 
-// DeriveP2PKeys derives send and receive keys from shared secret.
-// Uses HKDF with different info strings for each direction.
+// DeriveP2PKeys derives send and receive keys from shared secret using HKDF-SHA256.
+// The initiator→responder and responder→initiator keys use different HKDF info strings.
 func DeriveP2PKeys(sharedSecret []byte, isInitiator bool) (sendKey, recvKey [32]byte) {
-	// Use simple key derivation
-	// In production, use proper HKDF
-	h := make([]byte, 64)
-	copy(h, sharedSecret)
+	salt := []byte("shuttle-p2p-v1")
+	i2r := hkdf.New(sha256.New, sharedSecret, salt, []byte("i2r"))
+	r2i := hkdf.New(sha256.New, sharedSecret, salt, []byte("r2i"))
 
-	// XOR with role indicator
+	var i2rKey, r2iKey [32]byte
+	io.ReadFull(i2r, i2rKey[:])
+	io.ReadFull(r2i, r2iKey[:])
+
 	if isInitiator {
-		h[0] ^= 0x01
+		sendKey = i2rKey
+		recvKey = r2iKey
 	} else {
-		h[0] ^= 0x02
+		sendKey = r2iKey
+		recvKey = i2rKey
 	}
-
-	// Derive keys (simplified - in production use HKDF)
-	if isInitiator {
-		copy(sendKey[:], h[0:32])
-		copy(recvKey[:], h[32:64])
-	} else {
-		copy(recvKey[:], h[0:32])
-		copy(sendKey[:], h[32:64])
-	}
-
 	return
 }
 

@@ -2,9 +2,6 @@ package h3
 
 import (
 	"context"
-	"crypto/hmac"
-	"crypto/rand"
-	"crypto/sha256"
 	"crypto/tls"
 	"fmt"
 	"io"
@@ -16,6 +13,7 @@ import (
 	"github.com/quic-go/quic-go"
 	"github.com/shuttle-proxy/shuttle/obfs"
 	"github.com/shuttle-proxy/shuttle/transport"
+	"github.com/shuttle-proxy/shuttle/transport/auth"
 )
 
 type ClientConfig struct {
@@ -52,17 +50,11 @@ func (c *Client) Type() string { return "h3" }
 
 // computeSessionAuth generates [32-byte nonce][32-byte HMAC-SHA256(password, nonce)].
 func computeSessionAuth(password string) ([]byte, error) {
-	nonce := make([]byte, 32)
-	if _, err := io.ReadFull(rand.Reader, nonce); err != nil {
-		return nil, fmt.Errorf("generate nonce: %w", err)
+	payload, err := auth.GenerateHMAC(password)
+	if err != nil {
+		return nil, err
 	}
-	mac := hmac.New(sha256.New, []byte(password))
-	mac.Write(nonce)
-	sig := mac.Sum(nil)
-	buf := make([]byte, 64)
-	copy(buf[:32], nonce)
-	copy(buf[32:], sig)
-	return buf, nil
+	return payload[:], nil
 }
 
 func (c *Client) Dial(ctx context.Context, addr string) (transport.Connection, error) {
@@ -108,6 +100,7 @@ func (c *Client) Dial(ctx context.Context, addr string) (transport.Connection, e
 		qconn.CloseWithError(1, "control stream open failed")
 		return nil, fmt.Errorf("h3 open control stream: %w", err)
 	}
+	defer func() { ctrlStream.CancelRead(0); ctrlStream.Close() }()
 
 	authPayload, err := computeSessionAuth(c.config.Password)
 	if err != nil {
@@ -130,10 +123,6 @@ func (c *Client) Dial(ctx context.Context, addr string) (transport.Connection, e
 		qconn.CloseWithError(2, "auth rejected")
 		return nil, fmt.Errorf("h3 auth rejected by server")
 	}
-
-	// Close the control stream; data streams follow.
-	ctrlStream.CancelRead(0)
-	ctrlStream.Close()
 
 	h3conn := &h3Connection{qconn: qconn, padder: c.padder}
 	c.conn = h3conn

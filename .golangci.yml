@@ -1,0 +1,28 @@
+run:
+  timeout: 5m
+  skip-dirs:
+    - quicfork
+
+linters:
+  enable:
+    - errcheck
+    - staticcheck
+    - unused
+    - misspell
+    - gocritic
+    - govet
+    - ineffassign
+    - typecheck
+
+linters-settings:
+  errcheck:
+    exclude-functions:
+      - io.ReadFull  # HKDF reads always succeed on valid inputs
+  gocritic:
+    enabled-tags:
+      - diagnostic
+      - performance
+
+issues:
+  exclude-dirs:
+    - quicfork

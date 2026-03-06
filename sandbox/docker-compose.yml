@@ -3,6 +3,9 @@
 # Network Topology:
 #   client-a (10.100.1.10) --[net-a]--> router (10.100.0.1) --[net-server]--> server (10.100.0.10)
 #   client-b (10.100.2.10) --[net-b]--> router (10.100.0.1) --[net-server]--> server (10.100.0.10)
+#
+#   stun    (10.100.0.30) - STUN server on net-server
+#   gotest  (10.100.0.100 / 10.100.1.100 / 10.100.2.100) - Go test runner on all networks
 
 services:
   # ============================================
@@ -118,7 +121,70 @@ services:
     restart: unless-stopped
 
   # ============================================
-  # Test Runner
+  # Local httpbin (eliminates external dependency)
+  # ============================================
+  httpbin:
+    image: kennethreitz/httpbin:latest
+    container_name: shuttle-httpbin
+    hostname: httpbin
+    networks:
+      net-server:
+        ipv4_address: 10.100.0.20
+    restart: unless-stopped
+
+  # ============================================
+  # STUN Server (for P2P / NAT traversal tests)
+  # ============================================
+  stun:
+    build:
+      context: ..
+      dockerfile: sandbox/Dockerfile.stun
+    container_name: shuttle-stun
+    hostname: stun
+    networks:
+      net-server:
+        ipv4_address: 10.100.0.30
+    restart: unless-stopped
+
+  # ============================================
+  # Go Test Runner (integration tests in Docker)
+  #
+  # Connected to all three networks so it can:
+  #   - Query STUN from behind NAT (via net-a/net-b)
+  #   - Test P2P between net-a and net-b peers
+  #   - Test mDNS discovery within a subnet
+  #   - Access server and STUN on net-server
+  # ============================================
+  gotest:
+    build:
+      context: ..
+      dockerfile: sandbox/Dockerfile.gotest
+    container_name: shuttle-gotest
+    hostname: gotest
+    environment:
+      - SANDBOX_STUN_ADDR=10.100.0.30:3478
+      - SANDBOX_SERVER_ADDR=10.100.0.10:443
+      - SANDBOX_ROUTER_ADDR=10.100.0.1
+      - SANDBOX_NET_A_SELF=10.100.1.100
+      - SANDBOX_NET_B_SELF=10.100.2.100
+      - SANDBOX_NET_SERVER_SELF=10.100.0.100
+    cap_add:
+      - NET_ADMIN
+    networks:
+      net-server:
+        ipv4_address: 10.100.0.100
+      net-a:
+        ipv4_address: 10.100.1.100
+      net-b:
+        ipv4_address: 10.100.2.100
+    depends_on:
+      - stun
+      - router
+    profiles:
+      - gotest
+
+  # ============================================
+  # Test Runner (shell script tests)
   # ============================================
   tester:
     build:
@@ -131,7 +197,7 @@ services:
       - ./results:/results
     networks:
       net-server:
-        ipv4_address: 10.100.0.100
+        ipv4_address: 10.100.0.101
     depends_on:
       - client-a
       - client-b

@@ -1,14 +1,11 @@
 package webrtc
 
 import (
-	"crypto/hmac"
-	"crypto/rand"
-	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
-	"io"
 
 	"github.com/pion/webrtc/v4"
+	"github.com/shuttle-proxy/shuttle/transport/auth"
 )
 
 // SignalRequest is the client's POST body for WebRTC signaling.
@@ -26,18 +23,14 @@ type SignalResponse struct {
 
 // GenerateAuth creates a SignalRequest with HMAC authentication.
 func GenerateAuth(password string, sdp string) (*SignalRequest, error) {
-	nonce := make([]byte, 32)
-	if _, err := io.ReadFull(rand.Reader, nonce); err != nil {
+	payload, err := auth.GenerateHMAC(password)
+	if err != nil {
 		return nil, err
 	}
-	mac := hmac.New(sha256.New, []byte(password))
-	mac.Write(nonce)
-	sig := mac.Sum(nil)
-
 	return &SignalRequest{
 		SDP:   sdp,
-		Nonce: hex.EncodeToString(nonce),
-		HMAC:  hex.EncodeToString(sig),
+		Nonce: hex.EncodeToString(payload[:32]),
+		HMAC:  hex.EncodeToString(payload[32:]),
 	}, nil
 }
 
@@ -52,10 +45,7 @@ func VerifyAuth(req *SignalRequest, password string) ([]byte, bool) {
 	if err != nil {
 		return nil, false
 	}
-	mac := hmac.New(sha256.New, []byte(password))
-	mac.Write(nonce)
-	expected := mac.Sum(nil)
-	if !hmac.Equal(clientMAC, expected) {
+	if !auth.VerifyHMAC(nonce, clientMAC, password) {
 		return nil, false
 	}
 	return nonce, true

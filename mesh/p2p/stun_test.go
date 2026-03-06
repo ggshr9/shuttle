@@ -146,8 +146,9 @@ func TestParseMappedAddress(t *testing.T) {
 
 func TestDefaultSTUNServers(t *testing.T) {
 	servers := DefaultSTUNServers()
-	if len(servers) == 0 {
-		t.Error("expected non-empty default STUN servers")
+	// When SHUTTLE_TEST_NO_EXTERNAL is set, servers will be empty
+	if servers == nil {
+		t.Error("expected non-nil default STUN servers (may be empty slice)")
 	}
 
 	// Check that all servers have valid host:port format

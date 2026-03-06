@@ -45,9 +45,11 @@ func (t *DomainTrie) Insert(domain, action string) {
 		}
 		node = child
 	}
+	if !node.isEnd {
+		t.size++
+	}
 	node.isEnd = true
 	node.value = action
-	t.size++
 }
 
 // Lookup finds the action for a domain. Returns ("", false) if not found.
@@ -80,6 +82,30 @@ func (t *DomainTrie) Lookup(domain string) (string, bool) {
 	}
 
 	return lastMatch, found
+}
+
+// Delete removes a domain from the trie (soft delete).
+// Returns true if the domain was found and deleted.
+func (t *DomainTrie) Delete(domain string) bool {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	parts := reverseDomain(domain)
+	node := t.root
+	for _, part := range parts {
+		child, ok := node.children[part]
+		if !ok {
+			return false
+		}
+		node = child
+	}
+	if !node.isEnd {
+		return false
+	}
+	node.isEnd = false
+	node.value = ""
+	t.size--
+	return true
 }
 
 // Size returns the number of entries in the trie.

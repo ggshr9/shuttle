@@ -1,7 +1,6 @@
 package p2p
 
 import (
-	"context"
 	"net"
 	"testing"
 	"time"
@@ -194,18 +193,15 @@ func TestExtractInstanceName(t *testing.T) {
 }
 
 func TestGetLocalIPs(t *testing.T) {
+	// getLocalIPs only reads network interface info, does not make connections.
 	ips := getLocalIPs()
 
-	// Should return at least some IPs on most systems
-	// (might be empty in some CI environments)
 	t.Logf("Found %d local IPs", len(ips))
 
 	for _, ip := range ips {
-		// Should not include loopback
 		if ip.IsLoopback() {
 			t.Errorf("Should not include loopback: %v", ip)
 		}
-		// Should not include link-local
 		if ip.IsLinkLocalUnicast() {
 			t.Errorf("Should not include link-local: %v", ip)
 		}
@@ -358,15 +354,9 @@ func TestMDNSServiceExpirePeers(t *testing.T) {
 }
 
 func TestLookupPeersTimeout(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
-	defer cancel()
-
-	// This will timeout quickly since there are unlikely to be other Shuttle peers
-	peers, err := LookupPeers(ctx, 50*time.Millisecond)
-	if err != nil {
-		t.Logf("LookupPeers error (expected in most environments): %v", err)
-	}
-	t.Logf("Found %d peers", len(peers))
+	// Skip: LookupPeers joins mDNS multicast group 224.0.0.251:5353
+	// and sends multicast queries on the local network
+	t.Skip("skipped: sends mDNS multicast on local network")
 }
 
 func TestAddPeerAddress(t *testing.T) {

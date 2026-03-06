@@ -75,7 +75,9 @@ func NewTrickleICEGatherer(cfg *TrickleGathererConfig) *TrickleICEGatherer {
 		cfg = &TrickleGathererConfig{}
 	}
 
-	if len(cfg.STUNServers) == 0 {
+	// Only fill defaults when STUNServers is nil (not explicitly set).
+	// An explicit empty slice []string{} means "no STUN servers".
+	if cfg.STUNServers == nil {
 		cfg.STUNServers = DefaultSTUNServers()
 	}
 
