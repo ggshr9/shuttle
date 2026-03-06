@@ -1,28 +1,109 @@
-# Shuttle Server Configuration
+# ============================================================================
+# Shuttle 服务器配置 / Shuttle Server Configuration
+#
+# 带 [必填/REQUIRED] 标记的选项必须填写，其余均为可选（已有合理默认值）。
+# Options marked [REQUIRED] must be filled in. All others are optional
+# with sensible defaults.
+# ============================================================================
 
+
+# --------------------------------------------------------------------------
+# 基础设置 / Basic Settings
+# --------------------------------------------------------------------------
+
+# [可选] 监听地址 / Listen address (default: ":443")
 listen: ":443"
 
+# [必填] TLS 证书（可用 Let's Encrypt 免费申请）
+# TLS certificate (use Let's Encrypt for free certs)
 tls:
   cert_file: "/etc/shuttle/cert.pem"
   key_file: "/etc/shuttle/key.pem"
 
+# [必填] 认证密码，客户端需使用相同密码连接
+# Authentication password. Clients must use the same password to connect.
 auth:
   password: "your-secret-password"
+  # [可选] Noise IK 密钥对（用于 Reality 传输）
+  # Noise IK key pair for Reality transport (generate with: shuttle genkey)
+  # private_key: "..."
+  # public_key: "..."
 
+
+# --------------------------------------------------------------------------
+# 伪装站点 / Cover Site
+# --------------------------------------------------------------------------
+
+# 当非 Shuttle 客户端访问时显示的网站，用于伪装
+# Website shown to non-Shuttle visitors for camouflage
 cover:
-  mode: "reverse"           # default, static, reverse
+  # 模式 / Mode:
+  #   "default"  — 内置默认页面 / Built-in default page
+  #   "reverse"  — 反向代理真实网站 / Reverse proxy a real website
+  #   "static"   — 静态文件目录 / Serve static files
+  mode: "reverse"
   reverse_url: "https://www.example.com"
+  # static_dir: "/var/www/html"
+
+
+# --------------------------------------------------------------------------
+# 传输协议 / Transport
+# --------------------------------------------------------------------------
 
 transport:
+  # H3 (HTTP/3 over QUIC) — 默认启用
+  # Enabled by default
   h3:
     enabled: true
+    # path_prefix 需与客户端一致 / Must match client config
     path_prefix: "/cdn/stream/"
+
+  # Reality (TLS + Noise) — 高抗检测传输
+  # High anti-detection transport
   reality:
     enabled: true
+    # 模仿的目标网站（需为真实可访问的 HTTPS 站点）
+    # Target website to impersonate (must be a real accessible HTTPS site)
     target_sni: "www.apple.com"
     target_addr: "www.apple.com:443"
+    # 短 ID 列表，分发给客户端 / Short IDs to distribute to clients
     short_ids: ["abc123"]
 
+  # WebRTC DataChannel — 可选传输
+  # Optional WebRTC transport
+  # webrtc:
+  #   enabled: false
+  #   # 信令服务监听地址 / Signal server listen address
+  #   signal_listen: ":8443"
+  #   stun_servers:
+  #     - "stun:stun.l.google.com:19302"
+  #   turn_servers:
+  #     - "turn:turn.example.com:3478"
+  #   turn_user: "user"
+  #   turn_pass: "pass"
+  #   ice_policy: "all"   # "all", "relay", "public"
+
+
+# --------------------------------------------------------------------------
+# Mesh VPN 虚拟组网 / Mesh VPN
+# --------------------------------------------------------------------------
+
+# 启用后，所有连接的客户端会组成虚拟局域网 (10.7.0.0/24)
+# When enabled, all connected clients form a virtual LAN (10.7.0.0/24)
+# mesh:
+#   enabled: false
+#   # 虚拟网络 CIDR / Virtual network CIDR
+#   cidr: "10.7.0.0/24"
+#   # 启用 P2P 信令（允许客户端之间直连）/ Enable P2P signaling
+#   p2p_enabled: false
+
+
+# --------------------------------------------------------------------------
+# 日志 / Logging
+# --------------------------------------------------------------------------
+
 log:
+  # 日志级别 / Log level: "debug", "info", "warn", "error"
   level: "info"
+  # 输出位置 / Output: "stdout", "stderr", 或文件路径 / or a file path
   output: "stdout"

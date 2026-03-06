@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-REPO="ggshr9/shuttle"
+REPO="shuttle-proxy/shuttle"
 INSTALL_DIR="/usr/local/bin"
 CONFIG_DIR="/etc/shuttle"
 SERVICE_FILE="/etc/systemd/system/shuttled.service"
@@ -191,6 +191,8 @@ print_client_config() {
     echo "=============================="
     echo " Client Configuration"
     echo "=============================="
+    echo ""
+    echo "Or use the import URI below for quick setup."
     cat <<EOF
 
 server:
@@ -227,6 +229,29 @@ EOF
     echo "=============================="
 }
 
+# Print import URI for one-click client setup
+print_import_uri() {
+    local payload="{\"addr\":\"${DOMAIN}:443\",\"password\":\"${PASSWORD}\",\"transport\":\"${TRANSPORT}\",\"public_key\":\"${PUBLIC_KEY}\",\"short_id\":\"0123456789abcdef\"}"
+    local encoded
+    encoded=$(echo -n "$payload" | base64 -w0)
+    local uri="shuttle://${encoded}"
+
+    echo ""
+    echo "=============================="
+    echo " Quick Import URI"
+    echo "=============================="
+    echo ""
+    echo "Share this link with clients for one-click setup:"
+    echo ""
+    echo "  ${uri}"
+    echo ""
+    echo "Client usage:"
+    echo "  shuttle import \"${uri}\""
+    echo ""
+    echo "Or paste in Shuttle GUI -> Servers -> Import"
+    echo "=============================="
+}
+
 # Uninstall
 uninstall() {
     info "Uninstalling shuttled..."
@@ -258,6 +283,7 @@ main() {
             create_user
             install_service
             print_client_config
+            print_import_uri
             info "Setup complete! shuttled is running on ${DOMAIN}:443"
             ;;
         uninstall)

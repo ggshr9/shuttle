@@ -26,6 +26,24 @@ func main() {
 		fmt.Printf("shuttle v%s\n", version)
 	case "genkey":
 		genKey()
+	case "import":
+		// Parse manually: find the shuttle:// URI and optional -o flag in any order.
+		output := "config.yaml"
+		var uri string
+		args := os.Args[2:]
+		for i := 0; i < len(args); i++ {
+			if args[i] == "-o" && i+1 < len(args) {
+				output = args[i+1]
+				i++ // skip value
+			} else if uri == "" {
+				uri = args[i]
+			}
+		}
+		if uri == "" {
+			fmt.Fprintf(os.Stderr, "Usage: shuttle import <shuttle://...> [-o path]\n")
+			os.Exit(1)
+		}
+		importURI(uri, output)
 	case "run":
 		runCmd := flag.NewFlagSet("run", flag.ExitOnError)
 		configPath := runCmd.String("c", "", "path to config file (required)")
@@ -52,6 +70,7 @@ func printUsage() {
 	fmt.Fprintf(os.Stderr, "Shuttle v%s — Break the impossible triangle\n\n", version)
 	fmt.Fprintf(os.Stderr, "Usage:\n")
 	fmt.Fprintf(os.Stderr, "  shuttle run -c <config.yaml>    Start the client\n")
+	fmt.Fprintf(os.Stderr, "  shuttle import <shuttle://...>  Import server config from URI\n")
 	fmt.Fprintf(os.Stderr, "  shuttle genkey                  Generate key pair\n")
 	fmt.Fprintf(os.Stderr, "  shuttle version                 Show version\n")
 	fmt.Fprintf(os.Stderr, "  shuttle help                    Show this help\n")
@@ -65,6 +84,20 @@ func genKey() {
 	}
 	fmt.Printf("Private Key: %x\n", priv)
 	fmt.Printf("Public Key:  %x\n", pub)
+}
+
+func importURI(uri, output string) {
+	share, err := config.DecodeShareURI(uri)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Invalid URI: %v\n", err)
+		os.Exit(1)
+	}
+	data := config.RenderClientYAML(share)
+	if err := os.WriteFile(output, []byte(data), 0600); err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to write config: %v\n", err)
+		os.Exit(1)
+	}
+	fmt.Printf("Config written to %s\nRun: shuttle run -c %s\n", output, output)
 }
 
 func run(configPath string) {

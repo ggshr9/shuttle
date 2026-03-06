@@ -57,39 +57,68 @@ Pre-built binaries available on [GitHub Releases](https://github.com/shuttle-pro
 
 ## Quick Start
 
-### Client (CLI)
+### 1. Deploy Server (one command)
 
 ```bash
-# Download from releases or build
-go build -o shuttle ./cmd/shuttle
-
-# Run with config
-./shuttle run -c config.yaml
+# One-click install on any Linux VPS (generates config, certs, and systemd service)
+curl -fsSL https://raw.githubusercontent.com/shuttle-proxy/shuttle/main/deploy/install.sh | bash
 ```
 
-### Client (GUI)
+The installer prints a `shuttle://` URI at the end -- copy it for the next step.
+
+Or deploy manually:
 
 ```bash
-# Requires CGo (Wails + systray)
-go build -tags desktop,production -o shuttle-gui ./cmd/shuttle-gui
-
-# Opens native window with web UI (no config needed, uses defaults)
-./shuttle-gui
-```
-
-### Server
-
-```bash
-# One-click install on Linux VPS
-curl -fsSL https://raw.githubusercontent.com/ggshr9/shuttle/main/deploy/install.sh | bash
-
-# Or with Docker
+# Docker
 docker compose -f deploy/docker-compose.yml up -d
 
-# Or build manually
+# Or build from source
 go build -o shuttled ./cmd/shuttled
 ./shuttled run -c server.yaml
 ```
+
+### 2. Connect Client
+
+**CLI (2 steps):**
+
+```bash
+# Edit config/client.example.yaml — fill in your server addr and password, then:
+shuttle run -c config.yaml
+```
+
+**GUI (easiest):**
+
+```bash
+shuttle-gui
+# Paste the shuttle:// URI from the server output — done.
+```
+
+Pre-built binaries for all platforms are on the [Releases](https://github.com/shuttle-proxy/shuttle/releases) page.
+
+## Import URI
+
+Shuttle supports a `shuttle://` URI scheme for easy server sharing. The server
+installer prints one automatically. Format: `shuttle://` + base64-encoded JSON.
+
+**CLI import:**
+
+```bash
+# Paste the URI from server install output
+shuttle import "shuttle://eyJhZGRy..."
+
+# Writes config.yaml with sensible defaults (SOCKS5 :1080, HTTP :8080, CN direct)
+shuttle run -c config.yaml
+```
+
+**Server export:**
+
+```bash
+shuttled share -c /etc/shuttle/server.yaml
+# Prints: shuttle://eyJhZGRy...
+```
+
+- In the **GUI**, paste the URI into Servers → Import.
+- SIP008 subscription URLs are also supported.
 
 ## Client Config Example
 
@@ -215,7 +244,11 @@ VERSION=v1.0.0 GOARCH=amd64 nfpm pkg --packager rpm -f build/package/nfpm.yaml
 ### Run Tests
 
 ```bash
-go test -count=1 -v ./...
+# Host-safe unit tests (fast, no network impact)
+./scripts/test.sh
+
+# Full suite including Docker sandbox integration tests
+./scripts/test.sh --all
 ```
 
 ## OpenWrt Installation

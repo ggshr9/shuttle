@@ -43,6 +43,21 @@ func main() {
 		fmt.Printf("shuttled v%s\n", version)
 	case "genkey":
 		genKey()
+	case "share":
+		shareCmd := flag.NewFlagSet("share", flag.ExitOnError)
+		configPath := shareCmd.String("c", "", "path to server config file (required)")
+		addr := shareCmd.String("addr", "", "server address for clients (e.g. example.com:443)")
+		name := shareCmd.String("name", "", "optional server display name")
+		shareCmd.Usage = func() {
+			fmt.Fprintf(os.Stderr, "Usage: shuttled share -c <config.yaml> --addr <domain:port>\n\nFlags:\n")
+			shareCmd.PrintDefaults()
+		}
+		shareCmd.Parse(os.Args[2:])
+		if *configPath == "" {
+			shareCmd.Usage()
+			os.Exit(1)
+		}
+		share(*configPath, *addr, *name)
 	case "run":
 		runCmd := flag.NewFlagSet("run", flag.ExitOnError)
 		configPath := runCmd.String("c", "", "path to config file (required)")
@@ -69,6 +84,7 @@ func printUsage() {
 	fmt.Fprintf(os.Stderr, "Shuttled v%s — Shuttle Server\n\n", version)
 	fmt.Fprintf(os.Stderr, "Usage:\n")
 	fmt.Fprintf(os.Stderr, "  shuttled run -c <config.yaml>    Start the server\n")
+	fmt.Fprintf(os.Stderr, "  shuttled share -c <config.yaml> --addr <domain:port>  Generate import URI\n")
 	fmt.Fprintf(os.Stderr, "  shuttled genkey                  Generate key pair\n")
 	fmt.Fprintf(os.Stderr, "  shuttled version                 Show version\n")
 	fmt.Fprintf(os.Stderr, "  shuttled help                    Show this help\n")
@@ -82,6 +98,47 @@ func genKey() {
 	}
 	fmt.Printf("Private Key: %x\n", priv)
 	fmt.Printf("Public Key:  %x\n", pub)
+}
+
+func share(configPath, addr, name string) {
+	cfg, err := config.LoadServerConfig(configPath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to load config: %v\n", err)
+		os.Exit(1)
+	}
+
+	if addr == "" {
+		addr = cfg.Listen
+	}
+
+	s := &config.ShareURI{
+		Addr:     addr,
+		Password: cfg.Auth.Password,
+		Name:     name,
+	}
+
+	// Determine transport type
+	h3Enabled := cfg.Transport.H3.Enabled
+	realityEnabled := cfg.Transport.Reality.Enabled
+	switch {
+	case h3Enabled && realityEnabled:
+		s.Transport = "both"
+	case h3Enabled:
+		s.Transport = "h3"
+	case realityEnabled:
+		s.Transport = "reality"
+	}
+
+	// Reality-specific fields
+	if realityEnabled {
+		s.PublicKey = cfg.Auth.PublicKey
+		s.SNI = cfg.Transport.Reality.TargetSNI
+		if len(cfg.Transport.Reality.ShortIDs) > 0 {
+			s.ShortID = cfg.Transport.Reality.ShortIDs[0]
+		}
+	}
+
+	fmt.Println(config.EncodeShareURI(s))
 }
 
 func run(configPath string) {
