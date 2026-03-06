@@ -46,6 +46,7 @@ func NewGRPCClient(cfg *GRPCConfig, opts ...GRPCOption) *GRPCClient {
 		client: &http.Client{
 			Transport: &http.Transport{
 				TLSClientConfig: &tls.Config{
+					MinVersion: tls.VersionTLS12,
 					NextProtos: []string{"h2"},
 				},
 				ForceAttemptHTTP2: true,

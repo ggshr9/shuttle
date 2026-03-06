@@ -280,6 +280,51 @@ type ServerWebRTCConfig struct {
 	ICEPolicy    string   `yaml:"ice_policy" json:"ice_policy"` // "all", "relay", "public" (default "all")
 }
 
+// Validate checks the client config for obviously wrong values.
+func (c *ClientConfig) Validate() error {
+	switch c.Transport.Preferred {
+	case "auto", "h3", "reality", "cdn", "webrtc", "multipath":
+	default:
+		return fmt.Errorf("invalid transport.preferred: %q", c.Transport.Preferred)
+	}
+	switch c.Routing.Default {
+	case "proxy", "direct":
+	default:
+		return fmt.Errorf("invalid routing.default: %q", c.Routing.Default)
+	}
+	if c.Proxy.SOCKS5.Listen != "" {
+		if _, _, err := net.SplitHostPort(c.Proxy.SOCKS5.Listen); err != nil {
+			return fmt.Errorf("invalid proxy.socks5.listen: %w", err)
+		}
+	}
+	if c.Proxy.HTTP.Listen != "" {
+		if _, _, err := net.SplitHostPort(c.Proxy.HTTP.Listen); err != nil {
+			return fmt.Errorf("invalid proxy.http.listen: %w", err)
+		}
+	}
+	switch c.Congestion.Mode {
+	case "adaptive", "bbr", "brutal", "":
+	default:
+		return fmt.Errorf("invalid congestion.mode: %q", c.Congestion.Mode)
+	}
+	return nil
+}
+
+// Validate checks the server config for obviously wrong values.
+func (c *ServerConfig) Validate() error {
+	if c.Listen != "" {
+		if _, _, err := net.SplitHostPort(c.Listen); err != nil {
+			return fmt.Errorf("invalid listen address: %w", err)
+		}
+	}
+	switch c.Cover.Mode {
+	case "static", "reverse", "default", "":
+	default:
+		return fmt.Errorf("invalid cover.mode: %q", c.Cover.Mode)
+	}
+	return nil
+}
+
 // LoadClientConfig loads client config from a YAML file.
 func LoadClientConfig(path string) (*ClientConfig, error) {
 	data, err := os.ReadFile(path)
@@ -291,6 +336,9 @@ func LoadClientConfig(path string) (*ClientConfig, error) {
 		return nil, fmt.Errorf("parse config: %w", err)
 	}
 	applyClientDefaults(&cfg)
+	if err := cfg.Validate(); err != nil {
+		return nil, fmt.Errorf("config validation: %w", err)
+	}
 	return &cfg, nil
 }
 
@@ -305,6 +353,9 @@ func LoadServerConfig(path string) (*ServerConfig, error) {
 		return nil, fmt.Errorf("parse config: %w", err)
 	}
 	applyServerDefaults(&cfg)
+	if err := cfg.Validate(); err != nil {
+		return nil, fmt.Errorf("config validation: %w", err)
+	}
 	return &cfg, nil
 }
 

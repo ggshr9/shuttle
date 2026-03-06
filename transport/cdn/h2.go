@@ -41,6 +41,7 @@ func NewH2Client(cfg *H2Config, opts ...H2Option) *H2Client {
 		client: &http.Client{
 			Transport: &http.Transport{
 				TLSClientConfig: &tls.Config{
+					MinVersion: tls.VersionTLS12,
 					NextProtos: []string{"h2", "http/1.1"},
 				},
 				ForceAttemptHTTP2: true,

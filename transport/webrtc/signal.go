@@ -3,10 +3,14 @@ package webrtc
 import (
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
+	"strings"
 
 	"github.com/pion/webrtc/v4"
 	"github.com/shuttle-proxy/shuttle/transport/auth"
 )
+
+const maxSDPSize = 64 * 1024 // 64 KB
 
 // SignalRequest is the client's POST body for WebRTC signaling.
 type SignalRequest struct {
@@ -66,11 +70,28 @@ func encodeSignalRequest(req *SignalRequest) ([]byte, error) {
 	return json.Marshal(req)
 }
 
-// decodeSignalRequest unmarshals a SignalRequest from JSON.
+// decodeSignalRequest unmarshals a SignalRequest from JSON and validates the SDP.
 func decodeSignalRequest(data []byte) (*SignalRequest, error) {
 	var req SignalRequest
 	if err := json.Unmarshal(data, &req); err != nil {
 		return nil, err
 	}
+	if err := validateSDP(req.SDP); err != nil {
+		return nil, fmt.Errorf("invalid SDP: %w", err)
+	}
 	return &req, nil
+}
+
+// validateSDP performs basic validation on an SDP string.
+func validateSDP(sdp string) error {
+	if len(sdp) > maxSDPSize {
+		return fmt.Errorf("SDP too large: %d bytes (max %d)", len(sdp), maxSDPSize)
+	}
+	if sdp == "" {
+		return fmt.Errorf("SDP is empty")
+	}
+	if !strings.HasPrefix(sdp, "v=") {
+		return fmt.Errorf("SDP missing version line")
+	}
+	return nil
 }
