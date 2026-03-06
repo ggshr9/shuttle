@@ -212,9 +212,13 @@ func (s *Server) forwardToTarget(conn net.Conn) {
 		return
 	}
 	done := make(chan struct{}, 2)
-	cp := func(dst io.Writer, src io.Reader) {
+	cp := func(dst net.Conn, src net.Conn) {
 		buf := make([]byte, 32*1024)
 		io.CopyBuffer(dst, src, buf)
+		// Close write direction to signal EOF to peer.
+		if tc, ok := dst.(*net.TCPConn); ok {
+			tc.CloseWrite()
+		}
 		done <- struct{}{}
 	}
 	go cp(target, conn)

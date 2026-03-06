@@ -754,7 +754,11 @@ func (m *Manager) Connect(ctx context.Context, dstVIP net.IP) error {
 		m.markFailed(key)
 		return fmt.Errorf("p2p: derive shared secret: %w", err)
 	}
-	sendKey, recvKey := DeriveP2PKeys(sharedSecret, true)
+	sendKey, recvKey, err := DeriveP2PKeys(sharedSecret, true)
+	if err != nil {
+		m.markFailed(key)
+		return fmt.Errorf("p2p: derive keys: %w", err)
+	}
 
 	// Create P2P connection
 	p2pConn, err := NewP2PConn(m.udpConn, punchResult.RemoteAddr, dstVIP, m.localVIP, sendKey, recvKey)
@@ -934,7 +938,12 @@ func (m *Manager) handleConnect(msg *signal.Message) {
 			m.markFailed(key)
 			return
 		}
-		sendKey, recvKey := DeriveP2PKeys(sharedSecret, false)
+		sendKey, recvKey, err := DeriveP2PKeys(sharedSecret, false)
+		if err != nil {
+			m.logger.Debug("p2p: derive keys failed", "peer", msg.SrcVIP, "err", err)
+			m.markFailed(key)
+			return
+		}
 
 		// Create P2P connection
 		p2pConn, err := NewP2PConn(m.udpConn, punchResult.RemoteAddr, msg.SrcVIP, m.localVIP, sendKey, recvKey)

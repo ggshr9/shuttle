@@ -225,14 +225,14 @@ func TestReplayFilter_CheckBytes_DifferentInLaterChunks(t *testing.T) {
 func TestReplayFilter_CheckBytes_ShortNonce(t *testing.T) {
 	rf := NewReplayFilter(10 * time.Second)
 
-	// Nonces shorter than 8 bytes should always return false.
+	// Short nonces (< 8 bytes) are now handled correctly via FNV-1a.
 	short := []byte{1, 2, 3, 4, 5, 6, 7}
 	if rf.CheckBytes(short) {
-		t.Fatal("CheckBytes with <8 byte nonce should return false")
+		t.Fatal("first CheckBytes with short nonce should return false")
 	}
-	// Even on second call it should return false (never recorded).
-	if rf.CheckBytes(short) {
-		t.Fatal("CheckBytes with <8 byte nonce should still return false on second call")
+	// Second call should detect replay.
+	if !rf.CheckBytes(short) {
+		t.Fatal("second CheckBytes with short nonce should detect replay")
 	}
 }
 

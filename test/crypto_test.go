@@ -8,7 +8,10 @@ import (
 )
 
 func TestEncryptDecrypt(t *testing.T) {
-	key := crypto.DeriveKeys([]byte("test-key-material"), 32)
+	key, err := crypto.DeriveKeys([]byte("test-key-material"), 32)
+	if err != nil {
+		t.Fatalf("derive keys: %v", err)
+	}
 	plaintext := []byte("hello, shuttle!")
 
 	ciphertext, err := crypto.Encrypt(key, nil, plaintext)
@@ -28,7 +31,11 @@ func TestEncryptDecrypt(t *testing.T) {
 
 func TestStreamCipher(t *testing.T) {
 	var key [32]byte
-	copy(key[:], crypto.DeriveKeys([]byte("stream-key"), 32))
+	derived, err := crypto.DeriveKeys([]byte("stream-key"), 32)
+	if err != nil {
+		t.Fatalf("derive keys: %v", err)
+	}
+	copy(key[:], derived)
 
 	enc, err := crypto.NewStreamCipher(key, crypto.CipherChaChaPoly)
 	if err != nil {
@@ -76,9 +83,18 @@ func TestReplayFilter(t *testing.T) {
 }
 
 func TestDeriveKeys(t *testing.T) {
-	key1 := crypto.DeriveKeys([]byte("material-a"), 32)
-	key2 := crypto.DeriveKeys([]byte("material-b"), 32)
-	key3 := crypto.DeriveKeys([]byte("material-a"), 32)
+	key1, err := crypto.DeriveKeys([]byte("material-a"), 32)
+	if err != nil {
+		t.Fatalf("derive keys: %v", err)
+	}
+	key2, err := crypto.DeriveKeys([]byte("material-b"), 32)
+	if err != nil {
+		t.Fatalf("derive keys: %v", err)
+	}
+	key3, err := crypto.DeriveKeys([]byte("material-a"), 32)
+	if err != nil {
+		t.Fatalf("derive keys: %v", err)
+	}
 
 	if bytes.Equal(key1, key2) {
 		t.Error("different materials should produce different keys")

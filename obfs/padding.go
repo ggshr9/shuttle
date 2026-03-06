@@ -55,7 +55,7 @@ func (p *Padder) randomTarget() int {
 
 // Pad pads data to the next multiple of a random target size.
 // Format: [2-byte totalFrameLen][2-byte origDataLen][data][random padding]
-func (p *Padder) Pad(data []byte) []byte {
+func (p *Padder) Pad(data []byte) ([]byte, error) {
 	origLen := len(data)
 	target := p.randomTarget()
 	// Total frame = headerSize + origLen + padding. Round up to next multiple of target.
@@ -70,9 +70,11 @@ func (p *Padder) Pad(data []byte) []byte {
 
 	// Fill remaining with random bytes
 	if padStart := headerSize + origLen; padStart < totalSize {
-		io.ReadFull(rand.Reader, buf[padStart:])
+		if _, err := io.ReadFull(rand.Reader, buf[padStart:]); err != nil {
+			return nil, fmt.Errorf("obfs: random padding: %w", err)
+		}
 	}
-	return buf
+	return buf, nil
 }
 
 // Unpad removes padding and returns the original data from a complete frame.
@@ -101,6 +103,10 @@ func (p *Padder) ReadFrame(r io.Reader) ([]byte, error) {
 	frameLen := int(binary.BigEndian.Uint16(hdr[:]))
 	if frameLen < 2 {
 		return nil, fmt.Errorf("obfs: frame too short (%d)", frameLen)
+	}
+	const maxFrameLen = 65535 // uint16 max, explicit cap
+	if frameLen > maxFrameLen {
+		return nil, fmt.Errorf("obfs: frame too large (%d)", frameLen)
 	}
 
 	// Read the rest of the frame.

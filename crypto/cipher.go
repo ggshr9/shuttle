@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"runtime"
+	"sync"
 
 	"golang.org/x/crypto/argon2"
 	"golang.org/x/crypto/chacha20poly1305"
@@ -88,11 +89,13 @@ func Decrypt(key, nonce, ciphertext []byte) ([]byte, error) {
 }
 
 // DeriveKeys derives key material using HKDF-SHA256.
-func DeriveKeys(ikm []byte, length int) []byte {
+func DeriveKeys(ikm []byte, length int) ([]byte, error) {
 	r := hkdf.New(sha256.New, ikm, []byte("shuttle-v1"), []byte("session-keys"))
 	keys := make([]byte, length)
-	io.ReadFull(r, keys)
-	return keys
+	if _, err := io.ReadFull(r, keys); err != nil {
+		return nil, fmt.Errorf("hkdf expand: %w", err)
+	}
+	return keys, nil
 }
 
 // Argon2Key derives a key from a password using Argon2id.
@@ -102,6 +105,7 @@ func Argon2Key(password, salt []byte, keyLen uint32) []byte {
 
 // StreamCipher wraps an AEAD for stream encryption with automatic nonce management.
 type StreamCipher struct {
+	mu    sync.Mutex
 	aead  cipher.AEAD
 	nonce uint64
 	key   [32]byte
@@ -118,16 +122,20 @@ func NewStreamCipher(key [32]byte, ct CipherType) (*StreamCipher, error) {
 
 // Seal encrypts a frame, auto-incrementing the nonce.
 func (sc *StreamCipher) Seal(plaintext []byte) []byte {
+	sc.mu.Lock()
 	nonce := make([]byte, sc.aead.NonceSize())
 	binary.LittleEndian.PutUint64(nonce, sc.nonce)
 	sc.nonce++
+	sc.mu.Unlock()
 	return sc.aead.Seal(nil, nonce, plaintext, nil)
 }
 
 // Open decrypts a frame with the expected nonce.
 func (sc *StreamCipher) Open(ciphertext []byte) ([]byte, error) {
+	sc.mu.Lock()
 	nonce := make([]byte, sc.aead.NonceSize())
 	binary.LittleEndian.PutUint64(nonce, sc.nonce)
 	sc.nonce++
+	sc.mu.Unlock()
 	return sc.aead.Open(nil, nonce, ciphertext, nil)
 }

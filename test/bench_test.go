@@ -28,7 +28,10 @@ func BenchmarkBrutalOnAck(b *testing.B) {
 }
 
 func BenchmarkEncryptDecrypt(b *testing.B) {
-	key := crypto.DeriveKeys([]byte("bench-key"), 32)
+	key, err := crypto.DeriveKeys([]byte("bench-key"), 32)
+	if err != nil {
+		b.Fatal(err)
+	}
 	data := make([]byte, 1200)
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -39,7 +42,11 @@ func BenchmarkEncryptDecrypt(b *testing.B) {
 
 func BenchmarkStreamCipher(b *testing.B) {
 	var key [32]byte
-	copy(key[:], crypto.DeriveKeys([]byte("bench"), 32))
+	derived, err := crypto.DeriveKeys([]byte("bench"), 32)
+	if err != nil {
+		b.Fatal(err)
+	}
+	copy(key[:], derived)
 	enc, _ := crypto.NewStreamCipher(key, crypto.CipherChaChaPoly)
 	dec, _ := crypto.NewStreamCipher(key, crypto.CipherChaChaPoly)
 	data := make([]byte, 1200)
@@ -99,7 +106,7 @@ func BenchmarkPadding(b *testing.B) {
 	data := make([]byte, 500)
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		padded := p.Pad(data)
+		padded, _ := p.Pad(data)
 		p.Unpad(padded)
 	}
 }

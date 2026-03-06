@@ -209,14 +209,18 @@ func IsP2PPacket(data []byte) bool {
 
 // DeriveP2PKeys derives send and receive keys from shared secret using HKDF-SHA256.
 // The initiator→responder and responder→initiator keys use different HKDF info strings.
-func DeriveP2PKeys(sharedSecret []byte, isInitiator bool) (sendKey, recvKey [32]byte) {
+func DeriveP2PKeys(sharedSecret []byte, isInitiator bool) (sendKey, recvKey [32]byte, err error) {
 	salt := []byte("shuttle-p2p-v1")
 	i2r := hkdf.New(sha256.New, sharedSecret, salt, []byte("i2r"))
 	r2i := hkdf.New(sha256.New, sharedSecret, salt, []byte("r2i"))
 
 	var i2rKey, r2iKey [32]byte
-	io.ReadFull(i2r, i2rKey[:])
-	io.ReadFull(r2i, r2iKey[:])
+	if _, err = io.ReadFull(i2r, i2rKey[:]); err != nil {
+		return sendKey, recvKey, fmt.Errorf("hkdf i2r: %w", err)
+	}
+	if _, err = io.ReadFull(r2i, r2iKey[:]); err != nil {
+		return sendKey, recvKey, fmt.Errorf("hkdf r2i: %w", err)
+	}
 
 	if isInitiator {
 		sendKey = i2rKey
@@ -225,7 +229,7 @@ func DeriveP2PKeys(sharedSecret []byte, isInitiator bool) (sendKey, recvKey [32]
 		sendKey = r2iKey
 		recvKey = i2rKey
 	}
-	return
+	return sendKey, recvKey, nil
 }
 
 // P2PHandshake performs a Noise-like handshake to establish keys.
@@ -249,7 +253,7 @@ func NewP2PHandshake(localPriv, localPub, remotePub [32]byte, isInitiator bool) 
 }
 
 // Complete marks the handshake as complete and derives keys.
-func (h *P2PHandshake) Complete(sharedSecret []byte) (sendKey, recvKey [32]byte) {
+func (h *P2PHandshake) Complete(sharedSecret []byte) (sendKey, recvKey [32]byte, err error) {
 	copy(h.sharedKey[:], sharedSecret)
 	h.completed = true
 	return DeriveP2PKeys(sharedSecret, h.isInitiator)

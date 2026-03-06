@@ -1,7 +1,7 @@
 package crypto
 
 import (
-	"encoding/binary"
+	"hash/fnv"
 	"math/rand/v2"
 	"sync"
 	"time"
@@ -161,17 +161,14 @@ func (rf *ReplayFilter) Check(nonce uint64) bool {
 }
 
 func (rf *ReplayFilter) CheckBytes(nonce []byte) bool {
-	if len(nonce) < 8 {
+	if len(nonce) == 0 {
 		return false
 	}
-	// Hash all available bytes into a uint64 by XOR-folding 8-byte chunks.
-	// This ensures all 32 bytes of a nonce contribute to the fingerprint,
-	// not just the first 8.
-	var n uint64
-	for i := 0; i+8 <= len(nonce); i += 8 {
-		n ^= binary.LittleEndian.Uint64(nonce[i : i+8])
-	}
-	return rf.Check(n)
+	// Use FNV-1a to hash all bytes into a uint64.
+	// FNV-1a has much better collision resistance than XOR-folding.
+	h := fnv.New64a()
+	h.Write(nonce)
+	return rf.Check(h.Sum64())
 }
 
 func (rf *ReplayFilter) maybeSwap() {

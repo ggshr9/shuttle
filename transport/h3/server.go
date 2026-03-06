@@ -129,6 +129,8 @@ func (s *Server) handleConn(ctx context.Context, qconn *quic.Conn) {
 	}
 
 	// Read the 64-byte auth payload: [32-byte nonce][32-byte HMAC].
+	// Set a deadline so slow/malicious clients cannot hold resources indefinitely.
+	ctrlStream.SetReadDeadline(time.Now().Add(10 * time.Second))
 	authBuf := make([]byte, 64)
 	if _, err := io.ReadFull(ctrlStream, authBuf); err != nil {
 		s.logger.Debug("failed to read auth payload", "err", err)

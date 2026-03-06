@@ -191,7 +191,7 @@ func (d *grpcDuplex) Read(p []byte) (int, error) {
 	if length == 0 {
 		return 0, nil
 	}
-	const maxFrameSize = 16 << 20 // 16 MB
+	const maxFrameSize = 4 << 20 // 4 MB
 	if length > maxFrameSize {
 		return 0, fmt.Errorf("grpc frame too large: %d bytes (max %d)", length, maxFrameSize)
 	}

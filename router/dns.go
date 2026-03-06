@@ -273,23 +273,17 @@ type dohAnswer struct {
 
 // Cache methods
 func (c *dnsCache) get(domain string) ([]net.IP, bool) {
-	c.mu.RLock()
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	entry, ok := c.entries[domain]
 	if !ok {
-		c.mu.RUnlock()
 		return nil, false
 	}
 	if time.Now().After(entry.expiresAt) {
-		c.mu.RUnlock()
-		// Upgrade to write lock to delete expired entry.
-		c.mu.Lock()
 		delete(c.entries, domain)
-		c.mu.Unlock()
 		return nil, false
 	}
-	ips := entry.ips
-	c.mu.RUnlock()
-	return ips, true
+	return entry.ips, true
 }
 
 func (c *dnsCache) put(domain string, ips []net.IP, ttl time.Duration, domestic bool) {

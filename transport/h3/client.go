@@ -201,8 +201,11 @@ func (s *h3Stream) Read(p []byte) (int, error) {
 }
 
 func (s *h3Stream) Write(p []byte) (int, error) {
-	padded := s.padder.Pad(p)
-	_, err := s.qs.Write(padded)
+	padded, err := s.padder.Pad(p)
+	if err != nil {
+		return 0, err
+	}
+	_, err = s.qs.Write(padded)
 	if err != nil {
 		return 0, err
 	}
