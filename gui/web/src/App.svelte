@@ -1,4 +1,4 @@
-<script>
+<script lang="ts">
   import { onMount } from 'svelte'
   import { t, subscribeLocale } from './lib/i18n/index'
   import { api } from './lib/api'
@@ -10,15 +10,19 @@
   let showOnboarding = $state(false)
   let initialized = $state(false)
 
+  let apiError = $state(false)
+
   // Check if user needs onboarding (no servers configured)
   async function checkFirstRun() {
     try {
       const cfg = await api.getConfig()
       const hasServers = cfg.server?.addr || (cfg.servers && cfg.servers.length > 0)
       showOnboarding = !hasServers
+      apiError = false
     } catch {
-      // If we can't load config, don't show onboarding
+      // If we can't load config, don't show onboarding but still show UI
       showOnboarding = false
+      apiError = true
     }
     initialized = true
   }
@@ -55,7 +59,20 @@
   <Onboarding onComplete={handleOnboardingComplete} />
 {/if}
 
+{#if !initialized}
+  <div class="loading">
+    <div class="spinner"></div>
+    <p>Connecting to Shuttle...</p>
+  </div>
+{/if}
+
 {#if initialized}
+{#if apiError}
+  <div class="api-error">
+    Backend unreachable. Check that Shuttle is running.
+    <button onclick={checkFirstRun}>Retry</button>
+  </div>
+{/if}
 <div class="app">
   <nav class="tabs">
     {#each tabs as item}
@@ -137,5 +154,53 @@
   .tabs button.active {
     color: #58a6ff;
     border-bottom-color: #58a6ff;
+  }
+
+  .loading {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100vh;
+    color: #8b949e;
+    font-size: 14px;
+    gap: 16px;
+  }
+
+  .spinner {
+    width: 32px;
+    height: 32px;
+    border: 3px solid #2d333b;
+    border-top-color: #58a6ff;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+
+  @keyframes spin {
+    to { transform: rotate(360deg); }
+  }
+
+  .api-error {
+    background: rgba(248, 81, 73, 0.1);
+    border: 1px solid #f85149;
+    color: #f85149;
+    padding: 8px 16px;
+    border-radius: 6px;
+    max-width: 900px;
+    margin: 8px auto;
+    font-size: 13px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .api-error button {
+    background: #f85149;
+    color: #fff;
+    border: none;
+    border-radius: 4px;
+    padding: 4px 12px;
+    cursor: pointer;
+    font-size: 12px;
   }
 </style>

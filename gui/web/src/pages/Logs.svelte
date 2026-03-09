@@ -1,4 +1,4 @@
-<script>
+<script lang="ts">
   import { connectWS } from '../lib/ws'
   import { api } from '../lib/api'
   import { onMount } from 'svelte'

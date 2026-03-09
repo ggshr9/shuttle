@@ -1,4 +1,4 @@
-<script>
+<script lang="ts">
   import { api } from '../lib/api'
   import { t, getLocale, setLocale, getLocales } from '../lib/i18n/index'
   import { onMount } from 'svelte'
@@ -10,6 +10,10 @@
   let selectedLocale = $state(getLocale())
   let availableLocales = getLocales()
   let fileInput = $state(null)
+
+  // GeoData state
+  let geoStatus = $state(null)
+  let updatingGeo = $state(false)
 
   // Update state
   let currentVersion = $state('')
@@ -37,6 +41,13 @@
     if (!config.qos.rules) {
       config.qos.rules = []
     }
+    // Ensure geodata exists in config
+    if (!config.routing) {
+      config.routing = { rules: [], default: 'proxy', geodata: { enabled: true, auto_update: true } }
+    }
+    if (!config.routing.geodata) {
+      config.routing.geodata = { enabled: true, auto_update: true }
+    }
     // Get current version and check for updates
     try {
       const v = await api.getVersion()
@@ -55,6 +66,8 @@
     }
     // Load LAN info
     loadLanInfo()
+    // Load geodata status
+    loadGeoStatus()
   })
 
   async function loadLanInfo() {
@@ -121,6 +134,23 @@
     } finally {
       restoring = false
       e.target.value = ''
+    }
+  }
+
+  async function loadGeoStatus() {
+    try {
+      geoStatus = await api.getGeoDataStatus()
+    } catch { geoStatus = null }
+  }
+
+  async function updateGeoData() {
+    updatingGeo = true
+    try {
+      geoStatus = await api.updateGeoData()
+    } catch (err) {
+      msg = 'GeoData update failed: ' + (err.message || err)
+    } finally {
+      updatingGeo = false
     }
   }
 
@@ -295,6 +325,53 @@
         <button class="qos-add" onclick={() => config.qos.rules = [...(config.qos.rules || []), { priority: 'normal', ports: [] }]}>
           + {t('settings.qosAddRule')}
         </button>
+      </div>
+    {/if}
+  </section>
+
+  <section>
+    <h3>{t('settings.geodata')}</h3>
+    <div class="system-proxy-row" style="margin-top: 0; padding-top: 0; border-top: none;">
+      <label class="system-proxy-label">
+        <input type="checkbox" bind:checked={config.routing.geodata.enabled} />
+        <span class="label-text">{t('settings.geodataEnabled')}</span>
+        <span class="hint">{t('settings.geodataHint')}</span>
+      </label>
+    </div>
+    {#if config.routing.geodata.enabled}
+      <div class="geo-status">
+        {#if geoStatus}
+          <div class="geo-info">
+            <span class="geo-label">{t('settings.geodataFiles')}</span>
+            <span class="geo-value">{geoStatus.files_present?.length || 0} / 6</span>
+          </div>
+          {#if geoStatus.last_update && geoStatus.last_update !== '0001-01-01T00:00:00Z'}
+            <div class="geo-info">
+              <span class="geo-label">{t('settings.geodataLastUpdate')}</span>
+              <span class="geo-value">{new Date(geoStatus.last_update).toLocaleString()}</span>
+            </div>
+          {:else}
+            <div class="geo-info">
+              <span class="geo-label">{t('settings.geodataLastUpdate')}</span>
+              <span class="geo-value geo-warn">{t('settings.geodataNever')}</span>
+            </div>
+          {/if}
+          {#if geoStatus.last_error}
+            <div class="geo-info">
+              <span class="geo-label geo-error">{t('settings.geodataError')}</span>
+              <span class="geo-value geo-error">{geoStatus.last_error}</span>
+            </div>
+          {/if}
+        {/if}
+        <button class="geo-update-btn" onclick={updateGeoData} disabled={updatingGeo}>
+          {updatingGeo ? t('settings.geodataUpdating') : t('settings.geodataUpdateNow')}
+        </button>
+        <div class="geo-info" style="margin-top: 8px;">
+          <label>
+            <input type="checkbox" bind:checked={config.routing.geodata.auto_update} />
+            {t('settings.geodataAutoUpdate')}
+          </label>
+        </div>
       </div>
     {/if}
   </section>
@@ -847,4 +924,39 @@
     border-color: #58a6ff;
     color: #58a6ff;
   }
+
+  .geo-status {
+    margin-top: 12px;
+    padding: 12px;
+    background: #161b22;
+    border: 1px solid #2d333b;
+    border-radius: 8px;
+  }
+
+  .geo-info {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 13px;
+    padding: 4px 0;
+  }
+
+  .geo-label { color: #8b949e; }
+  .geo-value { color: #e1e4e8; }
+  .geo-warn { color: #d29922; }
+  .geo-error { color: #f85149; font-size: 12px; }
+
+  .geo-update-btn {
+    margin-top: 12px;
+    width: 100%;
+    padding: 8px;
+    background: #21262d;
+    color: #58a6ff;
+    border: 1px solid #2d333b;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 13px;
+  }
+  .geo-update-btn:hover { background: #30363d; }
+  .geo-update-btn:disabled { opacity: 0.5; cursor: default; }
 </style>

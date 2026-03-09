@@ -1,4 +1,4 @@
-<script>
+<script lang="ts">
   import { api } from './api'
   import { t } from './i18n/index'
 

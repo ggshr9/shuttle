@@ -163,7 +163,17 @@
       "normal": "Normal (Web)",
       "bulk": "Bulk (Downloads)",
       "low": "Low (BitTorrent)"
-    }
+    },
+    "geodata": "GeoIP/GeoSite Data",
+    "geodataEnabled": "Enable GeoIP/GeoSite",
+    "geodataHint": "Download rules for China direct, proxy, and ad blocking (Loyalsoldier)",
+    "geodataFiles": "Data files",
+    "geodataLastUpdate": "Last updated",
+    "geodataUpdateNow": "Update Now",
+    "geodataUpdating": "Updating...",
+    "geodataAutoUpdate": "Auto-update (every 24h)",
+    "geodataNever": "Never updated",
+    "geodataError": "Error"
   },
   "common": {
     "cancel": "Cancel",

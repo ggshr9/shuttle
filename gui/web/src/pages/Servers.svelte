@@ -1,4 +1,4 @@
-<script>
+<script lang="ts">
   import { api } from '../lib/api'
   import { connectWS } from '../lib/ws'
   import { toast } from '../lib/toast'
@@ -52,6 +52,10 @@
 
   async function addServer() {
     if (!newServer.addr) return
+    if (servers.some(s => s.addr === newServer.addr)) {
+      toast.error('Server with this address already exists')
+      return
+    }
     try {
       await api.addServer(newServer)
       servers = [...servers, { ...newServer }]
@@ -65,7 +69,8 @@
   async function removeServer(addr) {
     try {
       await api.deleteServer(addr)
-      servers = servers.filter(s => s.addr !== addr)
+      const idx = servers.findIndex(s => s.addr === addr)
+      if (idx !== -1) servers = [...servers.slice(0, idx), ...servers.slice(idx + 1)]
       toast.success('Server removed')
     } catch (e) {
       toast.error((e as Error).message)

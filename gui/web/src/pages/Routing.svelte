@@ -1,4 +1,4 @@
-<script>
+<script lang="ts">
   import { api } from '../lib/api'
   import { onMount } from 'svelte'
 
@@ -22,7 +22,7 @@
   onMount(async () => {
     routing = await api.getRouting()
     // Normalize rules to have a 'type' field for the UI
-    routing.rules = routing.rules.map(normalizeRule)
+    routing.rules = (routing.rules || []).map(normalizeRule)
     // Load templates
     try {
       templates = await api.getRoutingTemplates()

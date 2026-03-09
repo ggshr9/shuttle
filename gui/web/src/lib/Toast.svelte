@@ -1,4 +1,4 @@
-<script>
+<script lang="ts">
   import { onMount, onDestroy } from 'svelte'
   import { subscribe, dismiss, type ToastMessage } from './toast'
 

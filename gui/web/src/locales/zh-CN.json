@@ -163,7 +163,17 @@
       "normal": "普通 (网页)",
       "bulk": "批量 (下载)",
       "low": "低 (BitTorrent)"
-    }
+    },
+    "geodata": "GeoIP/GeoSite 数据",
+    "geodataEnabled": "启用 GeoIP/GeoSite",
+    "geodataHint": "从 Loyalsoldier 下载中国直连、代理、广告拦截规则",
+    "geodataFiles": "数据文件",
+    "geodataLastUpdate": "最后更新",
+    "geodataUpdateNow": "立即更新",
+    "geodataUpdating": "更新中...",
+    "geodataAutoUpdate": "自动更新（每24小时）",
+    "geodataNever": "从未更新",
+    "geodataError": "错误"
   },
   "common": {
     "cancel": "取消",

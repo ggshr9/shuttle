@@ -6,16 +6,23 @@ interface RequestOptions extends RequestInit {
   headers: Record<string, string>
 }
 
-async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
+async function request<T>(method: string, path: string, body?: unknown, timeoutMs = 10000): Promise<T> {
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), timeoutMs)
   const opts: RequestOptions = {
     method,
     headers: { 'Content-Type': 'application/json' },
+    signal: controller.signal,
   }
   if (body) opts.body = JSON.stringify(body)
-  const res = await fetch(BASE + path, opts)
-  const data = await res.json()
-  if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`)
-  return data as T
+  try {
+    const res = await fetch(BASE + path, opts)
+    const data = await res.json()
+    if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`)
+    return data as T
+  } finally {
+    clearTimeout(timer)
+  }
 }
 
 // Types
@@ -118,6 +125,15 @@ export interface LanInfo {
   interfaces: string[]
 }
 
+export interface GeoDataStatus {
+  enabled: boolean
+  last_update: string
+  last_error?: string
+  updating: boolean
+  files_present: string[]
+  next_update?: string
+}
+
 export interface Status {
   connected: boolean
   server?: Server
@@ -169,4 +185,7 @@ export const api = {
   setAutostart: (enabled: boolean) => request<void>('PUT', '/api/autostart', { enabled }),
   // Network/LAN
   getLanInfo: () => request<LanInfo>('GET', '/api/network/lan'),
+  // GeoData
+  getGeoDataStatus: () => request<GeoDataStatus>('GET', '/api/geodata/status'),
+  updateGeoData: () => request<GeoDataStatus>('POST', '/api/geodata/update', {}, 120000),
 }

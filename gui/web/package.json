@@ -5,11 +5,14 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:sandbox": "vite --config vite.config.sandbox.js",
+    "dev:sandbox-b": "SANDBOX_CLIENT=b vite --config vite.config.sandbox.js",
     "build": "vite build",
     "preview": "vite preview",
     "check": "svelte-check --tsconfig ./tsconfig.json"
   },
   "devDependencies": {
+    "@playwright/test": "^1.58.2",
     "@sveltejs/vite-plugin-svelte": "^5.0.0",
     "svelte": "^5.0.0",
     "svelte-check": "^4.0.0",

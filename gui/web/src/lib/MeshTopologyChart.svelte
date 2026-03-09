@@ -1,4 +1,4 @@
-<script>
+<script lang="ts">
   import { onMount } from 'svelte'
 
   /** @type {{ virtual_ip: string, state: string, method: string, avg_rtt_ms: number }[]} */
