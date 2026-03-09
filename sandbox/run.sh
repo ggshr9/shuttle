@@ -265,6 +265,30 @@ case "${1:-all}" in
     clean)
         cleanup
         ;;
+    gui)
+        # Start sandbox + open GUI for browser testing
+        build_binaries
+        build_images
+        start_env
+        echo ""
+        success "Sandbox is running with GUI API exposed:"
+        echo ""
+        echo "  Client A API:  http://localhost:19091/api/status"
+        echo "  Client B API:  http://localhost:19092/api/status"
+        echo "  Server:        http://localhost:19080/api/health (admin)"
+        echo ""
+        echo "  To open GUI in browser:"
+        echo "    cd gui/web && npm run dev:sandbox"
+        echo "    Then open http://localhost:5174"
+        echo ""
+        echo "  Test full proxy chain:"
+        echo '    curl -s localhost:19091/api/test/probe -d '"'"'{"url":"http://10.100.0.20/ip","via":"socks5"}'"'"' | jq .'
+        echo ""
+        echo "  Batch test:"
+        echo '    curl -s localhost:19091/api/test/probe/batch -d '"'"'{"tests":[{"name":"socks5","url":"http://10.100.0.20/ip","via":"socks5"},{"name":"http","url":"http://10.100.0.20/ip","via":"http"},{"name":"direct","url":"http://10.100.0.20/ip","via":"direct"}]}'"'"' | jq .'
+        echo ""
+        log "Press Ctrl+C to stop, then run: $0 down"
+        ;;
     all|"")
         build_binaries
         build_images
@@ -275,7 +299,7 @@ case "${1:-all}" in
         exit $result
         ;;
     *)
-        echo "Usage: $0 {build|up|down|test|gotest|logs|shell|clean|all}"
+        echo "Usage: $0 {build|up|down|test|gotest|gui|logs|shell|clean|all}"
         exit 1
         ;;
 esac

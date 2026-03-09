@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"sync"
 	"sync/atomic"
+	"time"
 )
 
 // HTTPConfig configures the HTTP proxy server.
@@ -160,6 +161,12 @@ func (s *HTTPServer) Close() error {
 	if s.listener != nil {
 		s.listener.Close()
 	}
-	s.wg.Wait()
+	// Wait for active connections with a timeout so port is released promptly.
+	done := make(chan struct{})
+	go func() { s.wg.Wait(); close(done) }()
+	select {
+	case <-done:
+	case <-time.After(3 * time.Second):
+	}
 	return nil
 }

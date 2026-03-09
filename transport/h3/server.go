@@ -68,6 +68,18 @@ func (s *Server) Listen(ctx context.Context) error {
 			return fmt.Errorf("load tls cert: %w", err)
 		}
 		tlsConf.Certificates = []tls.Certificate{cert}
+	} else {
+		// Auto-generate self-signed cert for zero-config setup
+		certPEM, keyPEM, err := crypto.GenerateSelfSignedCert(nil, 365*24*time.Hour)
+		if err != nil {
+			return fmt.Errorf("generate self-signed cert: %w", err)
+		}
+		cert, err := tls.X509KeyPair(certPEM, keyPEM)
+		if err != nil {
+			return fmt.Errorf("parse self-signed cert: %w", err)
+		}
+		tlsConf.Certificates = []tls.Certificate{cert}
+		s.logger.Info("using auto-generated self-signed certificate")
 	}
 
 	addr := s.config.ListenAddr

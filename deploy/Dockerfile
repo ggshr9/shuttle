@@ -15,14 +15,18 @@ RUN CGO_ENABLED=0 go build -ldflags="-s -w" -o /shuttled ./cmd/shuttled
 FROM alpine:3.20
 
 RUN apk add --no-cache ca-certificates tzdata \
-    && adduser -D -H -s /sbin/nologin shuttle
+    && adduser -D -H -s /sbin/nologin shuttle \
+    && mkdir -p /etc/shuttle \
+    && chown shuttle:shuttle /etc/shuttle
 
 COPY --from=builder /shuttled /usr/local/bin/shuttled
+COPY deploy/entrypoint.sh /entrypoint.sh
 
 USER shuttle
-EXPOSE 443/tcp 443/udp
+EXPOSE 443/tcp 443/udp 9090/tcp
+VOLUME /etc/shuttle
 
 HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
     CMD ["/usr/local/bin/shuttled", "version"]
 
-ENTRYPOINT ["/usr/local/bin/shuttled", "run", "-c", "/etc/shuttle/server.yaml"]
+ENTRYPOINT ["/entrypoint.sh"]

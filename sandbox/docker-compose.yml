@@ -40,12 +40,12 @@ services:
     image: alpine:3.19
     container_name: shuttle-router
     hostname: router
-    cap_add:
-      - NET_ADMIN
+    privileged: true
+    sysctls:
+      - net.ipv4.ip_forward=1
     command: >
       sh -c "
         apk add --no-cache iptables iproute2 bash &&
-        echo 1 > /proc/sys/net/ipv4/ip_forward &&
         iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE &&
         iptables -A FORWARD -i eth1 -o eth0 -j ACCEPT &&
         iptables -A FORWARD -i eth2 -o eth0 -j ACCEPT &&
@@ -63,7 +63,7 @@ services:
     restart: unless-stopped
 
   # ============================================
-  # Client A
+  # Client A (with GUI API for browser testing)
   # ============================================
   client-a:
     build:
@@ -76,12 +76,14 @@ services:
       - -c
       - |
         ip route add 10.100.0.0/24 via 10.100.1.1
-        exec shuttle run -c /etc/shuttle/client.yaml
+        exec shuttle api -c /etc/shuttle/client.yaml --listen 0.0.0.0:9090 --auto-connect
     volumes:
       - ./configs/client-a.yaml:/etc/shuttle/client.yaml:ro
     networks:
       net-a:
         ipv4_address: 10.100.1.10
+    ports:
+      - "19091:9090"   # GUI API (browse http://localhost:19091)
     depends_on:
       server:
         condition: service_healthy
@@ -92,7 +94,7 @@ services:
     restart: unless-stopped
 
   # ============================================
-  # Client B
+  # Client B (with GUI API for browser testing)
   # ============================================
   client-b:
     build:
@@ -105,12 +107,14 @@ services:
       - -c
       - |
         ip route add 10.100.0.0/24 via 10.100.2.1
-        exec shuttle run -c /etc/shuttle/client.yaml
+        exec shuttle api -c /etc/shuttle/client.yaml --listen 0.0.0.0:9090 --auto-connect
     volumes:
       - ./configs/client-b.yaml:/etc/shuttle/client.yaml:ro
     networks:
       net-b:
         ipv4_address: 10.100.2.10
+    ports:
+      - "19092:9090"   # GUI API (browse http://localhost:19092)
     depends_on:
       server:
         condition: service_healthy

@@ -17,12 +17,13 @@ import (
 )
 
 type ClientConfig struct {
-	ServerAddr        string
-	ServerName        string
-	Password          string
-	Fingerprint       *FingerprintConfig
-	PathPrefix        string
-	CongestionControl quic.CongestionControl // optional custom CC (e.g., BBR/Brutal adaptive)
+	ServerAddr         string
+	ServerName         string
+	Password           string
+	Fingerprint        *FingerprintConfig
+	PathPrefix         string
+	InsecureSkipVerify bool                   // skip TLS cert verification (for self-signed certs)
+	CongestionControl  quic.CongestionControl // optional custom CC (e.g., BBR/Brutal adaptive)
 }
 
 type Client struct {
@@ -70,11 +71,12 @@ func (c *Client) Dial(ctx context.Context, addr string) (transport.Connection, e
 	chromeParams := DefaultChromeTransportParams()
 
 	tlsConf := &tls.Config{
-		ServerName:       c.config.ServerName,
-		NextProtos:       ChromeALPN,
-		MinVersion:       tls.VersionTLS13,
-		CipherSuites:     ChromeCipherSuites,
-		CurvePreferences: ChromeCurvePreferences,
+		ServerName:         c.config.ServerName,
+		NextProtos:         ChromeALPN,
+		MinVersion:         tls.VersionTLS13,
+		CipherSuites:       ChromeCipherSuites,
+		CurvePreferences:   ChromeCurvePreferences,
+		InsecureSkipVerify: c.config.InsecureSkipVerify, //nolint:gosec // needed for self-signed certs in sandbox/bootstrap
 	}
 	quicConf := &quic.Config{
 		MaxIdleTimeout:                 time.Duration(chromeParams.MaxIdleTimeout) * time.Millisecond,

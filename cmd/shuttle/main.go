@@ -4,6 +4,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"log/slog"
 	"os"
 	"os/signal"
 	"syscall"
@@ -11,6 +12,7 @@ import (
 	"github.com/shuttle-proxy/shuttle/config"
 	"github.com/shuttle-proxy/shuttle/crypto"
 	"github.com/shuttle-proxy/shuttle/engine"
+	"github.com/shuttle-proxy/shuttle/gui/api"
 )
 
 const version = "0.1.0"
@@ -57,6 +59,21 @@ func main() {
 			os.Exit(1)
 		}
 		run(*configPath)
+	case "api":
+		apiCmd := flag.NewFlagSet("api", flag.ExitOnError)
+		configPath := apiCmd.String("c", "", "path to config file (required)")
+		listen := apiCmd.String("listen", "0.0.0.0:9090", "API listen address")
+		autoConnect := apiCmd.Bool("auto-connect", false, "auto-connect on startup")
+		apiCmd.Usage = func() {
+			fmt.Fprintf(os.Stderr, "Usage: shuttle api -c <config.yaml> [--listen addr] [--auto-connect]\n\nHeadless API server (no GUI). For Docker/testing.\n\nFlags:\n")
+			apiCmd.PrintDefaults()
+		}
+		apiCmd.Parse(os.Args[2:])
+		if *configPath == "" {
+			apiCmd.Usage()
+			os.Exit(1)
+		}
+		runAPI(*configPath, *listen, *autoConnect)
 	case "help", "-h", "--help":
 		printUsage()
 	default:
@@ -69,11 +86,12 @@ func main() {
 func printUsage() {
 	fmt.Fprintf(os.Stderr, "Shuttle v%s — Break the impossible triangle\n\n", version)
 	fmt.Fprintf(os.Stderr, "Usage:\n")
-	fmt.Fprintf(os.Stderr, "  shuttle run -c <config.yaml>    Start the client\n")
-	fmt.Fprintf(os.Stderr, "  shuttle import <shuttle://...>  Import server config from URI\n")
-	fmt.Fprintf(os.Stderr, "  shuttle genkey                  Generate key pair\n")
-	fmt.Fprintf(os.Stderr, "  shuttle version                 Show version\n")
-	fmt.Fprintf(os.Stderr, "  shuttle help                    Show this help\n")
+	fmt.Fprintf(os.Stderr, "  shuttle run -c <config.yaml>            Start the client\n")
+	fmt.Fprintf(os.Stderr, "  shuttle api -c <config.yaml>            Headless API server (for Docker/testing)\n")
+	fmt.Fprintf(os.Stderr, "  shuttle import <shuttle://...>          Import server config from URI\n")
+	fmt.Fprintf(os.Stderr, "  shuttle genkey                          Generate key pair\n")
+	fmt.Fprintf(os.Stderr, "  shuttle version                         Show version\n")
+	fmt.Fprintf(os.Stderr, "  shuttle help                            Show this help\n")
 }
 
 func genKey() {
@@ -98,6 +116,51 @@ func importURI(uri, output string) {
 		os.Exit(1)
 	}
 	fmt.Printf("Config written to %s\nRun: shuttle run -c %s\n", output, output)
+}
+
+func runAPI(configPath, listen string, autoConnect bool) {
+	cfg, err := config.LoadClientConfig(configPath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to load config: %v\n", err)
+		os.Exit(1)
+	}
+
+	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelDebug}))
+	slog.SetDefault(logger)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+	go func() {
+		<-sigCh
+		cancel()
+	}()
+
+	eng := engine.New(cfg)
+
+	// Start API server
+	srv := api.NewServer(eng, nil)
+	addr, err := srv.ListenAndServe(listen)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to start API server: %v\n", err)
+		os.Exit(1)
+	}
+	logger.Info("API server listening", "addr", addr)
+
+	// Auto-connect if requested
+	if autoConnect {
+		if err := eng.Start(ctx); err != nil {
+			logger.Error("auto-connect failed", "err", err)
+		} else {
+			logger.Info("auto-connected to server")
+		}
+	}
+
+	<-ctx.Done()
+	srv.Close()
+	eng.Stop()
 }
 
 func run(configPath string) {

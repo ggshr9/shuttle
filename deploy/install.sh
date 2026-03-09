@@ -49,7 +49,24 @@ download_binary() {
     info "Installed to ${INSTALL_DIR}/shuttled"
 }
 
-# Interactive config
+# Quick auto-init (zero interaction)
+auto_configure() {
+    local domain="${SHUTTLE_DOMAIN:-}"
+    local password="${SHUTTLE_PASSWORD:-}"
+    local args="--dir ${CONFIG_DIR}"
+
+    if [ -n "$domain" ]; then
+        args="$args --domain $domain"
+    fi
+    if [ -n "$password" ]; then
+        args="$args --password $password"
+    fi
+
+    info "Running zero-config setup..."
+    ${INSTALL_DIR}/shuttled init $args
+}
+
+# Interactive config (advanced)
 configure() {
     echo ""
     read -rp "Server domain (e.g. example.com): " DOMAIN
@@ -185,73 +202,6 @@ UNIT
     info "shuttled service started"
 }
 
-# Print client config
-print_client_config() {
-    echo ""
-    echo "=============================="
-    echo " Client Configuration"
-    echo "=============================="
-    echo ""
-    echo "Or use the import URI below for quick setup."
-    cat <<EOF
-
-server:
-  addr: "${DOMAIN}:443"
-  password: "${PASSWORD}"
-  sni: "${DOMAIN}"
-
-transport:
-  h3:
-    enabled: true
-  reality:
-    enabled: true
-    server_name: "www.microsoft.com"
-    public_key: "${PUBLIC_KEY}"
-    short_id: "0123456789abcdef"
-
-proxy:
-  socks5:
-    enabled: true
-    listen: "127.0.0.1:1080"
-  http:
-    enabled: true
-    listen: "127.0.0.1:8080"
-
-routing:
-  default: "proxy"
-  rules:
-    - domains: "geosite:cn"
-      action: "direct"
-    - geoip: "cn"
-      action: "direct"
-EOF
-    echo ""
-    echo "=============================="
-}
-
-# Print import URI for one-click client setup
-print_import_uri() {
-    local payload="{\"addr\":\"${DOMAIN}:443\",\"password\":\"${PASSWORD}\",\"transport\":\"${TRANSPORT}\",\"public_key\":\"${PUBLIC_KEY}\",\"short_id\":\"0123456789abcdef\"}"
-    local encoded
-    encoded=$(echo -n "$payload" | base64 -w0)
-    local uri="shuttle://${encoded}"
-
-    echo ""
-    echo "=============================="
-    echo " Quick Import URI"
-    echo "=============================="
-    echo ""
-    echo "Share this link with clients for one-click setup:"
-    echo ""
-    echo "  ${uri}"
-    echo ""
-    echo "Client usage:"
-    echo "  shuttle import \"${uri}\""
-    echo ""
-    echo "Or paste in Shuttle GUI -> Servers -> Import"
-    echo "=============================="
-}
-
 # Uninstall
 uninstall() {
     info "Uninstalling shuttled..."
@@ -279,12 +229,19 @@ main() {
         install)
             detect_platform
             download_binary "${1:-latest}"
+            auto_configure
+            create_user
+            install_service
+            info "Setup complete! shuttled is running."
+            info "Check the output above for the import URI and QR code."
+            ;;
+        install-advanced)
+            detect_platform
+            download_binary "${1:-latest}"
             configure
             create_user
             install_service
-            print_client_config
-            print_import_uri
-            info "Setup complete! shuttled is running on ${DOMAIN}:443"
+            info "Setup complete!"
             ;;
         uninstall)
             uninstall
@@ -297,7 +254,12 @@ main() {
             info "Upgrade complete."
             ;;
         *)
-            echo "Usage: $0 [install|uninstall|upgrade] [version]"
+            echo "Usage: $0 [install|install-advanced|uninstall|upgrade] [version]"
+            echo ""
+            echo "  install          Quick zero-config setup (default)"
+            echo "  install-advanced Interactive setup with certbot"
+            echo "  uninstall        Remove shuttled"
+            echo "  upgrade          Upgrade binary"
             exit 1
             ;;
     esac

@@ -8,6 +8,8 @@ import (
 	"sort"
 	"sync"
 	"time"
+
+	"github.com/quic-go/quic-go"
 )
 
 // TestResult represents the result of testing a single server.
@@ -134,6 +136,7 @@ func (t *Tester) testOne(ctx context.Context, srv Server) TestResult {
 }
 
 // measureLatency attempts to connect to the server and measure round-trip time.
+// It tries TCP first; if that fails it falls back to a UDP probe (for QUIC servers).
 func (t *Tester) measureLatency(ctx context.Context, srv Server) (time.Duration, error) {
 	host, port, err := net.SplitHostPort(srv.Addr)
 	if err != nil {
@@ -158,7 +161,12 @@ func (t *Tester) measureLatency(ctx context.Context, srv Server) (time.Duration,
 	dialer := &net.Dialer{}
 	conn, err := dialer.DialContext(ctx, "tcp", addr)
 	if err != nil {
-		return 0, fmt.Errorf("tcp: %w", err)
+		// TCP failed — try QUIC handshake (server may be QUIC-only)
+		quicLatency, quicErr := t.measureQUICLatency(ctx, addr, srv)
+		if quicErr != nil {
+			return 0, fmt.Errorf("tcp: %w; quic: %v", err, quicErr)
+		}
+		return quicLatency, nil
 	}
 	tcpLatency := time.Since(start)
 	defer conn.Close()
@@ -187,6 +195,33 @@ func (t *Tester) measureLatency(ctx context.Context, srv Server) (time.Duration,
 	}
 
 	return tcpLatency, nil
+}
+
+// measureQUICLatency performs a real QUIC handshake to measure server latency.
+func (t *Tester) measureQUICLatency(ctx context.Context, addr string, srv Server) (time.Duration, error) {
+	host, _, _ := net.SplitHostPort(addr)
+	serverName := srv.SNI
+	if serverName == "" {
+		serverName = host
+	}
+
+	tlsConf := &tls.Config{
+		ServerName:         serverName,
+		NextProtos:         []string{"h3"},
+		InsecureSkipVerify: true, //nolint:gosec // just measuring latency
+	}
+
+	start := time.Now()
+	qconn, err := quic.DialAddr(ctx, addr, tlsConf, &quic.Config{
+		MaxIdleTimeout:  t.cfg.Timeout,
+		KeepAlivePeriod: 0,
+	})
+	if err != nil {
+		return 0, fmt.Errorf("quic: %w", err)
+	}
+	latency := time.Since(start)
+	qconn.CloseWithError(0, "speedtest")
+	return latency, nil
 }
 
 // SortByLatency sorts results by latency (available servers first, then by latency).

@@ -20,8 +20,13 @@ CGO_ENABLED=1 go build -tags desktop,production -o shuttle-gui ./cmd/shuttle-gui
 
 ## Running Tests
 
-**IMPORTANT: NEVER run `go test ./...` directly — always use `scripts/test.sh`.**
-Direct `go test` is host-safe but misses network integration tests. The unified script
+**CRITICAL: NEVER run `go test` directly — always use `/test` skill or `scripts/test.sh`.**
+
+Running `go test ./...` directly **WILL modify the host's system proxy and autostart settings**,
+breaking the user's active network connection. Tests that touch system state (`sysproxy/`,
+`autostart/`) are gated behind `//go:build sandbox` and only run inside Docker containers.
+
+Use the `/test` slash command or call `./scripts/test.sh` directly. The unified script
 handles both tiers automatically and manages Docker lifecycle.
 
 ```bash

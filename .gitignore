@@ -3,9 +3,9 @@ dist/
 *.exe
 *.aar
 *.xcframework
-shuttle
-shuttled
-shuttle-gui
+/shuttle
+/shuttled
+/shuttle-gui
 *.deb
 *.rpm
 *.apk

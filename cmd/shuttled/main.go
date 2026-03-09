@@ -17,10 +17,12 @@ import (
 	"github.com/shuttle-proxy/shuttle/config"
 	"github.com/shuttle-proxy/shuttle/congestion"
 	"github.com/shuttle-proxy/shuttle/crypto"
+	"github.com/shuttle-proxy/shuttle/internal/qrterm"
 	"github.com/shuttle-proxy/shuttle/internal/sysopt"
 	"github.com/shuttle-proxy/shuttle/mesh"
 	meshsignal "github.com/shuttle-proxy/shuttle/mesh/signal"
 	"github.com/shuttle-proxy/shuttle/server"
+	"github.com/shuttle-proxy/shuttle/server/admin"
 	"github.com/shuttle-proxy/shuttle/transport"
 	"github.com/shuttle-proxy/shuttle/transport/h3"
 	"github.com/shuttle-proxy/shuttle/transport/reality"
@@ -43,6 +45,20 @@ func main() {
 		fmt.Printf("shuttled v%s\n", version)
 	case "genkey":
 		genKey()
+	case "init":
+		initCmd := flag.NewFlagSet("init", flag.ExitOnError)
+		dir := initCmd.String("dir", "", "config directory (default: /etc/shuttle or ~/.shuttle)")
+		domain := initCmd.String("domain", "", "server domain name (auto-detects IP if empty)")
+		password := initCmd.String("password", "", "set password (auto-generate if empty)")
+		transport := initCmd.String("transport", "both", "transport: h3, reality, both")
+		listen := initCmd.String("listen", ":443", "listen address")
+		force := initCmd.Bool("force", false, "overwrite existing config")
+		initCmd.Usage = func() {
+			fmt.Fprintf(os.Stderr, "Usage: shuttled init [flags]\n\nZero-config server bootstrap. Generates keys, certificates, and config.\n\nFlags:\n")
+			initCmd.PrintDefaults()
+		}
+		initCmd.Parse(os.Args[2:])
+		initServer(*dir, *domain, *password, *transport, *listen, *force)
 	case "share":
 		shareCmd := flag.NewFlagSet("share", flag.ExitOnError)
 		configPath := shareCmd.String("c", "", "path to server config file (required)")
@@ -60,16 +76,12 @@ func main() {
 		share(*configPath, *addr, *name)
 	case "run":
 		runCmd := flag.NewFlagSet("run", flag.ExitOnError)
-		configPath := runCmd.String("c", "", "path to config file (required)")
+		configPath := runCmd.String("c", "", "path to config file (auto-detects or auto-init if empty)")
 		runCmd.Usage = func() {
-			fmt.Fprintf(os.Stderr, "Usage: shuttled run -c <config.yaml>\n\nFlags:\n")
+			fmt.Fprintf(os.Stderr, "Usage: shuttled run [-c <config.yaml>]\n\nIf -c is not provided, looks for config in /etc/shuttle/ or ~/.shuttle/.\nIf no config found, auto-initializes with defaults.\n\nFlags:\n")
 			runCmd.PrintDefaults()
 		}
 		runCmd.Parse(os.Args[2:])
-		if *configPath == "" {
-			runCmd.Usage()
-			os.Exit(1)
-		}
 		run(*configPath)
 	case "help", "-h", "--help":
 		printUsage()
@@ -83,11 +95,68 @@ func main() {
 func printUsage() {
 	fmt.Fprintf(os.Stderr, "Shuttled v%s — Shuttle Server\n\n", version)
 	fmt.Fprintf(os.Stderr, "Usage:\n")
-	fmt.Fprintf(os.Stderr, "  shuttled run -c <config.yaml>    Start the server\n")
+	fmt.Fprintf(os.Stderr, "  shuttled init                    Zero-config server setup (generates everything)\n")
+	fmt.Fprintf(os.Stderr, "  shuttled run [-c config.yaml]    Start the server (auto-init if no config)\n")
 	fmt.Fprintf(os.Stderr, "  shuttled share -c <config.yaml> --addr <domain:port>  Generate import URI\n")
 	fmt.Fprintf(os.Stderr, "  shuttled genkey                  Generate key pair\n")
 	fmt.Fprintf(os.Stderr, "  shuttled version                 Show version\n")
 	fmt.Fprintf(os.Stderr, "  shuttled help                    Show this help\n")
+}
+
+func initServer(dir, domain, password, transport, listen string, force bool) {
+	var transports []string
+	switch transport {
+	case "h3":
+		transports = []string{"h3"}
+	case "reality":
+		transports = []string{"reality"}
+	default:
+		transports = []string{"h3", "reality"}
+	}
+
+	opts := &config.InitOptions{
+		ConfigDir:  dir,
+		Domain:     domain,
+		Password:   password,
+		Transports: transports,
+		Listen:     listen,
+		Force:      force,
+	}
+
+	result, err := config.Bootstrap(opts)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Init failed: %v\n", err)
+		os.Exit(1)
+	}
+
+	printInitResult(result)
+}
+
+func printInitResult(result *config.InitResult) {
+	fmt.Println()
+	fmt.Println("  ╔══════════════════════════════════════════╗")
+	fmt.Println("  ║       Shuttle Server — Ready!            ║")
+	fmt.Println("  ╚══════════════════════════════════════════╝")
+	fmt.Println()
+	fmt.Printf("  Config:     %s\n", result.ConfigPath)
+	fmt.Printf("  Server:     %s\n", result.ServerAddr)
+	fmt.Printf("  Password:   %s\n", result.Password)
+	fmt.Printf("  Admin API:  http://127.0.0.1:9090/api/ (token: %s...)\n", result.AdminToken[:8])
+	fmt.Println()
+	fmt.Println("  ── Import URI (share with clients) ──")
+	fmt.Println()
+	fmt.Printf("  %s\n", result.ShareURI)
+	fmt.Println()
+	fmt.Println("  ── QR Code (scan with Shuttle app) ──")
+	fmt.Println()
+	qrterm.Print(os.Stdout, result.ShareURI)
+	fmt.Println()
+	fmt.Println("  ── Next Steps ──")
+	fmt.Println()
+	fmt.Printf("  Start:   shuttled run -c %s\n", result.ConfigPath)
+	fmt.Println("  Client:  shuttle import \"<URI above>\"")
+	fmt.Println("  Or paste the URI in Shuttle GUI -> Servers -> Import")
+	fmt.Println()
 }
 
 func genKey() {
@@ -142,6 +211,22 @@ func share(configPath, addr, name string) {
 }
 
 func run(configPath string) {
+	// Auto-detect or auto-init config
+	if configPath == "" {
+		configPath = config.FindDefaultConfig()
+		if configPath == "" {
+			fmt.Fprintln(os.Stderr, "No config found. Auto-initializing...")
+			result, err := config.Bootstrap(nil)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Auto-init failed: %v\n", err)
+				os.Exit(1)
+			}
+			configPath = result.ConfigPath
+			printInitResult(result)
+			fmt.Fprintln(os.Stderr, "Starting server with auto-generated config...")
+		}
+	}
+
 	cfg, err := config.LoadServerConfig(configPath)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to load config: %v\n", err)
@@ -261,6 +346,20 @@ func run(configPath string) {
 		if cfg.Mesh.P2PEnabled {
 			signalHub = meshsignal.NewHub(logger)
 			logger.Info("mesh P2P signaling enabled")
+		}
+	}
+
+	// Start admin API if enabled
+	if cfg.Admin.Enabled {
+		adminInfo := &admin.ServerInfo{
+			StartTime:  time.Now(),
+			Version:    version,
+			ConfigPath: configPath,
+		}
+		if err := admin.ListenAndServe(&cfg.Admin, adminInfo, cfg, configPath); err != nil {
+			logger.Error("failed to start admin API", "err", err)
+		} else {
+			logger.Info("admin API listening", "addr", cfg.Admin.Listen)
 		}
 	}
 

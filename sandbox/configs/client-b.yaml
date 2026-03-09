@@ -15,6 +15,7 @@ transport:
   h3:
     enabled: true
     path_prefix: "/shuttle"
+    insecure_skip_verify: true  # sandbox uses self-signed certs
   reality:
     enabled: false
   webrtc:

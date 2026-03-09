@@ -10,6 +10,7 @@ import (
 	"net"
 	"sync"
 	"sync/atomic"
+	"time"
 )
 
 const (
@@ -325,6 +326,11 @@ func (s *SOCKS5Server) Close() error {
 	if s.listener != nil {
 		s.listener.Close()
 	}
-	s.wg.Wait()
+	done := make(chan struct{})
+	go func() { s.wg.Wait(); close(done) }()
+	select {
+	case <-done:
+	case <-time.After(3 * time.Second):
+	}
 	return nil
 }
