@@ -53,6 +53,9 @@ type Engine struct {
 	// Mesh client for P2P VPN
 	meshClient *mesh.MeshClient
 
+	// Geo data manager
+	geoManager *geodata.Manager
+
 	// Event subscribers — stores bidirectional channels, Subscribe returns receive-only view
 	subMu sync.Mutex
 	subs  map[chan Event]struct{}
@@ -151,6 +154,11 @@ func (e *Engine) startInternal(ctx context.Context) error {
 	e.mu.Unlock()
 
 	rt, dnsResolver := e.buildRouter(cfgSnap)
+	if cfgSnap.Routing.GeoData.Enabled && cfgSnap.Routing.GeoData.AutoUpdate {
+		if gm := e.GeoManager(); gm != nil {
+			gm.Start(ctx)
+		}
+	}
 	dialer := e.createDialer(cfgSnap, rt, dnsResolver)
 
 	closers, err := e.startProxies(ctx, cfgSnap, dialer, sel, cancel)
@@ -196,11 +204,12 @@ func (e *Engine) buildTransports(cfg *config.ClientConfig, ccAdapter quic.Conges
 
 	if cfg.Transport.H3.Enabled {
 		transports = append(transports, h3.NewClient(&h3.ClientConfig{
-			ServerAddr:        cfg.Server.Addr,
-			ServerName:        cfg.Server.SNI,
-			Password:          cfg.Server.Password,
-			PathPrefix:        cfg.Transport.H3.PathPrefix,
-			CongestionControl: ccAdapter,
+			ServerAddr:         cfg.Server.Addr,
+			ServerName:         cfg.Server.SNI,
+			Password:           cfg.Server.Password,
+			PathPrefix:         cfg.Transport.H3.PathPrefix,
+			InsecureSkipVerify: cfg.Transport.H3.InsecureSkipVerify,
+			CongestionControl:  ccAdapter,
 		}))
 	}
 
@@ -250,12 +259,33 @@ func (e *Engine) buildTransports(cfg *config.ClientConfig, ccAdapter quic.Conges
 func (e *Engine) buildRouter(cfg *config.ClientConfig) (*router.Router, *router.DNSResolver) {
 	geoIPDB := router.NewGeoIPDB()
 	geoSiteDB := router.NewGeoSiteDB()
-	defaultIPEntries, defaultSiteEntries := geodata.LoadDefaults()
-	for _, entry := range defaultIPEntries {
-		geoIPDB.LoadFromCIDRs(entry.CountryCode, entry.CIDRs)
+
+	loaded := false
+	if cfg.Routing.GeoData.Enabled {
+		mgr := e.getOrCreateGeoManager(cfg)
+		if ipEntries, err := mgr.LoadGeoIPEntries(); err == nil {
+			for _, entry := range ipEntries {
+				geoIPDB.LoadFromCIDRs(entry.CountryCode, entry.CIDRs)
+			}
+			e.logger.Info("loaded geodata GeoIP", "entries", len(ipEntries))
+			loaded = true
+		}
+		if siteEntries, err := mgr.LoadGeoSiteEntries(); err == nil {
+			for _, entry := range siteEntries {
+				geoSiteDB.LoadCategory(entry.Category, entry.Domains)
+			}
+			e.logger.Info("loaded geodata GeoSite", "categories", len(siteEntries))
+			loaded = true
+		}
 	}
-	for _, entry := range defaultSiteEntries {
-		geoSiteDB.LoadCategory(entry.Category, entry.Domains)
+	if !loaded {
+		defaultIPEntries, defaultSiteEntries := geodata.LoadDefaults()
+		for _, entry := range defaultIPEntries {
+			geoIPDB.LoadFromCIDRs(entry.CountryCode, entry.CIDRs)
+		}
+		for _, entry := range defaultSiteEntries {
+			geoSiteDB.LoadCategory(entry.Category, entry.Domains)
+		}
 	}
 
 	dnsResolver := router.NewDNSResolver(&router.DNSConfig{
@@ -492,7 +522,12 @@ func (e *Engine) stopInternal() error {
 	sel := e.sel
 	e.mu.Unlock()
 
-	// Close subsystems with a timeout to prevent infinite blocking.
+	// Cancel context first so accept loops and in-flight dials unblock,
+	// then close listeners/selector (whose wg.Wait won't hang).
+	if cancel != nil {
+		cancel()
+	}
+
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
@@ -508,11 +543,12 @@ func (e *Engine) stopInternal() error {
 	case <-time.After(stopTimeout):
 		e.logger.Warn("engine stop timed out, forcing shutdown")
 	}
-	if cancel != nil {
-		cancel()
-	}
 
 	e.mu.Lock()
+	if e.geoManager != nil {
+		e.geoManager.Stop()
+		e.geoManager = nil
+	}
 	e.state = StateStopped
 	e.closers = nil
 	e.sel = nil
@@ -670,6 +706,34 @@ func (e *Engine) SetConfig(cfg *config.ClientConfig) {
 	e.mu.Lock()
 	e.cfg = cp
 	e.mu.Unlock()
+}
+
+// getOrCreateGeoManager returns the existing geo manager or creates a new one.
+func (e *Engine) getOrCreateGeoManager(cfg *config.ClientConfig) *geodata.Manager {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if e.geoManager == nil {
+		e.geoManager = geodata.NewManager(geodata.ManagerConfig{
+			Enabled:        cfg.Routing.GeoData.Enabled,
+			DataDir:        cfg.Routing.GeoData.DataDir,
+			AutoUpdate:     cfg.Routing.GeoData.AutoUpdate,
+			UpdateInterval: cfg.Routing.GeoData.UpdateInterval,
+			DirectListURL:  cfg.Routing.GeoData.DirectListURL,
+			ProxyListURL:   cfg.Routing.GeoData.ProxyListURL,
+			RejectListURL:  cfg.Routing.GeoData.RejectListURL,
+			GFWListURL:     cfg.Routing.GeoData.GFWListURL,
+			CNCidrURL:      cfg.Routing.GeoData.CNCidrURL,
+			PrivateCidrURL: cfg.Routing.GeoData.PrivateCidrURL,
+		}, e.logger)
+	}
+	return e.geoManager
+}
+
+// GeoManager returns the geo data manager, or nil if not enabled.
+func (e *Engine) GeoManager() *geodata.Manager {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	return e.geoManager
 }
 
 // Subscribe returns a channel that receives real-time engine events.

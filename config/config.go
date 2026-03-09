@@ -103,8 +103,9 @@ type TransportConfig struct {
 
 // H3Config configures HTTP/3 transport.
 type H3Config struct {
-	Enabled    bool   `yaml:"enabled" json:"enabled"`
-	PathPrefix string `yaml:"path_prefix" json:"path_prefix"`
+	Enabled            bool   `yaml:"enabled" json:"enabled"`
+	PathPrefix         string `yaml:"path_prefix" json:"path_prefix"`
+	InsecureSkipVerify bool   `yaml:"insecure_skip_verify,omitempty" json:"insecure_skip_verify,omitempty"`
 }
 
 // RealityConfig configures Reality transport.
@@ -174,9 +175,25 @@ type TUNConfig struct {
 
 // RoutingConfig configures routing rules.
 type RoutingConfig struct {
-	Rules   []RouteRule `yaml:"rules" json:"rules"`
-	Default string      `yaml:"default" json:"default"` // "proxy", "direct"
-	DNS     DNSConfig   `yaml:"dns" json:"dns"`
+	Rules   []RouteRule   `yaml:"rules" json:"rules"`
+	Default string        `yaml:"default" json:"default"` // "proxy", "direct"
+	DNS     DNSConfig     `yaml:"dns" json:"dns"`
+	GeoData GeoDataConfig `yaml:"geodata" json:"geodata"`
+}
+
+// GeoDataConfig configures automatic GeoIP/GeoSite data management.
+type GeoDataConfig struct {
+	Enabled        bool   `yaml:"enabled" json:"enabled"`
+	DataDir        string `yaml:"data_dir,omitempty" json:"data_dir,omitempty"`
+	AutoUpdate     bool   `yaml:"auto_update" json:"auto_update"`
+	UpdateInterval string `yaml:"update_interval,omitempty" json:"update_interval,omitempty"` // e.g. "24h"
+	// Source URLs (defaults to Loyalsoldier/v2ray-rules-dat)
+	DirectListURL  string `yaml:"direct_list_url,omitempty" json:"direct_list_url,omitempty"`
+	ProxyListURL   string `yaml:"proxy_list_url,omitempty" json:"proxy_list_url,omitempty"`
+	RejectListURL  string `yaml:"reject_list_url,omitempty" json:"reject_list_url,omitempty"`
+	GFWListURL     string `yaml:"gfw_list_url,omitempty" json:"gfw_list_url,omitempty"`
+	CNCidrURL      string `yaml:"cn_cidr_url,omitempty" json:"cn_cidr_url,omitempty"`
+	PrivateCidrURL string `yaml:"private_cidr_url,omitempty" json:"private_cidr_url,omitempty"`
 }
 
 // RouteRule defines a single routing rule.
@@ -218,7 +235,15 @@ type ServerConfig struct {
 	Cover     CoverSiteConfig      `yaml:"cover" json:"cover"`
 	Transport ServerTransportConfig `yaml:"transport" json:"transport"`
 	Mesh      ServerMeshConfig     `yaml:"mesh" json:"mesh"`
+	Admin     AdminConfig          `yaml:"admin" json:"admin"`
 	Log       LogConfig            `yaml:"log" json:"log"`
+}
+
+// AdminConfig configures the server admin API.
+type AdminConfig struct {
+	Enabled bool   `yaml:"enabled" json:"enabled"`
+	Listen  string `yaml:"listen" json:"listen"` // default "127.0.0.1:9090"
+	Token   string `yaml:"token" json:"token"`
 }
 
 // ServerMeshConfig configures the server-side mesh virtual LAN.
@@ -370,6 +395,8 @@ func DefaultClientConfig() *ClientConfig {
 	cfg.Transport.Reality.Enabled = true
 	cfg.Transport.CDN.Enabled = true
 	cfg.Congestion.Mode = "adaptive"
+	cfg.Routing.GeoData.Enabled = true
+	cfg.Routing.GeoData.AutoUpdate = true
 	return cfg
 }
 
@@ -400,6 +427,7 @@ func applyClientDefaults(cfg *ClientConfig) {
 	if cfg.Routing.DNS.Remote.Via == "" {
 		cfg.Routing.DNS.Remote.Via = "proxy"
 	}
+	applyGeoDataDefaults(&cfg.Routing.GeoData)
 	if cfg.Log.Level == "" {
 		cfg.Log.Level = "info"
 	}
@@ -436,6 +464,46 @@ func applyClientDefaults(cfg *ClientConfig) {
 	}
 	if cfg.Mesh.P2P.FallbackThreshold == 0 {
 		cfg.Mesh.P2P.FallbackThreshold = 0.3
+	}
+}
+
+const (
+	defaultGeoBase     = "https://raw.githubusercontent.com/Loyalsoldier/v2ray-rules-dat/release/"
+	defaultDirectList  = defaultGeoBase + "direct-list.txt"
+	defaultProxyList   = defaultGeoBase + "proxy-list.txt"
+	defaultRejectList  = defaultGeoBase + "reject-list.txt"
+	defaultGFWList     = defaultGeoBase + "gfw.txt"
+	defaultCNCidr      = "https://raw.githubusercontent.com/misakaio/chnroutes2/master/chnroutes.txt"
+	defaultPrivateCidr = "" // not needed, private ranges handled by router directly
+)
+
+func applyGeoDataDefaults(g *GeoDataConfig) {
+	if g.DataDir == "" {
+		home, _ := os.UserHomeDir()
+		if home != "" {
+			g.DataDir = home + "/.shuttle/geodata"
+		}
+	}
+	if g.UpdateInterval == "" {
+		g.UpdateInterval = "24h"
+	}
+	if g.DirectListURL == "" {
+		g.DirectListURL = defaultDirectList
+	}
+	if g.ProxyListURL == "" {
+		g.ProxyListURL = defaultProxyList
+	}
+	if g.RejectListURL == "" {
+		g.RejectListURL = defaultRejectList
+	}
+	if g.GFWListURL == "" {
+		g.GFWListURL = defaultGFWList
+	}
+	if g.CNCidrURL == "" {
+		g.CNCidrURL = defaultCNCidr
+	}
+	if g.PrivateCidrURL == "" {
+		g.PrivateCidrURL = defaultPrivateCidr
 	}
 }
 
@@ -500,6 +568,27 @@ func (c *ClientConfig) DeepCopy() *ClientConfig {
 		}
 	}
 	return &cp
+}
+
+// DefaultServerConfig returns a config with sensible defaults.
+func DefaultServerConfig() *ServerConfig {
+	cfg := &ServerConfig{}
+	applyServerDefaults(cfg)
+	cfg.Transport.H3.Enabled = true
+	cfg.Transport.H3.PathPrefix = "/h3"
+	cfg.Transport.Reality.Enabled = true
+	cfg.Transport.Reality.TargetSNI = "www.microsoft.com"
+	cfg.Transport.Reality.TargetAddr = "www.microsoft.com:443"
+	return cfg
+}
+
+// SaveServerConfig writes a server config to a YAML file.
+func SaveServerConfig(path string, cfg *ServerConfig) error {
+	data, err := yaml.Marshal(cfg)
+	if err != nil {
+		return fmt.Errorf("marshal config: %w", err)
+	}
+	return os.WriteFile(path, data, 0600)
 }
 
 func applyServerDefaults(cfg *ServerConfig) {

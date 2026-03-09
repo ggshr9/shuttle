@@ -1,12 +1,16 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/shuttle-proxy/shuttle/autostart"
 	"github.com/shuttle-proxy/shuttle/config"
@@ -39,7 +43,7 @@ func HandlerWithOptions(eng *engine.Engine, subMgr *subscription.Manager, statsS
 	})
 
 	mux.HandleFunc("POST /api/connect", func(w http.ResponseWriter, r *http.Request) {
-		if err := eng.Start(r.Context()); err != nil {
+		if err := eng.Start(context.Background()); err != nil {
 			writeError(w, http.StatusConflict, err.Error())
 			return
 		}
@@ -126,6 +130,12 @@ func HandlerWithOptions(eng *engine.Engine, subMgr *subscription.Manager, statsS
 			return
 		}
 		cfg := eng.Config()
+		for _, s := range cfg.Servers {
+			if s.Addr == srv.Addr {
+				writeError(w, http.StatusConflict, "server with this address already exists")
+				return
+			}
+		}
 		cfg.Servers = append(cfg.Servers, srv)
 		eng.SetConfig(&cfg)
 		writeJSON(w, map[string]string{"status": "added"})
@@ -145,11 +155,18 @@ func HandlerWithOptions(eng *engine.Engine, subMgr *subscription.Manager, statsS
 			return
 		}
 		cfg := eng.Config()
+		found := false
 		filtered := make([]config.ServerEndpoint, 0, len(cfg.Servers))
 		for _, s := range cfg.Servers {
-			if s.Addr != req.Addr {
-				filtered = append(filtered, s)
+			if !found && s.Addr == req.Addr {
+				found = true
+				continue
 			}
+			filtered = append(filtered, s)
+		}
+		if !found {
+			writeError(w, http.StatusNotFound, "server not found")
+			return
 		}
 		cfg.Servers = filtered
 		eng.SetConfig(&cfg)
@@ -635,6 +652,32 @@ func HandlerWithOptions(eng *engine.Engine, subMgr *subscription.Manager, statsS
 		handleSpeedtestWS(w, r, eng)
 	})
 
+	// Geodata endpoints
+	mux.HandleFunc("GET /api/geodata/status", func(w http.ResponseWriter, r *http.Request) {
+		gm := eng.GeoManager()
+		if gm == nil {
+			writeJSON(w, map[string]any{"enabled": false})
+			return
+		}
+		writeJSON(w, gm.Status())
+	})
+
+	mux.HandleFunc("POST /api/geodata/update", func(w http.ResponseWriter, r *http.Request) {
+		gm := eng.GeoManager()
+		if gm == nil {
+			writeError(w, http.StatusBadRequest, "geodata not enabled")
+			return
+		}
+		if err := gm.Update(r.Context()); err != nil {
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		// Reload engine to pick up new data
+		cfg := eng.Config()
+		_ = eng.Reload(&cfg)
+		writeJSON(w, gm.Status())
+	})
+
 	// Stats history endpoint
 	mux.HandleFunc("GET /api/stats/history", func(w http.ResponseWriter, r *http.Request) {
 		days := 7
@@ -747,6 +790,192 @@ func HandlerWithOptions(eng *engine.Engine, subMgr *subscription.Manager, statsS
 			return
 		}
 		writeJSON(w, map[string]bool{"enabled": req.Enabled})
+	})
+
+	// Test probe — send a request through the full proxy chain
+	// Used for dev/testing to verify end-to-end connectivity
+	mux.HandleFunc("POST /api/test/probe", func(w http.ResponseWriter, r *http.Request) {
+		var req struct {
+			URL    string `json:"url"`    // target URL to fetch
+			Method string `json:"method"` // HTTP method (default GET)
+			Via    string `json:"via"`    // "socks5", "http", or "direct" (default "socks5")
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		r.Body.Close()
+
+		if req.URL == "" {
+			writeError(w, http.StatusBadRequest, "url is required")
+			return
+		}
+		if req.Method == "" {
+			req.Method = "GET"
+		}
+		if req.Via == "" {
+			req.Via = "socks5"
+		}
+
+		cfg := eng.Config()
+
+		// Build HTTP client with proxy
+		var transport *http.Transport
+		switch req.Via {
+		case "socks5":
+			proxyAddr := normalizeListenAddr(cfg.Proxy.SOCKS5.Listen)
+			proxyURL, _ := url.Parse("socks5://" + proxyAddr)
+			transport = &http.Transport{Proxy: http.ProxyURL(proxyURL)}
+		case "http":
+			proxyAddr := normalizeListenAddr(cfg.Proxy.HTTP.Listen)
+			proxyURL, _ := url.Parse("http://" + proxyAddr)
+			transport = &http.Transport{Proxy: http.ProxyURL(proxyURL)}
+		case "direct":
+			transport = &http.Transport{}
+		default:
+			writeError(w, http.StatusBadRequest, "via must be socks5, http, or direct")
+			return
+		}
+		transport.TLSHandshakeTimeout = 10 * time.Second
+
+		client := &http.Client{
+			Transport: transport,
+			Timeout:   15 * time.Second,
+		}
+		defer client.CloseIdleConnections()
+
+		start := time.Now()
+		probeReq, err := http.NewRequestWithContext(r.Context(), req.Method, req.URL, nil)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, fmt.Sprintf("invalid request: %v", err))
+			return
+		}
+		probeReq.Header.Set("User-Agent", "Shuttle-Probe/1.0")
+
+		resp, err := client.Do(probeReq)
+		elapsed := time.Since(start)
+		if err != nil {
+			writeJSON(w, map[string]any{
+				"success":    false,
+				"error":      err.Error(),
+				"via":        req.Via,
+				"latency_ms": elapsed.Milliseconds(),
+			})
+			return
+		}
+		defer resp.Body.Close()
+
+		// Read response body (limited)
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+
+		writeJSON(w, map[string]any{
+			"success":     true,
+			"status":      resp.StatusCode,
+			"status_text": resp.Status,
+			"via":         req.Via,
+			"latency_ms":  elapsed.Milliseconds(),
+			"headers":     resp.Header,
+			"body":        string(body),
+		})
+	})
+
+	// Test probe — batch: test multiple URLs / proxy modes at once
+	mux.HandleFunc("POST /api/test/probe/batch", func(w http.ResponseWriter, r *http.Request) {
+		var req struct {
+			Tests []struct {
+				Name   string `json:"name"`
+				URL    string `json:"url"`
+				Method string `json:"method"`
+				Via    string `json:"via"`
+			} `json:"tests"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		r.Body.Close()
+
+		if len(req.Tests) == 0 {
+			writeError(w, http.StatusBadRequest, "tests array is required")
+			return
+		}
+		if len(req.Tests) > 20 {
+			writeError(w, http.StatusBadRequest, "max 20 tests per batch")
+			return
+		}
+
+		cfg := eng.Config()
+		type result struct {
+			Name      string `json:"name"`
+			URL       string `json:"url"`
+			Via       string `json:"via"`
+			Success   bool   `json:"success"`
+			Status    int    `json:"status,omitempty"`
+			LatencyMs int64  `json:"latency_ms"`
+			Error     string `json:"error,omitempty"`
+			Body      string `json:"body,omitempty"`
+		}
+
+		var results []result
+		for _, t := range req.Tests {
+			if t.Method == "" {
+				t.Method = "GET"
+			}
+			if t.Via == "" {
+				t.Via = "socks5"
+			}
+
+			var transport *http.Transport
+			switch t.Via {
+			case "socks5":
+				proxyAddr := normalizeListenAddr(cfg.Proxy.SOCKS5.Listen)
+				proxyURL, _ := url.Parse("socks5://" + proxyAddr)
+				transport = &http.Transport{Proxy: http.ProxyURL(proxyURL)}
+			case "http":
+				proxyAddr := normalizeListenAddr(cfg.Proxy.HTTP.Listen)
+				proxyURL, _ := url.Parse("http://" + proxyAddr)
+				transport = &http.Transport{Proxy: http.ProxyURL(proxyURL)}
+			case "direct":
+				transport = &http.Transport{}
+			default:
+				results = append(results, result{Name: t.Name, URL: t.URL, Via: t.Via, Error: "invalid via"})
+				continue
+			}
+			transport.TLSHandshakeTimeout = 10 * time.Second
+
+			client := &http.Client{Transport: transport, Timeout: 15 * time.Second}
+			start := time.Now()
+			probeReq, err := http.NewRequestWithContext(r.Context(), t.Method, t.URL, nil)
+			if err != nil {
+				results = append(results, result{Name: t.Name, URL: t.URL, Via: t.Via, Error: err.Error()})
+				client.CloseIdleConnections()
+				continue
+			}
+			probeReq.Header.Set("User-Agent", "Shuttle-Probe/1.0")
+
+			resp, err := client.Do(probeReq)
+			elapsed := time.Since(start)
+			if err != nil {
+				results = append(results, result{Name: t.Name, URL: t.URL, Via: t.Via, LatencyMs: elapsed.Milliseconds(), Error: err.Error()})
+				client.CloseIdleConnections()
+				continue
+			}
+			body, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))
+			resp.Body.Close()
+			client.CloseIdleConnections()
+
+			results = append(results, result{
+				Name:      t.Name,
+				URL:       t.URL,
+				Via:       t.Via,
+				Success:   true,
+				Status:    resp.StatusCode,
+				LatencyMs: elapsed.Milliseconds(),
+				Body:      string(body),
+			})
+		}
+
+		writeJSON(w, map[string]any{"results": results})
 	})
 
 	// Network info endpoint for LAN sharing
