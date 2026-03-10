@@ -441,6 +441,69 @@ func TestMeshClientIsMeshDestination(t *testing.T) {
 	}
 }
 
+func TestMeshClientSplitRoutes(t *testing.T) {
+	mc := &MeshClient{
+		meshNet: &net.IPNet{
+			IP:   net.IPv4(10, 7, 0, 0).To4(),
+			Mask: net.CIDRMask(24, 32),
+		},
+	}
+
+	// Set split routes: 10.7.0.128/25 → direct, rest → mesh
+	mc.SetSplitRoutes([]struct{ CIDR, Action string }{
+		{"10.7.0.128/25", "direct"},
+	})
+
+	tests := []struct {
+		ip     string
+		isMesh bool
+		action string
+	}{
+		{"10.7.0.1", true, "mesh"},       // No split route match → default mesh
+		{"10.7.0.127", true, "mesh"},     // Just before split route range
+		{"10.7.0.128", false, "direct"},  // In direct split route
+		{"10.7.0.200", false, "direct"},  // In direct split route
+		{"10.7.0.255", false, "direct"},  // End of direct split route
+		{"192.168.1.1", false, ""},        // Not in mesh network at all
+	}
+
+	for _, tt := range tests {
+		ip := net.ParseIP(tt.ip)
+		if got := mc.IsMeshDestination(ip); got != tt.isMesh {
+			t.Errorf("IsMeshDestination(%s) = %v, want %v", tt.ip, got, tt.isMesh)
+		}
+		if got := mc.RouteMesh(ip); got != tt.action {
+			t.Errorf("RouteMesh(%s) = %q, want %q", tt.ip, got, tt.action)
+		}
+	}
+}
+
+func TestMeshClientSplitRouteProxyAction(t *testing.T) {
+	mc := &MeshClient{
+		meshNet: &net.IPNet{
+			IP:   net.IPv4(10, 7, 0, 0).To4(),
+			Mask: net.CIDRMask(24, 32),
+		},
+	}
+
+	mc.SetSplitRoutes([]struct{ CIDR, Action string }{
+		{"10.7.0.0/25", "proxy"},
+	})
+
+	// 10.7.0.1 matches the proxy split route
+	if mc.IsMeshDestination(net.ParseIP("10.7.0.1")) {
+		t.Error("proxy split route should exclude from mesh")
+	}
+	if got := mc.RouteMesh(net.ParseIP("10.7.0.1")); got != "proxy" {
+		t.Errorf("expected proxy action, got %q", got)
+	}
+
+	// 10.7.0.200 is in mesh but not in any split route → mesh
+	if !mc.IsMeshDestination(net.ParseIP("10.7.0.200")) {
+		t.Error("10.7.0.200 should be mesh destination")
+	}
+}
+
 func TestIPv6Allocator(t *testing.T) {
 	alloc, err := NewIPv6Allocator("fd00:7::/64")
 	if err != nil {

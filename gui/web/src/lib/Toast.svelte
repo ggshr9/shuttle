@@ -46,8 +46,8 @@
     gap: 10px;
     padding: 12px 16px;
     border-radius: 8px;
-    background: #161b22;
-    border: 1px solid #2d333b;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
     animation: slideIn 0.2s ease-out;
   }
@@ -64,23 +64,23 @@
   }
 
   .toast-success {
-    border-color: #238636;
-    background: linear-gradient(135deg, #161b22 0%, #1a2f1a 100%);
+    border-color: var(--btn-bg);
+    background: linear-gradient(135deg, var(--bg-secondary) 0%, #1a2f1a 100%);
   }
 
   .toast-error {
-    border-color: #f85149;
-    background: linear-gradient(135deg, #161b22 0%, #2f1a1a 100%);
+    border-color: var(--accent-red);
+    background: linear-gradient(135deg, var(--bg-secondary) 0%, #2f1a1a 100%);
   }
 
   .toast-warning {
     border-color: #d29922;
-    background: linear-gradient(135deg, #161b22 0%, #2f2a1a 100%);
+    background: linear-gradient(135deg, var(--bg-secondary) 0%, #2f2a1a 100%);
   }
 
   .toast-info {
-    border-color: #58a6ff;
-    background: linear-gradient(135deg, #161b22 0%, #1a1f2f 100%);
+    border-color: var(--accent);
+    background: linear-gradient(135deg, var(--bg-secondary) 0%, #1a1f2f 100%);
   }
 
   .toast-icon {
@@ -88,22 +88,22 @@
     font-weight: bold;
   }
 
-  .toast-success .toast-icon { color: #3fb950; }
-  .toast-error .toast-icon { color: #f85149; }
+  .toast-success .toast-icon { color: var(--accent-green); }
+  .toast-error .toast-icon { color: var(--accent-red); }
   .toast-warning .toast-icon { color: #d29922; }
-  .toast-info .toast-icon { color: #58a6ff; }
+  .toast-info .toast-icon { color: var(--accent); }
 
   .toast-message {
     flex: 1;
     font-size: 14px;
-    color: #e1e4e8;
+    color: var(--text-primary);
     line-height: 1.4;
   }
 
   .toast-close {
     background: none;
     border: none;
-    color: #8b949e;
+    color: var(--text-secondary);
     font-size: 18px;
     cursor: pointer;
     padding: 0 4px;
@@ -111,6 +111,6 @@
   }
 
   .toast-close:hover {
-    color: #e1e4e8;
+    color: var(--text-primary);
   }
 </style>

@@ -11,6 +11,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/shuttle-proxy/shuttle/qos"
 )
 
 const (
@@ -67,13 +69,14 @@ type ProcResolver interface {
 
 // SOCKS5Server implements a SOCKS5 proxy server.
 type SOCKS5Server struct {
-	config       *SOCKS5Config
-	dialer       Dialer
-	listener     net.Listener
-	closed       atomic.Bool
-	wg           sync.WaitGroup
-	logger       *slog.Logger
-	ProcResolver ProcResolver
+	config        *SOCKS5Config
+	dialer        Dialer
+	listener      net.Listener
+	closed        atomic.Bool
+	wg            sync.WaitGroup
+	logger        *slog.Logger
+	ProcResolver  ProcResolver
+	QoSClassifier *qos.Classifier
 }
 
 // NewSOCKS5Server creates a new SOCKS5 server.

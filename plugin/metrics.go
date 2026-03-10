@@ -35,11 +35,33 @@ func (m *Metrics) Close() error                   { return nil }
 func (m *Metrics) OnConnect(conn net.Conn, target string) (net.Conn, error) {
 	m.ActiveConns.Add(1)
 	m.TotalConns.Add(1)
-	return conn, nil
+	return &metricsConn{Conn: conn, metrics: m}, nil
 }
 
 func (m *Metrics) OnDisconnect(conn net.Conn) {
 	m.ActiveConns.Add(-1)
+}
+
+// metricsConn wraps a net.Conn to feed byte counts into Metrics.
+type metricsConn struct {
+	net.Conn
+	metrics *Metrics
+}
+
+func (mc *metricsConn) Read(b []byte) (int, error) {
+	n, err := mc.Conn.Read(b)
+	if n > 0 {
+		mc.metrics.BytesReceived.Add(int64(n))
+	}
+	return n, err
+}
+
+func (mc *metricsConn) Write(b []byte) (int, error) {
+	n, err := mc.Conn.Write(b)
+	if n > 0 {
+		mc.metrics.BytesSent.Add(int64(n))
+	}
+	return n, err
 }
 
 func (m *Metrics) OnData(data []byte, dir Direction) []byte {

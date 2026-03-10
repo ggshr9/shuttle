@@ -4,12 +4,20 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"time"
 
 	"gopkg.in/yaml.v3"
 )
 
+// Config version constants.
+const (
+	CurrentClientConfigVersion = 1
+	CurrentServerConfigVersion = 1
+)
+
 // ClientConfig is the top-level client configuration.
 type ClientConfig struct {
+	Version       int                  `yaml:"version" json:"version"`
 	Server        ServerEndpoint       `yaml:"server" json:"server"`
 	Servers       []ServerEndpoint     `yaml:"servers,omitempty" json:"servers,omitempty"` // saved server list
 	Subscriptions []SubscriptionConfig `yaml:"subscriptions,omitempty" json:"subscriptions,omitempty"`
@@ -18,7 +26,9 @@ type ClientConfig struct {
 	Routing       RoutingConfig        `yaml:"routing" json:"routing"`
 	QoS           QoSConfig            `yaml:"qos" json:"qos"`
 	Congestion    CongestionConfig     `yaml:"congestion" json:"congestion"`
+	Retry         RetryConfig          `yaml:"retry" json:"retry"`
 	Mesh          MeshConfig           `yaml:"mesh" json:"mesh"`
+	Obfs          ObfsConfig           `yaml:"obfs" json:"obfs"`
 	Log           LogConfig            `yaml:"log" json:"log"`
 }
 
@@ -31,9 +41,16 @@ type SubscriptionConfig struct {
 
 // MeshConfig configures the client-side mesh virtual LAN.
 type MeshConfig struct {
-	Enabled    bool      `yaml:"enabled" json:"enabled"`
-	P2PEnabled bool      `yaml:"p2p_enabled" json:"p2p_enabled"`
-	P2P        P2PConfig `yaml:"p2p" json:"p2p"`
+	Enabled    bool           `yaml:"enabled" json:"enabled"`
+	P2PEnabled bool           `yaml:"p2p_enabled" json:"p2p_enabled"`
+	P2P        P2PConfig      `yaml:"p2p" json:"p2p"`
+	SplitRoutes []SplitRoute  `yaml:"split_routes,omitempty" json:"split_routes,omitempty"`
+}
+
+// SplitRoute defines a subnet-level routing policy for mesh traffic.
+type SplitRoute struct {
+	CIDR   string `yaml:"cidr" json:"cidr"`     // e.g. "10.7.0.128/25"
+	Action string `yaml:"action" json:"action"` // "mesh", "direct", "proxy"
 }
 
 // P2PConfig configures peer-to-peer NAT traversal.
@@ -83,6 +100,13 @@ type QoSRule struct {
 	Priority string `yaml:"priority" json:"priority"` // "critical", "high", "normal", "bulk", "low"
 }
 
+// RetryConfig configures connection retry with exponential backoff.
+type RetryConfig struct {
+	MaxAttempts    int    `yaml:"max_attempts" json:"max_attempts"`
+	InitialBackoff string `yaml:"initial_backoff" json:"initial_backoff"` // duration string, e.g. "100ms"
+	MaxBackoff     string `yaml:"max_backoff" json:"max_backoff"`         // duration string, e.g. "5s"
+}
+
 // ServerEndpoint defines a remote server.
 type ServerEndpoint struct {
 	Addr     string `yaml:"addr" json:"addr"`
@@ -118,10 +142,12 @@ type RealityConfig struct {
 
 // CDNConfig configures CDN transport.
 type CDNConfig struct {
-	Enabled bool   `yaml:"enabled" json:"enabled"`
-	Domain  string `yaml:"domain" json:"domain"`
-	Path    string `yaml:"path" json:"path"`
-	Mode    string `yaml:"mode" json:"mode"` // "h2", "grpc"
+	Enabled            bool   `yaml:"enabled" json:"enabled"`
+	Domain             string `yaml:"domain" json:"domain"`
+	Path               string `yaml:"path" json:"path"`
+	Mode               string `yaml:"mode" json:"mode"`                                                      // "h2", "grpc"
+	FrontDomain        string `yaml:"front_domain" json:"front_domain"`                                       // SNI domain for domain fronting (different from actual server)
+	InsecureSkipVerify bool   `yaml:"insecure_skip_verify,omitempty" json:"insecure_skip_verify,omitempty"`
 }
 
 // WebRTCConfig configures WebRTC DataChannel transport.
@@ -209,10 +235,13 @@ type RouteRule struct {
 
 // DNSConfig configures DNS resolution.
 type DNSConfig struct {
-	Domestic string    `yaml:"domestic" json:"domestic"`
-	Remote   DNSRemote `yaml:"remote" json:"remote"`
-	Cache    bool      `yaml:"cache" json:"cache"`
-	Prefetch bool      `yaml:"prefetch" json:"prefetch"`
+	Domestic       string    `yaml:"domestic" json:"domestic"`
+	Remote         DNSRemote `yaml:"remote" json:"remote"`
+	Cache          bool      `yaml:"cache" json:"cache"`
+	Prefetch       bool      `yaml:"prefetch" json:"prefetch"`
+	LeakPrevention bool      `yaml:"leak_prevention" json:"leak_prevention"` // Force all DNS through proxy
+	DomesticDoH    string    `yaml:"domestic_doh" json:"domestic_doh"`       // DoH URL for domestic queries (e.g., "https://dns.alidns.com/dns-query")
+	StripECS       bool      `yaml:"strip_ecs" json:"strip_ecs"`            // Strip EDNS Client Subnet
 }
 
 // DNSRemote configures the remote DNS server.
@@ -221,22 +250,71 @@ type DNSRemote struct {
 	Via    string `yaml:"via" json:"via"` // "proxy" or "direct"
 }
 
+// ObfsConfig configures traffic obfuscation.
+type ObfsConfig struct {
+	PaddingEnabled bool   `yaml:"padding_enabled" json:"padding_enabled"`
+	ShapingEnabled bool   `yaml:"shaping_enabled" json:"shaping_enabled"`
+	MaxDelay       string `yaml:"max_delay" json:"max_delay"` // duration string, default "50ms"
+}
+
 // LogConfig configures logging.
 type LogConfig struct {
 	Level  string `yaml:"level" json:"level"`   // "debug", "info", "warn", "error"
+	Format string `yaml:"format" json:"format"` // "text" (default) or "json"
 	Output string `yaml:"output" json:"output"` // "stdout", "stderr", or file path
+}
+
+// AuditConfig configures server-side connection audit logging.
+type AuditConfig struct {
+	Enabled    bool   `yaml:"enabled" json:"enabled"`
+	LogDir     string `yaml:"log_dir" json:"log_dir"`
+	MaxEntries int    `yaml:"max_entries" json:"max_entries"`
+}
+
+// DebugConfig configures debug/profiling endpoints.
+type DebugConfig struct {
+	PprofEnabled bool   `yaml:"pprof_enabled" json:"pprof_enabled"`
+	PprofListen  string `yaml:"pprof_listen" json:"pprof_listen"`
+}
+
+// ReputationConfig configures IP reputation tracking for anti-probing defense.
+type ReputationConfig struct {
+	Enabled     bool `yaml:"enabled" json:"enabled"`
+	MaxFailures int  `yaml:"max_failures" json:"max_failures"` // failures before ban (default 5)
 }
 
 // ServerConfig is the top-level server configuration.
 type ServerConfig struct {
-	Listen    string               `yaml:"listen" json:"listen"`
-	TLS       TLSConfig            `yaml:"tls" json:"tls"`
-	Auth      AuthConfig           `yaml:"auth" json:"auth"`
-	Cover     CoverSiteConfig      `yaml:"cover" json:"cover"`
-	Transport ServerTransportConfig `yaml:"transport" json:"transport"`
-	Mesh      ServerMeshConfig     `yaml:"mesh" json:"mesh"`
-	Admin     AdminConfig          `yaml:"admin" json:"admin"`
-	Log       LogConfig            `yaml:"log" json:"log"`
+	Version      int                  `yaml:"version" json:"version"`
+	Listen       string               `yaml:"listen" json:"listen"`
+	DrainTimeout string               `yaml:"drain_timeout,omitempty" json:"drain_timeout,omitempty"` // graceful shutdown drain timeout, e.g. "30s"
+	TLS          TLSConfig            `yaml:"tls" json:"tls"`
+	Auth         AuthConfig           `yaml:"auth" json:"auth"`
+	Cover        CoverSiteConfig      `yaml:"cover" json:"cover"`
+	Transport    ServerTransportConfig `yaml:"transport" json:"transport"`
+	Mesh         ServerMeshConfig     `yaml:"mesh" json:"mesh"`
+	Admin        AdminConfig          `yaml:"admin" json:"admin"`
+	Audit        AuditConfig          `yaml:"audit" json:"audit"`
+	Reputation   ReputationConfig     `yaml:"reputation" json:"reputation"`
+	Cluster      ClusterConfig        `yaml:"cluster" json:"cluster"`
+	Debug        DebugConfig          `yaml:"debug" json:"debug"`
+	Log          LogConfig            `yaml:"log" json:"log"`
+}
+
+// ClusterConfig configures multi-instance server clustering.
+type ClusterConfig struct {
+	Enabled  bool              `yaml:"enabled" json:"enabled"`
+	NodeName string            `yaml:"node_name" json:"node_name"`
+	Secret   string            `yaml:"secret" json:"secret"`
+	Peers    []ClusterPeer     `yaml:"peers,omitempty" json:"peers,omitempty"`
+	Interval string            `yaml:"interval,omitempty" json:"interval,omitempty"` // default "15s"
+	MaxConns int64             `yaml:"max_conns,omitempty" json:"max_conns,omitempty"`
+}
+
+// ClusterPeer defines a known peer node in the cluster.
+type ClusterPeer struct {
+	Name string `yaml:"name" json:"name"`
+	Addr string `yaml:"addr" json:"addr"` // admin API address
 }
 
 // AdminConfig configures the server admin API.
@@ -244,6 +322,15 @@ type AdminConfig struct {
 	Enabled bool   `yaml:"enabled" json:"enabled"`
 	Listen  string `yaml:"listen" json:"listen"` // default "127.0.0.1:9090"
 	Token   string `yaml:"token" json:"token"`
+	Users   []User `yaml:"users,omitempty" json:"users,omitempty"`
+}
+
+// User represents a client user with traffic quotas.
+type User struct {
+	Name     string `yaml:"name" json:"name"`
+	Token    string `yaml:"token" json:"token"`         // Per-user auth token
+	MaxBytes int64  `yaml:"max_bytes" json:"max_bytes"` // 0 = unlimited
+	Enabled  bool   `yaml:"enabled" json:"enabled"`
 }
 
 // ServerMeshConfig configures the server-side mesh virtual LAN.
@@ -277,7 +364,15 @@ type CoverSiteConfig struct {
 type ServerTransportConfig struct {
 	H3      ServerH3Config      `yaml:"h3" json:"h3"`
 	Reality ServerRealityConfig `yaml:"reality" json:"reality"`
+	CDN     ServerCDNConfig     `yaml:"cdn" json:"cdn"`
 	WebRTC  ServerWebRTCConfig  `yaml:"webrtc" json:"webrtc"`
+}
+
+// ServerCDNConfig configures server-side CDN (HTTP/2) transport.
+type ServerCDNConfig struct {
+	Enabled bool   `yaml:"enabled" json:"enabled"`
+	Path    string `yaml:"path" json:"path"`     // URL path for CDN endpoint (default "/cdn/stream")
+	Listen  string `yaml:"listen" json:"listen"` // Listen address (default: same as main listen)
 }
 
 // ServerH3Config configures server H3.
@@ -332,6 +427,21 @@ func (c *ClientConfig) Validate() error {
 	default:
 		return fmt.Errorf("invalid congestion.mode: %q", c.Congestion.Mode)
 	}
+	if c.Obfs.MaxDelay != "" {
+		if _, err := time.ParseDuration(c.Obfs.MaxDelay); err != nil {
+			return fmt.Errorf("invalid obfs.max_delay: %w", err)
+		}
+	}
+	for _, sr := range c.Mesh.SplitRoutes {
+		if _, _, err := net.ParseCIDR(sr.CIDR); err != nil {
+			return fmt.Errorf("invalid mesh split_route CIDR %q: %w", sr.CIDR, err)
+		}
+		switch sr.Action {
+		case "mesh", "direct", "proxy":
+		default:
+			return fmt.Errorf("invalid mesh split_route action: %q (must be mesh, direct, or proxy)", sr.Action)
+		}
+	}
 	return nil
 }
 
@@ -347,6 +457,27 @@ func (c *ServerConfig) Validate() error {
 	default:
 		return fmt.Errorf("invalid cover.mode: %q", c.Cover.Mode)
 	}
+	if c.Cluster.Enabled {
+		if c.Cluster.NodeName == "" {
+			return fmt.Errorf("cluster.node_name is required when cluster is enabled")
+		}
+		if c.Cluster.Secret == "" {
+			return fmt.Errorf("cluster.secret is required when cluster is enabled")
+		}
+		for _, p := range c.Cluster.Peers {
+			if p.Name == "" {
+				return fmt.Errorf("cluster peer name is required")
+			}
+			if _, _, err := net.SplitHostPort(p.Addr); err != nil {
+				return fmt.Errorf("invalid cluster peer address %q: %w", p.Addr, err)
+			}
+		}
+		if c.Cluster.Interval != "" {
+			if _, err := time.ParseDuration(c.Cluster.Interval); err != nil {
+				return fmt.Errorf("invalid cluster.interval: %w", err)
+			}
+		}
+	}
 	return nil
 }
 
@@ -361,6 +492,9 @@ func LoadClientConfig(path string) (*ClientConfig, error) {
 		return nil, fmt.Errorf("parse config: %w", err)
 	}
 	applyClientDefaults(&cfg)
+	if cfg.Version == 0 {
+		cfg.Version = CurrentClientConfigVersion
+	}
 	if err := cfg.Validate(); err != nil {
 		return nil, fmt.Errorf("config validation: %w", err)
 	}
@@ -378,6 +512,9 @@ func LoadServerConfig(path string) (*ServerConfig, error) {
 		return nil, fmt.Errorf("parse config: %w", err)
 	}
 	applyServerDefaults(&cfg)
+	if cfg.Version == 0 {
+		cfg.Version = CurrentServerConfigVersion
+	}
 	if err := cfg.Validate(); err != nil {
 		return nil, fmt.Errorf("config validation: %w", err)
 	}
@@ -444,6 +581,10 @@ func applyClientDefaults(cfg *ClientConfig) {
 		if net.ParseIP(host) == nil {
 			cfg.Server.SNI = host
 		}
+	}
+	// Obfuscation defaults
+	if cfg.Obfs.MaxDelay == "" {
+		cfg.Obfs.MaxDelay = "50ms"
 	}
 	// P2P defaults
 	if len(cfg.Mesh.P2P.STUNServers) == 0 {

@@ -13,6 +13,7 @@ const (
 	EventTransportChanged                  // Active transport switched
 	EventError                             // Non-fatal error
 	EventConnection                        // Connection opened/closed
+	EventNetworkChange                     // Network interface change detected
 )
 
 var eventTypeNames = [...]string{
@@ -23,6 +24,7 @@ var eventTypeNames = [...]string{
 	EventTransportChanged: "transport_changed",
 	EventError:            "error",
 	EventConnection:       "connection",
+	EventNetworkChange:    "network_change",
 }
 
 func (t EventType) String() string {
@@ -136,6 +138,8 @@ type PathInfo struct {
 	TotalStreams  int64  `json:"total_streams"`
 	Available     bool   `json:"available"`
 	Failures      int64  `json:"failures"`
+	BytesSent     int64  `json:"bytes_sent"`
+	BytesReceived int64  `json:"bytes_received"`
 }
 
 // TransportInfo describes a transport's health.

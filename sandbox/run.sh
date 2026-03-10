@@ -155,23 +155,61 @@ run_tests() {
         ((failed++))
     fi
 
-    # Test 8: Proxy through server (SOCKS5) - via local httpbin
+    # Test 7: Proxy through server (SOCKS5) - via local httpbin
     ((total++))
-    if docker compose exec -T client-a curl -sf --socks5 127.0.0.1:1080 --max-time 10 http://10.100.0.20/ip > /dev/null 2>&1; then
-        success "test_socks5_proxy"
+    local socks5_result
+    socks5_result=$(docker compose exec -T client-a curl -sf --socks5 127.0.0.1:1080 --max-time 10 http://10.100.0.20/ip 2>&1)
+    if [ $? -eq 0 ] && echo "$socks5_result" | grep -q "origin"; then
+        success "test_socks5_proxy (response: $(echo "$socks5_result" | tr -d '\n'))"
         ((passed++))
     else
         error "test_socks5_proxy"
         ((failed++))
     fi
 
-    # Test 9: Proxy through server (HTTP) - via local httpbin
+    # Test 8: Proxy through server (HTTP) - via local httpbin
     ((total++))
-    if docker compose exec -T client-a curl -sf --proxy http://127.0.0.1:8080 --max-time 10 http://10.100.0.20/ip > /dev/null 2>&1; then
-        success "test_http_proxy"
+    local http_result
+    http_result=$(docker compose exec -T client-a curl -sf --proxy http://127.0.0.1:8080 --max-time 10 http://10.100.0.20/ip 2>&1)
+    if [ $? -eq 0 ] && echo "$http_result" | grep -q "origin"; then
+        success "test_http_proxy (response: $(echo "$http_result" | tr -d '\n'))"
         ((passed++))
     else
         error "test_http_proxy"
+        ((failed++))
+    fi
+
+    # Test 9: Verify httpbin /get returns full request info
+    ((total++))
+    local get_result
+    get_result=$(docker compose exec -T client-a curl -sf --socks5 127.0.0.1:1080 --max-time 10 http://10.100.0.20/get 2>&1)
+    if [ $? -eq 0 ] && echo "$get_result" | grep -q "headers"; then
+        success "test_socks5_get_endpoint"
+        ((passed++))
+    else
+        error "test_socks5_get_endpoint"
+        ((failed++))
+    fi
+
+    # Test 10: Client API status check
+    ((total++))
+    local api_status
+    api_status=$(docker compose exec -T client-a curl -sf --max-time 5 http://127.0.0.1:9090/api/status 2>&1)
+    if [ $? -eq 0 ] && echo "$api_status" | grep -q "state"; then
+        success "test_client_a_api_status"
+        ((passed++))
+    else
+        error "test_client_a_api_status"
+        ((failed++))
+    fi
+
+    # Test 11: Client B SOCKS5 proxy (proxy_all mode)
+    ((total++))
+    if docker compose exec -T client-b curl -sf --socks5 127.0.0.1:1080 --max-time 10 http://10.100.0.20/ip > /dev/null 2>&1; then
+        success "test_client_b_socks5"
+        ((passed++))
+    else
+        error "test_client_b_socks5"
         ((failed++))
     fi
 
@@ -189,18 +227,38 @@ run_tests() {
 
 # Run Go integration tests inside Docker
 run_gotest() {
+    local test_pkg="${1:-}"
+    local test_run="${2:-}"
+
     log "Running Go integration tests in Docker..."
     echo ""
     echo "========== Go Sandbox Tests =========="
     echo ""
 
-    # Ensure stun + router are up
-    docker compose up -d stun router
-    sleep 2
+    # Ensure full environment is up (e2e tests need clients + httpbin)
+    docker compose up -d server router httpbin client-a client-b stun
+    sleep 5
+
+    # Wait for server health
+    if docker compose exec -T server pgrep -x shuttled > /dev/null 2>&1; then
+        success "Server is healthy"
+    else
+        error "Server health check failed"
+        docker compose logs server
+        return 1
+    fi
 
     # Build and run gotest container
+    local env_args=""
+    if [ -n "$test_pkg" ]; then
+        env_args="$env_args -e SANDBOX_TEST_PKG=$test_pkg"
+    fi
+    if [ -n "$test_run" ]; then
+        env_args="$env_args -e SANDBOX_TEST_RUN=$test_run"
+    fi
+
     docker compose --profile gotest build gotest
-    docker compose --profile gotest run --rm gotest
+    docker compose --profile gotest run --rm $env_args gotest
     result=$?
 
     echo ""
@@ -252,7 +310,12 @@ case "${1:-all}" in
         run_tests
         ;;
     gotest)
-        run_gotest
+        shift
+        run_gotest "$@"
+        ;;
+    e2e)
+        # Run only E2E tests
+        run_gotest "./test/e2e/" "TestSandbox"
         ;;
     logs)
         shift
@@ -299,7 +362,7 @@ case "${1:-all}" in
         exit $result
         ;;
     *)
-        echo "Usage: $0 {build|up|down|test|gotest|gui|logs|shell|clean|all}"
+        echo "Usage: $0 {build|up|down|test|gotest|e2e|gui|logs|shell|clean|all}"
         exit 1
         ;;
 esac

@@ -6,7 +6,6 @@ import (
 	"io"
 	"log/slog"
 	"net"
-	"os"
 	"sync"
 	"time"
 
@@ -14,6 +13,8 @@ import (
 	"github.com/shuttle-proxy/shuttle/config"
 	"github.com/shuttle-proxy/shuttle/mesh"
 	"github.com/shuttle-proxy/shuttle/congestion"
+	"github.com/shuttle-proxy/shuttle/internal/logutil"
+	"github.com/shuttle-proxy/shuttle/internal/netmon"
 	"github.com/shuttle-proxy/shuttle/internal/procnet"
 	"github.com/shuttle-proxy/shuttle/internal/sysopt"
 	"github.com/shuttle-proxy/shuttle/plugin"
@@ -53,8 +54,17 @@ type Engine struct {
 	// Mesh client for P2P VPN
 	meshClient *mesh.MeshClient
 
+	// Network change monitor
+	netMon *netmon.Monitor
+
 	// Geo data manager
 	geoManager *geodata.Manager
+
+	// Current router (for PAC generation and conflict detection)
+	currentRouter *router.Router
+
+	// Plugin chain for connection tracking, filtering, and logging
+	chain *plugin.Chain
 
 	// Event subscribers — stores bidirectional channels, Subscribe returns receive-only view
 	subMu sync.Mutex
@@ -65,16 +75,7 @@ const stopTimeout = 10 * time.Second
 
 // New creates a new Engine from the given config.
 func New(cfg *config.ClientConfig) *Engine {
-	level := slog.LevelInfo
-	switch cfg.Log.Level {
-	case "debug":
-		level = slog.LevelDebug
-	case "warn":
-		level = slog.LevelWarn
-	case "error":
-		level = slog.LevelError
-	}
-	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: level}))
+	logger := logutil.NewLogger(cfg.Log.Level, cfg.Log.Format)
 
 	return &Engine{
 		state:   StateStopped,
@@ -161,19 +162,50 @@ func (e *Engine) startInternal(ctx context.Context) error {
 	}
 	dialer := e.createDialer(cfgSnap, rt, dnsResolver)
 
+	// Build plugin chain: metrics (byte counting + stats), connection tracker
+	// (lifecycle events), and logger (debug logging).
+	connTracker := plugin.NewConnTracker(e)
+	chain := plugin.NewChain(
+		e.metrics,
+		connTracker,
+		plugin.NewLogger(e.logger),
+	)
+	if err := chain.Init(ctx); err != nil {
+		return fail(fmt.Errorf("plugin chain init: %w", err))
+	}
+	e.mu.Lock()
+	e.chain = chain
+	e.mu.Unlock()
+
+	// Wrap dialer so every proxied connection flows through the plugin chain.
+	dialer = e.wrapDialer(dialer, chain)
+
 	closers, err := e.startProxies(ctx, cfgSnap, dialer, sel, cancel)
 	if err != nil {
 		sel.Close()
+		chain.Close() // Clean up plugin chain on proxy start failure
 		return fail(err)
 	}
 
 	e.mu.Lock()
 	e.closers = closers
+	e.currentRouter = rt
 	e.state = StateRunning
 	e.mu.Unlock()
 
 	e.emit(Event{Type: EventConnected, Message: "engine started"})
 	go e.speedLoop(ctx)
+
+	// Start network change monitor to detect WiFi/cellular switches.
+	nm := netmon.New(5 * time.Second)
+	nm.OnChange(func() {
+		e.logger.Info("network change detected")
+		e.emit(Event{Type: EventNetworkChange, Message: "network change detected"})
+	})
+	nm.Start(ctx)
+	e.mu.Lock()
+	e.netMon = nm
+	e.mu.Unlock()
 
 	return nil
 }
@@ -227,15 +259,18 @@ func (e *Engine) buildTransports(cfg *config.ClientConfig, ccAdapter quic.Conges
 		switch cfg.Transport.CDN.Mode {
 		case "grpc":
 			transports = append(transports, cdn.NewGRPCClient(&cdn.GRPCConfig{
-				CDNDomain: cfg.Transport.CDN.Domain,
-				Password:  cfg.Server.Password,
+				CDNDomain:   cfg.Transport.CDN.Domain,
+				Password:    cfg.Server.Password,
+				FrontDomain: cfg.Transport.CDN.FrontDomain,
 			}, cdn.WithGRPCLogger(e.logger)))
 		default:
 			transports = append(transports, cdn.NewH2Client(&cdn.H2Config{
-				ServerAddr: cfg.Server.Addr,
-				CDNDomain:  cfg.Transport.CDN.Domain,
-				Path:       cfg.Transport.CDN.Path,
-				Password:   cfg.Server.Password,
+				ServerAddr:         cfg.Server.Addr,
+				CDNDomain:          cfg.Transport.CDN.Domain,
+				Path:               cfg.Transport.CDN.Path,
+				Password:           cfg.Server.Password,
+				FrontDomain:        cfg.Transport.CDN.FrontDomain,
+				InsecureSkipVerify: cfg.Transport.CDN.InsecureSkipVerify,
 			}, cdn.WithH2Logger(e.logger)))
 		}
 	}
@@ -294,6 +329,9 @@ func (e *Engine) buildRouter(cfg *config.ClientConfig) (*router.Router, *router.
 		RemoteViaProxy: cfg.Routing.DNS.Remote.Via == "proxy",
 		CacheSize:      10000,
 		CacheTTL:       10 * time.Minute,
+		LeakPrevention: cfg.Routing.DNS.LeakPrevention,
+		DomesticDoH:    cfg.Routing.DNS.DomesticDoH,
+		StripECS:       cfg.Routing.DNS.StripECS,
 	}, geoIPDB, e.logger)
 
 	routerCfg := &router.RouterConfig{
@@ -327,9 +365,29 @@ func (e *Engine) buildRouter(cfg *config.ClientConfig) (*router.Router, *router.
 	return rt, dnsResolver
 }
 
+// buildRetryConfig converts config.RetryConfig to engine.RetryConfig with parsed durations.
+func buildRetryConfig(cfg config.RetryConfig) RetryConfig {
+	rc := DefaultRetryConfig()
+	if cfg.MaxAttempts > 0 {
+		rc.MaxAttempts = cfg.MaxAttempts
+	}
+	if cfg.InitialBackoff != "" {
+		if d, err := time.ParseDuration(cfg.InitialBackoff); err == nil {
+			rc.InitialBackoff = d
+		}
+	}
+	if cfg.MaxBackoff != "" {
+		if d, err := time.ParseDuration(cfg.MaxBackoff); err == nil {
+			rc.MaxBackoff = d
+		}
+	}
+	return rc
+}
+
 // createDialer builds the proxy dialer function.
 func (e *Engine) createDialer(cfg *config.ClientConfig, rt *router.Router, dnsResolver *router.DNSResolver) func(context.Context, string, string) (net.Conn, error) {
 	serverAddr := cfg.Server.Addr
+	retryCfg := buildRetryConfig(cfg.Retry)
 	return func(dialCtx context.Context, network, addr string) (net.Conn, error) {
 		host, port, _ := net.SplitHostPort(addr)
 
@@ -361,13 +419,22 @@ func (e *Engine) createDialer(cfg *config.ClientConfig, rt *router.Router, dnsRe
 			if curSel == nil {
 				return nil, fmt.Errorf("no active selector")
 			}
-			conn, err := curSel.Dial(dialCtx, serverAddr)
+			var conn transport.Connection
+			var stream transport.Stream
+			err := retryWithBackoff(dialCtx, retryCfg, func() error {
+				var dialErr error
+				conn, dialErr = curSel.Dial(dialCtx, serverAddr)
+				if dialErr != nil {
+					return fmt.Errorf("proxy dial: %w", dialErr)
+				}
+				stream, dialErr = conn.OpenStream(dialCtx)
+				if dialErr != nil {
+					return fmt.Errorf("open stream: %w", dialErr)
+				}
+				return nil
+			})
 			if err != nil {
-				return nil, fmt.Errorf("proxy dial: %w", err)
-			}
-			stream, err := conn.OpenStream(dialCtx)
-			if err != nil {
-				return nil, fmt.Errorf("open stream: %w", err)
+				return nil, err
 			}
 			header := []byte(addr + "\n")
 			if _, err := stream.Write(header); err != nil {
@@ -403,6 +470,7 @@ func (e *Engine) startProxies(ctx context.Context, cfg *config.ClientConfig, dia
 			ListenAddr: cfg.Proxy.SOCKS5.Listen,
 		}, dialer, e.logger)
 		socks.ProcResolver = procResolver
+		socks.QoSClassifier = qos.NewClassifier(&cfg.QoS)
 		if err := socks.Start(ctx); err != nil {
 			return cleanup(fmt.Errorf("socks5: %w", err))
 		}
@@ -414,6 +482,7 @@ func (e *Engine) startProxies(ctx context.Context, cfg *config.ClientConfig, dia
 			ListenAddr: cfg.Proxy.HTTP.Listen,
 		}, dialer, e.logger)
 		httpProxy.ProcResolver = procResolver
+		httpProxy.QoSClassifier = qos.NewClassifier(&cfg.QoS)
 		if err := httpProxy.Start(ctx); err != nil {
 			return cleanup(fmt.Errorf("http proxy: %w", err))
 		}
@@ -545,14 +614,23 @@ func (e *Engine) stopInternal() error {
 	}
 
 	e.mu.Lock()
+	if e.netMon != nil {
+		e.netMon.Stop()
+		e.netMon = nil
+	}
 	if e.geoManager != nil {
 		e.geoManager.Stop()
 		e.geoManager = nil
+	}
+	if e.chain != nil {
+		e.chain.Close()
+		e.chain = nil
 	}
 	e.state = StateStopped
 	e.closers = nil
 	e.sel = nil
 	e.cancel = nil
+	e.currentRouter = nil
 	e.mu.Unlock()
 
 	e.emit(Event{Type: EventDisconnected, Message: "engine stopped"})
@@ -652,12 +730,14 @@ func (e *Engine) Status() EngineStatus {
 		if paths := sel.ActivePaths(); len(paths) > 0 {
 			for _, sp := range paths {
 				status.MultipathPaths = append(status.MultipathPaths, PathInfo{
-					Transport:    sp.Transport,
-					Latency:      sp.Latency,
-					ActiveStreams: sp.ActiveStreams,
-					TotalStreams:  sp.TotalStreams,
-					Available:    sp.Available,
-					Failures:     sp.Failures,
+					Transport:     sp.Transport,
+					Latency:       sp.Latency,
+					ActiveStreams:  sp.ActiveStreams,
+					TotalStreams:   sp.TotalStreams,
+					Available:     sp.Available,
+					Failures:      sp.Failures,
+					BytesSent:     sp.BytesSent,
+					BytesReceived: sp.BytesReceived,
 				})
 			}
 		}
@@ -736,6 +816,13 @@ func (e *Engine) GeoManager() *geodata.Manager {
 	return e.geoManager
 }
 
+// CurrentRouter returns the active router, or nil if not running.
+func (e *Engine) CurrentRouter() *router.Router {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	return e.currentRouter
+}
+
 // Subscribe returns a channel that receives real-time engine events.
 // The channel is buffered. Slow consumers will miss events.
 func (e *Engine) Subscribe() chan Event {
@@ -800,6 +887,45 @@ func (e *Engine) speedLoop(ctx context.Context) {
 				Download: down,
 			})
 		}
+	}
+}
+
+// chainConn wraps a net.Conn so that closing it calls chain.OnDisconnect,
+// ensuring all plugins in the chain (metrics, logger, etc.) are notified.
+type chainConn struct {
+	net.Conn
+	chain     *plugin.Chain
+	closeOnce sync.Once
+}
+
+func (c *chainConn) Close() error {
+	c.closeOnce.Do(func() {
+		c.chain.OnDisconnect(c.Conn)
+	})
+	return c.Conn.Close()
+}
+
+// wrapDialer wraps a dialer function so that every successfully dialled
+// connection is run through the plugin chain's OnConnect hooks. When the
+// returned connection is closed, OnDisconnect is called on the full chain
+// via the chainConn wrapper.
+func (e *Engine) wrapDialer(
+	dialer func(context.Context, string, string) (net.Conn, error),
+	chain *plugin.Chain,
+) func(context.Context, string, string) (net.Conn, error) {
+	return func(ctx context.Context, network, addr string) (net.Conn, error) {
+		conn, err := dialer(ctx, network, addr)
+		if err != nil {
+			return nil, err
+		}
+		// Run the connection through the plugin chain (metrics, conntrack, logger).
+		// The chain may wrap the conn (e.g. trackingConn for byte counting).
+		wrapped, err := chain.OnConnect(conn, addr)
+		if err != nil {
+			conn.Close()
+			return nil, err
+		}
+		return &chainConn{Conn: wrapped, chain: chain}, nil
 	}
 }
 

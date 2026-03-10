@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"github.com/hashicorp/yamux"
-	"github.com/shuttle-proxy/shuttle/crypto"
+	shuttlecrypto "github.com/shuttle-proxy/shuttle/crypto"
 	"github.com/shuttle-proxy/shuttle/transport"
 	"golang.org/x/crypto/curve25519"
 )
@@ -84,6 +84,18 @@ func (s *Server) Listen(ctx context.Context) error {
 			return fmt.Errorf("load tls cert: %w", err)
 		}
 		tlsConf.Certificates = []tls.Certificate{cert}
+	} else {
+		// Auto-generate self-signed cert for zero-config setup
+		certPEM, keyPEM, err := shuttlecrypto.GenerateSelfSignedCert(nil, 365*24*time.Hour)
+		if err != nil {
+			return fmt.Errorf("generate self-signed cert: %w", err)
+		}
+		cert, err := tls.X509KeyPair(certPEM, keyPEM)
+		if err != nil {
+			return fmt.Errorf("parse self-signed cert: %w", err)
+		}
+		tlsConf.Certificates = []tls.Certificate{cert}
+		s.logger.Info("reality: using auto-generated self-signed certificate")
 	}
 	ln, err := tls.Listen("tcp", addr, tlsConf)
 	if err != nil {
@@ -116,7 +128,7 @@ func (s *Server) handleConn(ctx context.Context, raw net.Conn) {
 	// Set a deadline for the Noise handshake phase
 	raw.SetReadDeadline(time.Now().Add(10 * time.Second))
 
-	hs, err := crypto.NewResponder(s.privKey, s.pubKey)
+	hs, err := shuttlecrypto.NewResponder(s.privKey, s.pubKey)
 	if err != nil {
 		s.logger.Error("noise responder init failed", "err", err)
 		raw.Close()

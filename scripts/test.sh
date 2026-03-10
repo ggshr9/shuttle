@@ -100,14 +100,14 @@ run_sandbox_tests() {
     echo ""
 
     # Build images if needed
-    docker compose -f sandbox/docker-compose.yml build stun 2>&1 | tail -3
+    docker compose -f sandbox/docker-compose.yml build 2>&1 | tail -5
     docker compose -f sandbox/docker-compose.yml --profile gotest build gotest 2>&1 | tail -3
 
-    # Start infrastructure
-    docker compose -f sandbox/docker-compose.yml up -d stun router 2>&1
+    # Start full infrastructure (e2e tests need clients + httpbin)
+    docker compose -f sandbox/docker-compose.yml up -d server router httpbin client-a client-b stun 2>&1
 
     # Wait for services
-    sleep 2
+    sleep 5
 
     # Run tests
     if docker compose -f sandbox/docker-compose.yml --profile gotest run --rm gotest 2>&1; then
@@ -118,7 +118,7 @@ run_sandbox_tests() {
     fi
 
     # Cleanup
-    docker compose -f sandbox/docker-compose.yml --profile gotest down -v 2>&1 | tail -1
+    docker compose -f sandbox/docker-compose.yml --profile gotest --profile test down -v 2>&1 | tail -1
 
     echo ""
 }

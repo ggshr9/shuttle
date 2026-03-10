@@ -29,6 +29,10 @@ type Manager struct {
 	mu            sync.RWMutex
 	subscriptions map[string]*Subscription
 	client        *http.Client
+
+	autoMu      sync.Mutex
+	autoCancel  context.CancelFunc
+	autoRunning bool
 }
 
 // NewManager creates a new subscription manager.
@@ -37,6 +41,12 @@ func NewManager() *Manager {
 		subscriptions: make(map[string]*Subscription),
 		client: &http.Client{
 			Timeout: 30 * time.Second,
+			CheckRedirect: func(req *http.Request, via []*http.Request) error {
+				if len(via) > 5 {
+					return fmt.Errorf("too many redirects (max 5)")
+				}
+				return nil
+			},
 		},
 	}
 }
@@ -191,6 +201,51 @@ func (m *Manager) ToConfig() []config.SubscriptionConfig {
 		})
 	}
 	return configs
+}
+
+// StartAutoRefresh starts a background goroutine that periodically calls RefreshAll.
+// Only one auto-refresh goroutine runs at a time; calling StartAutoRefresh again
+// stops the previous goroutine before starting a new one.
+func (m *Manager) StartAutoRefresh(ctx context.Context, interval time.Duration) {
+	m.autoMu.Lock()
+	defer m.autoMu.Unlock()
+
+	// Stop existing goroutine if running.
+	if m.autoCancel != nil {
+		m.autoCancel()
+	}
+
+	autoCtx, cancel := context.WithCancel(ctx)
+	m.autoCancel = cancel
+	m.autoRunning = true
+
+	go func() {
+		ticker := time.NewTicker(interval)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-autoCtx.Done():
+				m.autoMu.Lock()
+				m.autoRunning = false
+				m.autoMu.Unlock()
+				return
+			case <-ticker.C:
+				m.RefreshAll(autoCtx)
+			}
+		}
+	}()
+}
+
+// StopAutoRefresh stops the auto-refresh goroutine if one is running.
+func (m *Manager) StopAutoRefresh() {
+	m.autoMu.Lock()
+	defer m.autoMu.Unlock()
+
+	if m.autoCancel != nil {
+		m.autoCancel()
+		m.autoCancel = nil
+	}
 }
 
 // GetAllServers returns all servers from all subscriptions.

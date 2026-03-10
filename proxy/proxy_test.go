@@ -557,3 +557,116 @@ func TestProcessContext_RoundTrip(t *testing.T) {
 		t.Fatalf("expected %q, got %q", "curl", got)
 	}
 }
+
+// ---------------------------------------------------------------------------
+// 7. Config defaults and constructor tests
+// ---------------------------------------------------------------------------
+
+func TestSOCKS5Config_Defaults(t *testing.T) {
+	dialer, _ := mockDialer()
+
+	// Empty ListenAddr should default to 127.0.0.1:1080
+	srv := NewSOCKS5Server(&SOCKS5Config{}, dialer, nil)
+	if srv.config.ListenAddr != "127.0.0.1:1080" {
+		t.Fatalf("expected default listen addr 127.0.0.1:1080, got %q", srv.config.ListenAddr)
+	}
+
+	// Custom addr should be preserved
+	srv = NewSOCKS5Server(&SOCKS5Config{ListenAddr: "0.0.0.0:9999"}, dialer, nil)
+	if srv.config.ListenAddr != "0.0.0.0:9999" {
+		t.Fatalf("expected custom listen addr 0.0.0.0:9999, got %q", srv.config.ListenAddr)
+	}
+}
+
+func TestHTTPConfig_Defaults(t *testing.T) {
+	dialer, _ := mockDialer()
+
+	// Empty ListenAddr should default to 127.0.0.1:8080
+	srv := NewHTTPServer(&HTTPConfig{}, dialer, nil)
+	if srv.config.ListenAddr != "127.0.0.1:8080" {
+		t.Fatalf("expected default listen addr 127.0.0.1:8080, got %q", srv.config.ListenAddr)
+	}
+
+	// Custom addr should be preserved
+	srv = NewHTTPServer(&HTTPConfig{ListenAddr: "0.0.0.0:3128"}, dialer, nil)
+	if srv.config.ListenAddr != "0.0.0.0:3128" {
+		t.Fatalf("expected custom listen addr 0.0.0.0:3128, got %q", srv.config.ListenAddr)
+	}
+}
+
+func TestSOCKS5_UnsupportedVersion(t *testing.T) {
+	client, server := net.Pipe()
+	defer client.Close()
+	defer server.Close()
+
+	dialer, _ := mockDialer()
+	srv := NewSOCKS5Server(&SOCKS5Config{}, dialer, nil)
+
+	go srv.handleConn(context.Background(), server)
+
+	// Send version 4 instead of 5 — should fail.
+	// Write may fail with "closed pipe" if server reads and closes fast enough,
+	// so we tolerate a write error here.
+	client.Write([]byte{0x04, 0x01, 0x00})
+
+	// The server should close the connection after seeing the wrong version.
+	// Try reading — expect EOF or error.
+	buf := make([]byte, 10)
+	client.SetReadDeadline(time.Now().Add(1 * time.Second))
+	_, err := client.Read(buf)
+	if err == nil {
+		t.Fatal("expected error or EOF for unsupported SOCKS version, got none")
+	}
+}
+
+func TestSOCKS5_UnsupportedCommand(t *testing.T) {
+	client, server := net.Pipe()
+	defer client.Close()
+	defer server.Close()
+
+	dialer, _ := mockDialer()
+	srv := NewSOCKS5Server(&SOCKS5Config{}, dialer, nil)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go srv.handleConn(ctx, server)
+
+	// Greet normally
+	if _, err := socks5Greet(client); err != nil {
+		t.Fatal(err)
+	}
+
+	// Send BIND command (0x02) instead of CONNECT (0x01).
+	// Only send the 4-byte header because handleRequest reads exactly 4 bytes
+	// before checking the command. With net.Pipe (synchronous), sending more
+	// would deadlock: the client blocks on Write while the server blocks on
+	// sendReply's Write.
+	errCh := make(chan error, 1)
+	go func() {
+		if _, err := client.Write([]byte{0x05, 0x02, 0x00, 0x01}); err != nil {
+			errCh <- err
+			return
+		}
+		// Read reply — should get "command not supported" (0x07)
+		reply := make([]byte, 10)
+		_, err := io.ReadFull(client, reply)
+		if err != nil {
+			errCh <- fmt.Errorf("read reply: %w", err)
+			return
+		}
+		if reply[1] != repCmdNotSupported {
+			errCh <- fmt.Errorf("expected repCmdNotSupported (0x07), got 0x%02x", reply[1])
+			return
+		}
+		errCh <- nil
+	}()
+
+	select {
+	case err := <-errCh:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("test timed out")
+	}
+}

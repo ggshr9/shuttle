@@ -1,6 +1,7 @@
 <script lang="ts">
   import { api } from '../lib/api'
   import { t, getLocale, setLocale, getLocales } from '../lib/i18n/index'
+  import { getTheme, setTheme, type Theme } from '../lib/theme'
   import { onMount } from 'svelte'
 
   let config = $state(null)
@@ -9,6 +10,7 @@
   let msg = $state('')
   let selectedLocale = $state(getLocale())
   let availableLocales = getLocales()
+  let selectedTheme = $state(getTheme())
   let fileInput = $state(null)
 
   // GeoData state
@@ -28,11 +30,26 @@
   // LAN sharing state
   let lanInfo = $state(null)
 
+  // Per-app routing state
+  let perAppProcesses = $state([])
+  let showPerAppPicker = $state(false)
+  let newAppName = $state('')
+
   onMount(async () => {
     config = await api.getConfig()
     // Ensure system_proxy exists in config
     if (!config.proxy.system_proxy) {
       config.proxy.system_proxy = { enabled: false }
+    }
+    // Ensure TUN per-app fields exist
+    if (!config.proxy.tun) {
+      config.proxy.tun = { enabled: false, device_name: '', per_app_mode: '', app_list: [] }
+    }
+    if (!config.proxy.tun.app_list) {
+      config.proxy.tun.app_list = []
+    }
+    if (!config.proxy.tun.per_app_mode) {
+      config.proxy.tun.per_app_mode = ''
     }
     // Ensure qos exists in config
     if (!config.qos) {
@@ -99,6 +116,34 @@
     const locale = e.target.value
     setLocale(locale)
     selectedLocale = locale
+  }
+
+  function changeTheme(e) {
+    const theme = e.target.value as Theme
+    setTheme(theme)
+    selectedTheme = theme
+  }
+
+  async function openPerAppPicker() {
+    try {
+      perAppProcesses = await api.getProcesses()
+      showPerAppPicker = true
+    } catch (e) {
+      msg = 'Failed to load processes: ' + e.message
+    }
+  }
+
+  function addPerApp(name: string) {
+    if (!name.trim()) return
+    const list = config.proxy.tun.app_list || []
+    if (!list.includes(name.trim())) {
+      config.proxy.tun.app_list = [...list, name.trim()]
+    }
+    newAppName = ''
+  }
+
+  function removePerApp(index: number) {
+    config.proxy.tun.app_list = config.proxy.tun.app_list.filter((_, i) => i !== index)
   }
 
   async function save() {
@@ -193,6 +238,38 @@
       </label>
       <input bind:value={config.proxy.tun.device_name} placeholder="utun7" />
     </div>
+    {#if config.proxy.tun.enabled}
+    <div class="per-app-section">
+      <div class="per-app-header">
+        <span class="per-app-label">Per-App Routing</span>
+        <select bind:value={config.proxy.tun.per_app_mode} class="per-app-mode">
+          <option value="">Disabled</option>
+          <option value="allow">Allow List (only these apps use proxy)</option>
+          <option value="deny">Deny List (these apps bypass proxy)</option>
+        </select>
+      </div>
+      {#if config.proxy.tun.per_app_mode}
+        <div class="per-app-list">
+          {#each config.proxy.tun.app_list as app, i}
+            <div class="per-app-item">
+              <span class="per-app-name">{app}</span>
+              <button class="per-app-remove" onclick={() => removePerApp(i)}>x</button>
+            </div>
+          {/each}
+          <div class="per-app-add-row">
+            <input
+              bind:value={newAppName}
+              placeholder="com.example.app or process name"
+              class="per-app-input"
+              onkeydown={(e) => e.key === 'Enter' && addPerApp(newAppName)}
+            />
+            <button class="per-app-add-btn" onclick={() => addPerApp(newAppName)}>Add</button>
+            <button class="per-app-pick-btn" onclick={openPerAppPicker}>Pick</button>
+          </div>
+        </div>
+      {/if}
+    </div>
+    {/if}
     <div class="system-proxy-row">
       <label class="system-proxy-label">
         <input type="checkbox" bind:checked={config.proxy.allow_lan} onchange={loadLanInfo} />
@@ -425,6 +502,13 @@
         {/each}
       </select>
     </label>
+    <label class="row">
+      <span>Theme</span>
+      <select value={selectedTheme} onchange={changeTheme}>
+        <option value="dark">Dark</option>
+        <option value="light">Light</option>
+      </select>
+    </label>
   </section>
 
   <section class="update-section">
@@ -484,14 +568,36 @@
 <p>Loading...</p>
 {/if}
 
+{#if showPerAppPicker}
+<div class="overlay" onclick={() => (showPerAppPicker = false)} role="dialog" aria-modal="true" aria-labelledby="perapp-picker-title" onkeydown={(e) => e.key === 'Escape' && (showPerAppPicker = false)}>
+  <div class="picker-modal" onclick={(e) => e.stopPropagation()}>
+    <h3 id="perapp-picker-title">Select Process</h3>
+    <p class="picker-hint">Click a process to add it to the per-app list</p>
+    {#if perAppProcesses.length}
+      <div class="picker-list">
+        {#each perAppProcesses as proc}
+          <button class="picker-item" onclick={() => { addPerApp(proc.name); }}>
+            <span class="picker-name">{proc.name}</span>
+            <span class="picker-conns">{proc.conns} conn{proc.conns !== 1 ? 's' : ''}</span>
+          </button>
+        {/each}
+      </div>
+    {:else}
+      <p class="picker-empty">No processes with active connections found</p>
+    {/if}
+    <button class="picker-close" onclick={() => (showPerAppPicker = false)}>Done</button>
+  </div>
+</div>
+{/if}
+
 <style>
   .page { max-width: 500px; }
   h2 { font-size: 18px; margin-bottom: 20px; }
-  h3 { font-size: 14px; color: #8b949e; margin: 20px 0 10px; }
+  h3 { font-size: 14px; color: var(--text-secondary); margin: 20px 0 10px; }
 
   section {
-    background: #161b22;
-    border: 1px solid #2d333b;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
     border-radius: 8px;
     padding: 12px 16px;
     margin-bottom: 12px;
@@ -511,7 +617,7 @@
     margin: 6px 0;
   }
 
-  .row span { font-size: 13px; color: #8b949e; min-width: 100px; }
+  .row span { font-size: 13px; color: var(--text-secondary); min-width: 100px; }
 
   .row input[type="text"], .row input:not([type]) {
     flex: 1;
@@ -528,13 +634,13 @@
     align-items: center;
     gap: 6px;
     font-size: 13px;
-    color: #8b949e;
+    color: var(--text-secondary);
   }
 
   .system-proxy-row {
     margin-top: 12px;
     padding-top: 12px;
-    border-top: 1px solid #2d333b;
+    border-top: 1px solid var(--border);
   }
 
   .system-proxy-label {
@@ -546,12 +652,12 @@
 
   .system-proxy-label .label-text {
     font-size: 13px;
-    color: #e1e4e8;
+    color: var(--text-primary);
   }
 
   .system-proxy-label .hint {
     font-size: 11px;
-    color: #8b949e;
+    color: var(--text-secondary);
     margin-left: auto;
   }
 
@@ -566,7 +672,7 @@
   .lan-info-title {
     font-size: 12px;
     font-weight: 500;
-    color: #58a6ff;
+    color: var(--accent);
     margin-bottom: 8px;
   }
 
@@ -585,44 +691,44 @@
   }
 
   .lan-address .ip {
-    color: #e1e4e8;
+    color: var(--text-primary);
     font-weight: 500;
     min-width: 110px;
   }
 
   .lan-address .port {
-    color: #8b949e;
-    background: #21262d;
+    color: var(--text-secondary);
+    background: var(--bg-tertiary);
     padding: 2px 6px;
     border-radius: 4px;
   }
 
   .lan-info-hint {
     font-size: 11px;
-    color: #8b949e;
+    color: var(--text-secondary);
     margin-top: 8px;
   }
 
   input[type="text"], input:not([type]) {
-    background: #0d1117;
-    border: 1px solid #2d333b;
+    background: var(--bg-surface);
+    border: 1px solid var(--border);
     border-radius: 6px;
     padding: 6px 10px;
-    color: #e1e4e8;
+    color: var(--text-primary);
     font-size: 13px;
   }
 
   select {
-    background: #0d1117;
-    border: 1px solid #2d333b;
+    background: var(--bg-surface);
+    border: 1px solid var(--border);
     border-radius: 6px;
     padding: 6px 10px;
-    color: #e1e4e8;
+    color: var(--text-primary);
     font-size: 13px;
   }
 
   .save {
-    background: #238636;
+    background: var(--btn-bg);
     color: #fff;
     border: none;
     border-radius: 6px;
@@ -633,7 +739,7 @@
   }
 
   .save:disabled { opacity: 0.5; }
-  .msg { font-size: 13px; color: #8b949e; margin-top: 8px; }
+  .msg { font-size: 13px; color: var(--text-secondary); margin-top: 8px; }
 
   .export-section {
     margin-top: 24px;
@@ -645,9 +751,9 @@
   }
 
   .export-btn {
-    background: #21262d;
-    color: #58a6ff;
-    border: 1px solid #2d333b;
+    background: var(--bg-tertiary);
+    color: var(--accent);
+    border: 1px solid var(--border);
     border-radius: 6px;
     padding: 8px 16px;
     text-decoration: none;
@@ -679,9 +785,9 @@
     display: flex;
     align-items: center;
     gap: 8px;
-    background: #21262d;
-    color: #e1e4e8;
-    border: 1px solid #2d333b;
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+    border: 1px solid var(--border);
     border-radius: 6px;
     padding: 10px 16px;
     text-decoration: none;
@@ -692,13 +798,13 @@
 
   .backup-btn:hover {
     background: #30363d;
-    border-color: #3fb950;
+    border-color: var(--accent-green);
   }
 
   .backup-btn.restore {
-    background: #161b22;
-    border-color: #58a6ff;
-    color: #58a6ff;
+    background: var(--bg-secondary);
+    border-color: var(--accent);
+    color: var(--accent);
   }
 
   .backup-btn.restore:hover {
@@ -725,19 +831,19 @@
   }
 
   .version-label {
-    color: #8b949e;
+    color: var(--text-secondary);
     font-size: 13px;
   }
 
   .version-value {
-    color: #e1e4e8;
+    color: var(--text-primary);
     font-size: 13px;
     font-family: 'Cascadia Code', 'Fira Code', monospace;
   }
 
   .update-available {
     background: rgba(63, 185, 80, 0.08);
-    border: 1px solid #3fb950;
+    border: 1px solid var(--accent-green);
     border-radius: 8px;
     padding: 12px;
     margin-bottom: 12px;
@@ -747,7 +853,7 @@
     display: flex;
     align-items: center;
     gap: 8px;
-    color: #3fb950;
+    color: var(--accent-green);
     font-size: 14px;
     font-weight: 500;
     margin-bottom: 12px;
@@ -765,8 +871,8 @@
 
   .changelog-btn {
     background: transparent;
-    border: 1px solid #3fb950;
-    color: #3fb950;
+    border: 1px solid var(--accent-green);
+    color: var(--accent-green);
     border-radius: 6px;
     padding: 6px 12px;
     cursor: pointer;
@@ -774,9 +880,9 @@
   }
 
   .download-btn {
-    background: #21262d;
-    border: 1px solid #2d333b;
-    color: #58a6ff;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border);
+    color: var(--accent);
     border-radius: 6px;
     padding: 6px 12px;
     text-decoration: none;
@@ -785,8 +891,8 @@
   }
 
   .download-btn.primary {
-    background: #238636;
-    border-color: #238636;
+    background: var(--btn-bg);
+    border-color: var(--btn-bg);
     color: #fff;
   }
 
@@ -795,13 +901,13 @@
   }
 
   .download-btn.primary:hover {
-    background: #2ea043;
+    background: var(--btn-bg-hover);
   }
 
   .changelog {
     margin-top: 12px;
-    background: #0d1117;
-    border: 1px solid #21262d;
+    background: var(--bg-surface);
+    border: 1px solid var(--bg-tertiary);
     border-radius: 6px;
     padding: 12px;
     max-height: 200px;
@@ -817,15 +923,15 @@
   }
 
   .up-to-date {
-    color: #3fb950;
+    color: var(--accent-green);
     font-size: 13px;
     margin-bottom: 12px;
   }
 
   .check-btn {
-    background: #21262d;
-    border: 1px solid #2d333b;
-    color: #e1e4e8;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border);
+    color: var(--text-primary);
     border-radius: 6px;
     padding: 8px 16px;
     cursor: pointer;
@@ -855,7 +961,7 @@
 
   .qos-rules-title {
     font-size: 12px;
-    color: #8b949e;
+    color: var(--text-secondary);
   }
 
   .qos-rule {
@@ -867,28 +973,28 @@
 
   .qos-priority-select {
     min-width: 140px;
-    background: #0d1117;
-    border: 1px solid #2d333b;
+    background: var(--bg-surface);
+    border: 1px solid var(--border);
     border-radius: 6px;
     padding: 6px 10px;
-    color: #e1e4e8;
+    color: var(--text-primary);
     font-size: 12px;
   }
 
   .qos-input {
     flex: 1;
-    background: #0d1117;
-    border: 1px solid #2d333b;
+    background: var(--bg-surface);
+    border: 1px solid var(--border);
     border-radius: 6px;
     padding: 6px 10px;
-    color: #e1e4e8;
+    color: var(--text-primary);
     font-size: 12px;
   }
 
   .qos-remove {
     background: transparent;
-    border: 1px solid #f85149;
-    color: #f85149;
+    border: 1px solid var(--accent-red);
+    color: var(--accent-red);
     border-radius: 4px;
     width: 24px;
     height: 24px;
@@ -910,8 +1016,8 @@
 
   .qos-add {
     background: transparent;
-    border: 1px dashed #2d333b;
-    color: #8b949e;
+    border: 1px dashed var(--border);
+    color: var(--text-secondary);
     border-radius: 6px;
     padding: 8px 12px;
     cursor: pointer;
@@ -921,15 +1027,15 @@
   }
 
   .qos-add:hover {
-    border-color: #58a6ff;
-    color: #58a6ff;
+    border-color: var(--accent);
+    color: var(--accent);
   }
 
   .geo-status {
     margin-top: 12px;
     padding: 12px;
-    background: #161b22;
-    border: 1px solid #2d333b;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
     border-radius: 8px;
   }
 
@@ -941,22 +1047,175 @@
     padding: 4px 0;
   }
 
-  .geo-label { color: #8b949e; }
-  .geo-value { color: #e1e4e8; }
+  .geo-label { color: var(--text-secondary); }
+  .geo-value { color: var(--text-primary); }
   .geo-warn { color: #d29922; }
-  .geo-error { color: #f85149; font-size: 12px; }
+  .geo-error { color: var(--accent-red); font-size: 12px; }
 
   .geo-update-btn {
     margin-top: 12px;
     width: 100%;
     padding: 8px;
-    background: #21262d;
-    color: #58a6ff;
-    border: 1px solid #2d333b;
+    background: var(--bg-tertiary);
+    color: var(--accent);
+    border: 1px solid var(--border);
     border-radius: 6px;
     cursor: pointer;
     font-size: 13px;
   }
   .geo-update-btn:hover { background: #30363d; }
   .geo-update-btn:disabled { opacity: 0.5; cursor: default; }
+
+  /* Per-app routing */
+  .per-app-section {
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid var(--border);
+  }
+
+  .per-app-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+  }
+
+  .per-app-label {
+    font-size: 13px;
+    color: var(--text-secondary);
+    min-width: 100px;
+  }
+
+  .per-app-mode {
+    flex: 1;
+    background: var(--bg-surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 6px 10px;
+    color: var(--text-primary);
+    font-size: 12px;
+  }
+
+  .per-app-list {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .per-app-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: var(--bg-surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 6px 10px;
+  }
+
+  .per-app-name {
+    font-size: 13px;
+    color: var(--text-primary);
+    font-family: 'Cascadia Code', 'Fira Code', monospace;
+  }
+
+  .per-app-remove {
+    background: none;
+    border: none;
+    color: var(--accent-red);
+    cursor: pointer;
+    font-size: 14px;
+    padding: 2px 6px;
+  }
+
+  .per-app-add-row {
+    display: flex;
+    gap: 4px;
+    margin-top: 4px;
+  }
+
+  .per-app-input {
+    flex: 1;
+    background: var(--bg-surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 6px 10px;
+    color: var(--text-primary);
+    font-size: 12px;
+  }
+
+  .per-app-add-btn, .per-app-pick-btn {
+    background: var(--bg-tertiary);
+    color: var(--accent);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 6px 12px;
+    cursor: pointer;
+    font-size: 12px;
+  }
+
+  .per-app-pick-btn { color: var(--accent-purple); }
+
+  /* Process picker modal */
+  .overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.6);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+  }
+
+  .picker-modal {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+    width: 400px;
+    max-height: 500px;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .picker-modal h3 { font-size: 16px; margin: 0 0 4px; color: var(--text-primary); }
+  .picker-hint { font-size: 12px; color: var(--text-muted); margin: 0 0 12px; }
+
+  .picker-list {
+    overflow-y: auto;
+    max-height: 350px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .picker-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: var(--bg-surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 8px 12px;
+    cursor: pointer;
+    color: var(--text-primary);
+    font-size: 13px;
+    width: 100%;
+    text-align: left;
+  }
+
+  .picker-item:hover { border-color: var(--accent); }
+  .picker-name { font-weight: 500; }
+  .picker-conns { font-size: 11px; color: var(--text-muted); }
+  .picker-empty { font-size: 13px; color: var(--text-muted); }
+
+  .picker-close {
+    margin-top: 12px;
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 8px;
+    cursor: pointer;
+    font-size: 13px;
+  }
 </style>

@@ -265,6 +265,34 @@ func TestGeoIPIPv6(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
+// GeoSiteDB tests
+// ---------------------------------------------------------------------------
+
+func TestGeoSiteCategories(t *testing.T) {
+	db := NewGeoSiteDB()
+	db.LoadCategory("cn", []string{"baidu.com"})
+	db.LoadCategory("ads", []string{"doubleclick.net"})
+	db.LoadCategory("apple", []string{"apple.com"})
+
+	cats := db.Categories()
+	if len(cats) != 3 {
+		t.Fatalf("expected 3 categories, got %d", len(cats))
+	}
+	// Should be sorted alphabetically
+	if cats[0] != "ads" || cats[1] != "apple" || cats[2] != "cn" {
+		t.Fatalf("expected sorted [ads apple cn], got %v", cats)
+	}
+}
+
+func TestGeoSiteCategoriesEmpty(t *testing.T) {
+	db := NewGeoSiteDB()
+	cats := db.Categories()
+	if len(cats) != 0 {
+		t.Fatalf("expected 0 categories, got %d", len(cats))
+	}
+}
+
+// ---------------------------------------------------------------------------
 // Router tests
 // ---------------------------------------------------------------------------
 

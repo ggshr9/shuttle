@@ -18,7 +18,13 @@ COPY . .
 # Download dependencies
 RUN go mod download
 
-# Pre-compile test binary to speed up repeated runs
+# Pre-compile test binaries to speed up repeated runs
 RUN go test -tags sandbox -c -o /dev/null ./mesh/p2p/ 2>/dev/null || true
+RUN go test -tags sandbox -c -o /dev/null ./test/e2e/ 2>/dev/null || true
 
-CMD ["go", "test", "-tags", "sandbox", "-count=1", "-v", "-timeout", "120s", "./mesh/p2p/", "-run", "TestSandbox"]
+# Default: run both P2P sandbox tests and E2E sandbox tests
+# Override with SANDBOX_TEST_PKG and SANDBOX_TEST_RUN env vars
+ENV SANDBOX_TEST_PKG="./mesh/p2p/ ./test/e2e/"
+ENV SANDBOX_TEST_RUN="TestSandbox"
+
+CMD ["sh", "-c", "go test -tags sandbox -count=1 -v -timeout 180s $SANDBOX_TEST_PKG -run $SANDBOX_TEST_RUN"]

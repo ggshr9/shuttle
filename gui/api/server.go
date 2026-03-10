@@ -19,8 +19,13 @@ type Server struct {
 // NewServer creates an API server. If webFS is non-nil, it serves the SPA from it
 // with fallback to index.html for client-side routing.
 func NewServer(eng *engine.Engine, webFS fs.FS) *Server {
-	apiHandler := Handler(eng)
+	return NewServerWithHandler(eng, webFS, Handler(eng))
+}
 
+// NewServerWithHandler creates an API server using a pre-built API handler.
+// This allows sharing the same handler (with stats, connlog, subscriptions)
+// between the standalone server and Wails asset handler.
+func NewServerWithHandler(eng *engine.Engine, webFS fs.FS, apiHandler http.Handler) *Server {
 	var handler http.Handler
 	if webFS != nil {
 		fileServer := http.FileServer(http.FS(webFS))

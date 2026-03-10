@@ -165,6 +165,11 @@ func (r *Router) MatchProtocol(proto string) Action {
 	return r.defaultAct
 }
 
+// GeoSiteDB returns the GeoSite database used by this router.
+func (r *Router) GeoSiteDB() *GeoSiteDB {
+	return r.geoSite
+}
+
 // Match performs full routing decision for a connection.
 func (r *Router) Match(domain string, ip net.IP, process string, protocol string) Action {
 	// Priority: protocol > process > domain > IP > default

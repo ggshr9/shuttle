@@ -4,9 +4,11 @@ import (
 	"context"
 	"io/fs"
 	"log"
+	"net/http"
 	"os"
 	"path/filepath"
 	"runtime"
+	"time"
 
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"
@@ -16,6 +18,7 @@ import (
 	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 
 	"github.com/shuttle-proxy/shuttle/config"
+	"github.com/shuttle-proxy/shuttle/connlog"
 	"github.com/shuttle-proxy/shuttle/engine"
 	"github.com/shuttle-proxy/shuttle/gui"
 	"github.com/shuttle-proxy/shuttle/gui/api"
@@ -30,13 +33,15 @@ type App struct {
 	eng        *engine.Engine
 	srv        *api.Server
 	statsStore *stats.Storage
+	connStore  *connlog.Storage
+	apiHandler http.Handler
 }
 
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
 
-	// Start internal API server for REST + WebSocket endpoints.
-	a.srv = api.NewServer(a.eng, nil)
+	// Start internal API server using the shared handler for REST + WebSocket endpoints.
+	a.srv = api.NewServerWithHandler(a.eng, nil, a.apiHandler)
 	addr, err := a.srv.ListenAndServe("127.0.0.1:0")
 	if err != nil {
 		log.Printf("API server failed: %v", err)
@@ -52,6 +57,9 @@ func (a *App) shutdown(ctx context.Context) {
 	}
 	if a.statsStore != nil {
 		a.statsStore.Close()
+	}
+	if a.connStore != nil {
+		a.connStore.Close()
 	}
 }
 
@@ -112,11 +120,26 @@ func main() {
 		app.statsStore = statsStore
 	}
 
+	// Initialize connection log storage
+	connStore, err := connlog.NewStorage(filepath.Join(dataDir, "connlog"), 512)
+	if err != nil {
+		log.Printf("Failed to initialize connlog storage: %v", err)
+	} else {
+		app.connStore = connStore
+	}
+
 	// Initialize subscription manager
 	subMgr := subscription.NewManager()
 	if len(cfg.Subscriptions) > 0 {
 		subMgr.LoadFromConfig(cfg.Subscriptions)
 	}
+
+	// Build one shared API handler for both the Wails asset handler and standalone server.
+	sharedHandler := api.HandlerWithConnLog(eng, subMgr, statsStore, connStore)
+	app.apiHandler = sharedHandler
+
+	// Wire stats recording and connlog: subscribe to engine events.
+	go recordEngineEvents(eng, statsStore, connStore)
 
 	// Embedded SPA assets
 	webFS, err := fs.Sub(gui.WebAssets, "web/dist")
@@ -155,7 +178,7 @@ func main() {
 		HideWindowOnClose: true, // Hide instead of close, allows tray/dock to restore
 		AssetServer: &assetserver.Options{
 			Assets:  webFS,
-			Handler: api.HandlerWithOptions(eng, subMgr, statsStore),
+			Handler: sharedHandler,
 		},
 		OnStartup:  app.startup,
 		OnShutdown: app.shutdown,
@@ -178,5 +201,58 @@ func main() {
 	})
 	if err != nil {
 		log.Fatal(err)
+	}
+}
+
+// recordEngineEvents subscribes to engine events and records stats and
+// connection log entries. It runs until the event channel is closed
+// (engine unsubscription) and also periodically polls engine status to
+// record cumulative byte counters to the stats store.
+func recordEngineEvents(eng *engine.Engine, statsStore *stats.Storage, connStore *connlog.Storage) {
+	ch := eng.Subscribe()
+	defer eng.Unsubscribe(ch)
+
+	// Periodic stats recording: poll engine status every 60 seconds so
+	// that the cumulative byte counters get flushed to the daily stats
+	// even when no speed-tick events fire (e.g. idle traffic).
+	ticker := time.NewTicker(60 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case ev, ok := <-ch:
+			if !ok {
+				return
+			}
+			switch ev.Type {
+			case engine.EventConnection:
+				// Log connection events to connlog storage.
+				if connStore != nil {
+					connStore.Log(connlog.Entry{
+						ID:          ev.ConnID,
+						Timestamp:   ev.Timestamp,
+						Target:      ev.Target,
+						Rule:        ev.Rule,
+						Protocol:    ev.Protocol,
+						ProcessName: ev.ProcessName,
+						BytesIn:     ev.BytesIn,
+						BytesOut:    ev.BytesOut,
+						DurationMs:  ev.DurationMs,
+						State:       ev.ConnState,
+					})
+				}
+				// On connection close, record 1 new connection in stats.
+				if statsStore != nil && ev.ConnState == "closed" {
+					status := eng.Status()
+					statsStore.Record(status.BytesSent, status.BytesReceived, 1)
+				}
+			}
+		case <-ticker.C:
+			// Periodic flush of byte counters to stats store.
+			if statsStore != nil {
+				status := eng.Status()
+				statsStore.Record(status.BytesSent, status.BytesReceived, 0)
+			}
+		}
 	}
 }

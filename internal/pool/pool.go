@@ -34,15 +34,19 @@ func Get(size int) []byte {
 	}
 }
 
-// Put returns a buffer to the appropriate pool.
+// Put zeroes a buffer and returns it to the appropriate pool.
+// Zeroing prevents sensitive data (keys, plaintext) from leaking to
+// subsequent pool users.
 func Put(buf []byte) {
 	c := cap(buf)
+	b := buf[:c]
+	clear(b)
 	switch {
 	case c <= 1024:
-		SmallPool.Put(buf[:c])
+		SmallPool.Put(b)
 	case c <= 16*1024:
-		MediumPool.Put(buf[:c])
+		MediumPool.Put(b)
 	default:
-		LargePool.Put(buf[:c])
+		LargePool.Put(b)
 	}
 }

@@ -9,10 +9,13 @@ import (
 	"net"
 	"net/http"
 	"runtime"
+	"strconv"
+	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/shuttle-proxy/shuttle/config"
+	"github.com/shuttle-proxy/shuttle/server/audit"
 )
 
 // ServerInfo tracks runtime server metrics.
@@ -27,12 +30,32 @@ type ServerInfo struct {
 }
 
 // Handler creates the admin API HTTP handler.
-func Handler(info *ServerInfo, cfg *config.ServerConfig, configPath string) http.Handler {
+func Handler(info *ServerInfo, cfg *config.ServerConfig, configPath string, users *UserStore, auditLog *audit.Logger) http.Handler {
 	mux := http.NewServeMux()
+	var cfgMu sync.RWMutex // protects concurrent access to cfg
 	token := cfg.Admin.Token
+
+	// Rate limiter: 1 token/sec refill, burst of 5.
+	limiter := NewRateLimiter(1, 5)
+	go func() {
+		ticker := time.NewTicker(5 * time.Minute)
+		defer ticker.Stop()
+		for range ticker.C {
+			limiter.cleanup()
+		}
+	}()
 
 	auth := func(next http.HandlerFunc) http.HandlerFunc {
 		return func(w http.ResponseWriter, r *http.Request) {
+			ip := extractIP(r.RemoteAddr)
+			if !limiter.Allow(ip) {
+				writeError(w, http.StatusTooManyRequests, "rate limit exceeded")
+				return
+			}
+			if token == "" {
+				writeError(w, http.StatusForbidden, "admin token not configured")
+				return
+			}
 			provided := r.Header.Get("Authorization")
 			expected := "Bearer " + token
 			if subtle.ConstantTimeCompare([]byte(provided), []byte(expected)) != 1 {
@@ -42,6 +65,9 @@ func Handler(info *ServerInfo, cfg *config.ServerConfig, configPath string) http
 			next(w, r)
 		}
 	}
+
+	// Dashboard — no auth required (login handled client-side)
+	mux.HandleFunc("GET /", handleDashboard)
 
 	// Health check — no auth required
 	mux.HandleFunc("GET /api/health", func(w http.ResponseWriter, r *http.Request) {
@@ -65,7 +91,9 @@ func Handler(info *ServerInfo, cfg *config.ServerConfig, configPath string) http
 
 	mux.HandleFunc("GET /api/config", auth(func(w http.ResponseWriter, r *http.Request) {
 		// Return config with secrets redacted
+		cfgMu.RLock()
 		redacted := *cfg
+		cfgMu.RUnlock()
 		redacted.Auth.Password = "***"
 		redacted.Auth.PrivateKey = "***"
 		redacted.Admin.Token = "***"
@@ -125,6 +153,11 @@ func Handler(info *ServerInfo, cfg *config.ServerConfig, configPath string) http
 		})
 	}))
 
+	mux.HandleFunc("GET /metrics", auth(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/plain; version=0.0.4; charset=utf-8")
+		WritePrometheusMetrics(w, info, users)
+	}))
+
 	mux.HandleFunc("POST /api/reload", auth(func(w http.ResponseWriter, r *http.Request) {
 		if configPath == "" {
 			writeError(w, http.StatusBadRequest, "no config path available for reload")
@@ -136,17 +169,107 @@ func Handler(info *ServerInfo, cfg *config.ServerConfig, configPath string) http
 			return
 		}
 		// Update the in-memory config reference
+		cfgMu.Lock()
 		*cfg = *newCfg
+		cfgMu.Unlock()
 		writeJSON(w, map[string]string{"status": "reloaded"})
+	}))
+
+	// User management
+	mux.HandleFunc("GET /api/users", auth(func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, users.List())
+	}))
+
+	mux.HandleFunc("POST /api/users", auth(func(w http.ResponseWriter, r *http.Request) {
+		var req struct {
+			Name     string `json:"name"`
+			MaxBytes int64  `json:"max_bytes"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			writeError(w, http.StatusBadRequest, "invalid request body")
+			return
+		}
+		if req.Name == "" {
+			writeError(w, http.StatusBadRequest, "name is required")
+			return
+		}
+		user, err := users.Add(req.Name, req.MaxBytes)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		// Sync back to config
+		cfgMu.Lock()
+		cfg.Admin.Users = users.ToConfig()
+		cfgMu.Unlock()
+		w.WriteHeader(http.StatusCreated)
+		writeJSON(w, user)
+	}))
+
+	mux.HandleFunc("DELETE /api/users/", auth(func(w http.ResponseWriter, r *http.Request) {
+		userToken := r.URL.Path[len("/api/users/"):]
+		if userToken == "" {
+			writeError(w, http.StatusBadRequest, "user token required")
+			return
+		}
+		if !users.Remove(userToken) {
+			writeError(w, http.StatusNotFound, "user not found")
+			return
+		}
+		cfgMu.Lock()
+		cfg.Admin.Users = users.ToConfig()
+		cfgMu.Unlock()
+		writeJSON(w, map[string]string{"status": "deleted"})
+	}))
+
+	mux.HandleFunc("PUT /api/users/", auth(func(w http.ResponseWriter, r *http.Request) {
+		userToken := r.URL.Path[len("/api/users/"):]
+		if userToken == "" {
+			writeError(w, http.StatusBadRequest, "user token required")
+			return
+		}
+		var req struct {
+			Enabled *bool `json:"enabled"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			writeError(w, http.StatusBadRequest, "invalid request body")
+			return
+		}
+		if req.Enabled != nil {
+			if !users.SetEnabled(userToken, *req.Enabled) {
+				writeError(w, http.StatusNotFound, "user not found")
+				return
+			}
+		}
+		cfgMu.Lock()
+		cfg.Admin.Users = users.ToConfig()
+		cfgMu.Unlock()
+		writeJSON(w, map[string]string{"status": "updated"})
+	}))
+
+	mux.HandleFunc("GET /api/audit", auth(func(w http.ResponseWriter, r *http.Request) {
+		if auditLog == nil {
+			writeJSON(w, []audit.Entry{})
+			return
+		}
+		n := 100
+		if s := r.URL.Query().Get("n"); s != "" {
+			if parsed, err := strconv.Atoi(s); err == nil && parsed > 0 {
+				n = parsed
+			}
+		}
+		writeJSON(w, auditLog.Recent(n))
 	}))
 
 	return mux
 }
 
-// ListenAndServe starts the admin API server.
-func ListenAndServe(cfg *config.AdminConfig, info *ServerInfo, serverCfg *config.ServerConfig, configPath string) error {
+// ListenAndServe starts the admin API server and returns the *http.Server
+// so the caller can call Shutdown() for graceful termination.
+// If the admin API is disabled, it returns (nil, nil).
+func ListenAndServe(cfg *config.AdminConfig, info *ServerInfo, serverCfg *config.ServerConfig, configPath string, users *UserStore, auditLog *audit.Logger) (*http.Server, error) {
 	if !cfg.Enabled {
-		return nil
+		return nil, nil
 	}
 
 	listen := cfg.Listen
@@ -156,10 +279,10 @@ func ListenAndServe(cfg *config.AdminConfig, info *ServerInfo, serverCfg *config
 
 	ln, err := net.Listen("tcp", listen)
 	if err != nil {
-		return fmt.Errorf("admin listen: %w", err)
+		return nil, fmt.Errorf("admin listen: %w", err)
 	}
 
-	handler := Handler(info, serverCfg, configPath)
+	handler := Handler(info, serverCfg, configPath, users, auditLog)
 	server := &http.Server{
 		Handler:      handler,
 		ReadTimeout:  10 * time.Second,
@@ -167,7 +290,7 @@ func ListenAndServe(cfg *config.AdminConfig, info *ServerInfo, serverCfg *config
 	}
 
 	go server.Serve(ln)
-	return nil
+	return server, nil
 }
 
 func writeJSON(w http.ResponseWriter, v any) {

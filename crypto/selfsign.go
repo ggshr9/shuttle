@@ -68,3 +68,16 @@ func GenerateSelfSignedCert(hosts []string, validFor time.Duration) (certPEM, ke
 
 	return certPEM, keyPEM, nil
 }
+
+// CertExpiry parses a PEM-encoded certificate and returns its NotAfter time.
+func CertExpiry(certPEM []byte) (time.Time, error) {
+	block, _ := pem.Decode(certPEM)
+	if block == nil {
+		return time.Time{}, fmt.Errorf("no PEM block found")
+	}
+	cert, err := x509.ParseCertificate(block.Bytes)
+	if err != nil {
+		return time.Time{}, fmt.Errorf("parse certificate: %w", err)
+	}
+	return cert.NotAfter, nil
+}

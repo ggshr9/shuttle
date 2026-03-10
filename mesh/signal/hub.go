@@ -1,6 +1,7 @@
 package signal
 
 import (
+	"fmt"
 	"io"
 	"log/slog"
 	"net"
@@ -150,11 +151,21 @@ func (h *Hub) PeerCount() int {
 }
 
 // HandleMessage processes an incoming signaling message.
-// This is the main entry point for the hub.
-func (h *Hub) HandleMessage(data []byte) error {
+// This is the main entry point for the hub. The senderVIP parameter
+// identifies the authenticated peer that sent the message; if the
+// decoded SrcVIP does not match, the message is rejected to prevent
+// VIP spoofing.
+func (h *Hub) HandleMessage(data []byte, senderVIP net.IP) error {
 	msg, err := Decode(data)
 	if err != nil {
 		return err
+	}
+
+	// Verify the sender's VIP matches the message's SrcVIP to prevent impersonation.
+	if !msg.SrcVIP.Equal(senderVIP) {
+		h.logger.Warn("signal: SrcVIP mismatch, dropping message",
+			"claimed", msg.SrcVIP, "actual", senderVIP)
+		return fmt.Errorf("signal: SrcVIP %v does not match sender %v", msg.SrcVIP, senderVIP)
 	}
 
 	switch msg.Type {

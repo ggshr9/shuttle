@@ -6,7 +6,9 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/shuttle-proxy/shuttle/config"
 )
@@ -189,6 +191,98 @@ func TestParseSubscriptionEmpty(t *testing.T) {
 	_, err = ParseSubscription("   ")
 	if err == nil {
 		t.Error("ParseSubscription() whitespace should return error")
+	}
+}
+
+func TestStartStopAutoRefresh(t *testing.T) {
+	m := NewManager()
+
+	ctx := context.Background()
+	m.StartAutoRefresh(ctx, 1*time.Hour)
+
+	m.autoMu.Lock()
+	running := m.autoRunning
+	m.autoMu.Unlock()
+	if !running {
+		t.Error("StartAutoRefresh() should set autoRunning = true")
+	}
+
+	// Stop should not error.
+	m.StopAutoRefresh()
+
+	// Give goroutine time to exit.
+	time.Sleep(50 * time.Millisecond)
+
+	m.autoMu.Lock()
+	running = m.autoRunning
+	m.autoMu.Unlock()
+	if running {
+		t.Error("StopAutoRefresh() should set autoRunning = false")
+	}
+
+	// Idempotent stop — should not panic.
+	m.StopAutoRefresh()
+}
+
+func TestAutoRefreshDoubleStart(t *testing.T) {
+	m := NewManager()
+	ctx := context.Background()
+
+	m.StartAutoRefresh(ctx, 1*time.Hour)
+
+	// Second start should replace the first without panic or deadlock.
+	m.StartAutoRefresh(ctx, 1*time.Hour)
+
+	m.autoMu.Lock()
+	running := m.autoRunning
+	m.autoMu.Unlock()
+
+	if !running {
+		t.Error("second StartAutoRefresh() should keep autoRunning = true")
+	}
+
+	m.StopAutoRefresh()
+
+	// Give goroutines time to exit.
+	time.Sleep(50 * time.Millisecond)
+}
+
+func TestAutoRefreshCallsRefreshAll(t *testing.T) {
+	var hitCount atomic.Int64
+	servers := []config.ServerEndpoint{
+		{Addr: "server1.example.com:443", Name: "Server 1", Password: "pass1"},
+	}
+	data, _ := json.Marshal(servers)
+
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hitCount.Add(1)
+		w.Write(data)
+	}))
+	defer ts.Close()
+
+	m := NewManager()
+	m.Add("Sub1", ts.URL)
+	m.Add("Sub2", ts.URL)
+
+	ctx := context.Background()
+	m.StartAutoRefresh(ctx, 50*time.Millisecond)
+
+	// Wait long enough for at least one tick (interval waits before first tick).
+	time.Sleep(200 * time.Millisecond)
+
+	m.StopAutoRefresh()
+
+	hits := hitCount.Load()
+	// We have 2 subscriptions; at least one tick should have fired (2+ hits).
+	if hits < 2 {
+		t.Errorf("expected at least 2 HTTP hits (2 subs x 1+ tick), got %d", hits)
+	}
+
+	// Verify subscriptions were actually updated with servers.
+	for _, sub := range m.List() {
+		if len(sub.Servers) == 0 {
+			t.Errorf("subscription %q was not refreshed", sub.Name)
+		}
 	}
 }
 

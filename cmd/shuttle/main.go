@@ -74,6 +74,12 @@ func main() {
 			os.Exit(1)
 		}
 		runAPI(*configPath, *listen, *autoConnect)
+	case "completion":
+		if len(os.Args) < 3 {
+			fmt.Fprintf(os.Stderr, "Usage: shuttle completion <bash|zsh|fish>\n")
+			os.Exit(1)
+		}
+		printCompletion(os.Args[2])
 	case "help", "-h", "--help":
 		printUsage()
 	default:
@@ -91,7 +97,112 @@ func printUsage() {
 	fmt.Fprintf(os.Stderr, "  shuttle import <shuttle://...>          Import server config from URI\n")
 	fmt.Fprintf(os.Stderr, "  shuttle genkey                          Generate key pair\n")
 	fmt.Fprintf(os.Stderr, "  shuttle version                         Show version\n")
+	fmt.Fprintf(os.Stderr, "  shuttle completion <bash|zsh|fish>       Generate shell completions\n")
 	fmt.Fprintf(os.Stderr, "  shuttle help                            Show this help\n")
+}
+
+func printCompletion(shell string) {
+	switch shell {
+	case "bash":
+		fmt.Print(`_shuttle() {
+    local cur prev commands
+    COMPREPLY=()
+    cur="${COMP_WORDS[COMP_CWORD]}"
+    prev="${COMP_WORDS[COMP_CWORD-1]}"
+    commands="run api import genkey version completion help"
+
+    if [ $COMP_CWORD -eq 1 ]; then
+        COMPREPLY=( $(compgen -W "$commands" -- "$cur") )
+        return
+    fi
+
+    case "$prev" in
+        run|api)
+            COMPREPLY=( $(compgen -W "-c" -- "$cur") )
+            ;;
+        -c)
+            COMPREPLY=( $(compgen -f -X '!*.yaml' -- "$cur") $(compgen -f -X '!*.yml' -- "$cur") )
+            ;;
+        completion)
+            COMPREPLY=( $(compgen -W "bash zsh fish" -- "$cur") )
+            ;;
+        api)
+            COMPREPLY=( $(compgen -W "-c --listen --auto-connect" -- "$cur") )
+            ;;
+    esac
+}
+complete -F _shuttle shuttle
+`)
+	case "zsh":
+		fmt.Print(`#compdef shuttle
+
+_shuttle() {
+    local -a commands
+    commands=(
+        'run:Start the client'
+        'api:Headless API server'
+        'import:Import server config from URI'
+        'genkey:Generate key pair'
+        'version:Show version'
+        'completion:Generate shell completions'
+        'help:Show help'
+    )
+
+    _arguments -C \
+        '1:command:->command' \
+        '*::arg:->args'
+
+    case $state in
+        command)
+            _describe 'command' commands
+            ;;
+        args)
+            case $words[1] in
+                run)
+                    _arguments '-c[Config file]:file:_files -g "*.{yaml,yml}"'
+                    ;;
+                api)
+                    _arguments \
+                        '-c[Config file]:file:_files -g "*.{yaml,yml}"' \
+                        '--listen[API listen address]:addr:' \
+                        '--auto-connect[Auto-connect on startup]'
+                    ;;
+                import)
+                    _arguments \
+                        '1:uri:' \
+                        '-o[Output file]:file:_files -g "*.{yaml,yml}"'
+                    ;;
+                completion)
+                    _values 'shell' bash zsh fish
+                    ;;
+            esac
+            ;;
+    esac
+}
+
+_shuttle "$@"
+`)
+	case "fish":
+		fmt.Print(`# Fish completions for shuttle
+complete -c shuttle -f
+complete -c shuttle -n '__fish_use_subcommand' -a 'run' -d 'Start the client'
+complete -c shuttle -n '__fish_use_subcommand' -a 'api' -d 'Headless API server'
+complete -c shuttle -n '__fish_use_subcommand' -a 'import' -d 'Import server config from URI'
+complete -c shuttle -n '__fish_use_subcommand' -a 'genkey' -d 'Generate key pair'
+complete -c shuttle -n '__fish_use_subcommand' -a 'version' -d 'Show version'
+complete -c shuttle -n '__fish_use_subcommand' -a 'completion' -d 'Generate shell completions'
+complete -c shuttle -n '__fish_use_subcommand' -a 'help' -d 'Show help'
+complete -c shuttle -n '__fish_seen_subcommand_from run' -s c -d 'Config file' -rF
+complete -c shuttle -n '__fish_seen_subcommand_from api' -s c -d 'Config file' -rF
+complete -c shuttle -n '__fish_seen_subcommand_from api' -l listen -d 'API listen address'
+complete -c shuttle -n '__fish_seen_subcommand_from api' -l auto-connect -d 'Auto-connect on startup'
+complete -c shuttle -n '__fish_seen_subcommand_from import' -s o -d 'Output file' -rF
+complete -c shuttle -n '__fish_seen_subcommand_from completion' -a 'bash zsh fish'
+`)
+	default:
+		fmt.Fprintf(os.Stderr, "Unsupported shell: %s (supported: bash, zsh, fish)\n", shell)
+		os.Exit(1)
+	}
 }
 
 func genKey() {

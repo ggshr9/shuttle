@@ -21,6 +21,8 @@ type PathInfo struct {
 	TotalStreams  int64  `json:"total_streams"`
 	Available     bool   `json:"available"`
 	Failures      int64  `json:"failures"`
+	BytesSent     int64  `json:"bytes_sent"`
+	BytesReceived int64  `json:"bytes_received"`
 }
 
 // PathMetrics tracks per-path quality metrics and holds the persistent connection.
@@ -31,6 +33,8 @@ type PathMetrics struct {
 	ActiveStreams int64 // atomic
 	TotalStreams  int64 // atomic
 	Failures      int64 // atomic — consecutive failures
+	BytesSent     int64 // atomic — total bytes sent via this path
+	BytesReceived int64 // atomic — total bytes received via this path
 	Available     bool
 	mu            sync.Mutex
 }
@@ -115,6 +119,8 @@ func (p *MultipathPool) PathInfos() []PathInfo {
 			TotalStreams:  atomic.LoadInt64(&pm.TotalStreams),
 			Available:     pm.Available,
 			Failures:      atomic.LoadInt64(&pm.Failures),
+			BytesSent:     atomic.LoadInt64(&pm.BytesSent),
+			BytesReceived: atomic.LoadInt64(&pm.BytesReceived),
 		}
 	}
 	return out
@@ -211,6 +217,11 @@ func (mc *multipathConn) OpenStream(ctx context.Context) (transport.Stream, erro
 	conn := path.Conn
 	path.mu.Unlock()
 
+	if conn == nil {
+		atomic.AddInt64(&path.Failures, 1)
+		return mc.openStreamFallback(ctx, path)
+	}
+
 	stream, err := conn.OpenStream(ctx)
 	if err != nil {
 		// Selected path failed; try fallback.
@@ -277,8 +288,19 @@ type trackedStream struct {
 
 func (ts *trackedStream) Read(b []byte) (int, error) {
 	n, err := ts.Stream.Read(b)
+	if n > 0 {
+		atomic.AddInt64(&ts.path.BytesReceived, int64(n))
+	}
 	if err != nil {
 		ts.decrement()
+	}
+	return n, err
+}
+
+func (ts *trackedStream) Write(b []byte) (int, error) {
+	n, err := ts.Stream.Write(b)
+	if n > 0 {
+		atomic.AddInt64(&ts.path.BytesSent, int64(n))
 	}
 	return n, err
 }

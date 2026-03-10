@@ -11,6 +11,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/shuttle-proxy/shuttle/qos"
 )
 
 // HTTPConfig configures the HTTP proxy server.
@@ -22,13 +24,14 @@ type HTTPConfig struct {
 
 // HTTPServer implements an HTTP CONNECT proxy server.
 type HTTPServer struct {
-	config       *HTTPConfig
-	dialer       Dialer
-	listener     net.Listener
-	closed       atomic.Bool
-	wg           sync.WaitGroup
-	logger       *slog.Logger
-	ProcResolver ProcResolver
+	config        *HTTPConfig
+	dialer        Dialer
+	listener      net.Listener
+	closed        atomic.Bool
+	wg            sync.WaitGroup
+	logger        *slog.Logger
+	ProcResolver  ProcResolver
+	QoSClassifier *qos.Classifier
 }
 
 // NewHTTPServer creates a new HTTP proxy server.

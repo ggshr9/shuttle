@@ -77,9 +77,10 @@ type natKey struct {
 }
 
 type natEntry struct {
-	conn   net.Conn
-	cancel context.CancelFunc
-	tos    uint8 // QoS TOS byte for response packets
+	conn       net.Conn
+	cancel     context.CancelFunc
+	tos        uint8     // QoS TOS byte for response packets
+	lastActive time.Time // last time this entry was accessed
 }
 
 type natTable struct {
@@ -90,13 +91,20 @@ type natTable struct {
 
 func (n *natTable) getTCP(k natKey) *natEntry {
 	n.mu.RLock()
-	defer n.mu.RUnlock()
-	return n.tcp[k]
+	e := n.tcp[k]
+	n.mu.RUnlock()
+	if e != nil {
+		n.mu.Lock()
+		e.lastActive = time.Now()
+		n.mu.Unlock()
+	}
+	return e
 }
 
 func (n *natTable) putTCP(k natKey, e *natEntry) {
 	n.mu.Lock()
 	defer n.mu.Unlock()
+	e.lastActive = time.Now()
 	n.tcp[k] = e
 }
 
@@ -108,13 +116,20 @@ func (n *natTable) deleteTCP(k natKey) {
 
 func (n *natTable) getUDP(k natKey) *natEntry {
 	n.mu.RLock()
-	defer n.mu.RUnlock()
-	return n.udp[k]
+	e := n.udp[k]
+	n.mu.RUnlock()
+	if e != nil {
+		n.mu.Lock()
+		e.lastActive = time.Now()
+		n.mu.Unlock()
+	}
+	return e
 }
 
 func (n *natTable) putUDP(k natKey, e *natEntry) {
 	n.mu.Lock()
 	defer n.mu.Unlock()
+	e.lastActive = time.Now()
 	n.udp[k] = e
 }
 
@@ -122,6 +137,26 @@ func (n *natTable) deleteUDP(k natKey) {
 	n.mu.Lock()
 	defer n.mu.Unlock()
 	delete(n.udp, k)
+}
+
+func (n *natTable) cleanup(maxAge time.Duration) {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	cutoff := time.Now().Add(-maxAge)
+	for k, e := range n.tcp {
+		if e.lastActive.Before(cutoff) {
+			e.cancel()
+			e.conn.Close()
+			delete(n.tcp, k)
+		}
+	}
+	for k, e := range n.udp {
+		if e.lastActive.Before(cutoff) {
+			e.cancel()
+			e.conn.Close()
+			delete(n.udp, k)
+		}
+	}
 }
 
 func (n *natTable) closeAll() {
@@ -175,7 +210,25 @@ func (t *TUNServer) Start(ctx context.Context) error {
 	)
 
 	go t.readLoop(ctx)
+	go t.cleanupLoop(ctx)
 	return nil
+}
+
+// cleanupLoop periodically removes stale NAT entries.
+func (t *TUNServer) cleanupLoop(ctx context.Context) {
+	ticker := time.NewTicker(60 * time.Second)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			if t.closed.Load() {
+				return
+			}
+			t.natTable.cleanup(5 * time.Minute)
+		}
+	}
 }
 
 // Close shuts down the TUN device and tears down routes.
@@ -390,6 +443,10 @@ func (t *TUNServer) dialAndProxyTCP(ctx context.Context, key natKey, clientISN u
 		buf := make([]byte, t.config.MTU-40) // IP(20)+TCP(20)
 		seq := uint32(1)                      // our ISN=0, first data byte seq=1
 		for {
+			// Set read deadline to detect dead connections
+			if dl, ok := conn.(interface{ SetReadDeadline(time.Time) error }); ok {
+				dl.SetReadDeadline(time.Now().Add(2 * time.Minute))
+			}
 			n, err := conn.Read(buf)
 			if n > 0 {
 				t.injectTCPData(key.dstIP, key.srcIP, key.dstPort, key.srcPort, seq, buf[:n], tos)

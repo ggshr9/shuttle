@@ -17,7 +17,15 @@ transport:
     path_prefix: "/shuttle"
     insecure_skip_verify: true  # sandbox uses self-signed certs
   reality:
+    enabled: true
+    server_name: "www.microsoft.com"
+    short_id: "abcd1234"
+    public_key: "d69e872aecb39b1a715bed386c26c6be0a0d5cb0a53c8da2543c3e8a9e761d73"
+  cdn:
     enabled: false
+    domain: "10.100.0.10:8443"
+    path: "/cdn/stream"
+    insecure_skip_verify: true
   webrtc:
     enabled: false
 

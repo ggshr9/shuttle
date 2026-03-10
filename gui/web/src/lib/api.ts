@@ -163,6 +163,7 @@ export const api = {
   getRoutingTemplates: () => request<RoutingTemplate[]>('GET', '/api/routing/templates'),
   applyRoutingTemplate: (id: string) => request<void>('POST', `/api/routing/templates/${id}`),
   getProcesses: () => request<Process[]>('GET', '/api/processes'),
+  getGeositeCategories: () => request<string[]>('GET', '/api/geosite/categories'),
   // Speedtest
   speedtest: (addrs: string[]) => request<SpeedtestResult[]>('POST', '/api/speedtest', { addrs }),
   // Subscriptions

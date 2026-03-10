@@ -305,8 +305,8 @@
   }
 
   .wizard {
-    background: #161b22;
-    border: 1px solid #2d333b;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
     border-radius: 16px;
     width: 100%;
     max-width: 440px;
@@ -325,8 +325,8 @@
     width: 32px;
     height: 32px;
     border-radius: 50%;
-    background: #2d333b;
-    color: #8b949e;
+    background: var(--border);
+    color: var(--text-secondary);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -336,25 +336,25 @@
   }
 
   .progress .step.active {
-    background: #238636;
+    background: var(--btn-bg);
     color: white;
   }
 
   .progress .step.done {
-    background: #238636;
+    background: var(--btn-bg);
     color: white;
   }
 
   .progress .line {
     width: 48px;
     height: 2px;
-    background: #2d333b;
+    background: var(--border);
     margin: 0 8px;
     transition: background 0.3s;
   }
 
   .progress .line.done {
-    background: #238636;
+    background: var(--btn-bg);
   }
 
   .content {
@@ -369,7 +369,7 @@
   .icon.success {
     width: 64px;
     height: 64px;
-    background: #238636;
+    background: var(--btn-bg);
     border-radius: 50%;
     display: inline-flex;
     align-items: center;
@@ -381,11 +381,11 @@
   h2 {
     font-size: 24px;
     margin: 0 0 8px;
-    color: #e1e4e8;
+    color: var(--text-primary);
   }
 
   .subtitle {
-    color: #8b949e;
+    color: var(--text-secondary);
     margin: 0 0 24px;
     font-size: 14px;
   }
@@ -400,7 +400,7 @@
     align-items: center;
     gap: 12px;
     padding: 12px 16px;
-    background: #0d1117;
+    background: var(--bg-surface);
     border-radius: 8px;
     margin-bottom: 8px;
     font-size: 14px;
@@ -413,7 +413,7 @@
   .method-tabs {
     display: flex;
     gap: 4px;
-    background: #0d1117;
+    background: var(--bg-surface);
     border-radius: 8px;
     padding: 4px;
     margin-bottom: 20px;
@@ -424,7 +424,7 @@
     padding: 10px;
     border: none;
     background: transparent;
-    color: #8b949e;
+    color: var(--text-secondary);
     border-radius: 6px;
     cursor: pointer;
     font-size: 13px;
@@ -432,11 +432,11 @@
   }
 
   .method-tabs button:hover {
-    color: #e1e4e8;
+    color: var(--text-primary);
   }
 
   .method-tabs button.active {
-    background: #238636;
+    background: var(--btn-bg);
     color: white;
   }
 
@@ -453,24 +453,24 @@
   .form label span {
     display: block;
     font-size: 13px;
-    color: #8b949e;
+    color: var(--text-secondary);
     margin-bottom: 6px;
   }
 
   .form input, .form textarea {
     width: 100%;
     padding: 10px 12px;
-    background: #0d1117;
-    border: 1px solid #2d333b;
+    background: var(--bg-surface);
+    border: 1px solid var(--border);
     border-radius: 8px;
-    color: #e1e4e8;
+    color: var(--text-primary);
     font-size: 14px;
     box-sizing: border-box;
   }
 
   .form input:focus, .form textarea:focus {
     outline: none;
-    border-color: #58a6ff;
+    border-color: var(--accent);
   }
 
   .form textarea {
@@ -480,13 +480,13 @@
 
   .hint {
     font-size: 12px;
-    color: #8b949e;
+    color: var(--text-secondary);
     margin: 4px 0 0;
     text-align: left;
   }
 
   .error {
-    color: #f85149;
+    color: var(--accent-red);
     font-size: 13px;
     margin: 12px 0;
     padding: 8px 12px;
@@ -503,7 +503,7 @@
   button.primary {
     flex: 1;
     padding: 12px 24px;
-    background: #238636;
+    background: var(--btn-bg);
     color: white;
     border: none;
     border-radius: 8px;
@@ -514,7 +514,7 @@
   }
 
   button.primary:hover:not(:disabled) {
-    background: #2ea043;
+    background: var(--btn-bg-hover);
   }
 
   button.primary:disabled {
@@ -529,8 +529,8 @@
 
   button.secondary {
     padding: 12px 24px;
-    background: #2d333b;
-    color: #e1e4e8;
+    background: var(--border);
+    color: var(--text-primary);
     border: none;
     border-radius: 8px;
     font-size: 15px;
@@ -545,18 +545,18 @@
   button.text {
     background: none;
     border: none;
-    color: #8b949e;
+    color: var(--text-secondary);
     font-size: 13px;
     cursor: pointer;
     padding: 8px;
   }
 
   button.text:hover {
-    color: #e1e4e8;
+    color: var(--text-primary);
   }
 
   .server-preview {
-    background: #0d1117;
+    background: var(--bg-surface);
     border-radius: 8px;
     padding: 12px;
     margin-bottom: 20px;
@@ -569,18 +569,18 @@
     gap: 8px;
     padding: 8px 0;
     font-size: 13px;
-    color: #e1e4e8;
+    color: var(--text-primary);
   }
 
   .server-item .dot {
     width: 8px;
     height: 8px;
-    background: #238636;
+    background: var(--btn-bg);
     border-radius: 50%;
   }
 
   .server-item.more {
-    color: #8b949e;
+    color: var(--text-secondary);
     padding-left: 16px;
   }
 
@@ -588,7 +588,7 @@
     display: flex;
     align-items: flex-start;
     gap: 12px;
-    background: #0d1117;
+    background: var(--bg-surface);
     border-radius: 8px;
     padding: 16px;
     margin-bottom: 24px;
@@ -600,19 +600,19 @@
     margin-top: 2px;
     width: 18px;
     height: 18px;
-    accent-color: #238636;
+    accent-color: var(--btn-bg);
   }
 
   .checkbox-option .option-title {
     display: block;
     font-size: 14px;
-    color: #e1e4e8;
+    color: var(--text-primary);
     margin-bottom: 2px;
   }
 
   .checkbox-option .option-desc {
     display: block;
     font-size: 12px;
-    color: #8b949e;
+    color: var(--text-secondary);
   }
 </style>

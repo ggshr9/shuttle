@@ -196,7 +196,7 @@
   h2 { font-size: 18px; margin: 0; }
 
   .btn-add {
-    background: #238636;
+    background: var(--btn-bg);
     color: #fff;
     border: none;
     border-radius: 6px;
@@ -204,15 +204,15 @@
     cursor: pointer;
     font-size: 13px;
   }
-  .btn-add:hover { background: #2ea043; }
+  .btn-add:hover { background: var(--btn-bg-hover); }
 
-  .msg { font-size: 13px; color: #8b949e; margin-bottom: 12px; }
-  .loading { color: #8b949e; }
+  .msg { font-size: 13px; color: var(--text-secondary); margin-bottom: 12px; }
+  .loading { color: var(--text-secondary); }
 
   .empty {
     text-align: center;
     padding: 40px;
-    color: #8b949e;
+    color: var(--text-secondary);
   }
   .empty p { margin: 8px 0; }
   .empty .help { font-size: 13px; color: #6e7681; }
@@ -223,12 +223,12 @@
     display: flex;
     justify-content: space-between;
     align-items: flex-start;
-    background: #161b22;
-    border: 1px solid #2d333b;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
     border-radius: 8px;
     padding: 14px;
   }
-  .sub-item.has-error { border-color: #f85149; }
+  .sub-item.has-error { border-color: var(--accent-red); }
 
   .sub-info { flex: 1; min-width: 0; }
 
@@ -242,12 +242,12 @@
   .sub-name {
     font-size: 15px;
     font-weight: 500;
-    color: #e1e4e8;
+    color: var(--text-primary);
   }
 
   .sub-count {
     font-size: 12px;
-    color: #3fb950;
+    color: var(--accent-green);
     background: rgba(63, 185, 80, 0.15);
     padding: 2px 8px;
     border-radius: 10px;
@@ -255,7 +255,7 @@
 
   .sub-url {
     font-size: 12px;
-    color: #8b949e;
+    color: var(--text-secondary);
     word-break: break-all;
     margin-bottom: 4px;
   }
@@ -266,7 +266,7 @@
   }
 
   .sub-error {
-    color: #f85149;
+    color: var(--accent-red);
     display: block;
     margin-top: 4px;
   }
@@ -278,9 +278,9 @@
   }
 
   .btn-sm {
-    background: #21262d;
-    color: #e1e4e8;
-    border: 1px solid #2d333b;
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+    border: 1px solid var(--border);
     border-radius: 6px;
     padding: 5px 12px;
     cursor: pointer;
@@ -288,12 +288,12 @@
   }
   .btn-sm:hover { background: #30363d; }
   .btn-sm:disabled { opacity: 0.5; cursor: default; }
-  .btn-danger { color: #f85149; }
+  .btn-danger { color: var(--accent-red); }
   .btn-danger:hover { background: #3d1f1f; }
 
   .servers-preview {
-    background: #0d1117;
-    border: 1px solid #21262d;
+    background: var(--bg-surface);
+    border: 1px solid var(--bg-tertiary);
     border-radius: 6px;
     padding: 8px 12px;
     margin-top: -8px;
@@ -307,11 +307,11 @@
     justify-content: space-between;
     padding: 4px 0;
     font-size: 12px;
-    border-bottom: 1px solid #21262d;
+    border-bottom: 1px solid var(--bg-tertiary);
   }
   .server-preview:last-child { border-bottom: none; }
 
-  .srv-name { color: #e1e4e8; }
+  .srv-name { color: var(--text-primary); }
   .srv-addr { color: #6e7681; }
 
   .more-servers {
@@ -336,8 +336,8 @@
   }
 
   .modal {
-    background: #161b22;
-    border: 1px solid #2d333b;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
     border-radius: 12px;
     width: 90%;
     max-width: 440px;
@@ -348,25 +348,25 @@
     justify-content: space-between;
     align-items: center;
     padding: 16px;
-    border-bottom: 1px solid #2d333b;
+    border-bottom: 1px solid var(--border);
   }
 
   .modal-header h3 {
     margin: 0;
     font-size: 16px;
-    color: #e1e4e8;
+    color: var(--text-primary);
   }
 
   .modal-close {
     background: none;
     border: none;
-    color: #8b949e;
+    color: var(--text-secondary);
     font-size: 24px;
     cursor: pointer;
     padding: 0;
     line-height: 1;
   }
-  .modal-close:hover { color: #e1e4e8; }
+  .modal-close:hover { color: var(--text-primary); }
 
   .modal-body {
     padding: 16px;
@@ -383,21 +383,21 @@
 
   .modal-body label span {
     font-size: 12px;
-    color: #8b949e;
+    color: var(--text-secondary);
   }
 
   .modal-body input {
-    background: #0d1117;
-    border: 1px solid #2d333b;
+    background: var(--bg-surface);
+    border: 1px solid var(--border);
     border-radius: 6px;
     padding: 8px 12px;
-    color: #e1e4e8;
+    color: var(--text-primary);
     font-size: 14px;
   }
 
   .modal-body input:focus {
     outline: none;
-    border-color: #58a6ff;
+    border-color: var(--accent);
   }
 
   .help-text {
@@ -411,13 +411,13 @@
     justify-content: flex-end;
     gap: 8px;
     padding: 12px 16px;
-    border-top: 1px solid #2d333b;
+    border-top: 1px solid var(--border);
   }
 
   .btn-cancel {
-    background: #21262d;
-    color: #e1e4e8;
-    border: 1px solid #2d333b;
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+    border: 1px solid var(--border);
     border-radius: 6px;
     padding: 8px 16px;
     cursor: pointer;
@@ -426,7 +426,7 @@
   .btn-cancel:hover { background: #30363d; }
 
   .btn-primary {
-    background: #238636;
+    background: var(--btn-bg);
     color: #fff;
     border: none;
     border-radius: 6px;
@@ -434,6 +434,6 @@
     cursor: pointer;
     font-size: 13px;
   }
-  .btn-primary:hover { background: #2ea043; }
+  .btn-primary:hover { background: var(--btn-bg-hover); }
   .btn-primary:disabled { opacity: 0.5; }
 </style>

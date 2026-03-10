@@ -24,7 +24,8 @@ services:
       net-server:
         ipv4_address: 10.100.0.10
     ports:
-      - "19443:443"    # H3/QUIC
+      - "19443:443"    # H3/QUIC + Reality/TLS
+      - "19444:8443"   # CDN/HTTP2
       - "19080:9090"   # API (for debugging)
     healthcheck:
       test: ["CMD", "pgrep", "-x", "shuttled"]
@@ -172,6 +173,11 @@ services:
       - SANDBOX_NET_A_SELF=10.100.1.100
       - SANDBOX_NET_B_SELF=10.100.2.100
       - SANDBOX_NET_SERVER_SELF=10.100.0.100
+      - SANDBOX_HTTPBIN_ADDR=10.100.0.20:80
+      - SANDBOX_CLIENT_A_ADDR=10.100.1.10
+      - SANDBOX_CLIENT_B_ADDR=10.100.2.10
+      - SANDBOX_CLIENT_A_API=10.100.1.10:9090
+      - SANDBOX_CLIENT_B_API=10.100.2.10:9090
     cap_add:
       - NET_ADMIN
     networks:
@@ -184,6 +190,9 @@ services:
     depends_on:
       - stun
       - router
+      - httpbin
+      - client-a
+      - client-b
     profiles:
       - gotest
 

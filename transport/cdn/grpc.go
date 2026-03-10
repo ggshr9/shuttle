@@ -23,6 +23,7 @@ type GRPCConfig struct {
 	ServiceName string // gRPC service name (e.g., "tunnel.Relay")
 	Password    string
 	Host        string // Optional Host header override
+	FrontDomain string // Domain fronting: use as TLS SNI instead of CDNDomain
 }
 
 // GRPCClient implements transport.ClientTransport over gRPC through CDN.
@@ -40,15 +41,19 @@ func NewGRPCClient(cfg *GRPCConfig, opts ...GRPCOption) *GRPCClient {
 	if cfg.CDNDomain == "" {
 		cfg.CDNDomain = cfg.ServerAddr
 	}
+	tlsCfg := &tls.Config{
+		MinVersion: tls.VersionTLS12,
+		NextProtos: []string{"h2"},
+	}
+	if cfg.FrontDomain != "" {
+		tlsCfg.ServerName = cfg.FrontDomain
+	}
 	c := &GRPCClient{
 		config: cfg,
 		logger: slog.Default(),
 		client: &http.Client{
 			Transport: &http.Transport{
-				TLSClientConfig: &tls.Config{
-					MinVersion: tls.VersionTLS12,
-					NextProtos: []string{"h2"},
-				},
+				TLSClientConfig: tlsCfg,
 				ForceAttemptHTTP2: true,
 			},
 		},

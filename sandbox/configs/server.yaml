@@ -14,8 +14,8 @@ tls:
 # Authentication
 auth:
   password: "sandbox-test-password"
-  private_key: ""
-  public_key: ""
+  private_key: "8830e7a1bacb499321eae32784bca8c8122153ef7690dff8814f7e8a2e25ed63"
+  public_key: "d69e872aecb39b1a715bed386c26c6be0a0d5cb0a53c8da2543c3e8a9e761d73"
 
 # Cover site (masquerading)
 cover:
@@ -30,9 +30,19 @@ transport:
     enabled: true
     path_prefix: "/shuttle"
 
-  # Reality/TLS - disabled (requires certificates)
+  # Reality/TLS+Noise - enabled for sandbox testing
   reality:
-    enabled: false
+    enabled: true
+    target_sni: "www.microsoft.com"
+    target_addr: "www.microsoft.com:443"
+    short_ids:
+      - "abcd1234"
+
+  # CDN/HTTP2 - enabled for sandbox CDN transport testing
+  cdn:
+    enabled: true
+    listen: "0.0.0.0:8443"
+    path: "/cdn/stream"
 
   # WebRTC DataChannel - disabled for sandbox simplicity
   webrtc:

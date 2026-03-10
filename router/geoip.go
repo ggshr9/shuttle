@@ -152,3 +152,15 @@ func (db *GeoSiteDB) Lookup(category string) []string {
 	defer db.mu.RUnlock()
 	return db.categories[category]
 }
+
+// Categories returns a sorted list of all loaded category names.
+func (db *GeoSiteDB) Categories() []string {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+	cats := make([]string, 0, len(db.categories))
+	for k := range db.categories {
+		cats = append(cats, k)
+	}
+	sort.Strings(cats)
+	return cats
+}

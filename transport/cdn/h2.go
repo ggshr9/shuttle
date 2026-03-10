@@ -16,11 +16,13 @@ import (
 
 // H2Config configures the CDN HTTP/2 transport.
 type H2Config struct {
-	ServerAddr string
-	CDNDomain  string // CDN domain (e.g., "cdn.example.com")
-	Path       string // HTTP/2 stream path
-	Host       string // Host header
-	Password   string
+	ServerAddr         string
+	CDNDomain          string // CDN domain (e.g., "cdn.example.com")
+	Path               string // HTTP/2 stream path
+	Host               string // Host header
+	Password           string
+	FrontDomain        string // Domain fronting: use as TLS SNI instead of CDNDomain
+	InsecureSkipVerify bool   // Skip TLS certificate verification (for testing)
 }
 
 // H2Client implements transport.ClientTransport over HTTP/2 through CDN.
@@ -35,15 +37,20 @@ func NewH2Client(cfg *H2Config, opts ...H2Option) *H2Client {
 	if cfg.Path == "" {
 		cfg.Path = "/ws"
 	}
+	tlsCfg := &tls.Config{
+		MinVersion:         tls.VersionTLS12,
+		NextProtos:         []string{"h2", "http/1.1"},
+		InsecureSkipVerify: cfg.InsecureSkipVerify,
+	}
+	if cfg.FrontDomain != "" {
+		tlsCfg.ServerName = cfg.FrontDomain
+	}
 	c := &H2Client{
 		config: cfg,
 		logger: slog.Default(),
 		client: &http.Client{
 			Transport: &http.Transport{
-				TLSClientConfig: &tls.Config{
-					MinVersion: tls.VersionTLS12,
-					NextProtos: []string{"h2", "http/1.1"},
-				},
+				TLSClientConfig: tlsCfg,
 				ForceAttemptHTTP2: true,
 			},
 		},

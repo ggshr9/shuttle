@@ -258,8 +258,8 @@
     width: 100px;
     height: 100px;
     border-radius: 50%;
-    border: 3px solid #2d333b;
-    background: #161b22;
+    border: 3px solid var(--border);
+    background: var(--bg-secondary);
     cursor: pointer;
     transition: all 0.3s;
     display: flex;
@@ -268,17 +268,17 @@
     margin: 0 auto;
   }
 
-  .toggle:hover { border-color: #58a6ff; }
-  .toggle.on { border-color: #3fb950; background: #0d1117; }
+  .toggle:hover { border-color: var(--accent); }
+  .toggle.on { border-color: var(--accent-green); background: var(--bg-surface); }
   .toggle:disabled { opacity: 0.5; }
 
-  .icon { font-size: 32px; color: #8b949e; }
-  .toggle.on .icon { color: #3fb950; }
+  .icon { font-size: 32px; color: var(--text-secondary); }
+  .toggle.on .icon { color: var(--accent-green); }
 
   .state {
     margin-top: 12px;
     font-size: 14px;
-    color: #8b949e;
+    color: var(--text-secondary);
     text-transform: uppercase;
     letter-spacing: 1px;
   }
@@ -286,7 +286,7 @@
   .shortcut-hint {
     margin-top: 8px;
     font-size: 11px;
-    color: #484f58;
+    color: var(--text-muted);
   }
 
   .speed-cards {
@@ -297,8 +297,8 @@
   }
 
   .card {
-    background: #161b22;
-    border: 1px solid #2d333b;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
     border-radius: 8px;
     padding: 16px 32px;
     min-width: 140px;
@@ -307,14 +307,14 @@
   .card .label {
     display: block;
     font-size: 12px;
-    color: #8b949e;
+    color: var(--text-secondary);
     margin-bottom: 4px;
   }
 
   .card .value {
     font-size: 20px;
     font-weight: 600;
-    color: #e1e4e8;
+    color: var(--text-primary);
   }
 
   .traffic-cards {
@@ -325,17 +325,17 @@
   }
 
   .card.traffic {
-    background: #0d1117;
-    border-color: #238636;
+    background: var(--bg-surface);
+    border-color: var(--btn-bg);
   }
 
   .card.traffic .value {
-    color: #3fb950;
+    color: var(--accent-green);
   }
 
   .stats {
-    background: #161b22;
-    border: 1px solid #2d333b;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
     border-radius: 8px;
     padding: 16px;
     margin: 16px 0;
@@ -345,14 +345,14 @@
     display: flex;
     justify-content: space-between;
     padding: 8px 0;
-    border-bottom: 1px solid #21262d;
+    border-bottom: 1px solid var(--bg-tertiary);
   }
 
   .stat:last-child { border-bottom: none; }
 
   h3 {
     font-size: 14px;
-    color: #8b949e;
+    color: var(--text-secondary);
     margin: 20px 0 8px;
     text-align: left;
   }
@@ -363,8 +363,8 @@
   }
 
   .transport {
-    background: #161b22;
-    border: 1px solid #2d333b;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
     border-radius: 6px;
     padding: 10px 16px;
     display: flex;
@@ -372,7 +372,7 @@
     font-size: 13px;
   }
 
-  .transport.available { border-color: #3fb950; }
+  .transport.available { border-color: var(--accent-green); }
 
   .history-chart {
     display: flex;
@@ -380,8 +380,8 @@
     justify-content: center;
     align-items: flex-end;
     height: 120px;
-    background: #161b22;
-    border: 1px solid #2d333b;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
     border-radius: 8px;
     padding: 16px;
     margin: 8px 0;
@@ -406,16 +406,16 @@
   }
 
   .bar-upload {
-    background: #58a6ff;
+    background: var(--accent);
   }
 
   .bar-download {
-    background: #3fb950;
+    background: var(--accent-green);
   }
 
   .chart-label {
     font-size: 10px;
-    color: #8b949e;
+    color: var(--text-secondary);
     margin-top: 4px;
   }
 
@@ -436,7 +436,7 @@
     align-items: center;
     gap: 4px;
     font-size: 11px;
-    color: #8b949e;
+    color: var(--text-secondary);
   }
 
   .legend-color {
@@ -446,11 +446,11 @@
   }
 
   .legend-color.upload {
-    background: #58a6ff;
+    background: var(--accent);
   }
 
   .legend-color.download {
-    background: #3fb950;
+    background: var(--accent-green);
   }
 
   .realtime-chart {
@@ -472,8 +472,8 @@
   }
 
   .mesh-status {
-    background: #161b22;
-    border: 1px solid #2d333b;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
     border-radius: 6px;
     padding: 10px 16px;
     display: flex;
@@ -483,13 +483,13 @@
 
   .mesh-label {
     font-size: 11px;
-    color: #8b949e;
+    color: var(--text-secondary);
   }
 
   .mesh-value {
     font-size: 14px;
     font-family: monospace;
-    color: #58a6ff;
+    color: var(--accent);
   }
 
   .subsection-title {

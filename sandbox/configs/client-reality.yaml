@@ -1,0 +1,53 @@
+# Shuttle Client Configuration — Reality Transport Only (Sandbox)
+#
+# Used by the e2e test runner to verify Reality/TLS+Noise transport.
+
+# Server connection
+server:
+  addr: "10.100.0.10:443"
+  name: "sandbox-server"
+  password: "sandbox-test-password"
+  sni: ""
+
+# Transport: Reality only
+transport:
+  preferred: "reality"
+  h3:
+    enabled: false
+  reality:
+    enabled: true
+    server_name: "www.microsoft.com"
+    short_id: "abcd1234"
+    public_key: "d69e872aecb39b1a715bed386c26c6be0a0d5cb0a53c8da2543c3e8a9e761d73"
+  webrtc:
+    enabled: false
+
+# Proxy listeners
+proxy:
+  allow_lan: true
+  socks5:
+    enabled: true
+    listen: "0.0.0.0:1180"
+  http:
+    enabled: true
+    listen: "0.0.0.0:8180"
+  tun:
+    enabled: false
+
+# Routing
+routing:
+  mode: "proxy_all"
+  default: "proxy"
+
+# Congestion control
+congestion:
+  mode: "adaptive"
+
+# Mesh VPN - disabled
+mesh:
+  enabled: false
+
+# Logging
+log:
+  level: "debug"
+  format: "text"

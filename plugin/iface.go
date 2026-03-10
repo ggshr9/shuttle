@@ -71,3 +71,28 @@ func (c *Chain) Close() error {
 	}
 	return errors.Join(errs...)
 }
+
+// OnConnect runs the connection through all ConnPlugin instances in order.
+// If any plugin returns an error, the connection is rejected.
+// The returned net.Conn may be wrapped (e.g. for byte tracking).
+func (c *Chain) OnConnect(conn net.Conn, target string) (net.Conn, error) {
+	for _, p := range c.plugins {
+		if cp, ok := p.(ConnPlugin); ok {
+			var err error
+			conn, err = cp.OnConnect(conn, target)
+			if err != nil {
+				return nil, fmt.Errorf("plugin %s: %w", p.Name(), err)
+			}
+		}
+	}
+	return conn, nil
+}
+
+// OnDisconnect notifies all ConnPlugin instances in reverse order.
+func (c *Chain) OnDisconnect(conn net.Conn) {
+	for i := len(c.plugins) - 1; i >= 0; i-- {
+		if cp, ok := c.plugins[i].(ConnPlugin); ok {
+			cp.OnDisconnect(conn)
+		}
+	}
+}

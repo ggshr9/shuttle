@@ -19,14 +19,16 @@
   let importData = $state('')
   let importing = $state(false)
 
+  // GeoSite categories for autocomplete
+  let geositeCategories = $state([])
+
   onMount(async () => {
     routing = await api.getRouting()
     // Normalize rules to have a 'type' field for the UI
     routing.rules = (routing.rules || []).map(normalizeRule)
-    // Load templates
-    try {
-      templates = await api.getRoutingTemplates()
-    } catch {}
+    // Load templates and geosite categories
+    try { templates = await api.getRoutingTemplates() } catch {}
+    try { geositeCategories = await api.getGeositeCategories() } catch {}
   })
 
   function normalizeRule(rule) {
@@ -182,7 +184,7 @@
             <button class="pick-btn" onclick={() => openProcessPicker(i)}>Pick</button>
           </div>
         {:else if rule._type === 'geosite'}
-          <input bind:value={rule.value} placeholder="category-ads, cn, geolocation-!cn" class="value-input" />
+          <input bind:value={rule.value} placeholder="category-ads, cn, geolocation-!cn" class="value-input" list="geosite-cats" />
         {:else if rule._type === 'domain'}
           <input bind:value={rule.value} placeholder="+.example.com, ads.example.com" class="value-input" />
         {:else if rule._type === 'geoip'}
@@ -209,6 +211,12 @@
   </div>
   {#if msg}<p class="msg">{msg}</p>{/if}
 </div>
+
+<datalist id="geosite-cats">
+  {#each geositeCategories as cat}
+    <option value={cat} />
+  {/each}
+</datalist>
 
 {#if showTemplates}
 <div class="overlay" onclick={() => (showTemplates = false)} role="dialog" aria-modal="true" aria-labelledby="templates-dialog-title" onkeydown={(e) => e.key === 'Escape' && (showTemplates = false)}>
@@ -288,9 +296,9 @@
   }
 
   .btn-template, .btn-import, .btn-export {
-    background: #21262d;
-    color: #8b949e;
-    border: 1px solid #2d333b;
+    background: var(--bg-tertiary);
+    color: var(--text-secondary);
+    border: 1px solid var(--border);
     border-radius: 6px;
     padding: 6px 12px;
     cursor: pointer;
@@ -299,12 +307,12 @@
 
   .btn-template:hover, .btn-import:hover, .btn-export:hover {
     background: #30363d;
-    color: #e1e4e8;
+    color: var(--text-primary);
   }
 
-  .btn-template { color: #a371f7; }
-  .btn-import { color: #58a6ff; }
-  .btn-export { color: #3fb950; }
+  .btn-template { color: var(--accent-purple); }
+  .btn-import { color: var(--accent); }
+  .btn-export { color: var(--accent-green); }
 
   .default-row {
     display: flex;
@@ -313,14 +321,14 @@
     margin-bottom: 16px;
   }
 
-  .default-row span { font-size: 13px; color: #8b949e; }
+  .default-row span { font-size: 13px; color: var(--text-secondary); }
 
   select {
-    background: #161b22;
-    border: 1px solid #2d333b;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
     border-radius: 6px;
     padding: 6px 10px;
-    color: #e1e4e8;
+    color: var(--text-primary);
     font-size: 13px;
   }
 
@@ -336,15 +344,15 @@
 
   .value-input, .process-field input {
     flex: 1;
-    background: #161b22;
-    border: 1px solid #2d333b;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
     border-radius: 6px;
     padding: 8px 12px;
-    color: #e1e4e8;
+    color: var(--text-primary);
     font-size: 13px;
   }
 
-  .value-input:focus, .process-field input:focus { outline: none; border-color: #58a6ff; }
+  .value-input:focus, .process-field input:focus { outline: none; border-color: var(--accent); }
 
   .process-field {
     flex: 1;
@@ -353,9 +361,9 @@
   }
 
   .pick-btn {
-    background: #21262d;
-    color: #58a6ff;
-    border: 1px solid #2d333b;
+    background: var(--bg-tertiary);
+    color: var(--accent);
+    border: 1px solid var(--border);
     border-radius: 6px;
     padding: 6px 12px;
     cursor: pointer;
@@ -367,8 +375,8 @@
 
   .remove {
     background: none;
-    border: 1px solid #2d333b;
-    color: #f85149;
+    border: 1px solid var(--border);
+    color: var(--accent-red);
     border-radius: 6px;
     padding: 6px 10px;
     cursor: pointer;
@@ -381,9 +389,9 @@
   }
 
   .add {
-    background: #21262d;
-    color: #e1e4e8;
-    border: 1px solid #2d333b;
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+    border: 1px solid var(--border);
     border-radius: 6px;
     padding: 8px 16px;
     cursor: pointer;
@@ -391,7 +399,7 @@
   }
 
   .save {
-    background: #238636;
+    background: var(--btn-bg);
     color: #fff;
     border: none;
     border-radius: 6px;
@@ -401,7 +409,7 @@
   }
 
   .save:disabled { opacity: 0.5; }
-  .msg { font-size: 13px; color: #8b949e; margin-top: 8px; }
+  .msg { font-size: 13px; color: var(--text-secondary); margin-top: 8px; }
 
   /* Process picker overlay */
   .overlay {
@@ -415,8 +423,8 @@
   }
 
   .picker {
-    background: #161b22;
-    border: 1px solid #2d333b;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
     border-radius: 12px;
     padding: 20px;
     width: 400px;
@@ -425,8 +433,8 @@
     flex-direction: column;
   }
 
-  .picker h3 { font-size: 16px; margin: 0 0 4px; color: #e1e4e8; }
-  .picker-hint { font-size: 12px; color: #484f58; margin: 0 0 12px; }
+  .picker h3 { font-size: 16px; margin: 0 0 4px; color: var(--text-primary); }
+  .picker-hint { font-size: 12px; color: var(--text-muted); margin: 0 0 12px; }
 
   .proc-list {
     overflow-y: auto;
@@ -440,38 +448,38 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    background: #0d1117;
-    border: 1px solid #2d333b;
+    background: var(--bg-surface);
+    border: 1px solid var(--border);
     border-radius: 6px;
     padding: 8px 12px;
     cursor: pointer;
-    color: #e1e4e8;
+    color: var(--text-primary);
     font-size: 13px;
     width: 100%;
     text-align: left;
   }
 
-  .proc-item:hover { border-color: #58a6ff; }
+  .proc-item:hover { border-color: var(--accent); }
   .proc-name { font-weight: 500; }
-  .proc-conns { font-size: 11px; color: #484f58; }
+  .proc-conns { font-size: 11px; color: var(--text-muted); }
 
   .close-btn {
     margin-top: 12px;
-    background: #21262d;
-    color: #e1e4e8;
-    border: 1px solid #2d333b;
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+    border: 1px solid var(--border);
     border-radius: 6px;
     padding: 8px;
     cursor: pointer;
     font-size: 13px;
   }
 
-  .empty { font-size: 13px; color: #484f58; }
+  .empty { font-size: 13px; color: var(--text-muted); }
 
   /* Modal styles */
   .modal {
-    background: #161b22;
-    border: 1px solid #2d333b;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
     border-radius: 12px;
     padding: 20px;
     width: 450px;
@@ -480,8 +488,8 @@
     flex-direction: column;
   }
 
-  .modal h3 { font-size: 16px; margin: 0 0 4px; color: #e1e4e8; }
-  .modal-hint { font-size: 12px; color: #484f58; margin: 0 0 12px; }
+  .modal h3 { font-size: 16px; margin: 0 0 4px; color: var(--text-primary); }
+  .modal-hint { font-size: 12px; color: var(--text-muted); margin: 0 0 12px; }
 
   .template-list {
     display: flex;
@@ -495,36 +503,36 @@
     display: flex;
     flex-direction: column;
     align-items: flex-start;
-    background: #0d1117;
-    border: 1px solid #2d333b;
+    background: var(--bg-surface);
+    border: 1px solid var(--border);
     border-radius: 6px;
     padding: 12px;
     cursor: pointer;
-    color: #e1e4e8;
+    color: var(--text-primary);
     text-align: left;
     width: 100%;
   }
 
-  .template-item:hover { border-color: #a371f7; }
+  .template-item:hover { border-color: var(--accent-purple); }
   .template-item:disabled { opacity: 0.5; cursor: default; }
 
   .template-name { font-weight: 500; font-size: 14px; }
-  .template-desc { font-size: 12px; color: #8b949e; margin-top: 4px; }
+  .template-desc { font-size: 12px; color: var(--text-secondary); margin-top: 4px; }
 
   .modal textarea {
     width: 100%;
-    background: #0d1117;
-    border: 1px solid #2d333b;
+    background: var(--bg-surface);
+    border: 1px solid var(--border);
     border-radius: 6px;
     padding: 10px;
-    color: #e1e4e8;
+    color: var(--text-primary);
     font-size: 12px;
     font-family: 'Cascadia Code', 'Fira Code', monospace;
     resize: vertical;
     box-sizing: border-box;
   }
 
-  .modal textarea:focus { outline: none; border-color: #58a6ff; }
+  .modal textarea:focus { outline: none; border-color: var(--accent); }
 
   .modal-actions {
     display: flex;
@@ -534,7 +542,7 @@
   }
 
   .apply-btn {
-    background: #238636;
+    background: var(--btn-bg);
     color: #fff;
     border: none;
     border-radius: 6px;
@@ -543,6 +551,6 @@
     font-size: 13px;
   }
 
-  .apply-btn:hover { background: #2ea043; }
+  .apply-btn:hover { background: var(--btn-bg-hover); }
   .apply-btn:disabled { opacity: 0.5; }
 </style>

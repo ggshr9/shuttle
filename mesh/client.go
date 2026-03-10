@@ -20,12 +20,22 @@ type MeshClient struct {
 	virtualIP net.IP
 	meshNet   *net.IPNet
 
+	// Split tunnel routes — protected by routeMu
+	routeMu     sync.RWMutex
+	splitRoutes []splitRoute
+
 	// P2P support
 	p2pEnabled    bool
 	p2pManager    *p2p.Manager
 	signalClient  *signal.Client
 	fallbackCtrl  *p2p.FallbackController
 	logger        *slog.Logger
+}
+
+// splitRoute is a parsed subnet-level routing policy.
+type splitRoute struct {
+	cidr   *net.IPNet
+	action string // "mesh", "direct", "proxy"
 }
 
 // MeshClientConfig configures the mesh client.
@@ -161,9 +171,52 @@ func (mc *MeshClient) VirtualIP() net.IP { return mc.virtualIP }
 // MeshCIDR returns the mesh network CIDR string (e.g. "10.7.0.0/24").
 func (mc *MeshClient) MeshCIDR() string { return mc.meshNet.String() }
 
-// IsMeshDestination reports whether the given IP belongs to the mesh network.
+// SetSplitRoutes configures per-subnet routing policies.
+func (mc *MeshClient) SetSplitRoutes(routes []struct{ CIDR, Action string }) {
+	parsed := make([]splitRoute, 0, len(routes))
+	for _, r := range routes {
+		_, cidr, err := net.ParseCIDR(r.CIDR)
+		if err != nil {
+			if mc.logger != nil {
+				mc.logger.Warn("mesh: invalid split route CIDR", "cidr", r.CIDR, "err", err)
+			}
+			continue
+		}
+		parsed = append(parsed, splitRoute{cidr: cidr, action: r.Action})
+	}
+	mc.routeMu.Lock()
+	mc.splitRoutes = parsed
+	mc.routeMu.Unlock()
+}
+
+// RouteMesh returns the routing action for an IP within the mesh network.
+// Returns "mesh" if the IP should be sent via mesh, "direct" or "proxy" otherwise.
+// If no split route matches, defaults to "mesh" for mesh IPs.
+func (mc *MeshClient) RouteMesh(ip net.IP) string {
+	// Check split routes first (more specific takes priority)
+	mc.routeMu.RLock()
+	routes := mc.splitRoutes
+	mc.routeMu.RUnlock()
+	for _, r := range routes {
+		if r.cidr.Contains(ip) {
+			return r.action
+		}
+	}
+	// Default: mesh for mesh destinations
+	if mc.meshNet.Contains(ip) {
+		return "mesh"
+	}
+	return ""
+}
+
+// IsMeshDestination reports whether the given IP should be routed via mesh.
+// Respects split route policies: IPs in a "direct" or "proxy" split route are excluded.
 func (mc *MeshClient) IsMeshDestination(ip net.IP) bool {
-	return mc.meshNet.Contains(ip)
+	if !mc.meshNet.Contains(ip) {
+		return false
+	}
+	action := mc.RouteMesh(ip)
+	return action == "mesh"
 }
 
 // Send writes a raw IPv4 packet to the mesh.

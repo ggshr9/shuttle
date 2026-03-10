@@ -33,7 +33,7 @@ func testSetup() (*ServerInfo, *config.ServerConfig) {
 
 func TestHealthNoAuth(t *testing.T) {
 	info, cfg := testSetup()
-	handler := Handler(info, cfg, "")
+	handler := Handler(info, cfg, "", NewUserStore(cfg.Admin.Users), nil)
 
 	req := httptest.NewRequest("GET", "/api/health", nil)
 	w := httptest.NewRecorder()
@@ -52,7 +52,7 @@ func TestHealthNoAuth(t *testing.T) {
 
 func TestStatusRequiresAuth(t *testing.T) {
 	info, cfg := testSetup()
-	handler := Handler(info, cfg, "")
+	handler := Handler(info, cfg, "", NewUserStore(cfg.Admin.Users), nil)
 
 	// No auth header
 	req := httptest.NewRequest("GET", "/api/status", nil)
@@ -76,7 +76,7 @@ func TestStatusRequiresAuth(t *testing.T) {
 
 func TestStatusWithAuth(t *testing.T) {
 	info, cfg := testSetup()
-	handler := Handler(info, cfg, "")
+	handler := Handler(info, cfg, "", NewUserStore(cfg.Admin.Users), nil)
 
 	req := httptest.NewRequest("GET", "/api/status", nil)
 	req.Header.Set("Authorization", "Bearer test-token-abc123")
@@ -103,7 +103,7 @@ func TestStatusWithAuth(t *testing.T) {
 
 func TestConfigRedactsSecrets(t *testing.T) {
 	info, cfg := testSetup()
-	handler := Handler(info, cfg, "")
+	handler := Handler(info, cfg, "", NewUserStore(cfg.Admin.Users), nil)
 
 	req := httptest.NewRequest("GET", "/api/config", nil)
 	req.Header.Set("Authorization", "Bearer test-token-abc123")
@@ -133,7 +133,7 @@ func TestShareURI(t *testing.T) {
 	cfg.Transport.H3.Enabled = true
 	cfg.Transport.Reality.Enabled = true
 	cfg.Transport.Reality.ShortIDs = []string{"abcd1234"}
-	handler := Handler(info, cfg, "")
+	handler := Handler(info, cfg, "", NewUserStore(cfg.Admin.Users), nil)
 
 	req := httptest.NewRequest("GET", "/api/share?addr=example.com:443", nil)
 	req.Header.Set("Authorization", "Bearer test-token-abc123")
@@ -157,7 +157,7 @@ func TestShareURI(t *testing.T) {
 
 func TestMetrics(t *testing.T) {
 	info, cfg := testSetup()
-	handler := Handler(info, cfg, "")
+	handler := Handler(info, cfg, "", NewUserStore(cfg.Admin.Users), nil)
 
 	req := httptest.NewRequest("GET", "/api/metrics", nil)
 	req.Header.Set("Authorization", "Bearer test-token-abc123")

@@ -3,9 +3,11 @@ package geodata
 import (
 	"bufio"
 	"context"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -66,16 +68,23 @@ type Manager struct {
 	cancel     context.CancelFunc
 }
 
+// persistedStatus is the on-disk representation of manager state.
+type persistedStatus struct {
+	LastUpdate time.Time `json:"last_update"`
+}
+
 // NewManager creates a new geo data manager.
 func NewManager(cfg ManagerConfig, logger *slog.Logger) *Manager {
 	if logger == nil {
 		logger = slog.Default()
 	}
-	return &Manager{
+	m := &Manager{
 		cfg:        cfg,
 		downloader: NewDownloader(cfg.DataDir, logger),
 		logger:     logger,
 	}
+	m.loadStatus()
+	return m
 }
 
 // Start begins the auto-update loop if configured.
@@ -146,6 +155,10 @@ func (m *Manager) Update(ctx context.Context) error {
 		m.lastError = ""
 	}
 	m.mu.Unlock()
+
+	if err == nil {
+		m.saveStatus()
+	}
 
 	return err
 }
@@ -248,6 +261,36 @@ func (m *Manager) hasAllFiles() bool {
 		}
 	}
 	return true
+}
+
+func (m *Manager) statusPath() string {
+	return filepath.Join(m.cfg.DataDir, "status.json")
+}
+
+func (m *Manager) loadStatus() {
+	data, err := os.ReadFile(m.statusPath())
+	if err != nil {
+		return
+	}
+	var ps persistedStatus
+	if err := json.Unmarshal(data, &ps); err != nil {
+		return
+	}
+	m.mu.Lock()
+	m.lastUpdate = ps.LastUpdate
+	m.mu.Unlock()
+}
+
+func (m *Manager) saveStatus() {
+	m.mu.RLock()
+	ps := persistedStatus{LastUpdate: m.lastUpdate}
+	m.mu.RUnlock()
+	data, err := json.Marshal(ps)
+	if err != nil {
+		return
+	}
+	_ = os.MkdirAll(m.cfg.DataDir, 0o755)
+	_ = os.WriteFile(m.statusPath(), data, 0o644)
 }
 
 // loadBareCIDRs reads a file with one CIDR per line (no country code prefix).

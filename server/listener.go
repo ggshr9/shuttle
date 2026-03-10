@@ -96,6 +96,8 @@ func protoForType(t string) string {
 		return "UDP (QUIC)"
 	case "reality":
 		return "TCP (TLS)"
+	case "cdn":
+		return "TCP (HTTP/2)"
 	case "webrtc":
 		return "UDP/TCP (WebRTC)"
 	default:

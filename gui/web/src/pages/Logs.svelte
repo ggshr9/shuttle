@@ -247,18 +247,18 @@
   h2 { font-size: 18px; margin: 0; }
 
   .status-badge {
-    background: #21262d;
-    border: 1px solid #2d333b;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border);
     border-radius: 12px;
     padding: 4px 10px;
     font-size: 11px;
-    color: #8b949e;
+    color: var(--text-secondary);
   }
 
   .status-badge.active {
     background: rgba(63, 185, 80, 0.1);
-    border-color: #3fb950;
-    color: #3fb950;
+    border-color: var(--accent-green);
+    color: var(--accent-green);
   }
 
   .controls {
@@ -266,14 +266,14 @@
     gap: 12px;
     align-items: center;
     font-size: 13px;
-    color: #8b949e;
+    color: var(--text-secondary);
     margin-left: auto;
   }
 
   .controls button {
-    background: #21262d;
-    border: 1px solid #2d333b;
-    color: #e1e4e8;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border);
+    color: var(--text-primary);
     border-radius: 6px;
     padding: 4px 12px;
     cursor: pointer;
@@ -288,8 +288,8 @@
   .log-container {
     flex: 1;
     overflow-y: auto;
-    background: #0d1117;
-    border: 1px solid #2d333b;
+    background: var(--bg-surface);
+    border: 1px solid var(--border);
     border-radius: 8px;
     padding: 8px;
     font-family: 'Cascadia Code', 'Fira Code', monospace;
@@ -315,7 +315,7 @@
   }
 
   .line.connection {
-    border-left: 2px solid #3fb950;
+    border-left: 2px solid var(--accent-green);
     padding-left: 8px;
     margin-left: -8px;
   }
@@ -326,20 +326,20 @@
     align-items: center;
   }
 
-  .time { color: #484f58; min-width: 70px; }
-  .level { color: #58a6ff; min-width: 40px; text-transform: uppercase; }
+  .time { color: var(--text-muted); min-width: 70px; }
+  .level { color: var(--accent); min-width: 40px; text-transform: uppercase; }
   .level.warn { color: #d29922; }
-  .level.error { color: #f85149; }
+  .level.error { color: var(--accent-red); }
   .msg { color: #c9d1d9; flex: 1; }
-  .empty { color: #484f58; text-align: center; margin-top: 40px; }
+  .empty { color: var(--text-muted); text-align: center; margin-top: 40px; }
 
   .conn-icon {
-    color: #3fb950;
+    color: var(--accent-green);
     font-size: 10px;
   }
 
   .expand-icon {
-    color: #484f58;
+    color: var(--text-muted);
     font-size: 10px;
     margin-left: auto;
     padding-right: 8px;
@@ -350,7 +350,7 @@
     margin-left: 78px;
     padding: 8px 12px;
     background: rgba(13, 17, 23, 0.8);
-    border: 1px solid #21262d;
+    border: 1px solid var(--bg-tertiary);
     border-radius: 6px;
     margin-bottom: 4px;
   }
@@ -371,7 +371,7 @@
   }
 
   .detail-value.protocol {
-    color: #58a6ff;
+    color: var(--accent);
     background: rgba(88, 166, 255, 0.1);
     padding: 1px 6px;
     border-radius: 3px;
@@ -383,11 +383,11 @@
   }
 
   .traffic-in {
-    color: #3fb950;
+    color: var(--accent-green);
     margin-right: 12px;
   }
 
   .traffic-out {
-    color: #58a6ff;
+    color: var(--accent);
   }
 </style>
