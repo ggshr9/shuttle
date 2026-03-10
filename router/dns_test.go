@@ -32,7 +32,7 @@ func newDoHServer(t *testing.T, responseJSON string) (*httptest.Server, *atomic.
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		count.Add(1)
 		w.Header().Set("Content-Type", "application/dns-json")
-		w.Write([]byte(responseJSON))
+		_, _ = w.Write([]byte(responseJSON))
 	}))
 	t.Cleanup(srv.Close)
 	return srv, &count
@@ -83,7 +83,7 @@ func TestDNSResolver_StripECSParam(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		capturedURL.Store(r.URL.String())
 		w.Header().Set("Content-Type", "application/dns-json")
-		w.Write([]byte(`{"Status":0,"Answer":[{"type":1,"data":"1.2.3.4"}]}`))
+		_, _ = w.Write([]byte(`{"Status":0,"Answer":[{"type":1,"data":"1.2.3.4"}]}`))
 	}))
 	defer srv.Close()
 
@@ -173,7 +173,7 @@ func TestDNSResolver_DomesticDoH(t *testing.T) {
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			capturedPath.Store(r.URL.String())
 			w.Header().Set("Content-Type", "application/dns-json")
-			w.Write([]byte(`{"Status":0,"Answer":[{"type":1,"data":"10.20.30.40"}]}`))
+			_, _ = w.Write([]byte(`{"Status":0,"Answer":[{"type":1,"data":"10.20.30.40"}]}`))
 		}))
 		defer srv.Close()
 

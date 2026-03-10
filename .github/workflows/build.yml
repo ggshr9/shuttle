@@ -21,7 +21,7 @@ jobs:
           go-version: '1.24'
       - uses: golangci/golangci-lint-action@4afd733a84b2f1a21c7ce21404f413136a96b55d # v6
         with:
-          version: latest
+          version: v1.64.8
 
   security:
     runs-on: ubuntu-latest

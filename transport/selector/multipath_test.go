@@ -24,9 +24,8 @@ func (s *fakeStream) Close() error                { s.closed.Store(true); return
 func (s *fakeStream) StreamID() uint64             { return s.id }
 
 type fakeConn struct {
-	streamErr  error
-	streamID   uint64
-	openCount  atomic.Int64
+	streamErr   error
+	openCount   atomic.Int64
 	closeCalled atomic.Bool
 }
 
@@ -35,7 +34,7 @@ func (c *fakeConn) OpenStream(ctx context.Context) (transport.Stream, error) {
 		return nil, c.streamErr
 	}
 	id := c.openCount.Add(1)
-	return &fakeStream{id: uint64(id)}, nil
+	return &fakeStream{id: uint64(id)}, nil //nolint:gosec // counter starts at 0 and only increments
 }
 func (c *fakeConn) AcceptStream(ctx context.Context) (transport.Stream, error) {
 	return nil, errors.New("not implemented")

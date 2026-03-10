@@ -43,7 +43,7 @@ func NewShaper(inner io.ReadWriter, cfg ShaperConfig) *Shaper {
 	return &Shaper{
 		inner: inner,
 		cfg:   cfg,
-		rng:   rand.New(rand.NewSource(time.Now().UnixNano())),
+		rng:   rand.New(rand.NewSource(time.Now().UnixNano())), //nolint:gosec // shaping randomness does not need crypto rand
 	}
 }
 

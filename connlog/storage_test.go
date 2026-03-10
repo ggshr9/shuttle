@@ -36,7 +36,7 @@ func TestLogAndRecent(t *testing.T) {
 		{ID: "3", Timestamp: time.Now(), Target: "c.com:443", Rule: "proxy", State: "closed"},
 	}
 	for _, e := range entries {
-		s.Log(e)
+		s.Log(&e)
 	}
 
 	recent := s.Recent(3)
@@ -77,7 +77,7 @@ func TestRingBuffer(t *testing.T) {
 
 	// Log more entries than maxEntries.
 	for i := 0; i < 12; i++ {
-		s.Log(Entry{
+		s.Log(&Entry{
 			ID:        string(rune('a' + i)),
 			Timestamp: time.Now(),
 			Target:    "host.com:443",
@@ -116,7 +116,7 @@ func TestLogWritesFile(t *testing.T) {
 		DurationMs:  150,
 		State:       "closed",
 	}
-	s.Log(e)
+	s.Log(&e)
 	s.Close()
 
 	// Find the log file.
@@ -183,18 +183,18 @@ func TestCleanOldFiles(t *testing.T) {
 
 	for _, d := range oldDates {
 		name := filepath.Join(dir, "connections-"+d+".jsonl")
-		if err := os.WriteFile(name, []byte(`{"id":"old"}`+"\n"), 0o644); err != nil {
+		if err := os.WriteFile(name, []byte(`{"id":"old"}`+"\n"), 0o600); err != nil {
 			t.Fatalf("create old file: %v", err)
 		}
 	}
 	recentFile := filepath.Join(dir, "connections-"+recentDate+".jsonl")
-	if err := os.WriteFile(recentFile, []byte(`{"id":"recent"}`+"\n"), 0o644); err != nil {
+	if err := os.WriteFile(recentFile, []byte(`{"id":"recent"}`+"\n"), 0o600); err != nil {
 		t.Fatalf("create recent file: %v", err)
 	}
 
 	// Also create a non-matching file that should be left alone.
 	otherFile := filepath.Join(dir, "other.txt")
-	if err := os.WriteFile(otherFile, []byte("keep"), 0o644); err != nil {
+	if err := os.WriteFile(otherFile, []byte("keep"), 0o600); err != nil {
 		t.Fatalf("create other file: %v", err)
 	}
 

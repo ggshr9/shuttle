@@ -344,7 +344,7 @@ func ClusterHandler(cm *ClusterManager) http.Handler {
 	// Cluster status — returns all peers + local state
 	mux.HandleFunc("GET /api/cluster", auth(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]any{
+		_ = json.NewEncoder(w).Encode(map[string]any{
 			"node":  cm.LocalState(),
 			"peers": cm.Peers(),
 		})
@@ -353,7 +353,7 @@ func ClusterHandler(cm *ClusterManager) http.Handler {
 	// Cluster health — lightweight endpoint for peer health checks
 	mux.HandleFunc("GET /api/cluster/health", auth(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]string{"status": "ok", "node": cm.nodeName})
+		_ = json.NewEncoder(w).Encode(map[string]string{"status": "ok", "node": cm.nodeName})
 	}))
 
 	return mux

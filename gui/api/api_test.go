@@ -99,7 +99,7 @@ func TestAPIConfigServers_CRUD(t *testing.T) {
 		t.Fatalf("GET servers: expected 200, got %d", rr.Code)
 	}
 	var initial map[string]interface{}
-	json.Unmarshal(rr.Body.Bytes(), &initial)
+	_ = json.Unmarshal(rr.Body.Bytes(), &initial)
 	servers, _ := initial["servers"].([]interface{})
 	if len(servers) != 0 {
 		t.Fatalf("expected 0 servers initially, got %d", len(servers))
@@ -117,7 +117,7 @@ func TestAPIConfigServers_CRUD(t *testing.T) {
 		t.Fatalf("GET servers: expected 200, got %d", rr.Code)
 	}
 	var afterAdd map[string]interface{}
-	json.Unmarshal(rr.Body.Bytes(), &afterAdd)
+	_ = json.Unmarshal(rr.Body.Bytes(), &afterAdd)
 	servers, _ = afterAdd["servers"].([]interface{})
 	if len(servers) != 1 {
 		t.Fatalf("expected 1 server after add, got %d", len(servers))
@@ -138,7 +138,7 @@ func TestAPIConfigServers_CRUD(t *testing.T) {
 	// Verify it's gone
 	rr = doRequest(h, "GET", "/api/config/servers", "")
 	var afterDel map[string]interface{}
-	json.Unmarshal(rr.Body.Bytes(), &afterDel)
+	_ = json.Unmarshal(rr.Body.Bytes(), &afterDel)
 	servers, _ = afterDel["servers"].([]interface{})
 	if len(servers) != 0 {
 		t.Fatalf("expected 0 servers after delete, got %d", len(servers))
@@ -169,7 +169,7 @@ func TestAPISubscriptions_CRUD(t *testing.T) {
 		t.Fatalf("GET subscriptions: expected 200, got %d", rr.Code)
 	}
 	var initial []interface{}
-	json.Unmarshal(rr.Body.Bytes(), &initial)
+	_ = json.Unmarshal(rr.Body.Bytes(), &initial)
 	if len(initial) != 0 {
 		t.Fatalf("expected 0 subscriptions initially, got %d", len(initial))
 	}
@@ -182,7 +182,7 @@ func TestAPISubscriptions_CRUD(t *testing.T) {
 
 	// Extract the subscription ID from the response
 	var addedSub map[string]interface{}
-	json.Unmarshal(rr.Body.Bytes(), &addedSub)
+	_ = json.Unmarshal(rr.Body.Bytes(), &addedSub)
 	subID, ok := addedSub["id"].(string)
 	if !ok || subID == "" {
 		t.Fatal("expected subscription ID in response")
@@ -191,7 +191,7 @@ func TestAPISubscriptions_CRUD(t *testing.T) {
 	// List should now contain 1 subscription
 	rr = doRequest(h, "GET", "/api/subscriptions", "")
 	var afterAdd []interface{}
-	json.Unmarshal(rr.Body.Bytes(), &afterAdd)
+	_ = json.Unmarshal(rr.Body.Bytes(), &afterAdd)
 	if len(afterAdd) != 1 {
 		t.Fatalf("expected 1 subscription after add, got %d", len(afterAdd))
 	}
@@ -205,7 +205,7 @@ func TestAPISubscriptions_CRUD(t *testing.T) {
 	// List should be empty again
 	rr = doRequest(h, "GET", "/api/subscriptions", "")
 	var afterDel []interface{}
-	json.Unmarshal(rr.Body.Bytes(), &afterDel)
+	_ = json.Unmarshal(rr.Body.Bytes(), &afterDel)
 	if len(afterDel) != 0 {
 		t.Fatalf("expected 0 subscriptions after delete, got %d", len(afterDel))
 	}
@@ -327,7 +327,7 @@ func TestAPIConnectDoubleStart(t *testing.T) {
 	if rr.Code != http.StatusOK {
 		t.Fatalf("expected 200 for first connect, got %d: %s", rr.Code, rr.Body.String())
 	}
-	defer eng.Stop()
+	defer func() { _ = eng.Stop() }()
 
 	// Second connect on an already-running engine should return 409.
 	rr = doRequest(h, "POST", "/api/connect", "")

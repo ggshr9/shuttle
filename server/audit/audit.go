@@ -67,7 +67,7 @@ func (l *Logger) openLogFile() error {
 }
 
 // Log records an audit entry.
-func (l *Logger) Log(e Entry) {
+func (l *Logger) Log(e *Entry) {
 	if e.Timestamp.IsZero() {
 		e.Timestamp = time.Now()
 	}
@@ -75,7 +75,7 @@ func (l *Logger) Log(e Entry) {
 	defer l.mu.Unlock()
 
 	// Ring buffer
-	l.entries[l.head] = e
+	l.entries[l.head] = *e
 	l.head = (l.head + 1) % l.maxEntries
 	if l.count < l.maxEntries {
 		l.count++
@@ -86,11 +86,11 @@ func (l *Logger) Log(e Entry) {
 		day := e.Timestamp.Format("2006-01-02")
 		if day != l.currentDay {
 			l.writer.Close()
-			l.openLogFile()
+			_ = l.openLogFile()
 		}
 		data, _ := json.Marshal(e)
-		l.writer.Write(data)
-		l.writer.Write([]byte("\n"))
+		_, _ = l.writer.Write(data)
+		_, _ = l.writer.WriteString("\n")
 	}
 }
 

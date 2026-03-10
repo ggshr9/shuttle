@@ -48,9 +48,10 @@ func BuiltinPresets() []SourcePreset {
 
 // PresetByID returns the preset with the given ID, or nil if not found.
 func PresetByID(id string) *SourcePreset {
-	for _, p := range BuiltinPresets() {
-		if p.ID == id {
-			return &p
+	presets := BuiltinPresets()
+	for i := range presets {
+		if presets[i].ID == id {
+			return &presets[i]
 		}
 	}
 	return nil

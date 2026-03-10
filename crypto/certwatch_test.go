@@ -54,7 +54,7 @@ func TestCertWatcherNoRenewalNeeded(t *testing.T) {
 		t.Fatalf("write key: %v", err)
 	}
 
-	w := NewCertWatcher(CertWatcherConfig{
+	w := NewCertWatcher(&CertWatcherConfig{
 		CertFile:    certFile,
 		KeyFile:     keyFile,
 		Hosts:       []string{"localhost"},
@@ -88,7 +88,7 @@ func TestCertWatcherRenewsExpiring(t *testing.T) {
 		t.Fatalf("write key: %v", err)
 	}
 
-	w := NewCertWatcher(CertWatcherConfig{
+	w := NewCertWatcher(&CertWatcherConfig{
 		CertFile:    certFile,
 		KeyFile:     keyFile,
 		Hosts:       []string{"localhost"},
@@ -137,7 +137,7 @@ func TestCertWatcherCallback(t *testing.T) {
 	}
 
 	var called atomic.Bool
-	w := NewCertWatcher(CertWatcherConfig{
+	w := NewCertWatcher(&CertWatcherConfig{
 		CertFile:    certFile,
 		KeyFile:     keyFile,
 		Hosts:       []string{"localhost"},
@@ -175,7 +175,7 @@ func TestCertWatcherStartStop(t *testing.T) {
 		t.Fatalf("write key: %v", err)
 	}
 
-	w := NewCertWatcher(CertWatcherConfig{
+	w := NewCertWatcher(&CertWatcherConfig{
 		CertFile:      certFile,
 		KeyFile:       keyFile,
 		Hosts:         []string{"localhost"},
@@ -188,7 +188,7 @@ func TestCertWatcherStartStop(t *testing.T) {
 }
 
 func TestCertWatcherDefaults(t *testing.T) {
-	w := NewCertWatcher(CertWatcherConfig{}, nil)
+	w := NewCertWatcher(&CertWatcherConfig{}, nil)
 	if w.renewBefore != 7*24*time.Hour {
 		t.Errorf("default renewBefore = %v, want 7 days", w.renewBefore)
 	}

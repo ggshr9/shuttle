@@ -1043,7 +1043,7 @@ func handlerWithAllOptions(eng *engine.Engine, subMgr *subscription.Manager, sta
 		if r.URL.Query().Get("download") == "true" {
 			w.Header().Set("Content-Disposition", "attachment; filename=shuttle.pac")
 		}
-		w.Write([]byte(pac))
+		_, _ = w.Write([]byte(pac))
 	})
 
 	// Rule conflict detection
@@ -1052,7 +1052,8 @@ func handlerWithAllOptions(eng *engine.Engine, subMgr *subscription.Manager, sta
 
 		// Convert config rules to router rules
 		var rules []router.Rule
-		for _, rule := range cfg.Routing.Rules {
+		for i := range cfg.Routing.Rules {
+			rule := &cfg.Routing.Rules[i]
 			rr := router.Rule{Action: router.Action(rule.Action)}
 			switch {
 			case rule.Domains != "":

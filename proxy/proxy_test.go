@@ -607,12 +607,12 @@ func TestSOCKS5_UnsupportedVersion(t *testing.T) {
 	// Send version 4 instead of 5 — should fail.
 	// Write may fail with "closed pipe" if server reads and closes fast enough,
 	// so we tolerate a write error here.
-	client.Write([]byte{0x04, 0x01, 0x00})
+	_, _ = client.Write([]byte{0x04, 0x01, 0x00})
 
 	// The server should close the connection after seeing the wrong version.
 	// Try reading — expect EOF or error.
 	buf := make([]byte, 10)
-	client.SetReadDeadline(time.Now().Add(1 * time.Second))
+	_ = client.SetReadDeadline(time.Now().Add(1 * time.Second))
 	_, err := client.Read(buf)
 	if err == nil {
 		t.Fatal("expected error or EOF for unsupported SOCKS version, got none")

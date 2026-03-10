@@ -48,7 +48,7 @@ func retryWithBackoff(ctx context.Context, cfg RetryConfig, fn func() error) err
 			// Add jitter
 			jittered := backoff
 			if cfg.Jitter > 0 {
-				jitter := time.Duration(float64(backoff) * cfg.Jitter * (rand.Float64()*2 - 1))
+				jitter := time.Duration(float64(backoff) * cfg.Jitter * (rand.Float64()*2 - 1)) //nolint:gosec // jitter does not need cryptographic randomness
 				jittered = backoff + jitter
 				if jittered < 0 {
 					jittered = backoff

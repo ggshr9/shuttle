@@ -1,6 +1,7 @@
 package logutil
 
 import (
+	"context"
 	"log/slog"
 	"testing"
 )
@@ -46,7 +47,7 @@ func TestNewLoggerLevels(t *testing.T) {
 			if logger == nil {
 				t.Fatal("expected non-nil logger")
 			}
-			if !logger.Handler().Enabled(nil, tt.expected) {
+			if !logger.Handler().Enabled(context.TODO(), tt.expected) {
 				t.Errorf("expected level %v to be enabled for input %q", tt.expected, tt.input)
 			}
 		})

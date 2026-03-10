@@ -281,7 +281,7 @@ func parseRemoteAddr(addr string) net.Addr {
 		return &net.TCPAddr{}
 	}
 	var port int
-	fmt.Sscanf(portStr, "%d", &port)
+	_, _ = fmt.Sscanf(portStr, "%d", &port)
 	return &net.TCPAddr{
 		IP:   net.ParseIP(host),
 		Port: port,

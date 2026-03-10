@@ -75,7 +75,7 @@ func GeneratePAC(r *Router, cfg *PACConfig) string {
 	if len(rejectDomains) > 0 {
 		sb.WriteString("  // Rejected domains (ads/tracking)\n")
 		for _, d := range rejectDomains {
-			sb.WriteString(fmt.Sprintf("  if (dnsDomainIs(host, \"%s\")) return \"PROXY 0.0.0.0:1\";\n", escapeJSString(d)))
+			sb.WriteString(fmt.Sprintf("  if (dnsDomainIs(host, %q)) return \"PROXY 0.0.0.0:1\";\n", escapeJSString(d)))
 		}
 		sb.WriteString("\n")
 	}
@@ -84,7 +84,7 @@ func GeneratePAC(r *Router, cfg *PACConfig) string {
 	if len(directDomains) > 0 {
 		sb.WriteString("  // Direct domains\n")
 		for _, d := range directDomains {
-			sb.WriteString(fmt.Sprintf("  if (dnsDomainIs(host, \"%s\")) return \"DIRECT\";\n", escapeJSString(d)))
+			sb.WriteString(fmt.Sprintf("  if (dnsDomainIs(host, %q)) return \"DIRECT\";\n", escapeJSString(d)))
 		}
 		sb.WriteString("\n")
 	}
@@ -93,7 +93,7 @@ func GeneratePAC(r *Router, cfg *PACConfig) string {
 	if len(proxyDomains) > 0 {
 		sb.WriteString("  // Proxy domains\n")
 		for _, d := range proxyDomains {
-			sb.WriteString(fmt.Sprintf("  if (dnsDomainIs(host, \"%s\")) return \"%s\";\n", escapeJSString(d), proxyStr))
+			sb.WriteString(fmt.Sprintf("  if (dnsDomainIs(host, %q)) return %q;\n", escapeJSString(d), proxyStr))
 		}
 		sb.WriteString("\n")
 	}
@@ -104,7 +104,7 @@ func GeneratePAC(r *Router, cfg *PACConfig) string {
 		for _, cidr := range directCIDRs {
 			ip, mask := cidrToNetMask(cidr)
 			if ip != "" {
-				sb.WriteString(fmt.Sprintf("  if (isInNet(host, \"%s\", \"%s\")) return \"DIRECT\";\n", ip, mask))
+				sb.WriteString(fmt.Sprintf("  if (isInNet(host, %q, %q)) return \"DIRECT\";\n", ip, mask))
 			}
 		}
 		sb.WriteString("\n")
@@ -115,7 +115,7 @@ func GeneratePAC(r *Router, cfg *PACConfig) string {
 		for _, cidr := range proxyCIDRs {
 			ip, mask := cidrToNetMask(cidr)
 			if ip != "" {
-				sb.WriteString(fmt.Sprintf("  if (isInNet(host, \"%s\", \"%s\")) return \"%s\";\n", ip, mask, proxyStr))
+				sb.WriteString(fmt.Sprintf("  if (isInNet(host, %q, %q)) return %q;\n", ip, mask, proxyStr))
 			}
 		}
 		sb.WriteString("\n")
@@ -124,9 +124,9 @@ func GeneratePAC(r *Router, cfg *PACConfig) string {
 	// Default
 	sb.WriteString("  // Default action\n")
 	if cfg.DefaultAction == ActionDirect {
-		sb.WriteString(fmt.Sprintf("  return \"%s\";\n", directStr))
+		sb.WriteString(fmt.Sprintf("  return %q;\n", directStr))
 	} else {
-		sb.WriteString(fmt.Sprintf("  return \"%s\";\n", proxyStr))
+		sb.WriteString(fmt.Sprintf("  return %q;\n", proxyStr))
 	}
 
 	sb.WriteString("}\n")

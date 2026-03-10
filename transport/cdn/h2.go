@@ -40,7 +40,7 @@ func NewH2Client(cfg *H2Config, opts ...H2Option) *H2Client {
 	tlsCfg := &tls.Config{
 		MinVersion:         tls.VersionTLS12,
 		NextProtos:         []string{"h2", "http/1.1"},
-		InsecureSkipVerify: cfg.InsecureSkipVerify,
+		InsecureSkipVerify: cfg.InsecureSkipVerify, //nolint:gosec // configurable option for CDN fronting where cert may not match
 	}
 	if cfg.FrontDomain != "" {
 		tlsCfg.ServerName = cfg.FrontDomain

@@ -45,7 +45,7 @@ type CertWatcher struct {
 }
 
 // NewCertWatcher creates a new CertWatcher from the given config.
-func NewCertWatcher(cfg CertWatcherConfig, logger *slog.Logger) *CertWatcher {
+func NewCertWatcher(cfg *CertWatcherConfig, logger *slog.Logger) *CertWatcher {
 	if cfg.RenewBefore == 0 {
 		cfg.RenewBefore = 7 * 24 * time.Hour
 	}

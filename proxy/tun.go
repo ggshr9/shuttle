@@ -445,7 +445,7 @@ func (t *TUNServer) dialAndProxyTCP(ctx context.Context, key natKey, clientISN u
 		for {
 			// Set read deadline to detect dead connections
 			if dl, ok := conn.(interface{ SetReadDeadline(time.Time) error }); ok {
-				dl.SetReadDeadline(time.Now().Add(2 * time.Minute))
+				_ = dl.SetReadDeadline(time.Now().Add(2 * time.Minute))
 			}
 			n, err := conn.Read(buf)
 			if n > 0 {

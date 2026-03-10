@@ -224,11 +224,10 @@ func recordEngineEvents(eng *engine.Engine, statsStore *stats.Storage, connStore
 			if !ok {
 				return
 			}
-			switch ev.Type {
-			case engine.EventConnection:
+			if ev.Type == engine.EventConnection {
 				// Log connection events to connlog storage.
 				if connStore != nil {
-					connStore.Log(connlog.Entry{
+					connStore.Log(&connlog.Entry{
 						ID:          ev.ConnID,
 						Timestamp:   ev.Timestamp,
 						Target:      ev.Target,

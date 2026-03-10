@@ -8,17 +8,26 @@ import (
 var (
 	// Small buffers (1KB) for headers/control data
 	SmallPool = &sync.Pool{
-		New: func() any { return make([]byte, 1024) },
+		New: func() any {
+			b := make([]byte, 1024)
+			return &b
+		},
 	}
 
 	// Medium buffers (16KB) for typical data transfer
 	MediumPool = &sync.Pool{
-		New: func() any { return make([]byte, 16*1024) },
+		New: func() any {
+			b := make([]byte, 16*1024)
+			return &b
+		},
 	}
 
 	// Large buffers (64KB) for high-throughput transfer
 	LargePool = &sync.Pool{
-		New: func() any { return make([]byte, 64*1024) },
+		New: func() any {
+			b := make([]byte, 64*1024)
+			return &b
+		},
 	}
 )
 
@@ -26,11 +35,14 @@ var (
 func Get(size int) []byte {
 	switch {
 	case size <= 1024:
-		return SmallPool.Get().([]byte)[:size]
+		bp := SmallPool.Get().(*[]byte)
+		return (*bp)[:size]
 	case size <= 16*1024:
-		return MediumPool.Get().([]byte)[:size]
+		bp := MediumPool.Get().(*[]byte)
+		return (*bp)[:size]
 	default:
-		return LargePool.Get().([]byte)[:min(size, 64*1024)]
+		bp := LargePool.Get().(*[]byte)
+		return (*bp)[:min(size, 64*1024)]
 	}
 }
 
@@ -43,10 +55,10 @@ func Put(buf []byte) {
 	clear(b)
 	switch {
 	case c <= 1024:
-		SmallPool.Put(b)
+		SmallPool.Put(&b)
 	case c <= 16*1024:
-		MediumPool.Put(b)
+		MediumPool.Put(&b)
 	default:
-		LargePool.Put(b)
+		LargePool.Put(&b)
 	}
 }

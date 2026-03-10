@@ -290,7 +290,7 @@ func (m *Manager) saveStatus() {
 		return
 	}
 	_ = os.MkdirAll(m.cfg.DataDir, 0o755)
-	_ = os.WriteFile(m.statusPath(), data, 0o644)
+	_ = os.WriteFile(m.statusPath(), data, 0o600)
 }
 
 // loadBareCIDRs reads a file with one CIDR per line (no country code prefix).

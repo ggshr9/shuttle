@@ -95,7 +95,8 @@ func (r *Reputation) RecordFailure(ip string) bool {
 			fresh = append(fresh, t)
 		}
 	}
-	rec.failures = append(fresh, now)
+	fresh = append(fresh, now)
+	rec.failures = fresh
 
 	// Check if threshold exceeded
 	if len(rec.failures) >= r.config.MaxFailures {

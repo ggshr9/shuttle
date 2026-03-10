@@ -25,7 +25,7 @@ func WritePrometheusMetrics(w io.Writer, info *ServerInfo, users *UserStore) {
 	// Per-user metrics
 	if users != nil {
 		for _, u := range users.List() {
-			labels := fmt.Sprintf(`user="%s"`, u.Name)
+			labels := fmt.Sprintf("user=%q", u.Name)
 			writeCounterLabeled(w, "shuttle_user_bytes_sent_total", "Total bytes sent by user", labels, float64(u.BytesSent))
 			writeCounterLabeled(w, "shuttle_user_bytes_received_total", "Total bytes received by user", labels, float64(u.BytesRecv))
 			writeGaugeLabeled(w, "shuttle_user_active_connections", "Active connections for user", labels, float64(u.ActiveConns))

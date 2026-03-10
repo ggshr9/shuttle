@@ -16,8 +16,8 @@ func TestNewLogger_MemoryOnly(t *testing.T) {
 	}
 	defer l.Close()
 
-	l.Log(Entry{Target: "example.com:443", BytesIn: 100, BytesOut: 200, DurationMs: 50})
-	l.Log(Entry{Target: "test.com:80", BytesIn: 300, BytesOut: 400, DurationMs: 100})
+	l.Log(&Entry{Target: "example.com:443", BytesIn: 100, BytesOut: 200, DurationMs: 50})
+	l.Log(&Entry{Target: "test.com:80", BytesIn: 300, BytesOut: 400, DurationMs: 100})
 
 	entries := l.Recent(5)
 	if len(entries) != 2 {
@@ -39,8 +39,8 @@ func TestNewLogger_WithFile(t *testing.T) {
 		t.Fatalf("NewLogger: %v", err)
 	}
 
-	l.Log(Entry{Target: "example.com:443", BytesIn: 100, BytesOut: 200, DurationMs: 50})
-	l.Log(Entry{Target: "test.com:80", BytesIn: 300, BytesOut: 400, DurationMs: 100})
+	l.Log(&Entry{Target: "example.com:443", BytesIn: 100, BytesOut: 200, DurationMs: 50})
+	l.Log(&Entry{Target: "test.com:80", BytesIn: 300, BytesOut: 400, DurationMs: 100})
 	l.Close()
 
 	// Check that a JSONL file was written
@@ -74,7 +74,7 @@ func TestRingBuffer(t *testing.T) {
 
 	// Log 5 entries into a buffer of size 3
 	for i := 0; i < 5; i++ {
-		l.Log(Entry{Target: string(rune('A' + i)), DurationMs: int64(i)})
+		l.Log(&Entry{Target: string(rune('A' + i)), DurationMs: int64(i)})
 	}
 
 	entries := l.Recent(10) // ask for more than available

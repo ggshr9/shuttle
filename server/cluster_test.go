@@ -197,7 +197,7 @@ func TestClusterManagerCheckPeer(t *testing.T) {
 			w.WriteHeader(http.StatusUnauthorized)
 			return
 		}
-		json.NewEncoder(w).Encode(map[string]any{
+		_ = json.NewEncoder(w).Encode(map[string]any{
 			"version":      "0.1.0",
 			"active_conns": 25,
 			"total_conns":  100,
@@ -299,7 +299,7 @@ func TestClusterHandlerHealth(t *testing.T) {
 		t.Fatalf("status = %d, want 200", rec.Code)
 	}
 	var resp map[string]string
-	json.NewDecoder(rec.Body).Decode(&resp)
+	_ = json.NewDecoder(rec.Body).Decode(&resp)
 	if resp["node"] != "test" {
 		t.Errorf("node = %q, want %q", resp["node"], "test")
 	}
@@ -344,7 +344,7 @@ func TestClusterHandlerStatus(t *testing.T) {
 		Node  PeerState   `json:"node"`
 		Peers []PeerState `json:"peers"`
 	}
-	json.NewDecoder(rec.Body).Decode(&resp)
+	_ = json.NewDecoder(rec.Body).Decode(&resp)
 	if resp.Node.Name != "test" {
 		t.Errorf("node.name = %q, want %q", resp.Node.Name, "test")
 	}

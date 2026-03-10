@@ -256,13 +256,13 @@ func TestAutoRefreshCallsRefreshAll(t *testing.T) {
 
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		hitCount.Add(1)
-		w.Write(data)
+		_, _ = w.Write(data)
 	}))
 	defer ts.Close()
 
 	m := NewManager()
-	m.Add("Sub1", ts.URL)
-	m.Add("Sub2", ts.URL)
+	_, _ = m.Add("Sub1", ts.URL)
+	_, _ = m.Add("Sub2", ts.URL)
 
 	ctx := context.Background()
 	m.StartAutoRefresh(ctx, 50*time.Millisecond)

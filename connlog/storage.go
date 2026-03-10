@@ -62,12 +62,12 @@ func NewStorage(logDir string, maxEntries int) (*Storage, error) {
 // Log appends an entry to the ring buffer and writes it as a JSON line to
 // the current log file. If the date has changed since the file was opened,
 // it rotates to a new file automatically.
-func (s *Storage) Log(entry Entry) {
+func (s *Storage) Log(entry *Entry) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	// Store in ring buffer.
-	s.entries[s.head] = entry
+	s.entries[s.head] = *entry
 	s.head = (s.head + 1) % s.maxEntries
 	if s.count < s.maxEntries {
 		s.count++
@@ -83,8 +83,8 @@ func (s *Storage) Log(entry Entry) {
 	if s.writer != nil {
 		data, err := json.Marshal(entry)
 		if err == nil {
-			s.writer.Write(data)
-			s.writer.Write([]byte("\n"))
+			_, _ = s.writer.Write(data)
+			_, _ = s.writer.WriteString("\n")
 		}
 	}
 }

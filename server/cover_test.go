@@ -42,7 +42,7 @@ func TestCoverHandlerDefault(t *testing.T) {
 func TestCoverHandlerStatic(t *testing.T) {
 	dir := t.TempDir()
 	indexContent := "<html><body>static test page</body></html>"
-	if err := os.WriteFile(filepath.Join(dir, "index.html"), []byte(indexContent), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "index.html"), []byte(indexContent), 0o600); err != nil {
 		t.Fatal(err)
 	}
 

@@ -387,7 +387,7 @@ func run(configPath string) {
 			pprofMux.HandleFunc("/debug/pprof/symbol", pprof.Symbol)
 			pprofMux.HandleFunc("/debug/pprof/trace", pprof.Trace)
 			logger.Info("pprof enabled", "addr", pprofListen)
-			if err := http.ListenAndServe(pprofListen, pprofMux); err != nil {
+			if err := http.ListenAndServe(pprofListen, pprofMux); err != nil { //nolint:gosec // pprof debug server, local only
 				logger.Error("pprof server failed", "err", err)
 			}
 		}()
@@ -815,7 +815,7 @@ func handleStream(ctx context.Context, stream transport.Stream, remoteIP string,
 				logger.Debug("dial target failed", "target", target, "err", err)
 				return
 			}
-			defer remote.Close()
+			defer remote.Close() //nolint:gocritic // not a real loop; reads until newline then returns
 
 			// Forward any residual bytes that were read past the header.
 			if len(residual) > 0 {
@@ -830,7 +830,7 @@ func handleStream(ctx context.Context, stream transport.Stream, remoteIP string,
 			var counter *countingReadWriter
 			if user != nil {
 				user.ActiveConns.Add(1)
-				defer user.ActiveConns.Add(-1)
+				defer user.ActiveConns.Add(-1) //nolint:gocritic // not a real loop; reads until newline then returns
 				counter = &countingReadWriter{
 					inner: stream,
 					user:  user,
@@ -860,7 +860,7 @@ func handleStream(ctx context.Context, stream transport.Stream, remoteIP string,
 					adminInfo.BytesSent.Add(entry.BytesOut)
 					adminInfo.BytesRecv.Add(entry.BytesIn)
 				}
-				auditLog.Log(entry)
+				auditLog.Log(&entry)
 			}
 			return
 		}
@@ -1099,7 +1099,7 @@ func relay(a io.ReadWriter, b io.ReadWriter) {
 		}
 		// Close write side if possible to signal EOF
 		if cw, ok := b.(interface{ CloseWrite() error }); ok {
-			cw.CloseWrite()
+			_ = cw.CloseWrite()
 		}
 		done <- struct{}{}
 	}()
@@ -1111,7 +1111,7 @@ func relay(a io.ReadWriter, b io.ReadWriter) {
 			slog.Debug("relay b→a finished", "err", err)
 		}
 		if cw, ok := a.(interface{ CloseWrite() error }); ok {
-			cw.CloseWrite()
+			_ = cw.CloseWrite()
 		}
 		done <- struct{}{}
 	}()

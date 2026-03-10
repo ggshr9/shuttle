@@ -77,8 +77,8 @@ func TestUserStoreSetEnabled(t *testing.T) {
 
 func TestUserStoreToConfig(t *testing.T) {
 	s := NewUserStore(nil)
-	s.Add("u1", 1000)
-	s.Add("u2", 0)
+	_, _ = s.Add("u1", 1000)
+	_, _ = s.Add("u2", 0)
 
 	cfg := s.ToConfig()
 	if len(cfg) != 2 {

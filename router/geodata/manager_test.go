@@ -74,7 +74,7 @@ func TestStatusPersistenceCorruptFile(t *testing.T) {
 
 	// Write corrupt status.json
 	statusPath := filepath.Join(dir, "status.json")
-	os.WriteFile(statusPath, []byte("not json"), 0o644)
+	_ = os.WriteFile(statusPath, []byte("not json"), 0o600)
 
 	// Should not error, just ignore corrupt data
 	m := NewManager(ManagerConfig{
@@ -121,8 +121,8 @@ func TestManagerHasAllFiles(t *testing.T) {
 	}
 
 	// Create the required files
-	os.WriteFile(filepath.Join(dir, FileDirectList), []byte("example.com"), 0o644)
-	os.WriteFile(filepath.Join(dir, FileCNCidr), []byte("1.0.0.0/8"), 0o644)
+	_ = os.WriteFile(filepath.Join(dir, FileDirectList), []byte("example.com"), 0o600)
+	_ = os.WriteFile(filepath.Join(dir, FileCNCidr), []byte("1.0.0.0/8"), 0o600)
 
 	if !m.hasAllFiles() {
 		t.Fatal("expected hasAllFiles=true after creating required files")
