@@ -17,11 +17,57 @@ import (
 )
 
 // ---------------------------------------------------------------------------
+// breakableConn wraps a transport.Connection with a killswitch.
+// When Break() is called, subsequent OpenStream calls return io.EOF,
+// which ResilientConn recognizes as a connection-level error and triggers
+// reconnection. This avoids yamux's "session shutdown" error which is not
+// currently in the recognized error set.
+// ---------------------------------------------------------------------------
+
+type breakableConn struct {
+	inner  transport.Connection
+	broken atomic.Bool
+}
+
+func newBreakableConn(c transport.Connection) *breakableConn {
+	return &breakableConn{inner: c}
+}
+
+func (b *breakableConn) Break() {
+	b.broken.Store(true)
+	b.inner.Close()
+}
+
+func (b *breakableConn) OpenStream(ctx context.Context) (transport.Stream, error) {
+	if b.broken.Load() {
+		return nil, io.EOF
+	}
+	s, err := b.inner.OpenStream(ctx)
+	if err != nil && b.broken.Load() {
+		return nil, io.EOF
+	}
+	return s, err
+}
+
+func (b *breakableConn) AcceptStream(ctx context.Context) (transport.Stream, error) {
+	return b.inner.AcceptStream(ctx)
+}
+
+func (b *breakableConn) Close() error {
+	return b.inner.Close()
+}
+
+func (b *breakableConn) LocalAddr() net.Addr  { return b.inner.LocalAddr() }
+func (b *breakableConn) RemoteAddr() net.Addr { return b.inner.RemoteAddr() }
+
+var _ transport.Connection = (*breakableConn)(nil)
+
+// ---------------------------------------------------------------------------
 // TestResilientConnOverVnet
 //
-// Creates a vnet with a client→server link, wraps the connection in
-// ResilientConn, sends data, breaks the link (closes the conn), and
-// verifies auto-reconnect happens and data flows again.
+// Creates a vnet with a client->server link. Wraps the connection in
+// ResilientConn. Sends data, breaks the link, verifies auto-reconnect
+// happens and data flows again.
 // ---------------------------------------------------------------------------
 
 func TestResilientConnOverVnet(t *testing.T) {
@@ -46,16 +92,17 @@ func TestResilientConnOverVnet(t *testing.T) {
 
 	clientTransport := newVnetClient(env.Net, clientNode, "resilient")
 
-	// Dial function for ResilientConn — creates a fresh transport.Connection each time.
+	// Dial function for ResilientConn -- creates a fresh transport.Connection each time.
 	dial := func(ctx context.Context) (transport.Connection, error) {
 		return clientTransport.Dial(ctx, "server:9000")
 	}
 
-	// Establish initial connection.
-	initial, err := dial(ctx)
+	// Establish initial connection wrapped in breakableConn.
+	rawInitial, err := dial(ctx)
 	if err != nil {
 		t.Fatalf("initial dial: %v", err)
 	}
+	initial := newBreakableConn(rawInitial)
 
 	var reconnectCount atomic.Int32
 	rc := resilient.Wrap(initial, dial, resilient.Config{
@@ -66,7 +113,7 @@ func TestResilientConnOverVnet(t *testing.T) {
 	})
 	defer rc.Close()
 
-	// Phase 1: Send data through the resilient connection — should work normally.
+	// Phase 1: Send data through the resilient connection -- should work normally.
 	msg1 := []byte("hello-resilient")
 	stream1, err := rc.OpenStream(ctx)
 	if err != nil {
@@ -84,9 +131,9 @@ func TestResilientConnOverVnet(t *testing.T) {
 	}
 	stream1.Close()
 
-	// Phase 2: Break the underlying connection by closing it directly.
-	// This simulates a network outage. The next OpenStream should trigger reconnect.
-	initial.Close()
+	// Phase 2: Break the underlying connection via the killswitch.
+	// This causes OpenStream to return io.EOF, triggering reconnect.
+	initial.Break()
 
 	// Phase 3: OpenStream should detect the broken connection and auto-reconnect.
 	msg2 := []byte("after-reconnect")
@@ -147,10 +194,11 @@ func TestResilientConnMobileHandoff(t *testing.T) {
 		return clientTransport.Dial(ctx, "server:9100")
 	}
 
-	initial, err := dial(ctx)
+	rawInitial, err := dial(ctx)
 	if err != nil {
 		t.Fatalf("initial dial: %v", err)
 	}
+	initial := newBreakableConn(rawInitial)
 
 	var reconnects atomic.Int32
 	rc := resilient.Wrap(initial, dial, resilient.Config{
@@ -180,14 +228,13 @@ func TestResilientConnMobileHandoff(t *testing.T) {
 	stream.Close()
 	t.Log("phase 1 (WiFi): data verified")
 
-	// Phase 2: Simulate handoff blip — the connection breaks during handoff.
-	// Apply HandoffBlip link conditions (high loss, latency spike).
+	// Phase 2: Simulate handoff blip -- connection breaks during transition.
 	blipCfg := vnet.HandoffBlip()
 	env.Net.UpdateLink(clientNode, serverNode, blipCfg)
 	env.Net.UpdateLink(serverNode, clientNode, blipCfg)
 
-	// Close the existing underlying connection to simulate the handoff disruption.
-	initial.Close()
+	// Break the existing connection to simulate the handoff disruption.
+	initial.Break()
 
 	// Wait a brief moment for the handoff to settle, then switch to LTE.
 	time.Sleep(50 * time.Millisecond)
@@ -246,20 +293,23 @@ func TestResilientConnMaxRetriesVnet(t *testing.T) {
 	}
 	echoServer(ctx, t, srv)
 
+	// Establish initial connection before shutting down the server.
 	clientTransport := newVnetClient(env.Net, clientNode, "maxretry")
+	rawInitial, err := clientTransport.Dial(ctx, "server:9200")
+	if err != nil {
+		t.Fatalf("initial dial: %v", err)
+	}
+	initial := newBreakableConn(rawInitial)
+
+	// Shut down the server now -- subsequent dials will fail.
+	srv.Close()
 
 	var dialAttempts atomic.Int32
 	dial := func(ctx context.Context) (transport.Connection, error) {
 		dialAttempts.Add(1)
-		return clientTransport.Dial(ctx, "server:9200")
+		// Server is down, so dial fails.
+		return nil, &net.OpError{Op: "dial", Net: "tcp", Err: errors.New("connection refused")}
 	}
-
-	// Establish initial connection.
-	initial, err := dial(ctx)
-	if err != nil {
-		t.Fatalf("initial dial: %v", err)
-	}
-	dialAttempts.Store(0) // reset counter after initial dial
 
 	rc := resilient.Wrap(initial, dial, resilient.Config{
 		MaxRetries: 3,
@@ -268,10 +318,8 @@ func TestResilientConnMaxRetriesVnet(t *testing.T) {
 	})
 	defer rc.Close()
 
-	// Shut down the server permanently — close both the server transport and the
-	// underlying initial connection, so new dials and existing streams fail.
-	srv.Close()
-	initial.Close()
+	// Break the initial connection to trigger reconnect.
+	initial.Break()
 
 	// OpenStream should detect the broken connection, attempt to reconnect
 	// MaxRetries times, and then fail.
@@ -325,24 +373,27 @@ func TestResilientConnMultipleReconnectsVnet(t *testing.T) {
 	clientTransport := newVnetClient(env.Net, clientNode, "multi")
 
 	// Track all dialed connections so we can break them.
+	// The dial function wraps each new conn in a breakableConn.
 	var connsMu sync.Mutex
-	var dialedConns []transport.Connection
+	var breakables []*breakableConn
 
 	dial := func(ctx context.Context) (transport.Connection, error) {
-		conn, err := clientTransport.Dial(ctx, "server:9300")
+		raw, err := clientTransport.Dial(ctx, "server:9300")
 		if err != nil {
 			return nil, err
 		}
+		bc := newBreakableConn(raw)
 		connsMu.Lock()
-		dialedConns = append(dialedConns, conn)
+		breakables = append(breakables, bc)
 		connsMu.Unlock()
-		return conn, nil
+		return bc, nil
 	}
 
-	initial, err := dial(ctx)
+	rawInitial, err := clientTransport.Dial(ctx, "server:9300")
 	if err != nil {
 		t.Fatalf("initial dial: %v", err)
 	}
+	initial := newBreakableConn(rawInitial)
 
 	var reconnects atomic.Int32
 	rc := resilient.Wrap(initial, dial, resilient.Config{
@@ -377,7 +428,7 @@ func TestResilientConnMultipleReconnectsVnet(t *testing.T) {
 	echoRoundTrip("round-1", []byte("first"))
 
 	// Break connection #1.
-	initial.Close()
+	initial.Break()
 
 	// Round 2: triggers reconnect.
 	echoRoundTrip("round-2", []byte("second"))
@@ -385,10 +436,10 @@ func TestResilientConnMultipleReconnectsVnet(t *testing.T) {
 		t.Fatal("expected at least 1 reconnect after first break")
 	}
 
-	// Break the most recent connection.
+	// Break the most recently dialed connection.
 	connsMu.Lock()
-	if len(dialedConns) > 0 {
-		dialedConns[len(dialedConns)-1].Close()
+	if len(breakables) > 0 {
+		breakables[len(breakables)-1].Break()
 	}
 	connsMu.Unlock()
 
@@ -429,16 +480,17 @@ func TestResilientConnCloseWhileReconnecting(t *testing.T) {
 
 	clientTransport := newVnetClient(env.Net, clientNode, "closereconn")
 
-	// Dial always fails — simulating permanent server down.
+	// Dial always fails -- simulating permanent server down.
 	dial := func(ctx context.Context) (transport.Connection, error) {
 		return nil, &net.OpError{Op: "dial", Net: "tcp", Err: errors.New("connection refused")}
 	}
 
 	// Start with a working connection, then break it.
-	initial, err := clientTransport.Dial(ctx, "server:9400")
+	rawInitial, err := clientTransport.Dial(ctx, "server:9400")
 	if err != nil {
 		t.Fatalf("initial dial: %v", err)
 	}
+	initial := newBreakableConn(rawInitial)
 
 	rc := resilient.Wrap(initial, dial, resilient.Config{
 		MaxRetries: 3,
@@ -447,9 +499,9 @@ func TestResilientConnCloseWhileReconnecting(t *testing.T) {
 	})
 
 	// Break the connection.
-	initial.Close()
+	initial.Break()
 
-	// Close the ResilientConn — this should not block or panic.
+	// Close the ResilientConn -- should not block or panic.
 	rc.Close()
 
 	// After close, operations should fail promptly.

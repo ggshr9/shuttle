@@ -291,7 +291,6 @@ func (m *mockCallback) OnSpeedUpdate(upload, download int64) {
 }
 
 func TestSetCallbackAndNotifyStatus(t *testing.T) {
-	t.Parallel()
 	mock := &mockCallback{}
 
 	// Set callback and verify status notification arrives.
@@ -315,14 +314,12 @@ func TestSetCallbackAndNotifyStatus(t *testing.T) {
 }
 
 func TestNotifyStatusNoCallback(t *testing.T) {
-	t.Parallel()
 	// Ensure no panic when no callback is set.
 	SetCallback(nil)
 	notifyStatus("running") // should not panic
 }
 
 func TestNotifyError(t *testing.T) {
-	t.Parallel()
 	mock := &mockCallback{}
 	SetCallback(mock)
 	defer SetCallback(nil)
@@ -343,7 +340,6 @@ func TestNotifyError(t *testing.T) {
 }
 
 func TestGetCallbackReturnsNilWhenUnset(t *testing.T) {
-	t.Parallel()
 	SetCallback(nil)
 	cb := getCallback()
 	if cb != nil {
@@ -352,7 +348,6 @@ func TestGetCallbackReturnsNilWhenUnset(t *testing.T) {
 }
 
 func TestSetCallbackOverwrite(t *testing.T) {
-	t.Parallel()
 	mock1 := &mockCallback{}
 	mock2 := &mockCallback{}
 
@@ -378,7 +373,8 @@ func TestSetCallbackOverwrite(t *testing.T) {
 }
 
 func TestCallbackConcurrency(t *testing.T) {
-	t.Parallel()
+	// This test cannot run in parallel with other callback tests because
+	// SetCallback/getCallback use a package-level variable.
 	mock := &mockCallback{}
 	SetCallback(mock)
 	defer SetCallback(nil)
@@ -405,8 +401,6 @@ func TestCallbackConcurrency(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestSetAutoReconnectToggle(t *testing.T) {
-	t.Parallel()
-
 	// Default state: autoReconnect should be false.
 	mu.Lock()
 	initial := autoReconnect
@@ -433,7 +427,6 @@ func TestSetAutoReconnectToggle(t *testing.T) {
 }
 
 func TestSetAutoReconnectConcurrency(t *testing.T) {
-	t.Parallel()
 	var wg sync.WaitGroup
 	for i := 0; i < 100; i++ {
 		wg.Add(1)
