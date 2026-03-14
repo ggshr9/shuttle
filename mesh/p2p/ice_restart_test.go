@@ -2,6 +2,7 @@ package p2p
 
 import (
 	"net"
+	"sync"
 	"testing"
 	"time"
 )
@@ -705,9 +706,12 @@ func TestICEAgent_StateChangeCallback(t *testing.T) {
 	agent := NewICEAgent(noSTUNAgent())
 	defer agent.Close()
 
+	var mu sync.Mutex
 	stateChanges := make([]ICEConnectionState, 0)
 	agent.OnStateChange(func(state ICEConnectionState) {
+		mu.Lock()
 		stateChanges = append(stateChanges, state)
+		mu.Unlock()
 	})
 
 	// Trigger state change
@@ -717,6 +721,8 @@ func TestICEAgent_StateChangeCallback(t *testing.T) {
 
 	time.Sleep(10 * time.Millisecond)
 
+	mu.Lock()
+	defer mu.Unlock()
 	if len(stateChanges) != 1 {
 		t.Errorf("State changes = %d, want 1", len(stateChanges))
 	}
