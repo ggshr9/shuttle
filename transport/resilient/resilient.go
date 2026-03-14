@@ -8,6 +8,7 @@ import (
 	"io"
 	"net"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/shuttle-proxy/shuttle/transport"
@@ -57,6 +58,11 @@ type ResilientConn struct {
 
 	// sleepFn is an internal hook for testing backoff timing.
 	sleepFn func(time.Duration)
+
+	// Keepalive fields.
+	stopKeepalive context.CancelFunc
+	healthy       atomic.Bool
+	tickerFn      func(time.Duration) tickerIface // test hook
 }
 
 // Wrap creates a ResilientConn around an existing connection.
@@ -212,11 +218,16 @@ func (rc *ResilientConn) AcceptStream(ctx context.Context) (transport.Stream, er
 	return rc.getInner().AcceptStream(ctx)
 }
 
-// Close closes the resilient wrapper and the underlying connection.
+// Close closes the resilient wrapper, stops the keepalive loop if running,
+// and closes the underlying connection.
 func (rc *ResilientConn) Close() error {
 	rc.mu.Lock()
 	defer rc.mu.Unlock()
 	rc.closed = true
+	if rc.stopKeepalive != nil {
+		rc.stopKeepalive()
+		rc.stopKeepalive = nil
+	}
 	return rc.inner.Close()
 }
 
