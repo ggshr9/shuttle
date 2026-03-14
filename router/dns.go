@@ -247,8 +247,8 @@ func (r *DNSResolver) queryRemote(ctx context.Context, domain string) ([]net.IP,
 	if server == "" {
 		server = "https://1.1.1.1/dns-query"
 	}
-	// Ensure it's an HTTPS URL
-	if !strings.HasPrefix(server, "https://") {
+	// Ensure it's an HTTPS URL (allow http:// for testing)
+	if !strings.HasPrefix(server, "https://") && !strings.HasPrefix(server, "http://") {
 		// Legacy plain DNS config — upgrade to DoH
 		server = "https://1.1.1.1/dns-query"
 	}

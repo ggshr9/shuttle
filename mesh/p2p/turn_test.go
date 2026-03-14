@@ -8,7 +8,7 @@ import (
 
 func TestNewTURNClient(t *testing.T) {
 	cfg := &TURNConfig{
-		Server:   "turn.example.com:3478",
+		Server:   "127.0.0.1:3478",
 		Username: "user",
 		Password: "pass",
 	}
