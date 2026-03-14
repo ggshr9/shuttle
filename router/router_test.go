@@ -593,6 +593,26 @@ func TestRouterNetworkTypeWildcardDomain(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
+// Benchmarks
+// ---------------------------------------------------------------------------
+
+func BenchmarkRouterMatchWithNetworkType(b *testing.B) {
+	r := newTestRouter([]Rule{
+		{Type: "domain", Values: []string{"example.com"}, Action: ActionDirect, NetworkType: "wifi"},
+		{Type: "domain", Values: []string{"+.google.com"}, Action: ActionProxy, NetworkType: "cellular"},
+		{Type: "ip-cidr", Values: []string{"10.0.0.0/8"}, Action: ActionDirect, NetworkType: "wifi"},
+		{Type: "domain", Values: []string{"fallback.com"}, Action: ActionDirect},
+	}, ActionProxy)
+	r.SetNetworkType("wifi")
+
+	ip := net.ParseIP("10.1.2.3")
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_ = r.Match("example.com", ip, "", "")
+	}
+}
+
+// ---------------------------------------------------------------------------
 // DNSCache tests
 // ---------------------------------------------------------------------------
 
