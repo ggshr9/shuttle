@@ -93,7 +93,7 @@ func isConnectionError(err error) bool {
 	}
 	// Catch generic "closed" or "reset" errors from various transports.
 	msg := err.Error()
-	for _, substr := range []string{"closed", "reset", "broken pipe", "connection refused"} {
+	for _, substr := range []string{"closed", "reset", "broken pipe", "connection refused", "shutdown"} {
 		if containsLower(msg, substr) {
 			return true
 		}
