@@ -6,6 +6,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/shuttle-proxy/shuttle/testkit/observe"
 )
 
 func TestBasicDialListen(t *testing.T) {
@@ -583,5 +585,207 @@ func TestZeroConfig(t *testing.T) {
 	// Should be near-instant. Allow up to 50ms.
 	if elapsed > 50*time.Millisecond {
 		t.Fatalf("zero config too slow: %v", elapsed)
+	}
+}
+
+func TestDynamicLinkUpdate(t *testing.T) {
+	rec := observe.NewRecorderManual()
+	net := New(WithSeed(20), WithRecorder(rec))
+	defer net.Close()
+
+	a := net.AddNode("a")
+	b := net.AddNode("b")
+	net.Link(a, b, LinkConfig{Latency: 5 * time.Millisecond})
+
+	ln, err := net.Listen(b, ":80")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ln.Close()
+
+	go func() {
+		c, err := ln.Accept()
+		if err != nil {
+			return
+		}
+		buf := make([]byte, 256)
+		for {
+			n, err := c.Read(buf)
+			if err != nil {
+				return
+			}
+			c.Write(buf[:n])
+		}
+	}()
+
+	conn, err := net.Dial(context.Background(), a, ":80")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+
+	// Phase 1: Fast link (5ms latency).
+	start := time.Now()
+	conn.Write([]byte("fast"))
+	buf := make([]byte, 64)
+	conn.Read(buf)
+	fast := time.Since(start)
+
+	// Phase 2: Degrade link to 100ms latency.
+	net.UpdateLink(a, b, LinkConfig{Latency: 100 * time.Millisecond})
+	net.UpdateLink(b, a, LinkConfig{Latency: 100 * time.Millisecond})
+
+	start = time.Now()
+	conn.Write([]byte("slow"))
+	conn.Read(buf)
+	slow := time.Since(start)
+
+	// The slow round-trip should be significantly longer.
+	if slow < 100*time.Millisecond {
+		t.Fatalf("after degradation, RTT = %v, expected >= 100ms", slow)
+	}
+	if fast > slow {
+		t.Fatalf("fast RTT (%v) should be less than slow RTT (%v)", fast, slow)
+	}
+
+	// Verify link-update events were recorded.
+	updates := rec.Filter("link-update")
+	if len(updates) < 2 {
+		t.Fatalf("expected at least 2 link-update events, got %d", len(updates))
+	}
+}
+
+func TestMultiHopLatencyAccumulation(t *testing.T) {
+	net := New(WithSeed(21))
+	defer net.Close()
+
+	a := net.AddNode("a")
+	b := net.AddNode("b")
+	c := net.AddNode("c")
+
+	// a->b: 30ms, b->c: 40ms. Multi-hop a->c should accumulate to ~70ms.
+	net.Link(a, b, LinkConfig{Latency: 30 * time.Millisecond})
+	net.Link(b, c, LinkConfig{Latency: 40 * time.Millisecond})
+
+	ln, err := net.Listen(c, ":80")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ln.Close()
+
+	go func() {
+		conn, err := ln.Accept()
+		if err != nil {
+			return
+		}
+		buf := make([]byte, 64)
+		n, _ := conn.Read(buf)
+		conn.Write(buf[:n])
+	}()
+
+	conn, err := net.Dial(context.Background(), a, ":80")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+
+	start := time.Now()
+	conn.Write([]byte("hop"))
+	buf := make([]byte, 64)
+	conn.Read(buf)
+	rtt := time.Since(start)
+
+	// Expected RTT = (30+40)*2 = 140ms. Allow 100ms-500ms.
+	if rtt < 100*time.Millisecond {
+		t.Fatalf("multi-hop RTT too fast: %v (expected >= 100ms)", rtt)
+	}
+	if rtt > 500*time.Millisecond {
+		t.Fatalf("multi-hop RTT too slow: %v", rtt)
+	}
+}
+
+func TestReorderConfig(t *testing.T) {
+	rec := observe.NewRecorderManual()
+	net := New(WithSeed(30), WithRecorder(rec))
+	defer net.Close()
+
+	a := net.AddNode("a")
+	b := net.AddNode("b")
+	net.Link(a, b, LinkConfig{
+		Latency:      5 * time.Millisecond,
+		ReorderPct:   0.5,
+		ReorderDelay: 20 * time.Millisecond,
+	})
+
+	ln, err := net.Listen(b, ":80")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ln.Close()
+
+	go func() {
+		c, err := ln.Accept()
+		if err != nil {
+			return
+		}
+		io.Copy(io.Discard, c)
+	}()
+
+	conn, err := net.Dial(context.Background(), a, ":80")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Send enough messages that some should be reordered.
+	for i := 0; i < 50; i++ {
+		conn.Write([]byte("x"))
+	}
+	conn.Close()
+
+	// Verify reorder events were recorded.
+	reorders := rec.Filter("reorder")
+	if len(reorders) == 0 {
+		t.Fatal("expected reorder events with 50% reorder probability")
+	}
+	t.Logf("reorder events: %d out of 50 writes", len(reorders))
+}
+
+func TestRecorderAssertions(t *testing.T) {
+	rec := observe.NewRecorderManual()
+	rec.Record(observe.Event{Kind: "dial", From: "a", To: "b"})
+	rec.Record(observe.Event{Kind: "drop", From: "link", Size: 100})
+	rec.Record(observe.Event{Kind: "drop", From: "link", Size: 200})
+	rec.Record(observe.Event{Kind: "send", From: "a", To: "b", Size: 500})
+
+	// Count
+	if c := rec.Count("drop"); c != 2 {
+		t.Fatalf("Count(drop) = %d, want 2", c)
+	}
+	if c := rec.Count("dial"); c != 1 {
+		t.Fatalf("Count(dial) = %d, want 1", c)
+	}
+	if c := rec.Count("nonexistent"); c != 0 {
+		t.Fatalf("Count(nonexistent) = %d, want 0", c)
+	}
+
+	// Filter
+	drops := rec.Filter("drop")
+	if len(drops) != 2 {
+		t.Fatalf("Filter(drop) len = %d, want 2", len(drops))
+	}
+
+	// FilterFrom
+	linkDrops := rec.FilterFrom("drop", "link")
+	if len(linkDrops) != 2 {
+		t.Fatalf("FilterFrom(drop, link) len = %d, want 2", len(linkDrops))
+	}
+	aDrops := rec.FilterFrom("drop", "a")
+	if len(aDrops) != 0 {
+		t.Fatalf("FilterFrom(drop, a) len = %d, want 0", len(aDrops))
+	}
+
+	// TotalBytes
+	if total := rec.TotalBytes("drop"); total != 300 {
+		t.Fatalf("TotalBytes(drop) = %d, want 300", total)
 	}
 }

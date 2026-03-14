@@ -404,6 +404,99 @@ func TestConcurrentAccess(t *testing.T) {
 	<-done
 }
 
+func TestClearRules(t *testing.T) {
+	fi := New()
+	errFault := errors.New("clear-me")
+	fi.OnWrite().Error(errFault).Install()
+
+	a, b := net.Pipe()
+	defer a.Close()
+	defer b.Close()
+
+	wrapped := fi.WrapConn(a)
+
+	// Write should fail.
+	_, err := wrapped.Write([]byte("x"))
+	if !errors.Is(err, errFault) {
+		t.Fatalf("before clear: got err=%v, want %v", err, errFault)
+	}
+
+	// Clear write rules.
+	fi.ClearWrite()
+
+	// Write should now pass.
+	go func() {
+		buf := make([]byte, 64)
+		_, _ = b.Read(buf)
+	}()
+	_, err = wrapped.Write([]byte("ok"))
+	if err != nil {
+		t.Fatalf("after clear: got err=%v, want nil", err)
+	}
+}
+
+func TestClearAllRules(t *testing.T) {
+	fi := New()
+	errR := errors.New("read-err")
+	errW := errors.New("write-err")
+	fi.OnRead().Error(errR).Install()
+	fi.OnWrite().Error(errW).Install()
+
+	fi.ClearRules()
+
+	a, b := net.Pipe()
+	defer a.Close()
+	defer b.Close()
+
+	wrapped := fi.WrapConn(a)
+
+	// Both should pass through.
+	go func() {
+		_, _ = wrapped.Write([]byte("data"))
+	}()
+	buf := make([]byte, 64)
+	n, err := b.Read(buf)
+	if err != nil {
+		t.Fatalf("write passthrough: err=%v", err)
+	}
+	if !bytes.Equal(buf[:n], []byte("data")) {
+		t.Fatalf("got %q, want %q", buf[:n], "data")
+	}
+}
+
+func TestSetSeed(t *testing.T) {
+	// Verify that SetSeed produces deterministic results.
+	results := make([]int, 2)
+	for trial := 0; trial < 2; trial++ {
+		SetSeed(42)
+		hits := 0
+		for i := 0; i < 100; i++ {
+			fi := New()
+			fi.OnWrite().Error(errors.New("x")).WithProbability(0.5).Install()
+			a, b := net.Pipe()
+			go func() {
+				buf := make([]byte, 64)
+				for {
+					if _, err := b.Read(buf); err != nil {
+						return
+					}
+				}
+			}()
+			wrapped := fi.WrapConn(a)
+			_, err := wrapped.Write([]byte("x"))
+			if err != nil {
+				hits++
+			}
+			a.Close()
+			b.Close()
+		}
+		results[trial] = hits
+	}
+	if results[0] != results[1] {
+		t.Fatalf("SetSeed not deterministic: trial1=%d, trial2=%d", results[0], results[1])
+	}
+}
+
 func TestChainedBuilder(t *testing.T) {
 	fi := New()
 	errFault := errors.New("chained error")

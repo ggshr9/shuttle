@@ -40,6 +40,30 @@ func (fi *Injector) WithRecorder(r *observe.Recorder) *Injector {
 	return fi
 }
 
+// ClearRules removes all installed rules. Useful for changing fault
+// scenarios mid-test.
+func (fi *Injector) ClearRules() {
+	fi.mu.Lock()
+	fi.readRules = nil
+	fi.writeRules = nil
+	fi.dialRules = nil
+	fi.mu.Unlock()
+}
+
+// ClearRead removes all read rules.
+func (fi *Injector) ClearRead() {
+	fi.mu.Lock()
+	fi.readRules = nil
+	fi.mu.Unlock()
+}
+
+// ClearWrite removes all write rules.
+func (fi *Injector) ClearWrite() {
+	fi.mu.Lock()
+	fi.writeRules = nil
+	fi.mu.Unlock()
+}
+
 // OnRead returns a RuleBuilder targeting read operations.
 func (fi *Injector) OnRead() *RuleBuilder {
 	return &RuleBuilder{

@@ -120,8 +120,8 @@ func (n *Network) Dial(ctx context.Context, from *Node, toAddr string) (net.Conn
 	}
 
 	// Create conditioned connection pair.
-	aToBLnk := newLink(aToBCfg, n.clock, newRand(n.rng.childSeed()), n.recorder)
-	bToALnk := newLink(bToACfg, n.clock, newRand(n.rng.childSeed()), n.recorder)
+	aToBLnk := newLink(aToBCfg, n.clock, newRand(n.rng.childSeed()), n.recorder, from, targetNode)
+	bToALnk := newLink(bToACfg, n.clock, newRand(n.rng.childSeed()), n.recorder, targetNode, from)
 
 	n.mu.Lock()
 	n.links = append(n.links, aToBLnk, bToALnk)
@@ -140,6 +140,29 @@ func (n *Network) Dial(ctx context.Context, from *Node, toAddr string) (net.Conn
 	}
 
 	return clientConn, nil
+}
+
+// UpdateLink changes link conditions for all active connections from a to b.
+// New connections will also use the updated config via the edge table.
+func (n *Network) UpdateLink(a, b *Node, cfg LinkConfig) {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	// Update edge config for future connections.
+	for i := range n.edges {
+		if n.edges[i].from == a && n.edges[i].to == b {
+			n.edges[i].link = cfg
+		}
+	}
+	// Update active links.
+	for _, l := range n.links {
+		if l.fromNode == a && l.toNode == b {
+			l.UpdateConfig(cfg)
+		}
+	}
+	if n.recorder != nil {
+		n.recorder.RecordF("link-update", a.Name, b.Name,
+			"latency=%v loss=%.2f bw=%d", cfg.Latency, cfg.Loss, cfg.Bandwidth)
+	}
 }
 
 // Close shuts down the network and all active links.
@@ -180,17 +203,91 @@ func (n *Network) findListener(from *Node, addr string) (*Node, *virtualListener
 	return nil, nil
 }
 
-// findLinkConfigs returns the link configs for direct link between two nodes.
-// If no direct link exists (multi-hop), returns zero configs.
+// findLinkConfigs returns the accumulated link configs for a path between two nodes.
+// For multi-hop paths, latency, jitter, and loss are accumulated along the path.
+// Bandwidth is set to the minimum along the path (bottleneck).
 // Must be called with n.mu held.
 func (n *Network) findLinkConfigs(from, to *Node) (aToB, bToA LinkConfig) {
+	// Check direct link first.
+	directFound := false
 	for _, e := range n.edges {
 		if e.from == from && e.to == to {
 			aToB = e.link
+			directFound = true
 		}
 		if e.from == to && e.to == from {
 			bToA = e.link
 		}
 	}
+	if directFound {
+		return
+	}
+
+	// Multi-hop: BFS to find path, then accumulate configs.
+	pathForward := n.findPath(from, to)
+	pathReverse := n.findPath(to, from)
+	if pathForward != nil {
+		aToB = n.accumulateConfigs(pathForward)
+	}
+	if pathReverse != nil {
+		bToA = n.accumulateConfigs(pathReverse)
+	}
 	return
+}
+
+// findPath returns the sequence of edges from src to dst using BFS.
+// Must be called with n.mu held.
+func (n *Network) findPath(src, dst *Node) []edge {
+	type pathEntry struct {
+		node *Node
+		path []edge
+	}
+	visited := map[*Node]bool{src: true}
+	queue := []pathEntry{{node: src}}
+	for len(queue) > 0 {
+		curr := queue[0]
+		queue = queue[1:]
+		for _, e := range n.edges {
+			if e.from == curr.node && !visited[e.to] {
+				newPath := make([]edge, len(curr.path)+1)
+				copy(newPath, curr.path)
+				newPath[len(curr.path)] = e
+				if e.to == dst {
+					return newPath
+				}
+				visited[e.to] = true
+				queue = append(queue, pathEntry{node: e.to, path: newPath})
+			}
+		}
+	}
+	return nil
+}
+
+// accumulateConfigs combines multiple link configs along a path.
+// Latency and jitter are summed, loss is combined probabilistically,
+// and bandwidth is the minimum (bottleneck).
+func (n *Network) accumulateConfigs(path []edge) LinkConfig {
+	if len(path) == 0 {
+		return LinkConfig{}
+	}
+	acc := path[0].link
+	for _, e := range path[1:] {
+		acc.Latency += e.link.Latency
+		acc.Jitter += e.link.Jitter
+		// P(no loss) = product of (1 - loss_i)
+		acc.Loss = 1.0 - (1.0-acc.Loss)*(1.0-e.link.Loss)
+		if e.link.Bandwidth > 0 {
+			if acc.Bandwidth == 0 || e.link.Bandwidth < acc.Bandwidth {
+				acc.Bandwidth = e.link.Bandwidth
+			}
+		}
+		// Reorder: take max probability
+		if e.link.ReorderPct > acc.ReorderPct {
+			acc.ReorderPct = e.link.ReorderPct
+		}
+		if e.link.ReorderDelay > acc.ReorderDelay {
+			acc.ReorderDelay = e.link.ReorderDelay
+		}
+	}
+	return acc
 }

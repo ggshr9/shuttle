@@ -7,6 +7,26 @@ import (
 	"time"
 )
 
+// defaultRng is a package-level seeded RNG for deterministic fault injection.
+var (
+	defaultRng   = rand.New(rand.NewSource(0))
+	defaultRngMu sync.Mutex
+)
+
+// SetSeed sets the global seed for fault injection randomness.
+// Call this at test setup for deterministic behavior.
+func SetSeed(seed int64) {
+	defaultRngMu.Lock()
+	defaultRng = rand.New(rand.NewSource(seed))
+	defaultRngMu.Unlock()
+}
+
+func seededFloat64() float64 {
+	defaultRngMu.Lock()
+	defer defaultRngMu.Unlock()
+	return defaultRng.Float64()
+}
+
 // Action defines a fault behavior applied to read/write data.
 type Action interface {
 	// Apply transforms or fails the operation. It receives the data buffer
@@ -93,7 +113,7 @@ func (r *Rule) matches() bool {
 		return false
 	}
 	// Check probability.
-	if r.probability < 1.0 && rand.Float64() >= r.probability {
+	if r.probability < 1.0 && seededFloat64() >= r.probability {
 		return false
 	}
 	r.timesUsed++

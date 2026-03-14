@@ -92,6 +92,72 @@ func TestRecorderEventsCopy(t *testing.T) {
 	}
 }
 
+func TestRecorderFilter(t *testing.T) {
+	r := NewRecorderManual()
+	r.Record(Event{Kind: "dial", From: "a"})
+	r.Record(Event{Kind: "drop", From: "link"})
+	r.Record(Event{Kind: "drop", From: "link"})
+	r.Record(Event{Kind: "send", From: "a"})
+
+	if got := len(r.Filter("drop")); got != 2 {
+		t.Fatalf("Filter(drop) = %d, want 2", got)
+	}
+	if got := len(r.Filter("")); got != 4 {
+		t.Fatalf("Filter('') = %d, want 4 (all)", got)
+	}
+}
+
+func TestRecorderFilterFrom(t *testing.T) {
+	r := NewRecorderManual()
+	r.Record(Event{Kind: "drop", From: "link"})
+	r.Record(Event{Kind: "drop", From: "injector"})
+
+	if got := len(r.FilterFrom("drop", "link")); got != 1 {
+		t.Fatalf("FilterFrom(drop, link) = %d, want 1", got)
+	}
+	if got := len(r.FilterFrom("", "link")); got != 1 {
+		t.Fatalf("FilterFrom('', link) = %d, want 1", got)
+	}
+}
+
+func TestRecorderCount(t *testing.T) {
+	r := NewRecorderManual()
+	r.Record(Event{Kind: "a"})
+	r.Record(Event{Kind: "b"})
+	r.Record(Event{Kind: "a"})
+
+	if got := r.Count("a"); got != 2 {
+		t.Fatalf("Count(a) = %d, want 2", got)
+	}
+	if got := r.Count("c"); got != 0 {
+		t.Fatalf("Count(c) = %d, want 0", got)
+	}
+}
+
+func TestRecorderTotalBytes(t *testing.T) {
+	r := NewRecorderManual()
+	r.Record(Event{Kind: "send", Size: 100})
+	r.Record(Event{Kind: "send", Size: 200})
+	r.Record(Event{Kind: "recv", Size: 50})
+
+	if got := r.TotalBytes("send"); got != 300 {
+		t.Fatalf("TotalBytes(send) = %d, want 300", got)
+	}
+}
+
+func TestRecorderAssertHelpers(t *testing.T) {
+	r := NewRecorderManual()
+	r.Record(Event{Kind: "dial"})
+	r.Record(Event{Kind: "drop"})
+	r.Record(Event{Kind: "drop"})
+
+	// These should not fail.
+	r.AssertHas(t, "dial")
+	r.AssertCount(t, "drop", 2)
+	r.AssertCountRange(t, "drop", 1, 5)
+	r.AssertNone(t, "nonexistent")
+}
+
 func TestRecorderSizeInDetail(t *testing.T) {
 	r := NewRecorderManual()
 	r.Record(Event{Kind: "recv", From: "srv", To: "cli", Detail: "response", Size: 512})
