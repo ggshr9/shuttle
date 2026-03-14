@@ -1,0 +1,71 @@
+# Performance budgets for CI regression detection.
+# Thresholds are set at ~3x expected values to catch real regressions, not noise.
+# Adjust as benchmarks stabilize.
+
+budgets:
+  # Congestion control – hot-path callbacks
+  - name: "BenchmarkBBROnAck"
+    max_ns_per_op: 1000
+    max_allocs_per_op: 5
+
+  - name: "BenchmarkBrutalOnAck"
+    max_ns_per_op: 500
+    max_allocs_per_op: 3
+
+  - name: "BenchmarkAdaptiveCongestionUnderLoad"
+    max_ns_per_op: 2000
+    max_allocs_per_op: 10
+
+  # Crypto
+  - name: "BenchmarkEncryptDecrypt"
+    max_ns_per_op: 15000
+    max_allocs_per_op: 15
+
+  - name: "BenchmarkStreamCipher"
+    max_ns_per_op: 10000
+    max_allocs_per_op: 10
+
+  - name: "BenchmarkReplayFilter"
+    max_ns_per_op: 500
+    max_allocs_per_op: 5
+
+  # Router / domain trie
+  - name: "BenchmarkDomainTrieLookup"
+    max_ns_per_op: 2000
+    max_allocs_per_op: 5
+
+  - name: "BenchmarkDNSTrieLookup.*"
+    max_ns_per_op: 2000
+    max_allocs_per_op: 5
+
+  - name: "BenchmarkRouterMatch"
+    max_ns_per_op: 3000
+    max_allocs_per_op: 10
+
+  - name: "BenchmarkRouterMatchWithGeoIP.*"
+    max_ns_per_op: 5000
+    max_allocs_per_op: 15
+
+  # Memory pools
+  - name: "BenchmarkBufferPool"
+    max_ns_per_op: 500
+    max_allocs_per_op: 2
+
+  # Obfuscation
+  - name: "BenchmarkPadding"
+    max_ns_per_op: 5000
+    max_allocs_per_op: 10
+
+  # Connection / stream latency
+  - name: "BenchmarkConnectionEstablishment"
+    max_ns_per_op: 500000
+    max_allocs_per_op: 200
+
+  - name: "BenchmarkStreamOpenLatency"
+    max_ns_per_op: 50000
+    max_allocs_per_op: 50
+
+  # Selector
+  - name: "BenchmarkSelectorDial"
+    max_ns_per_op: 5000
+    max_allocs_per_op: 20
