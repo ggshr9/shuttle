@@ -18,27 +18,38 @@ const (
 
 // Rule defines a routing rule.
 type Rule struct {
-	Type   string   // "domain", "domain-suffix", "domain-keyword", "geoip", "geosite", "process", "protocol"
-	Values []string // Match values
-	Action Action
+	Type        string   // "domain", "domain-suffix", "domain-keyword", "geoip", "geosite", "process", "protocol"
+	Values      []string // Match values
+	Action      Action
+	NetworkType string // optional: "wifi", "cellular", "ethernet" — if set, rule only matches on this network type
 }
 
 // Router dispatches connections based on domain, IP, process, and protocol rules.
 type Router struct {
-	mu          sync.RWMutex
-	domainTrie  *DomainTrie
-	ipRules     []ipRule
-	processMap  map[string]Action
-	protocolMap map[string]Action
-	geoIP       *GeoIPDB
-	geoSite     *GeoSiteDB
-	defaultAct  Action
-	logger      *slog.Logger
+	mu           sync.RWMutex
+	domainTrie   *DomainTrie
+	ipRules      []ipRule
+	processMap   map[string]Action
+	protocolMap  map[string]Action
+	networkRules []networkRule // rules constrained to a specific network type
+	geoIP        *GeoIPDB
+	geoSite      *GeoSiteDB
+	defaultAct   Action
+	networkType  string // current network type: "wifi", "cellular", "ethernet", ""
+	logger       *slog.Logger
 }
 
 type ipRule struct {
 	cidr   *net.IPNet
 	action Action
+}
+
+// networkRule is a rule that only applies when the current network type matches.
+type networkRule struct {
+	ruleType    string // "domain", "ip-cidr", "process", "protocol"
+	values      []string
+	action      Action
+	networkType string // "wifi", "cellular", "ethernet"
 }
 
 // RouterConfig configures the router.
@@ -72,7 +83,33 @@ func NewRouter(cfg *RouterConfig, geoIP *GeoIPDB, geoSite *GeoSiteDB, logger *sl
 	return r
 }
 
+// SetNetworkType updates the current network type used for network-type-aware routing.
+// Valid values: "wifi", "cellular", "ethernet", or "" (unset).
+func (r *Router) SetNetworkType(nt string) {
+	r.mu.Lock()
+	r.networkType = strings.ToLower(nt)
+	r.mu.Unlock()
+}
+
+// NetworkType returns the currently configured network type.
+func (r *Router) NetworkType() string {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return r.networkType
+}
+
 func (r *Router) addRule(rule Rule) {
+	// If the rule has a NetworkType constraint, store it separately.
+	if rule.NetworkType != "" {
+		r.networkRules = append(r.networkRules, networkRule{
+			ruleType:    rule.Type,
+			values:      rule.Values,
+			action:      rule.Action,
+			networkType: strings.ToLower(rule.NetworkType),
+		})
+		return
+	}
+
 	switch rule.Type {
 	case "domain", "domain-suffix":
 		for _, v := range rule.Values {
@@ -107,6 +144,67 @@ func (r *Router) addRule(rule Rule) {
 			r.protocolMap[strings.ToLower(v)] = rule.Action
 		}
 	}
+}
+
+// matchNetworkRules checks network-type-constrained rules against the current
+// connection parameters. Returns the action and true if a rule matched.
+func (r *Router) matchNetworkRules(domain string, ip net.IP, process string, protocol string) (Action, bool) {
+	if len(r.networkRules) == 0 || r.networkType == "" {
+		return "", false
+	}
+
+	for _, nr := range r.networkRules {
+		if nr.networkType != r.networkType {
+			continue
+		}
+		switch nr.ruleType {
+		case "domain", "domain-suffix":
+			if domain != "" {
+				for _, v := range nr.values {
+					lowerDomain := strings.ToLower(domain)
+					lowerVal := strings.ToLower(v)
+					if strings.HasPrefix(v, "+.") {
+						// Wildcard suffix match
+						suffix := strings.ToLower(v[2:])
+						if lowerDomain == suffix || strings.HasSuffix(lowerDomain, "."+suffix) {
+							return nr.action, true
+						}
+					} else if lowerDomain == lowerVal {
+						return nr.action, true
+					}
+				}
+			}
+		case "ip-cidr":
+			if ip != nil {
+				for _, v := range nr.values {
+					_, cidr, err := net.ParseCIDR(v)
+					if err != nil {
+						continue
+					}
+					if cidr.Contains(ip) {
+						return nr.action, true
+					}
+				}
+			}
+		case "process":
+			if process != "" {
+				for _, v := range nr.values {
+					if strings.EqualFold(v, process) {
+						return nr.action, true
+					}
+				}
+			}
+		case "protocol":
+			if protocol != "" {
+				for _, v := range nr.values {
+					if strings.EqualFold(v, protocol) {
+						return nr.action, true
+					}
+				}
+			}
+		}
+	}
+	return "", false
 }
 
 // MatchDomain returns the action for a domain name.
@@ -172,6 +270,14 @@ func (r *Router) GeoSiteDB() *GeoSiteDB {
 
 // Match performs full routing decision for a connection.
 func (r *Router) Match(domain string, ip net.IP, process string, protocol string) Action {
+	r.mu.RLock()
+	// Check network-type-constrained rules first (highest priority).
+	if action, ok := r.matchNetworkRules(domain, ip, process, protocol); ok {
+		r.mu.RUnlock()
+		return action
+	}
+	r.mu.RUnlock()
+
 	// Priority: protocol > process > domain > IP > default
 	if protocol != "" {
 		if action := r.MatchProtocol(protocol); action != r.defaultAct {
