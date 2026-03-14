@@ -75,6 +75,106 @@ func Pristine() Impairment {
 	return Impairment{}
 }
 
+// --- Mobile Network Presets ---
+
+// WiFi returns an impairment simulating a typical WiFi connection:
+// 5ms delay, 2ms jitter, 50mbit bandwidth.
+func WiFi() Impairment {
+	return Impairment{
+		Delay:     5 * time.Millisecond,
+		Jitter:    2 * time.Millisecond,
+		Bandwidth: "50mbit",
+	}
+}
+
+// WiFiCongested returns an impairment simulating a congested WiFi link
+// (e.g. coffee shop, conference): 30ms delay, 20ms jitter, 3% loss, 2mbit.
+func WiFiCongested() Impairment {
+	return Impairment{
+		Delay:     30 * time.Millisecond,
+		Jitter:    20 * time.Millisecond,
+		Loss:      3,
+		Bandwidth: "2mbit",
+	}
+}
+
+// LTE returns an impairment simulating a 4G/LTE connection:
+// 30ms delay, 10ms jitter, 0.5% loss, 10mbit.
+func LTE() Impairment {
+	return Impairment{
+		Delay:     30 * time.Millisecond,
+		Jitter:    10 * time.Millisecond,
+		Loss:      0.5,
+		Bandwidth: "10mbit",
+	}
+}
+
+// FiveG returns an impairment simulating a 5G sub-6GHz connection:
+// 10ms delay, 4ms jitter, 100mbit.
+func FiveG() Impairment {
+	return Impairment{
+		Delay:     10 * time.Millisecond,
+		Jitter:    4 * time.Millisecond,
+		Bandwidth: "100mbit",
+	}
+}
+
+// ThreeG returns an impairment simulating a 3G/HSPA connection:
+// 80ms delay, 40ms jitter, 2% loss, 1mbit.
+func ThreeG() Impairment {
+	return Impairment{
+		Delay:     80 * time.Millisecond,
+		Jitter:    40 * time.Millisecond,
+		Loss:      2,
+		Bandwidth: "1mbit",
+	}
+}
+
+// MobileEdge returns an impairment simulating a 2G/EDGE connection:
+// 300ms delay, 100ms jitter, 5% loss, 50kbit.
+func MobileEdge() Impairment {
+	return Impairment{
+		Delay:     300 * time.Millisecond,
+		Jitter:    100 * time.Millisecond,
+		Loss:      5,
+		Bandwidth: "50kbit",
+	}
+}
+
+// CellularWeakSignal returns an impairment simulating poor cellular signal:
+// 120ms delay, 80ms jitter, 8% loss, 5% reorder, 500kbit.
+func CellularWeakSignal() Impairment {
+	return Impairment{
+		Delay:     120 * time.Millisecond,
+		Jitter:    80 * time.Millisecond,
+		Loss:      8,
+		Reorder:   5,
+		Bandwidth: "500kbit",
+	}
+}
+
+// HandoffBlip returns an impairment simulating the disruption during
+// a WiFi↔cellular handoff: 400ms delay, 200ms jitter, 30% loss.
+func HandoffBlip() Impairment {
+	return Impairment{
+		Delay:  400 * time.Millisecond,
+		Jitter: 200 * time.Millisecond,
+		Loss:   30,
+	}
+}
+
+// Subway returns an impairment simulating underground/tunnel connectivity:
+// 160ms delay, 120ms jitter, 15% loss, 10% reorder, 200kbit.
+func Subway() Impairment {
+	return Impairment{
+		Delay:     160 * time.Millisecond,
+		Jitter:    120 * time.Millisecond,
+		Loss:      15,
+		Reorder:   10,
+		Bandwidth: "200kbit",
+	}
+}
+
 // Apply runs tc netem on a container's interface via docker exec.
 // It first attempts "tc qdisc add"; if a qdisc already exists it falls back
 // to "tc qdisc change" so callers can apply repeatedly without resetting first.
