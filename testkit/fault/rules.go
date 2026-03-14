@@ -1,6 +1,7 @@
 package fault
 
 import (
+	"fmt"
 	"math/rand"
 	"sync"
 	"time"
@@ -11,6 +12,8 @@ type Action interface {
 	// Apply transforms or fails the operation. It receives the data buffer
 	// and returns potentially modified data and an error.
 	Apply(data []byte) ([]byte, error)
+	// Name returns a human-readable name for observability logging.
+	Name() string
 }
 
 // delayAction sleeps for a fixed duration before passing data through.
@@ -22,6 +25,7 @@ func (a *delayAction) Apply(data []byte) ([]byte, error) {
 	time.Sleep(a.d)
 	return data, nil
 }
+func (a *delayAction) Name() string { return fmt.Sprintf("delay(%v)", a.d) }
 
 // errorAction returns a fixed error, discarding the data.
 type errorAction struct {
@@ -31,6 +35,7 @@ type errorAction struct {
 func (a *errorAction) Apply([]byte) ([]byte, error) {
 	return nil, a.err
 }
+func (a *errorAction) Name() string { return fmt.Sprintf("error(%v)", a.err) }
 
 // dropAction silently discards data (returns original length to caller).
 type dropAction struct{}
@@ -38,6 +43,7 @@ type dropAction struct{}
 func (a *dropAction) Apply(data []byte) ([]byte, error) {
 	return nil, nil // sentinel: nil data, nil error means "drop"
 }
+func (a *dropAction) Name() string { return "drop" }
 
 // corruptAction flips random bits in the data.
 type corruptAction struct {
@@ -63,6 +69,7 @@ func (a *corruptAction) Apply(data []byte) ([]byte, error) {
 	out[idx] ^= bit
 	return out, nil
 }
+func (a *corruptAction) Name() string { return "corrupt" }
 
 // Rule describes a single fault injection rule with constraints.
 type Rule struct {

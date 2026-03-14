@@ -16,6 +16,7 @@ import (
 
 	"github.com/hashicorp/yamux"
 	"github.com/shuttle-proxy/shuttle/testkit/fault"
+	"github.com/shuttle-proxy/shuttle/testkit/observe"
 	"github.com/shuttle-proxy/shuttle/testkit/vnet"
 	"github.com/shuttle-proxy/shuttle/transport"
 )
@@ -26,18 +27,23 @@ import (
 
 // Env holds a test scenario environment with virtual network + fault injection.
 type Env struct {
-	Net    *vnet.Network
-	Faults *fault.Injector
-	T      testing.TB
+	Net      *vnet.Network
+	Faults   *fault.Injector
+	Recorder *observe.Recorder
+	T        testing.TB
 }
 
 // NewEnv creates a new scenario environment with optional vnet options.
+// It automatically creates an observe.Recorder that dumps timeline on test failure.
 func NewEnv(t testing.TB, opts ...vnet.Option) *Env {
 	t.Helper()
+	rec := observe.NewRecorder(t)
+	opts = append(opts, vnet.WithRecorder(rec))
 	return &Env{
-		Net:    vnet.New(opts...),
-		Faults: fault.New(),
-		T:      t,
+		Net:      vnet.New(opts...),
+		Faults:   fault.New().WithRecorder(rec),
+		Recorder: rec,
+		T:        t,
 	}
 }
 

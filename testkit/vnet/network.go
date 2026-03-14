@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"net"
 	"sync"
+
+	"github.com/shuttle-proxy/shuttle/testkit/observe"
 )
 
 // edge represents a directed link between two nodes.
@@ -15,12 +17,13 @@ type edge struct {
 
 // Network is the topology manager for the virtual network.
 type Network struct {
-	mu    sync.Mutex
-	nodes map[string]*Node
-	edges []edge // directed edges
-	rng   *deterministicRand
-	clock Clock
-	links []*link // track for cleanup
+	mu       sync.Mutex
+	nodes    map[string]*Node
+	edges    []edge // directed edges
+	rng      *deterministicRand
+	clock    Clock
+	links    []*link // track for cleanup
+	recorder *observe.Recorder
 }
 
 // Option configures a Network.
@@ -30,6 +33,21 @@ type Option func(*Network)
 func WithSeed(seed int64) Option {
 	return func(n *Network) {
 		n.rng = newRand(seed)
+	}
+}
+
+// WithClock sets the clock used by all links in the network.
+// Use NewVirtualClock for deterministic, instant-advancing time in tests.
+func WithClock(c Clock) Option {
+	return func(n *Network) {
+		n.clock = c
+	}
+}
+
+// WithRecorder attaches an observe.Recorder for event logging.
+func WithRecorder(r *observe.Recorder) Option {
+	return func(n *Network) {
+		n.recorder = r
 	}
 }
 
@@ -102,8 +120,8 @@ func (n *Network) Dial(ctx context.Context, from *Node, toAddr string) (net.Conn
 	}
 
 	// Create conditioned connection pair.
-	aToBLnk := newLink(aToBCfg, n.clock, newRand(n.rng.childSeed()))
-	bToALnk := newLink(bToACfg, n.clock, newRand(n.rng.childSeed()))
+	aToBLnk := newLink(aToBCfg, n.clock, newRand(n.rng.childSeed()), n.recorder)
+	bToALnk := newLink(bToACfg, n.clock, newRand(n.rng.childSeed()), n.recorder)
 
 	n.mu.Lock()
 	n.links = append(n.links, aToBLnk, bToALnk)
@@ -115,6 +133,10 @@ func (n *Network) Dial(ctx context.Context, from *Node, toAddr string) (net.Conn
 		clientConn.Close()
 		serverConn.Close()
 		return nil, fmt.Errorf("listener at %q is closed", toAddr)
+	}
+
+	if n.recorder != nil {
+		n.recorder.RecordF("dial", from.Name, targetNode.Name, "addr=%s", toAddr)
 	}
 
 	return clientConn, nil

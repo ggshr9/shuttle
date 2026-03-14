@@ -86,6 +86,11 @@ jobs:
           files: coverage.out
         env:
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+      - name: Performance budget check
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          go build -o checkperf ./cmd/checkperf
+          go test -bench=. -benchmem -timeout 120s -run='^$' -json ./... | ./checkperf
 
   build-frontend:
     runs-on: ubuntu-latest

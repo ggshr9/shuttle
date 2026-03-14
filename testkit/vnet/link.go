@@ -4,6 +4,8 @@ import (
 	"io"
 	"sync"
 	"time"
+
+	"github.com/shuttle-proxy/shuttle/testkit/observe"
 )
 
 // LinkConfig describes network conditions for one direction of a link.
@@ -18,9 +20,10 @@ type LinkConfig struct {
 // link applies network conditions between a writer and a reader.
 // It reads from src, applies conditions, and writes to dst.
 type link struct {
-	cfg   LinkConfig
-	clock Clock
-	rng   *deterministicRand
+	cfg      LinkConfig
+	clock    Clock
+	rng      *deterministicRand
+	recorder *observe.Recorder
 
 	// token bucket for bandwidth limiting
 	mu        sync.Mutex
@@ -30,11 +33,12 @@ type link struct {
 	closeOnce sync.Once
 }
 
-func newLink(cfg LinkConfig, clock Clock, rng *deterministicRand) *link {
+func newLink(cfg LinkConfig, clock Clock, rng *deterministicRand, rec *observe.Recorder) *link {
 	return &link{
 		cfg:      cfg,
 		clock:    clock,
 		rng:      rng,
+		recorder: rec,
 		tokens:   0, // start empty so first write must wait
 		lastFill: clock.Now(),
 		closeCh:  make(chan struct{}),
@@ -70,6 +74,14 @@ func (l *link) run(dst io.WriteCloser, src io.Reader) {
 func (l *link) deliver(dst io.Writer, data []byte) {
 	// Loss: drop with probability
 	if l.cfg.Loss > 0 && l.rng.Float64() < l.cfg.Loss {
+		if l.recorder != nil {
+			l.recorder.Record(observe.Event{
+				Kind:   "drop",
+				From:   "link",
+				Detail: "packet loss",
+				Size:   len(data),
+			})
+		}
 		return // silently drop
 	}
 

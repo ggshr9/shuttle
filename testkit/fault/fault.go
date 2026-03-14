@@ -12,9 +12,11 @@
 package fault
 
 import (
+	"fmt"
 	"net"
 	"sync"
 
+	"github.com/shuttle-proxy/shuttle/testkit/observe"
 	"github.com/shuttle-proxy/shuttle/transport"
 )
 
@@ -24,11 +26,18 @@ type Injector struct {
 	writeRules []Rule
 	dialRules  []Rule
 	mu         sync.Mutex
+	recorder   *observe.Recorder
 }
 
 // New creates a new fault Injector with no rules.
 func New() *Injector {
 	return &Injector{}
+}
+
+// WithRecorder attaches a Recorder so that fault activations are logged.
+func (fi *Injector) WithRecorder(r *observe.Recorder) *Injector {
+	fi.recorder = r
+	return fi
 }
 
 // OnRead returns a RuleBuilder targeting read operations.
@@ -71,12 +80,24 @@ func (fi *Injector) WrapStream(s transport.Stream) transport.Stream {
 // applyRules evaluates rules in order and applies the first matching rule.
 // Returns the (possibly modified) data and error. If no rule matches,
 // returns the original data with nil error.
-func (fi *Injector) applyRules(rules []Rule, data []byte) ([]byte, error, bool) {
+func (fi *Injector) applyRules(target string, rules []Rule, data []byte) ([]byte, error, bool) {
 	fi.mu.Lock()
 	defer fi.mu.Unlock()
 	for i := range rules {
 		if rules[i].matches() {
 			out, err := rules[i].action.Apply(data)
+			if fi.recorder != nil {
+				detail := fmt.Sprintf("%s on %s", rules[i].action.Name(), target)
+				if err != nil {
+					detail += fmt.Sprintf(" → error: %v", err)
+				}
+				fi.recorder.Record(observe.Event{
+					Kind:   "fault",
+					From:   "injector",
+					Detail: detail,
+					Size:   len(data),
+				})
+			}
 			return out, err, true
 		}
 	}

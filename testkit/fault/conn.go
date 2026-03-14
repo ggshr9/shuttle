@@ -18,7 +18,7 @@ func (c *faultConn) Read(b []byte) (int, error) {
 	if err != nil {
 		return n, err
 	}
-	out, faultErr, matched := c.injector.applyRules(c.injector.readRules, b[:n])
+	out, faultErr, matched := c.injector.applyRules("read", c.injector.readRules, b[:n])
 	if !matched {
 		return n, nil
 	}
@@ -34,7 +34,7 @@ func (c *faultConn) Read(b []byte) (int, error) {
 }
 
 func (c *faultConn) Write(b []byte) (int, error) {
-	out, faultErr, matched := c.injector.applyRules(c.injector.writeRules, b)
+	out, faultErr, matched := c.injector.applyRules("write", c.injector.writeRules, b)
 	if !matched {
 		return c.inner.Write(b)
 	}

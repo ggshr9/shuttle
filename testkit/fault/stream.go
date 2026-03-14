@@ -17,7 +17,7 @@ func (s *faultStream) Read(b []byte) (int, error) {
 	if err != nil {
 		return n, err
 	}
-	out, faultErr, matched := s.injector.applyRules(s.injector.readRules, b[:n])
+	out, faultErr, matched := s.injector.applyRules("read", s.injector.readRules, b[:n])
 	if !matched {
 		return n, nil
 	}
@@ -32,7 +32,7 @@ func (s *faultStream) Read(b []byte) (int, error) {
 }
 
 func (s *faultStream) Write(b []byte) (int, error) {
-	out, faultErr, matched := s.injector.applyRules(s.injector.writeRules, b)
+	out, faultErr, matched := s.injector.applyRules("write", s.injector.writeRules, b)
 	if !matched {
 		return s.inner.Write(b)
 	}

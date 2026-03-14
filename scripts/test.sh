@@ -48,6 +48,7 @@ RUN_FILTER=""
 RACE_FLAG=""
 COVER_FLAG=""
 BENCH_MODE=false
+PERF_MODE=false
 FUZZ_MODE=false
 FUZZ_SECS=30
 BG_MODE=false
@@ -62,6 +63,7 @@ while [[ $# -gt 0 ]]; do
         --race)     RACE_FLAG="-race"; shift ;;
         --cover)    COVER_FLAG="-coverprofile=coverage.out -covermode=atomic"; shift ;;
         --bench)    BENCH_MODE=true; shift ;;
+        --perf)     PERF_MODE=true; shift ;;
         --fuzz)     FUZZ_MODE=true; FUZZ_SECS="${2:-30}"; shift; [[ "$1" =~ ^[0-9]+$ ]] && shift ;;
         --bg)       BG_MODE=true; shift ;;
         --watch)    WATCH_MODE=true; shift ;;
@@ -79,6 +81,7 @@ while [[ $# -gt 0 ]]; do
             echo "  --race        Enable Go race detector"
             echo "  --cover       Generate coverage report (coverage.out + coverage.html)"
             echo "  --bench       Run benchmark tests"
+            echo "  --perf        Run benchmarks + check against .perf-budget.yaml"
             echo "  --fuzz SECS   Run fuzz tests for N seconds (default: 30)"
             echo "  --bg          Run in background, output to test.log"
             echo "  --watch       Watch mode: re-run on .go file changes"
@@ -282,6 +285,21 @@ fi
 # Fuzz mode
 if $FUZZ_MODE; then
     run_fuzz_tests
+    exit $HOST_RESULT
+fi
+
+# Perf budget mode
+if $PERF_MODE; then
+    log "Running performance budget check..."
+    echo ""
+    go build -o "$PROJECT_DIR/checkperf" ./cmd/checkperf
+    if go test -bench=. -benchmem -timeout 120s -run='^$' -json "$PKG" 2>&1 | "$PROJECT_DIR/checkperf"; then
+        success "Performance budget check passed"
+    else
+        HOST_RESULT=1
+        error "Performance budget check failed"
+    fi
+    rm -f "$PROJECT_DIR/checkperf"
     exit $HOST_RESULT
 fi
 
