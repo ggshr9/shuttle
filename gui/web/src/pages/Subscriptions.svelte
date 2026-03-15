@@ -2,6 +2,7 @@
   import { api } from '../lib/api'
   import { onMount } from 'svelte'
   import { toast } from '../lib/toast'
+  import { t } from '../lib/i18n/index'
 
   let subscriptions = $state([])
   let loading = $state(true)
@@ -71,7 +72,7 @@
   }
 
   function formatDate(dateStr) {
-    if (!dateStr) return 'Never'
+    if (!dateStr) return t('subscriptions.never')
     const date = new Date(dateStr)
     return date.toLocaleString()
   }
@@ -79,16 +80,16 @@
 
 <div class="page">
   <div class="header">
-    <h2>Subscriptions</h2>
-    <button class="btn-add" onclick={() => (showAdd = true)}>Add Subscription</button>
+    <h2>{t('subscriptions.title')}</h2>
+    <button class="btn-add" onclick={() => (showAdd = true)}>{t('subscriptions.add')}</button>
   </div>
 
   {#if loading}
-    <p class="loading">Loading...</p>
+    <p class="loading">{t('common.loading')}</p>
   {:else if subscriptions.length === 0}
     <div class="empty">
-      <p>No subscriptions yet</p>
-      <p class="help">Add a subscription URL to automatically import servers</p>
+      <p>{t('subscriptions.noSubscriptions')}</p>
+      <p class="help">{t('subscriptions.noSubscriptionsHelp')}</p>
     </div>
   {:else}
     <div class="sub-list">
@@ -97,13 +98,13 @@
           <div class="sub-info">
             <div class="sub-header">
               <span class="sub-name">{sub.name || 'Unnamed'}</span>
-              <span class="sub-count">{sub.servers?.length || 0} servers</span>
+              <span class="sub-count">{t('subscriptions.servers', { count: sub.servers?.length || 0 })}</span>
             </div>
             <div class="sub-url">{sub.url}</div>
             <div class="sub-meta">
-              Updated: {formatDate(sub.updated_at)}
+              {t('subscriptions.updated', { date: formatDate(sub.updated_at) })}
               {#if sub.error}
-                <span class="sub-error">Error: {sub.error}</span>
+                <span class="sub-error">{t('subscriptions.error', { message: sub.error })}</span>
               {/if}
             </div>
           </div>
@@ -113,13 +114,13 @@
               onclick={() => refreshSubscription(sub.id)}
               disabled={refreshing[sub.id]}
             >
-              {refreshing[sub.id] ? 'Refreshing...' : 'Refresh'}
+              {refreshing[sub.id] ? t('subscriptions.refreshing') : t('subscriptions.refresh')}
             </button>
             <button
               class="btn-sm btn-danger"
               onclick={() => deleteSubscription(sub.id)}
             >
-              Delete
+              {t('subscriptions.delete')}
             </button>
           </div>
         </div>
@@ -133,7 +134,7 @@
               </div>
             {/each}
             {#if sub.servers.length > 5}
-              <div class="more-servers">+{sub.servers.length - 5} more</div>
+              <div class="more-servers">{t('subscriptions.moreServers', { count: sub.servers.length - 5 })}</div>
             {/if}
           </div>
         {/if}
@@ -153,30 +154,30 @@
   >
     <div class="modal" onclick={(e) => e.stopPropagation()}>
       <div class="modal-header">
-        <h3 id="add-sub-dialog-title">Add Subscription</h3>
+        <h3 id="add-sub-dialog-title">{t('subscriptions.add')}</h3>
         <button class="modal-close" onclick={() => (showAdd = false)}>&times;</button>
       </div>
       <div class="modal-body">
         <label>
-          <span>Name (optional)</span>
+          <span>{t('subscriptions.name')}</span>
           <input bind:value={newSub.name} placeholder="My Subscription" />
         </label>
         <label>
-          <span>Subscription URL</span>
+          <span>{t('subscriptions.url')}</span>
           <input bind:value={newSub.url} placeholder="https://example.com/subscribe" />
         </label>
         <p class="help-text">
-          Supported formats: Shuttle JSON, SIP008, Base64
+          {t('subscriptions.supportedFormats')}
         </p>
       </div>
       <div class="modal-footer">
-        <button class="btn-cancel" onclick={() => (showAdd = false)}>Cancel</button>
+        <button class="btn-cancel" onclick={() => (showAdd = false)}>{t('common.cancel')}</button>
         <button
           class="btn-primary"
           onclick={addSubscription}
           disabled={adding || !newSub.url.trim()}
         >
-          {adding ? 'Adding...' : 'Add'}
+          {adding ? t('subscriptions.adding') : t('subscriptions.addBtn')}
         </button>
       </div>
     </div>

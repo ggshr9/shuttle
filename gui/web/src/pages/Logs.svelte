@@ -132,13 +132,13 @@
     const content = filteredLogs.map(l => {
       let line = `[${l.time}] [${l.level.toUpperCase()}] ${l.msg}`
       if (l.details) {
-        line += `\n  Target: ${l.details.target}`
-        line += `\n  Protocol: ${l.details.protocol}`
-        if (l.details.rule) line += `\n  Rule: ${l.details.rule}`
-        if (l.details.process) line += `\n  Process: ${l.details.process}`
-        if (l.details.duration) line += `\n  Duration: ${formatDuration(l.details.duration)}`
+        line += `\n  ${t('logs.targetColon')} ${l.details.target}`
+        line += `\n  ${t('logs.protocolColon')} ${l.details.protocol}`
+        if (l.details.rule) line += `\n  ${t('logs.ruleColon')} ${l.details.rule}`
+        if (l.details.process) line += `\n  ${t('logs.processColon')} ${l.details.process}`
+        if (l.details.duration) line += `\n  ${t('logs.durationColon')} ${formatDuration(l.details.duration)}`
         if (l.details.bytesIn || l.details.bytesOut) {
-          line += `\n  Traffic: ${formatBytes(l.details.bytesIn)} in / ${formatBytes(l.details.bytesOut)} out`
+          line += `\n  ${t('logs.trafficColon')} ${formatBytes(l.details.bytesIn)} in / ${formatBytes(l.details.bytesOut)} out`
         }
       }
       return line
@@ -197,10 +197,10 @@
   <div class="filter-bar">
     <div class="filter-group">
       <span class="filter-label">{t('logs.level')}:</span>
-      <button class="level-toggle" class:active={levelFilters.debug} onclick={() => toggleLevel('debug')}>Debug</button>
-      <button class="level-toggle" class:active={levelFilters.info} onclick={() => toggleLevel('info')}>Info</button>
-      <button class="level-toggle warn" class:active={levelFilters.warn} onclick={() => toggleLevel('warn')}>Warn</button>
-      <button class="level-toggle error" class:active={levelFilters.error} onclick={() => toggleLevel('error')}>Error</button>
+      <button class="level-toggle" class:active={levelFilters.debug} onclick={() => toggleLevel('debug')}>{t('logs.debug')}</button>
+      <button class="level-toggle" class:active={levelFilters.info} onclick={() => toggleLevel('info')}>{t('logs.info')}</button>
+      <button class="level-toggle warn" class:active={levelFilters.warn} onclick={() => toggleLevel('warn')}>{t('logs.warn')}</button>
+      <button class="level-toggle error" class:active={levelFilters.error} onclick={() => toggleLevel('error')}>{t('logs.error')}</button>
     </div>
     <div class="filter-group">
       <input
@@ -258,32 +258,32 @@
         {#if expandedId === log.id && log.details}
           <div class="details">
             <div class="detail-row">
-              <span class="detail-label">Target:</span>
+              <span class="detail-label">{t('logs.targetColon')}</span>
               <span class="detail-value">{log.details.target}</span>
             </div>
             <div class="detail-row">
-              <span class="detail-label">Protocol:</span>
+              <span class="detail-label">{t('logs.protocolColon')}</span>
               <span class="detail-value protocol">{log.details.protocol.toUpperCase()}</span>
             </div>
             {#if log.details.rule}
               <div class="detail-row">
-                <span class="detail-label">Rule:</span>
+                <span class="detail-label">{t('logs.ruleColon')}</span>
                 <span class="detail-value rule">{log.details.rule}</span>
               </div>
             {/if}
             {#if log.details.process}
               <div class="detail-row">
-                <span class="detail-label">Process:</span>
+                <span class="detail-label">{t('logs.processColon')}</span>
                 <span class="detail-value">{log.details.process}</span>
               </div>
             {/if}
             {#if log.details.state === 'closed'}
               <div class="detail-row">
-                <span class="detail-label">Duration:</span>
+                <span class="detail-label">{t('logs.durationColon')}</span>
                 <span class="detail-value">{formatDuration(log.details.duration)}</span>
               </div>
               <div class="detail-row">
-                <span class="detail-label">Traffic:</span>
+                <span class="detail-label">{t('logs.trafficColon')}</span>
                 <span class="detail-value">
                   <span class="traffic-in">↓ {formatBytes(log.details.bytesIn)}</span>
                   <span class="traffic-out">↑ {formatBytes(log.details.bytesOut)}</span>

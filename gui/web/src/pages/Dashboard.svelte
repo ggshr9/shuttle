@@ -237,11 +237,11 @@
       <div class="mesh-info">
         {#if status.mesh.virtual_ip}
           <div class="mesh-status">
-            <span class="mesh-label">Virtual IP</span>
+            <span class="mesh-label">{t('dashboard.virtualIP')}</span>
             <span class="mesh-value">{status.mesh.virtual_ip}</span>
           </div>
           <div class="mesh-status">
-            <span class="mesh-label">Network</span>
+            <span class="mesh-label">{t('dashboard.network')}</span>
             <span class="mesh-value">{status.mesh.cidr}</span>
           </div>
         {/if}

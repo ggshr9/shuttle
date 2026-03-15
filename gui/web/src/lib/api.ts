@@ -46,6 +46,7 @@ export interface Server {
   addr: string
   name?: string
   password?: string
+  sni?: string
 }
 
 export interface ServersResponse {
@@ -191,6 +192,106 @@ export interface TransportStats {
   bytes_recv: number
 }
 
+export interface PathStats {
+  interface: string
+  local_addr: string
+  rtt_ms: number
+  loss_rate: number
+  bytes_sent: number
+  bytes_recv: number
+  available: boolean
+}
+
+export interface ConnectionHistoryEntry {
+  id: string
+  timestamp: string
+  target: string
+  rule: string
+  protocol: string
+  process_name?: string
+  bytes_in: number
+  bytes_out: number
+  duration_ms: number
+  state: string
+}
+
+export interface StreamInfo {
+  stream_id: number
+  conn_id: string
+  target: string
+  transport: string
+  bytes_sent: number
+  bytes_received: number
+  errors: number
+  closed: boolean
+  duration_ms: number
+}
+
+export interface DebugState {
+  engine_state: string
+  circuit_breaker: string
+  streams: number
+  transport: string
+  uptime_seconds: number
+  goroutines: number
+}
+
+export interface SystemResources {
+  goroutines: number
+  mem_alloc_mb: number
+  mem_sys_mb: number
+  mem_gc_cycles: number
+  num_cpu: number
+  uptime_seconds: number
+}
+
+export interface RoutingConflict {
+  domain: string
+  action1: string
+  action2: string
+  rule1: string
+  rule2: string
+}
+
+export interface ProbeResult {
+  success: boolean
+  status?: number
+  status_text?: string
+  via: string
+  latency_ms: number
+  error?: string
+  headers?: Record<string, string[]>
+  body?: string
+}
+
+export interface BatchProbeResult {
+  name: string
+  url: string
+  via: string
+  success: boolean
+  status?: number
+  latency_ms: number
+  error?: string
+  body?: string
+}
+
+export interface ConfigValidation {
+  valid: boolean
+  errors: string[]
+}
+
+export interface GeodataSourcePreset {
+  id: string
+  name: string
+  description: string
+  direct_list: string
+  proxy_list: string
+  reject_list: string
+  gfw_list: string
+  cn_cidr: string
+  private_cidr: string
+}
+
 export const api = {
   status: () => request<Status>('GET', '/api/status'),
   connect: () => request<void>('POST', '/api/connect'),
@@ -199,6 +300,7 @@ export const api = {
   putConfig: (cfg: Config) => request<void>('PUT', '/api/config', cfg),
   getServers: () => request<ServersResponse>('GET', '/api/config/servers'),
   setActiveServer: (srv: Server) => request<void>('PUT', '/api/config/servers', srv),
+  /** @deprecated Use setActiveServer instead */
   putServers: (srv: Server) => request<void>('PUT', '/api/config/servers', srv),
   addServer: (srv: Server) => request<void>('POST', '/api/config/servers', srv),
   deleteServer: (addr: string) => request<void>('DELETE', '/api/config/servers', { addr }),
@@ -208,11 +310,7 @@ export const api = {
   getRouting: () => request<RoutingRules>('GET', '/api/routing/rules'),
   putRouting: (r: RoutingRules) => request<void>('PUT', '/api/routing/rules', r),
   exportRouting: () => `${BASE}/api/routing/export`,
-  exportRoutingData: async (): Promise<any> => {
-    const res = await fetch(`${BASE}/api/routing/export`)
-    if (!res.ok) throw new Error(`HTTP ${res.status}`)
-    return res.json()
-  },
+  exportRoutingData: () => request<any>('GET', '/api/routing/export'),
   importRouting: (rules: RoutingRules, mode: 'merge' | 'replace' = 'merge') =>
     request<{ added: number; total: number }>('POST', '/api/routing/import', { ...rules, mode }),
   getRoutingTemplates: () => request<RoutingTemplate[]>('GET', '/api/routing/templates'),
@@ -221,7 +319,10 @@ export const api = {
   getGeositeCategories: () => request<string[]>('GET', '/api/geosite/categories'),
   testRouting: (url: string) => request<DryRunResult>('POST', '/api/routing/test', { url }),
   // Speedtest
-  speedtest: (addrs: string[]) => request<SpeedtestResult[]>('POST', '/api/speedtest', { addrs }),
+  speedtest: async (addrs: string[]): Promise<SpeedtestResult[]> => {
+    const data = await request<{ results: SpeedtestResult[] }>('POST', '/api/speedtest', { addrs })
+    return data.results
+  },
   getSpeedtestHistory: (days = 30) => request<SpeedtestHistoryEntry[]>('GET', `/api/speedtest/history?days=${days}`),
   // Subscriptions
   getSubscriptions: () => request<Subscription[]>('GET', '/api/subscriptions'),
@@ -250,9 +351,38 @@ export const api = {
   updateGeoData: () => request<GeoDataStatus>('POST', '/api/geodata/update', {}, 120000),
   // Transport stats
   getTransportStats: () => request<TransportStats[]>('GET', '/api/transports/stats'),
+  // Multipath stats
+  getMultipathStats: () => request<PathStats[]>('GET', '/api/multipath/stats'),
+  // Connection history
+  getConnectionsHistory: () => request<ConnectionHistoryEntry[]>('GET', '/api/connections/history'),
+  // Streams by connection ID
+  getConnectionStreams: (id: string) => request<StreamInfo[]>('GET', `/api/connections/${id}/streams`),
+  // Debug state
+  getDebugState: () => request<DebugState>('GET', '/api/debug/state'),
+  // System resources
+  getSystemResources: () => request<SystemResources>('GET', '/api/system/resources'),
+  // PAC script
+  getPacScript: () => request<string>('GET', '/api/pac'),
+  // Routing conflicts
+  getRoutingConflicts: () => request<{ conflicts: RoutingConflict[]; count: number }>('GET', '/api/routing/conflicts'),
+  // Config validation
+  validateConfig: (config: any) => request<ConfigValidation>('POST', '/api/config/validate', config),
+  // Test probe
+  testProbe: (url: string, via?: string) => request<ProbeResult>('POST', '/api/test/probe', { url, via }, 20000),
+  // Test probe batch
+  testProbeBatch: (tests: Array<{ name?: string; url: string; method?: string; via?: string }>) =>
+    request<{ results: BatchProbeResult[] }>('POST', '/api/test/probe/batch', { tests }, 60000),
+  // Geodata sources
+  getGeodataSources: () => request<GeodataSourcePreset[]>('GET', '/api/geodata/sources'),
+  // Update geodata source preset
+  updateGeodataSource: (id: string) => request<{ status: string; source: string }>('POST', `/api/geodata/sources/${id}`),
   // Diagnostics
   downloadDiagnostics: async (): Promise<void> => {
-    const res = await fetch(`${BASE}/api/diagnostics`)
+    const headers: Record<string, string> = {}
+    if (authToken) {
+      headers['Authorization'] = `Bearer ${authToken}`
+    }
+    const res = await fetch(`${BASE}/api/diagnostics`, { headers })
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
     const blob = await res.blob()
     const url = URL.createObjectURL(blob)

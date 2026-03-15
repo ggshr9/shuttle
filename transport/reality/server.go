@@ -67,9 +67,7 @@ func NewServer(cfg *ServerConfig, logger *slog.Logger) (*Server, error) {
 	}
 	copy(s.privKey[:], privBytes)
 	// Clamp for Curve25519
-	s.privKey[0] &= 248
-	s.privKey[31] &= 127
-	s.privKey[31] |= 64
+	shuttlecrypto.ClampPrivateKey(s.privKey[:])
 	pubSlice, err := curve25519.X25519(s.privKey[:], curve25519.Basepoint)
 	if err != nil {
 		return nil, fmt.Errorf("reality: derive public key: %w", err)

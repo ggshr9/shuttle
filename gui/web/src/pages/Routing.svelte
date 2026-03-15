@@ -1,5 +1,6 @@
 <script lang="ts">
   import { api } from '../lib/api'
+  import { t } from '../lib/i18n/index'
   import { onMount } from 'svelte'
 
   let routing = $state({ rules: [], default: 'proxy', dns: {} })
@@ -271,25 +272,25 @@
 
 <div class="page">
   <div class="header">
-    <h2>Routing Rules</h2>
+    <h2>{t('routing.title')}</h2>
     <div class="header-actions">
-      <button class="btn-template" onclick={() => (showTemplates = true)}>Templates</button>
-      <button class="btn-import" onclick={() => (showImport = true)}>Import</button>
-      <button class="btn-export" onclick={exportRules}>Export</button>
+      <button class="btn-template" onclick={() => (showTemplates = true)}>{t('routing.templates')}</button>
+      <button class="btn-import" onclick={() => (showImport = true)}>{t('routing.import')}</button>
+      <button class="btn-export" onclick={exportRules}>{t('routing.export')}</button>
     </div>
   </div>
 
   <div class="test-section">
-    <span class="test-label">Test URL</span>
+    <span class="test-label">{t('routing.testUrl')}</span>
     <div class="test-row">
       <input
         class="test-input"
         bind:value={testUrl}
-        placeholder="Enter domain or URL to test..."
+        placeholder={t('routing.testPlaceholder')}
         onkeydown={(e) => e.key === 'Enter' && runTest()}
       />
       <button class="test-btn" onclick={runTest} disabled={testing || !testUrl.trim()}>
-        {testing ? 'Testing...' : 'Test'}
+        {testing ? t('routing.testing') : t('routing.test')}
       </button>
     </div>
     {#if testResult}
@@ -298,7 +299,7 @@
           {testResult.action.toUpperCase()}
         </span>
         <span class="test-result-detail">
-          Matched by: <strong>{testResult.matched_by}</strong>
+          {t('routing.matchedBy')}: <strong>{testResult.matched_by}</strong>
           {#if testResult.rule}
             &mdash; {testResult.rule}
           {/if}
@@ -311,10 +312,10 @@
   </div>
 
   <label class="default-row">
-    <span>Default Action</span>
+    <span>{t('routing.defaultAction')}</span>
     <select bind:value={routing.default}>
-      <option value="proxy">Proxy</option>
-      <option value="direct">Direct</option>
+      <option value="proxy">{t('routing.proxy')}</option>
+      <option value="direct">{t('routing.direct')}</option>
     </select>
   </label>
 
@@ -322,17 +323,17 @@
     {#each routing.rules as rule, i}
       <div class="rule">
         <select bind:value={rule._type} class="type-select">
-          <option value="domain">Domain</option>
-          <option value="geosite">GeoSite</option>
-          <option value="process">Process</option>
-          <option value="geoip">GeoIP</option>
-          <option value="ip_cidr">IP CIDR</option>
+          <option value="domain">{t('routing.typeDomain')}</option>
+          <option value="geosite">{t('routing.typeGeosite')}</option>
+          <option value="process">{t('routing.typeProcess')}</option>
+          <option value="geoip">{t('routing.typeGeoip')}</option>
+          <option value="ip_cidr">{t('routing.typeIpCidr')}</option>
         </select>
 
         {#if rule._type === 'process'}
           <div class="process-field">
             <input bind:value={rule.value} placeholder="chrome.exe, WeChat.exe" />
-            <button class="pick-btn" onclick={() => openProcessPicker(i)}>Pick</button>
+            <button class="pick-btn" onclick={() => openProcessPicker(i)}>{t('routing.pick')}</button>
           </div>
         {:else if rule._type === 'geosite'}
           <input bind:value={rule.value} placeholder="category-ads, cn, geolocation-!cn" class="value-input" list="geosite-cats" />
@@ -345,9 +346,9 @@
         {/if}
 
         <select bind:value={rule.action}>
-          <option value="direct">Direct</option>
-          <option value="proxy">Proxy</option>
-          <option value="reject">Reject</option>
+          <option value="direct">{t('routing.direct')}</option>
+          <option value="proxy">{t('routing.proxy')}</option>
+          <option value="reject">{t('routing.reject')}</option>
         </select>
         <button class="remove" onclick={() => removeRule(i)}>x</button>
       </div>
@@ -355,15 +356,15 @@
   </div>
 
   <div class="actions">
-    <button class="add" onclick={addRule}>+ Add Rule</button>
+    <button class="add" onclick={addRule}>+ {t('routing.addRule')}</button>
     <button class="save" onclick={save} disabled={saving}>
-      {saving ? 'Saving...' : 'Save & Apply'}
+      {saving ? t('routing.saving') : t('routing.saveApply')}
     </button>
   </div>
   {#if msg}<p class="msg">{msg}</p>{/if}
 
   <div class="import-export-section">
-    <h3 class="section-title">Import / Export</h3>
+    <h3 class="section-title">{t('routing.importExport')}</h3>
     <div
       class="drop-zone"
       class:drop-zone-active={dragOver}
@@ -378,11 +379,11 @@
         <span class="drop-file-icon">&#128196;</span>
         <span class="drop-file-name">{droppedFileName}</span>
         <span class="drop-file-hint">{droppedRules?.rules?.length ?? 0} rule(s) found</span>
-        <button class="drop-clear" onclick={() => { droppedFileName = ''; droppedRules = null; importData = ''; importError = '' }}>Clear</button>
+        <button class="drop-clear" onclick={() => { droppedFileName = ''; droppedRules = null; importData = ''; importError = '' }}>{t('routing.clear')}</button>
       {:else}
         <span class="drop-icon">&#8615;</span>
-        <span class="drop-text">Drop .json file here</span>
-        <span class="drop-hint">or click Import to paste JSON manually</span>
+        <span class="drop-text">{t('routing.dragDrop')}</span>
+        <span class="drop-hint">{t('routing.dragDropHint')}</span>
       {/if}
     </div>
     {#if importError}
@@ -391,19 +392,19 @@
     <div class="import-mode-row">
       <label class="mode-label">
         <input type="radio" name="importMode" value="merge" bind:group={importMode} />
-        Merge with existing rules
+        {t('routing.mergeMode')}
       </label>
       <label class="mode-label">
         <input type="radio" name="importMode" value="replace" bind:group={importMode} />
-        Replace all rules
+        {t('routing.replaceMode')}
       </label>
     </div>
     <div class="import-export-actions">
       <button class="btn-import-action" onclick={() => { if (droppedRules) { doImport() } else { showImport = true } }} disabled={importing}>
-        {importing ? 'Importing...' : 'Import'}
+        {importing ? t('routing.importing') : t('routing.import')}
       </button>
       <button class="btn-export-action" onclick={exportRules}>
-        Export
+        {t('routing.export')}
       </button>
     </div>
   </div>
@@ -418,8 +419,8 @@
 {#if showTemplates}
 <div class="overlay" onclick={() => (showTemplates = false)} role="dialog" aria-modal="true" aria-labelledby="templates-dialog-title" onkeydown={(e) => e.key === 'Escape' && (showTemplates = false)}>
   <div class="modal" onclick={(e) => e.stopPropagation()}>
-    <h3 id="templates-dialog-title">Routing Templates</h3>
-    <p class="modal-hint">Choose a template to replace current rules</p>
+    <h3 id="templates-dialog-title">{t('routing.routingTemplates')}</h3>
+    <p class="modal-hint">{t('routing.templateHint')}</p>
     <div class="template-list">
       {#each templates as t}
         <button class="template-item" onclick={() => applyTemplate(t.id)} disabled={applyingTemplate}>
@@ -428,7 +429,7 @@
         </button>
       {/each}
     </div>
-    <button class="close-btn" onclick={() => (showTemplates = false)}>Cancel</button>
+    <button class="close-btn" onclick={() => (showTemplates = false)}>{t('common.cancel')}</button>
   </div>
 </div>
 {/if}
@@ -436,8 +437,8 @@
 {#if showImport}
 <div class="overlay" onclick={closeImport} role="dialog" aria-modal="true" aria-labelledby="import-rules-dialog-title" onkeydown={(e) => e.key === 'Escape' && closeImport()}>
   <div class="modal" onclick={(e) => e.stopPropagation()}>
-    <h3 id="import-rules-dialog-title">Import Rules</h3>
-    <p class="modal-hint">Paste JSON rules configuration</p>
+    <h3 id="import-rules-dialog-title">{t('routing.importRules')}</h3>
+    <p class="modal-hint">{t('routing.importRulesHint')}</p>
     <textarea
       bind:value={importData}
       placeholder={'{"rules": [{"geosite": "cn", "action": "direct"}], "default": "proxy"}'}
@@ -449,17 +450,17 @@
     <div class="import-mode-row modal-mode-row">
       <label class="mode-label">
         <input type="radio" name="modalImportMode" value="merge" bind:group={importMode} />
-        Merge
+        {t('routing.merge')}
       </label>
       <label class="mode-label">
         <input type="radio" name="modalImportMode" value="replace" bind:group={importMode} />
-        Replace
+        {t('routing.replace')}
       </label>
     </div>
     <div class="modal-actions">
-      <button class="close-btn" onclick={closeImport}>Cancel</button>
+      <button class="close-btn" onclick={closeImport}>{t('common.cancel')}</button>
       <button class="apply-btn" onclick={doImport} disabled={importing || !importData.trim()}>
-        {importing ? 'Importing...' : 'Import'}
+        {importing ? t('routing.importing') : t('routing.import')}
       </button>
     </div>
   </div>
@@ -469,8 +470,8 @@
 {#if showProcessPicker}
 <div class="overlay" onclick={closeProcessPicker} role="dialog" aria-modal="true" aria-labelledby="process-picker-dialog-title" onkeydown={(e) => e.key === 'Escape' && closeProcessPicker()}>
   <div class="picker" onclick={(e) => e.stopPropagation()}>
-    <h3 id="process-picker-dialog-title">Select Process</h3>
-    <p class="picker-hint">Click a process to add it to the rule</p>
+    <h3 id="process-picker-dialog-title">{t('routing.selectProcess')}</h3>
+    <p class="picker-hint">{t('routing.selectProcessHint')}</p>
     {#if processes.length}
       <div class="proc-list">
         {#each processes as proc}
@@ -481,9 +482,9 @@
         {/each}
       </div>
     {:else}
-      <p class="empty">No processes with active connections found</p>
+      <p class="empty">{t('routing.noProcesses')}</p>
     {/if}
-    <button class="close-btn" onclick={closeProcessPicker}>Done</button>
+    <button class="close-btn" onclick={closeProcessPicker}>{t('routing.done')}</button>
   </div>
 </div>
 {/if}

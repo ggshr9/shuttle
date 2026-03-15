@@ -255,11 +255,11 @@
     {#if config.proxy.tun.enabled}
     <div class="per-app-section">
       <div class="per-app-header">
-        <span class="per-app-label">Per-App Routing</span>
+        <span class="per-app-label">{t('settings.perAppRouting')}</span>
         <select bind:value={config.proxy.tun.per_app_mode} class="per-app-mode">
-          <option value="">Disabled</option>
-          <option value="allow">Allow List (only these apps use proxy)</option>
-          <option value="deny">Deny List (these apps bypass proxy)</option>
+          <option value="">{t('settings.perAppDisabled')}</option>
+          <option value="allow">{t('settings.perAppAllow')}</option>
+          <option value="deny">{t('settings.perAppDeny')}</option>
         </select>
       </div>
       {#if config.proxy.tun.per_app_mode}
@@ -277,8 +277,8 @@
               class="per-app-input"
               onkeydown={(e) => e.key === 'Enter' && addPerApp(newAppName)}
             />
-            <button class="per-app-add-btn" onclick={() => addPerApp(newAppName)}>Add</button>
-            <button class="per-app-pick-btn" onclick={openPerAppPicker}>Pick</button>
+            <button class="per-app-add-btn" onclick={() => addPerApp(newAppName)}>{t('settings.add')}</button>
+            <button class="per-app-pick-btn" onclick={openPerAppPicker}>{t('settings.pick')}</button>
           </div>
         </div>
       {/if}
@@ -365,10 +365,10 @@
     <label class="row">
       <span>{t('settings.logLevel')}</span>
       <select bind:value={config.log.level}>
-        <option value="debug">Debug</option>
-        <option value="info">Info</option>
-        <option value="warn">Warn</option>
-        <option value="error">Error</option>
+        <option value="debug">{t('settings.logDebug')}</option>
+        <option value="info">{t('settings.logInfo')}</option>
+        <option value="warn">{t('settings.logWarn')}</option>
+        <option value="error">{t('settings.logError')}</option>
       </select>
     </label>
   </section>
@@ -517,10 +517,10 @@
       </select>
     </label>
     <label class="row">
-      <span>Theme</span>
+      <span>{t('settings.theme')}</span>
       <select value={selectedTheme} onchange={changeTheme}>
-        <option value="dark">Dark</option>
-        <option value="light">Light</option>
+        <option value="dark">{t('settings.dark')}</option>
+        <option value="light">{t('settings.light')}</option>
       </select>
     </label>
   </section>
@@ -587,14 +587,14 @@
   </section>
 </div>
 {:else}
-<p>Loading...</p>
+<p>{t('common.loading')}</p>
 {/if}
 
 {#if showPerAppPicker}
 <div class="overlay" onclick={() => (showPerAppPicker = false)} role="dialog" aria-modal="true" aria-labelledby="perapp-picker-title" onkeydown={(e) => e.key === 'Escape' && (showPerAppPicker = false)}>
   <div class="picker-modal" onclick={(e) => e.stopPropagation()}>
-    <h3 id="perapp-picker-title">Select Process</h3>
-    <p class="picker-hint">Click a process to add it to the per-app list</p>
+    <h3 id="perapp-picker-title">{t('settings.selectProcess')}</h3>
+    <p class="picker-hint">{t('settings.selectProcessHint')}</p>
     {#if perAppProcesses.length}
       <div class="picker-list">
         {#each perAppProcesses as proc}
@@ -605,9 +605,9 @@
         {/each}
       </div>
     {:else}
-      <p class="picker-empty">No processes with active connections found</p>
+      <p class="picker-empty">{t('settings.noProcesses')}</p>
     {/if}
-    <button class="picker-close" onclick={() => (showPerAppPicker = false)}>Done</button>
+    <button class="picker-close" onclick={() => (showPerAppPicker = false)}>{t('settings.done')}</button>
   </div>
 </div>
 {/if}

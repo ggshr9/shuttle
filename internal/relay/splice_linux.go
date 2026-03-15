@@ -169,7 +169,6 @@ func trySplice(a, b io.ReadWriteCloser) (int64, int64, bool) {
 	}
 
 	var aFD, bFD int
-	var fdErr error
 
 	// Extract file descriptors.
 	if err := aRaw.Control(func(fd uintptr) { aFD = int(fd) }); err != nil {
@@ -191,8 +190,6 @@ func trySplice(a, b io.ReadWriteCloser) (int64, int64, bool) {
 	if testErr != nil && testErr != unix.EAGAIN {
 		return 0, 0, false
 	}
-
-	_ = fdErr
 
 	n1, n2, err := spliceRelay(aFD, bFD)
 	if err != nil {

@@ -6,6 +6,7 @@ import (
 	"crypto/subtle"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net"
 	"io"
 	"net/http"
@@ -361,7 +362,10 @@ func decodeJSON(r *http.Request, v interface{}) error {
 
 func writeJSON(w http.ResponseWriter, v any) {
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(v)
+	if err := json.NewEncoder(w).Encode(v); err != nil {
+		// Log but don't try to write error (headers already sent)
+		slog.Debug("writeJSON encode error", "err", err)
+	}
 }
 
 func writeError(w http.ResponseWriter, code int, msg string) {

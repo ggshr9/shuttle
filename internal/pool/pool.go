@@ -106,9 +106,15 @@ func Get(size int) []byte {
 		bp := MedLargePool.Get().(*[]byte)
 		return (*bp)[:size]
 	default:
+		if size > 64*1024 {
+			// Size exceeds largest pool tier; allocate a dedicated buffer
+			// to avoid silent truncation.
+			buf := make([]byte, size)
+			return buf
+		}
 		largeStats.gets.Add(1)
 		bp := LargePool.Get().(*[]byte)
-		return (*bp)[:min(size, 64*1024)]
+		return (*bp)[:size]
 	}
 }
 

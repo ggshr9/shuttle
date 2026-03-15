@@ -86,15 +86,15 @@
 {#if !initialized}
   <div class="loading">
     <div class="spinner"></div>
-    <p>Connecting to Shuttle...</p>
+    <p>{t('app.connecting')}</p>
   </div>
 {/if}
 
 {#if initialized}
 {#if apiError}
   <div class="api-error">
-    Backend unreachable. Check that Shuttle is running.
-    <button onclick={checkFirstRun}>Retry</button>
+    {t('app.backendError')}
+    <button onclick={checkFirstRun}>{t('app.retry')}</button>
   </div>
 {/if}
 <div class="app">

@@ -2,6 +2,7 @@
   import { api } from '../lib/api'
   import { connectWS } from '../lib/ws'
   import { toast } from '../lib/toast'
+  import { t } from '../lib/i18n/index'
   import { onMount } from 'svelte'
 
   let active = $state({ addr: '', name: '', password: '' })
@@ -133,7 +134,7 @@
   function getLatencyDisplay(addr) {
     const result = testResults[addr]
     if (!result) return null
-    if (!result.available) return { text: 'timeout', class: 'latency-error' }
+    if (!result.available) return { text: t('common.timeout'), class: 'latency-error' }
     const ms = result.latency
     if (ms < 100) return { text: `${ms}ms`, class: 'latency-good' }
     if (ms < 300) return { text: `${ms}ms`, class: 'latency-ok' }
@@ -159,41 +160,41 @@
 </script>
 
 <div class="page">
-  <h2>Active Server</h2>
+  <h2>{t('servers.activeServer')}</h2>
 
   <div class="form">
     <label>
-      <span>Server Address</span>
+      <span>{t('servers.serverAddress')}</span>
       <input bind:value={active.addr} placeholder="example.com:443" />
     </label>
     <label>
-      <span>Name</span>
+      <span>{t('servers.name')}</span>
       <input bind:value={active.name} placeholder="My Server" />
     </label>
     <label>
-      <span>Password</span>
+      <span>{t('servers.password')}</span>
       <input type="password" bind:value={active.password} />
     </label>
 
     <button onclick={save} disabled={saving}>
-      {saving ? 'Saving...' : 'Save & Reconnect'}
+      {saving ? t('servers.saving') : t('servers.saveReconnect')}
     </button>
       </div>
 
   <div class="section-header">
-    <h2 class="section">Saved Servers</h2>
+    <h2 class="section">{t('servers.savedServers')}</h2>
     <div class="section-actions">
       <button class="btn-auto" onclick={autoSelect} disabled={autoSelecting || testing || servers.length === 0}>
-        {autoSelecting ? 'Selecting...' : 'Auto Select'}
+        {autoSelecting ? t('servers.selecting') : t('servers.autoSelect')}
       </button>
       <button class="btn-test" onclick={runSpeedtest} disabled={testing || autoSelecting}>
         {#if testing}
-          Testing ({testProgress.done}/{testProgress.total})...
+          {t('servers.testing', { done: testProgress.done, total: testProgress.total })}
         {:else}
-          Test All
+          {t('servers.testAll')}
         {/if}
       </button>
-      <button class="btn-import" onclick={() => (showImport = true)}>Import</button>
+      <button class="btn-import" onclick={() => (showImport = true)}>{t('servers.import')}</button>
     </div>
   </div>
 
@@ -210,8 +211,8 @@
             {/if}
           </div>
           <div class="server-actions">
-            <button class="btn-sm" onclick={() => switchTo(srv)}>Use</button>
-            <button class="btn-sm btn-danger" onclick={() => removeServer(srv.addr)}>Remove</button>
+            <button class="btn-sm" onclick={() => switchTo(srv)}>{t('servers.use')}</button>
+            <button class="btn-sm btn-danger" onclick={() => removeServer(srv.addr)}>{t('servers.remove')}</button>
           </div>
         </div>
       {/each}
@@ -219,23 +220,23 @@
   {:else}
     <div class="empty-state">
       <div class="empty-icon">📡</div>
-      <h3>No Servers Yet</h3>
-      <p>Add a proxy server to get started</p>
+      <h3>{t('emptyState.noServers')}</h3>
+      <p>{t('emptyState.addToStart')}</p>
       <div class="empty-actions">
         <button class="action-btn primary" onclick={() => showImport = true}>
-          Import Config
+          {t('emptyState.importConfig')}
         </button>
-        <span class="or">or add manually below</span>
+        <span class="or">{t('emptyState.orAddManually')}</span>
       </div>
     </div>
   {/if}
 
-  <h3>Add Server</h3>
+  <h3>{t('servers.addServer')}</h3>
   <div class="add-form">
     <input bind:value={newServer.addr} placeholder="addr:port" />
-    <input bind:value={newServer.name} placeholder="Name" />
-    <input type="password" bind:value={newServer.password} placeholder="Password" />
-    <button onclick={addServer}>Add</button>
+    <input bind:value={newServer.name} placeholder={t('servers.name')} />
+    <input type="password" bind:value={newServer.password} placeholder={t('servers.password')} />
+    <button onclick={addServer}>{t('servers.add')}</button>
   </div>
 </div>
 
@@ -250,17 +251,17 @@
   >
     <div class="modal" onclick={(e) => e.stopPropagation()}>
       <div class="modal-header">
-        <h3 id="import-dialog-title">Import Servers</h3>
+        <h3 id="import-dialog-title">{t('import.title')}</h3>
         <button class="modal-close" onclick={closeImport}>&times;</button>
       </div>
       <div class="modal-body">
         <p class="help-text">
-          Paste configuration data below. Supported formats:
+          {t('import.description')}
         </p>
         <ul class="help-list">
-          <li>shuttle:// URI (one per line)</li>
-          <li>JSON (single server or array)</li>
-          <li>Base64 encoded JSON</li>
+          <li>{t('import.formats.uri')}</li>
+          <li>{t('import.formats.json')}</li>
+          <li>{t('import.formats.base64')}</li>
         </ul>
         <textarea
           bind:value={importData}
@@ -272,7 +273,7 @@
             <p class="import-error">{importResult.error}</p>
           {:else}
             <p class="import-success">
-              Added {importResult.added} of {importResult.total} server(s)
+              {t('import.added', { added: importResult.added, total: importResult.total })}
             </p>
             {#if importResult.errors?.length}
               <ul class="import-errors">
@@ -285,9 +286,9 @@
         {/if}
       </div>
       <div class="modal-footer">
-        <button class="btn-cancel" onclick={closeImport}>Cancel</button>
+        <button class="btn-cancel" onclick={closeImport}>{t('import.cancel')}</button>
         <button class="btn-primary" onclick={doImport} disabled={importing || !importData.trim()}>
-          {importing ? 'Importing...' : 'Import'}
+          {importing ? t('import.importing') : t('import.import')}
         </button>
       </div>
     </div>

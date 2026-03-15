@@ -990,6 +990,10 @@ func (c *ClientConfig) DeepCopy() *ClientConfig {
 		cp.Transport.WebRTC.TURNServers = make([]string, len(c.Transport.WebRTC.TURNServers))
 		copy(cp.Transport.WebRTC.TURNServers, c.Transport.WebRTC.TURNServers)
 	}
+	if c.Mesh.SplitRoutes != nil {
+		cp.Mesh.SplitRoutes = make([]SplitRoute, len(c.Mesh.SplitRoutes))
+		copy(cp.Mesh.SplitRoutes, c.Mesh.SplitRoutes)
+	}
 	if c.QoS.Rules != nil {
 		cp.QoS.Rules = make([]QoSRule, len(c.QoS.Rules))
 		for i, r := range c.QoS.Rules {

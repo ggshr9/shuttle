@@ -29,13 +29,18 @@ type NoiseHandshake struct {
 	recvKey [32]byte
 }
 
+// ClampPrivateKey applies Curve25519 key clamping to a 32-byte private key.
+func ClampPrivateKey(priv []byte) {
+	priv[0] &= 248
+	priv[31] &= 127
+	priv[31] |= 64
+}
+
 func GenerateKeyPair() (pub, priv [32]byte, err error) {
 	if _, err = io.ReadFull(rand.Reader, priv[:]); err != nil {
 		return
 	}
-	priv[0] &= 248
-	priv[31] &= 127
-	priv[31] |= 64
+	ClampPrivateKey(priv[:])
 	pubSlice, err := curve25519.X25519(priv[:], curve25519.Basepoint)
 	if err != nil {
 		return
@@ -128,9 +133,7 @@ func DeriveKeysFromPassword(password string) (pub, priv [32]byte, err error) {
 	salt := []byte("shuttle-noise-ik-v1")
 	keyMaterial := Argon2Key([]byte(password), salt, 32)
 	copy(priv[:], keyMaterial)
-	priv[0] &= 248
-	priv[31] &= 127
-	priv[31] |= 64
+	ClampPrivateKey(priv[:])
 	pubSlice, err := curve25519.X25519(priv[:], curve25519.Basepoint)
 	if err != nil {
 		return

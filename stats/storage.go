@@ -224,30 +224,19 @@ type PeriodStats struct {
 	Days        int    `json:"days"` // number of days with data in this period
 }
 
-// GetWeeklySummary returns stats aggregated by ISO week for the last N weeks.
-func (s *Storage) GetWeeklySummary(weeks int) []PeriodStats {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-
-	if weeks <= 0 {
-		return nil
-	}
-
-	// Build a map of ISO-week -> aggregated stats
+// aggregateByPeriod aggregates daily stats into period buckets using the given
+// cutoff time and key function. The keyFunc maps each date to a period key
+// (e.g. "2026-W11" for weekly, "2026-03" for monthly).
+func (s *Storage) aggregateByPeriod(cutoff time.Time, keyFunc func(time.Time) string) []PeriodStats {
 	buckets := make(map[string]*PeriodStats)
 	var orderedKeys []string
-
-	now := time.Now()
-	// Walk back from today far enough to cover N weeks
-	cutoff := now.AddDate(0, 0, -weeks*7)
 
 	for dateStr, stat := range s.stats {
 		t, err := time.Parse("2006-01-02", dateStr)
 		if err != nil || t.Before(cutoff) {
 			continue
 		}
-		year, week := t.ISOWeek()
-		key := fmt.Sprintf("%04d-W%02d", year, week)
+		key := keyFunc(t)
 		if _, ok := buckets[key]; !ok {
 			buckets[key] = &PeriodStats{Period: key}
 			orderedKeys = append(orderedKeys, key)
@@ -266,6 +255,22 @@ func (s *Storage) GetWeeklySummary(weeks int) []PeriodStats {
 	return result
 }
 
+// GetWeeklySummary returns stats aggregated by ISO week for the last N weeks.
+func (s *Storage) GetWeeklySummary(weeks int) []PeriodStats {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	if weeks <= 0 {
+		return nil
+	}
+
+	cutoff := time.Now().AddDate(0, 0, -weeks*7)
+	return s.aggregateByPeriod(cutoff, func(t time.Time) string {
+		year, week := t.ISOWeek()
+		return fmt.Sprintf("%04d-W%02d", year, week)
+	})
+}
+
 // GetMonthlySummary returns stats aggregated by month for the last N months.
 func (s *Storage) GetMonthlySummary(months int) []PeriodStats {
 	s.mu.RLock()
@@ -275,35 +280,11 @@ func (s *Storage) GetMonthlySummary(months int) []PeriodStats {
 		return nil
 	}
 
-	// Cutoff: first day of the month N months ago
 	now := time.Now()
-	cutoff := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.Local).AddDate(0, -(months - 1), 0)
-
-	buckets := make(map[string]*PeriodStats)
-	var orderedKeys []string
-
-	for dateStr, stat := range s.stats {
-		t, err := time.Parse("2006-01-02", dateStr)
-		if err != nil || t.Before(cutoff) {
-			continue
-		}
-		key := t.Format("2006-01")
-		if _, ok := buckets[key]; !ok {
-			buckets[key] = &PeriodStats{Period: key}
-			orderedKeys = append(orderedKeys, key)
-		}
-		buckets[key].BytesSent += stat.BytesSent
-		buckets[key].BytesRecv += stat.BytesReceived
-		buckets[key].Connections += stat.Connections
-		buckets[key].Days++
-	}
-
-	sort.Strings(orderedKeys)
-	result := make([]PeriodStats, 0, len(orderedKeys))
-	for _, k := range orderedKeys {
-		result = append(result, *buckets[k])
-	}
-	return result
+	cutoff := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.Local).AddDate(0, -(months-1), 0)
+	return s.aggregateByPeriod(cutoff, func(t time.Time) string {
+		return t.Format("2006-01")
+	})
 }
 
 // Close stops the autoSave goroutine and performs a final save.
