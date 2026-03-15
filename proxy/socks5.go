@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/subtle"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -12,8 +13,13 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/shuttle-proxy/shuttle/internal/relay"
 	"github.com/shuttle-proxy/shuttle/qos"
 )
+
+// errUDPAssociate is a sentinel error returned by handleRequest when the
+// client sends a UDP ASSOCIATE command instead of CONNECT.
+var errUDPAssociate = errors.New("udp associate")
 
 const (
 	socks5Version = 0x05
@@ -144,6 +150,10 @@ func (s *SOCKS5Server) handleConn(ctx context.Context, conn net.Conn) {
 	// 2. Read request
 	target, err := s.handleRequest(conn)
 	if err != nil {
+		if errors.Is(err, errUDPAssociate) {
+			s.handleUDPAssociate(ctx, conn)
+			return
+		}
 		s.logger.Debug("socks5 request failed", "err", err)
 		return
 	}
@@ -172,7 +182,7 @@ func (s *SOCKS5Server) handleConn(ctx context.Context, conn net.Conn) {
 	s.sendReply(conn, repSuccess, remote.LocalAddr())
 
 	// 5. Relay data
-	relay(conn, remote)
+	proxyRelay(conn, remote)
 }
 
 func (s *SOCKS5Server) handleAuth(conn net.Conn) error {
@@ -244,14 +254,32 @@ func (s *SOCKS5Server) handleRequest(conn net.Conn) (string, error) {
 	if buf[0] != socks5Version {
 		return "", fmt.Errorf("unsupported version: %d", buf[0])
 	}
+	if buf[1] == cmdUDPAssociate {
+		// Read and discard the address (required by SOCKS5 spec) before handling.
+		_, err := s.readAddress(buf[3], conn)
+		if err != nil {
+			return "", fmt.Errorf("udp associate read addr: %w", err)
+		}
+		return "", errUDPAssociate
+	}
 	if buf[1] != cmdConnect {
 		s.sendReply(conn, repCmdNotSupported, nil)
 		return "", fmt.Errorf("unsupported command: %d", buf[1])
 	}
 
-	// Read address
+	target, err := s.readAddress(buf[3], conn)
+	if err != nil {
+		s.sendReply(conn, repAddrNotSupported, nil)
+		return "", err
+	}
+	return target, nil
+}
+
+// readAddress reads a SOCKS5 address (ATYP already consumed) and port,
+// returning "host:port". The atyp byte must be provided separately.
+func (s *SOCKS5Server) readAddress(atyp byte, conn net.Conn) (string, error) {
 	var host string
-	switch buf[3] {
+	switch atyp {
 	case atypIPv4:
 		addr := make([]byte, 4)
 		if _, err := io.ReadFull(conn, addr); err != nil {
@@ -275,17 +303,13 @@ func (s *SOCKS5Server) handleRequest(conn net.Conn) (string, error) {
 		}
 		host = net.IP(addr).String()
 	default:
-		s.sendReply(conn, repAddrNotSupported, nil)
-		return "", fmt.Errorf("unsupported address type: %d", buf[3])
+		return "", fmt.Errorf("unsupported address type: %d", atyp)
 	}
-
-	// Read port
 	portBuf := make([]byte, 2)
 	if _, err := io.ReadFull(conn, portBuf); err != nil {
 		return "", err
 	}
 	port := binary.BigEndian.Uint16(portBuf)
-
 	return fmt.Sprintf("%s:%d", host, port), nil
 }
 
@@ -304,23 +328,10 @@ func (s *SOCKS5Server) sendReply(conn net.Conn, rep byte, addr net.Addr) error {
 	return err
 }
 
-// relay copies data bidirectionally between two connections.
-func relay(a, b net.Conn) {
-	done := make(chan struct{}, 2)
-	go func() {
-		if _, err := io.Copy(b, a); err != nil {
-			slog.Debug("relay copy error", "dir", "a→b", "err", err)
-		}
-		done <- struct{}{}
-	}()
-	go func() {
-		if _, err := io.Copy(a, b); err != nil {
-			slog.Debug("relay copy error", "dir", "b→a", "err", err)
-		}
-		done <- struct{}{}
-	}()
-	<-done
-	<-done
+// proxyRelay copies data bidirectionally between two connections using the
+// shared relay package, which supports zero-copy (splice) when available.
+func proxyRelay(a, b net.Conn) {
+	relay.Relay(a, b)
 }
 
 // Close shuts down the SOCKS5 server.

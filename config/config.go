@@ -15,6 +15,13 @@ const (
 	CurrentServerConfigVersion = 1
 )
 
+// YamuxConfig holds yamux multiplexer tuning parameters.
+type YamuxConfig struct {
+	MaxStreamWindowSize    uint32 `yaml:"max_stream_window_size" json:"max_stream_window_size"`       // default 256KB
+	KeepAliveInterval      int    `yaml:"keep_alive_interval" json:"keep_alive_interval"`             // seconds, default 30
+	ConnectionWriteTimeout int    `yaml:"connection_write_timeout" json:"connection_write_timeout"`    // seconds, default 10
+}
+
 // ClientConfig is the top-level client configuration.
 type ClientConfig struct {
 	Version       int                  `yaml:"version" json:"version"`
@@ -29,6 +36,7 @@ type ClientConfig struct {
 	Retry         RetryConfig          `yaml:"retry" json:"retry"`
 	Mesh          MeshConfig           `yaml:"mesh" json:"mesh"`
 	Obfs          ObfsConfig           `yaml:"obfs" json:"obfs"`
+	Yamux         YamuxConfig          `yaml:"yamux" json:"yamux"`
 	Log           LogConfig            `yaml:"log" json:"log"`
 }
 
@@ -243,6 +251,7 @@ type DNSConfig struct {
 	LeakPrevention bool      `yaml:"leak_prevention" json:"leak_prevention"` // Force all DNS through proxy
 	DomesticDoH    string    `yaml:"domestic_doh" json:"domestic_doh"`       // DoH URL for domestic queries (e.g., "https://dns.alidns.com/dns-query")
 	StripECS       bool      `yaml:"strip_ecs" json:"strip_ecs"`            // Strip EDNS Client Subnet
+	PersistentConn *bool     `yaml:"persistent_conn" json:"persistent_conn"` // Persistent HTTP/2 connections for DoH (default true)
 }
 
 // DNSRemote configures the remote DNS server.
@@ -301,6 +310,7 @@ type ServerConfig struct {
 	Reputation   ReputationConfig     `yaml:"reputation" json:"reputation"`
 	Cluster      ClusterConfig        `yaml:"cluster" json:"cluster"`
 	Debug        DebugConfig          `yaml:"debug" json:"debug"`
+	Yamux        YamuxConfig          `yaml:"yamux" json:"yamux"`
 	Log          LogConfig            `yaml:"log" json:"log"`
 }
 

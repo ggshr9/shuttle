@@ -126,6 +126,28 @@
 - [x] **Connection log rotation**: `CleanOldFiles(keepDays int)` method on connlog.Storage
 - [x] **NewServerWithHandler**: Extracted GUI API server factory for handler reuse
 
+## Phase 11: Robustness & Observability
+
+### P0 — Config Validation & Error Recovery
+- [ ] **Config deep validation**: Validate URLs, CIDRs, port ranges, DNS servers, transport mode compatibility in `ClientConfig.Validate()` / `ServerConfig.Validate()`
+- [ ] **Engine circuit breaker**: Track consecutive failures, auto-pause reconnect after N failures, emit `EventConnectionError` with backoff info
+- [ ] **Goroutine leak prevention**: Ensure all background goroutines cancel on error/shutdown paths in shuttled and engine
+
+### P1 — Test Coverage & Feature Wiring
+- [ ] **Test coverage: speedtest**: Mock HTTP server tests for latency/download/upload measurement logic
+- [ ] **Test coverage: stats**: Window calculation, sampling, edge cases
+- [ ] **Test coverage: limiter**: Token bucket allow/deny, burst, refill timing
+- [ ] **Test coverage: qos**: Port classifier, protocol detection, DSCP marking rules
+- [ ] **Obfs pipeline integration**: Wire `obfs.Shaper` into transport streams via engine config, with on/off toggle
+- [ ] **Diagnostic API endpoints**: `GET /api/debug/state`, `POST /api/config/validate`, `GET /api/system/resources`
+
+### P2 — GUI & Server Enhancements
+- [ ] **Logs page search & filter**: Log level filter dropdown, text search, export with date range
+- [ ] **Dashboard transport breakdown**: Active connections by transport type, DNS cache hit rate
+- [ ] **Routing dry-run**: "Test URL" input → shows which rule matches and action taken
+- [ ] **Server admin backup/restore**: `POST /api/server/backup`, `POST /api/server/restore` for user list + config
+- [ ] **Connection quality tracing**: Correlation IDs through proxy chain, per-connection timing/error logs
+
 ---
 
 ## Recently Completed

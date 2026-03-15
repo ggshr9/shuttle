@@ -20,6 +20,7 @@ import (
 	"github.com/shuttle-proxy/shuttle/plugin"
 	"github.com/shuttle-proxy/shuttle/proxy"
 	"github.com/shuttle-proxy/shuttle/router"
+	"github.com/shuttle-proxy/shuttle/stream"
 	"github.com/shuttle-proxy/shuttle/router/geodata"
 	"github.com/shuttle-proxy/shuttle/transport"
 	"github.com/shuttle-proxy/shuttle/qos"
@@ -62,6 +63,9 @@ type Engine struct {
 
 	// Current router (for PAC generation and conflict detection)
 	currentRouter *router.Router
+
+	// Stream-level metrics tracker
+	streamTracker *stream.StreamTracker
 
 	// Plugin chain for connection tracking, filtering, and logging
 	chain *plugin.Chain
@@ -106,6 +110,10 @@ func (e *Engine) startInternal(ctx context.Context) error {
 	e.mu.Unlock()
 
 	e.emit(Event{Type: EventLog, Message: "engine starting"})
+
+	e.mu.Lock()
+	e.streamTracker = stream.NewStreamTracker(0) // default 1000-entry ring
+	e.mu.Unlock()
 
 	sysopt.Apply(e.logger)
 
@@ -323,6 +331,11 @@ func (e *Engine) buildRouter(cfg *config.ClientConfig) (*router.Router, *router.
 		}
 	}
 
+	// PersistentConn defaults to true when not explicitly set in config.
+	persistentConn := true
+	if cfg.Routing.DNS.PersistentConn != nil {
+		persistentConn = *cfg.Routing.DNS.PersistentConn
+	}
 	dnsResolver := router.NewDNSResolver(&router.DNSConfig{
 		DomesticServer: cfg.Routing.DNS.Domestic,
 		RemoteServer:   cfg.Routing.DNS.Remote.Server,
@@ -332,6 +345,7 @@ func (e *Engine) buildRouter(cfg *config.ClientConfig) (*router.Router, *router.
 		LeakPrevention: cfg.Routing.DNS.LeakPrevention,
 		DomesticDoH:    cfg.Routing.DNS.DomesticDoH,
 		StripECS:       cfg.Routing.DNS.StripECS,
+		PersistentConn: persistentConn,
 	}, geoIPDB, e.logger)
 
 	routerCfg := &router.RouterConfig{
@@ -420,14 +434,14 @@ func (e *Engine) createDialer(cfg *config.ClientConfig, rt *router.Router, dnsRe
 				return nil, fmt.Errorf("no active selector")
 			}
 			var conn transport.Connection
-			var stream transport.Stream
+			var rawStream transport.Stream
 			err := retryWithBackoff(dialCtx, retryCfg, func() error {
 				var dialErr error
 				conn, dialErr = curSel.Dial(dialCtx, serverAddr)
 				if dialErr != nil {
 					return fmt.Errorf("proxy dial: %w", dialErr)
 				}
-				stream, dialErr = conn.OpenStream(dialCtx)
+				rawStream, dialErr = conn.OpenStream(dialCtx)
 				if dialErr != nil {
 					return fmt.Errorf("open stream: %w", dialErr)
 				}
@@ -436,12 +450,27 @@ func (e *Engine) createDialer(cfg *config.ClientConfig, rt *router.Router, dnsRe
 			if err != nil {
 				return nil, err
 			}
-			header := []byte(addr + "\n")
-			if _, err := stream.Write(header); err != nil {
-				stream.Close()
+			// Wrap with measured stream for per-stream metrics.
+			st := e.streamTracker
+			transportType := ""
+			if curSel != nil {
+				transportType = curSel.ActiveTransport()
+			}
+			metrics := st.Track(rawStream.StreamID(), addr, transportType)
+			measured := stream.NewMeasuredStream(rawStream, metrics)
+
+			// For UDP streams, prepend the UDP marker so the server uses UDP relay.
+			var header []byte
+			if network == "udp" {
+				header = []byte(proxy.UDPStreamPrefix + addr + "\n")
+			} else {
+				header = []byte(addr + "\n")
+			}
+			if _, err := measured.Write(header); err != nil {
+				measured.Close()
 				return nil, fmt.Errorf("send target: %w", err)
 			}
-			return &streamConn{stream: stream, addr: addr}, nil
+			return &streamConn{stream: measured, addr: addr}, nil
 		}
 	}
 }
@@ -631,6 +660,7 @@ func (e *Engine) stopInternal() error {
 	e.sel = nil
 	e.cancel = nil
 	e.currentRouter = nil
+	e.streamTracker = nil
 	e.mu.Unlock()
 
 	e.emit(Event{Type: EventDisconnected, Message: "engine stopped"})
@@ -703,6 +733,7 @@ func (e *Engine) Status() EngineStatus {
 	sel := e.sel
 	mc := e.meshClient
 	cfg := e.cfg
+	st := e.streamTracker
 	e.mu.RUnlock()
 
 	stats := e.metrics.Stats()
@@ -716,6 +747,18 @@ func (e *Engine) Status() EngineStatus {
 		BytesReceived: stats["bytes_received"],
 		UploadSpeed:   up,
 		DownloadSpeed: down,
+	}
+
+	// Add stream-level metrics summary.
+	if st != nil {
+		sum := st.Summary()
+		status.Streams = &StreamStats{
+			TotalStreams:    sum.TotalStreams,
+			ActiveStreams:   sum.ActiveStreams,
+			TotalBytesSent: sum.TotalBytesSent,
+			TotalBytesRecv: sum.TotalBytesRecv,
+			AvgDurationMs:  sum.AvgDuration.Milliseconds(),
+		}
 	}
 
 	if sel != nil {
@@ -770,6 +813,17 @@ func (e *Engine) Status() EngineStatus {
 	}
 
 	return status
+}
+
+// StreamStats returns an aggregate summary of per-stream metrics.
+func (e *Engine) StreamStats() stream.StreamSummary {
+	e.mu.RLock()
+	st := e.streamTracker
+	e.mu.RUnlock()
+	if st == nil {
+		return stream.StreamSummary{}
+	}
+	return st.Summary()
 }
 
 // Config returns a deep copy of the current config.
@@ -943,3 +997,21 @@ func (c *streamConn) RemoteAddr() net.Addr                { return &net.TCPAddr{
 func (c *streamConn) SetDeadline(t time.Time) error       { return nil }
 func (c *streamConn) SetReadDeadline(t time.Time) error   { return nil }
 func (c *streamConn) SetWriteDeadline(t time.Time) error  { return nil }
+
+// ReadFrom delegates to the underlying stream's ReadFrom if available,
+// preserving zero-copy (splice) capability on Linux.
+func (c *streamConn) ReadFrom(r io.Reader) (int64, error) {
+	if rf, ok := c.stream.(io.ReaderFrom); ok {
+		return rf.ReadFrom(r)
+	}
+	return io.Copy(struct{ io.Writer }{c.stream}, r)
+}
+
+// WriteTo delegates to the underlying stream's WriteTo if available,
+// preserving zero-copy (splice) capability on Linux.
+func (c *streamConn) WriteTo(w io.Writer) (int64, error) {
+	if wt, ok := c.stream.(io.WriterTo); ok {
+		return wt.WriteTo(w)
+	}
+	return io.Copy(w, struct{ io.Reader }{c.stream})
+}

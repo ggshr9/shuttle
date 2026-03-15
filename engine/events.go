@@ -14,6 +14,7 @@ const (
 	EventError                             // Non-fatal error
 	EventConnection                        // Connection opened/closed
 	EventNetworkChange                     // Network interface change detected
+	EventConnectionError                   // Transport connection failed (circuit breaker)
 )
 
 var eventTypeNames = [...]string{
@@ -25,6 +26,7 @@ var eventTypeNames = [...]string{
 	EventError:            "error",
 	EventConnection:       "connection",
 	EventNetworkChange:    "network_change",
+	EventConnectionError:  "connection_error",
 }
 
 func (t EventType) String() string {
@@ -56,6 +58,9 @@ type Event struct {
 
 	// Error fields
 	Error string `json:"error,omitempty"`
+
+	// ConnectionError fields (EventConnectionError)
+	BackoffMs int64 `json:"backoff_ms,omitempty"` // Backoff duration in ms before next retry
 
 	// Connection fields (EventConnection)
 	ConnID      string `json:"conn_id,omitempty"`      // Unique connection identifier
@@ -107,6 +112,16 @@ type EngineStatus struct {
 	Transports     []TransportInfo `json:"transports"`
 	MultipathPaths []PathInfo      `json:"multipath_paths,omitempty"`
 	Mesh           *MeshStatus     `json:"mesh,omitempty"`
+	Streams        *StreamStats    `json:"streams,omitempty"`
+}
+
+// StreamStats summarises per-stream metrics for the API.
+type StreamStats struct {
+	TotalStreams    int64 `json:"total_streams"`
+	ActiveStreams   int64 `json:"active_streams"`
+	TotalBytesSent int64 `json:"total_bytes_sent"`
+	TotalBytesRecv int64 `json:"total_bytes_recv"`
+	AvgDurationMs  int64 `json:"avg_duration_ms"`
 }
 
 // MeshStatus describes the mesh VPN connection status.

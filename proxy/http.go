@@ -130,7 +130,7 @@ func (s *HTTPServer) handleConnect(ctx context.Context, conn net.Conn, req *http
 	defer remote.Close()
 
 	fmt.Fprintf(conn, "HTTP/1.1 200 Connection Established\r\n\r\n")
-	relay(conn, remote)
+	proxyRelay(conn, remote)
 }
 
 func (s *HTTPServer) handleHTTP(ctx context.Context, conn net.Conn, req *http.Request) {

@@ -26,6 +26,7 @@ type DNSConfig struct {
 	LeakPrevention bool   // Force all DNS through DoH, never fall back to system resolver
 	DomesticDoH    string // DoH URL for domestic queries (e.g., "https://dns.alidns.com/dns-query")
 	StripECS       bool   // Strip EDNS Client Subnet from DoH queries
+	PersistentConn bool   // Use persistent HTTP/2 connections with query deduplication
 }
 
 // DNSResolver implements split DNS with anti-pollution.
@@ -34,7 +35,8 @@ type DNSResolver struct {
 	cache      *dnsCache
 	geoIP      *GeoIPDB
 	logger     *slog.Logger
-	httpClient *http.Client // injectable HTTP client for DoH (nil = default)
+	httpClient *http.Client       // injectable HTTP client for DoH (nil = default)
+	mux        *DNSMultiplexer    // persistent connection pool + dedup (nil when disabled)
 }
 
 type dnsCache struct {
@@ -67,6 +69,10 @@ func NewDNSResolver(cfg *DNSConfig, geoIP *GeoIPDB, logger *slog.Logger) *DNSRes
 	if logger == nil {
 		logger = slog.Default()
 	}
+	var mux *DNSMultiplexer
+	if cfg.PersistentConn {
+		mux = NewDNSMultiplexer()
+	}
 	return &DNSResolver{
 		config: cfg,
 		cache: &dnsCache{
@@ -75,6 +81,14 @@ func NewDNSResolver(cfg *DNSConfig, geoIP *GeoIPDB, logger *slog.Logger) *DNSRes
 		},
 		geoIP:  geoIP,
 		logger: logger,
+		mux:    mux,
+	}
+}
+
+// Close releases resources held by the resolver.
+func (r *DNSResolver) Close() {
+	if r.mux != nil {
+		r.mux.Close()
 	}
 }
 
@@ -271,6 +285,18 @@ func (r *DNSResolver) buildDoHURL(server, domain string) string {
 // resolveDoH performs a DNS-over-HTTPS query using the JSON API against the given server URL.
 // This is the shared implementation used by both remote and domestic DoH resolution.
 func (r *DNSResolver) resolveDoH(ctx context.Context, server, domain string) ([]net.IP, error) {
+	// When the multiplexer is active and no injected httpClient is set, use it
+	// for persistent connections and query deduplication.
+	if r.mux != nil && r.httpClient == nil {
+		return r.mux.Query(ctx, server, domain, func(ctx context.Context, client *http.Client) ([]net.IP, error) {
+			return r.doDoHRequest(ctx, server, domain, client)
+		})
+	}
+	return r.doDoHRequest(ctx, server, domain, r.httpClient)
+}
+
+// doDoHRequest executes a single DoH HTTP request and parses the JSON response.
+func (r *DNSResolver) doDoHRequest(ctx context.Context, server, domain string, client *http.Client) ([]net.IP, error) {
 	reqURL := r.buildDoHURL(server, domain)
 	req, err := http.NewRequestWithContext(ctx, "GET", reqURL, nil)
 	if err != nil {
@@ -278,7 +304,6 @@ func (r *DNSResolver) resolveDoH(ctx context.Context, server, domain string) ([]
 	}
 	req.Header.Set("Accept", "application/dns-json")
 
-	client := r.httpClient
 	if client == nil {
 		client = &http.Client{
 			Timeout: 5 * time.Second,

@@ -19,8 +19,9 @@ import (
 	"time"
 
 	"github.com/shuttle-proxy/shuttle/config"
-	"github.com/shuttle-proxy/shuttle/internal/pool"
 	"github.com/shuttle-proxy/shuttle/congestion"
+	"github.com/shuttle-proxy/shuttle/internal/relay"
+	"github.com/shuttle-proxy/shuttle/proxy"
 	"github.com/shuttle-proxy/shuttle/crypto"
 	"github.com/shuttle-proxy/shuttle/internal/logutil"
 	"github.com/shuttle-proxy/shuttle/internal/qrterm"
@@ -802,11 +803,24 @@ func handleStream(ctx context.Context, stream transport.Stream, remoteIP string,
 				dl.SetReadDeadline(time.Time{})
 			}
 
-			logger.Debug("proxying", "target", target)
+			// Check for UDP prefix: "UDP:target" → UDP relay mode.
+			isUDP := false
+			if strings.HasPrefix(target, proxy.UDPStreamPrefix) {
+				target = strings.TrimPrefix(target, proxy.UDPStreamPrefix)
+				isUDP = true
+			}
+
+			logger.Debug("proxying", "target", target, "udp", isUDP)
 
 			// SSRF protection: block connections to internal/private networks
 			if isBlockedTarget(target) {
 				logger.Warn("blocked SSRF attempt to internal target", "target", target, "ip", remoteIP)
+				return
+			}
+
+			if isUDP {
+				// UDP relay mode: read framed datagrams from stream, send as UDP.
+				handleUDPRelay(stream, target, residual, logger)
 				return
 			}
 
@@ -840,7 +854,7 @@ func handleStream(ctx context.Context, stream transport.Stream, remoteIP string,
 
 			// Relay bidirectionally.
 			startTime := time.Now()
-			relay(rw, remote)
+			serverRelay(rw, remote)
 
 			// Record audit entry after relay completes.
 			if auditLog != nil {
@@ -1000,6 +1014,76 @@ func (fw *meshFrameWriter) Close() error {
 	return fw.stream.Close()
 }
 
+// handleUDPRelay relays UDP datagrams between a transport stream and a remote
+// UDP endpoint. It reads framed datagrams from the stream, sends them via UDP,
+// and sends responses back as framed datagrams on the stream.
+func handleUDPRelay(stream io.ReadWriteCloser, target string, residual []byte, logger *slog.Logger) {
+	udpAddr, err := net.ResolveUDPAddr("udp", target)
+	if err != nil {
+		logger.Debug("udp relay: resolve failed", "target", target, "err", err)
+		return
+	}
+	udpConn, err := net.DialUDP("udp", nil, udpAddr)
+	if err != nil {
+		logger.Debug("udp relay: dial failed", "target", target, "err", err)
+		return
+	}
+	defer udpConn.Close()
+
+	// If there are residual bytes from header parsing, prepend them for frame reading.
+	var reader io.Reader = stream
+	if len(residual) > 0 {
+		reader = io.MultiReader(bytes.NewReader(residual), stream)
+	}
+
+	// Stream → UDP: read frames from stream, send as UDP datagrams.
+	done := make(chan struct{}, 2)
+	go func() {
+		defer func() { done <- struct{}{} }()
+		for {
+			_, payload, err := proxy.ReadUDPFrame(reader)
+			if err != nil {
+				if err != io.EOF {
+					logger.Debug("udp relay: read frame error", "err", err)
+				}
+				return
+			}
+			if _, err := udpConn.Write(payload); err != nil {
+				logger.Debug("udp relay: udp write error", "err", err)
+				return
+			}
+		}
+	}()
+
+	// UDP → Stream: read UDP responses, write as frames back on stream.
+	go func() {
+		defer func() { done <- struct{}{} }()
+		buf := make([]byte, 65535)
+		for {
+			udpConn.SetReadDeadline(time.Now().Add(5 * time.Second))
+			n, err := udpConn.Read(buf)
+			if err != nil {
+				if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
+					// Idle timeout — no more responses expected.
+					return
+				}
+				logger.Debug("udp relay: udp read error", "err", err)
+				return
+			}
+			if err := proxy.WriteUDPFrame(stream, target, buf[:n]); err != nil {
+				logger.Debug("udp relay: write frame error", "err", err)
+				return
+			}
+		}
+	}()
+
+	<-done
+	// Once one direction is done, close everything and wait for the other.
+	udpConn.Close()
+	stream.Close()
+	<-done
+}
+
 func findNewline(b []byte) int {
 	return bytes.IndexByte(b, '\n')
 }
@@ -1088,33 +1172,26 @@ func isBlockedIP(ip net.IP) bool {
 	return false
 }
 
-func relay(a io.ReadWriter, b io.ReadWriter) {
-	done := make(chan struct{}, 2)
-	go func() {
-		buf := pool.Get(32 * 1024) // 32KB relay buffer from pool
-		_, err := io.CopyBuffer(b, a, buf)
-		pool.Put(buf)
-		if err != nil {
-			slog.Debug("relay a→b finished", "err", err)
-		}
-		// Close write side if possible to signal EOF
-		if cw, ok := b.(interface{ CloseWrite() error }); ok {
-			_ = cw.CloseWrite()
-		}
-		done <- struct{}{}
-	}()
-	go func() {
-		buf := pool.Get(32 * 1024) // 32KB relay buffer from pool
-		_, err := io.CopyBuffer(a, b, buf)
-		pool.Put(buf)
-		if err != nil {
-			slog.Debug("relay b→a finished", "err", err)
-		}
-		if cw, ok := a.(interface{ CloseWrite() error }); ok {
-			_ = cw.CloseWrite()
-		}
-		done <- struct{}{}
-	}()
-	<-done
-	<-done
+// serverRelay copies data bidirectionally using the shared relay package,
+// which supports zero-copy (splice) when both sides are raw TCP connections.
+// It wraps io.ReadWriter arguments into io.ReadWriteCloser when necessary.
+func serverRelay(a io.ReadWriter, b io.ReadWriter) {
+	rwcA := asReadWriteCloser(a)
+	rwcB := asReadWriteCloser(b)
+	relay.Relay(rwcA, rwcB)
 }
+
+// asReadWriteCloser returns the value unchanged if it already implements
+// io.ReadWriteCloser, otherwise wraps it with a no-op Close.
+func asReadWriteCloser(rw io.ReadWriter) io.ReadWriteCloser {
+	if rwc, ok := rw.(io.ReadWriteCloser); ok {
+		return rwc
+	}
+	return readWriteNopCloser{rw}
+}
+
+type readWriteNopCloser struct {
+	io.ReadWriter
+}
+
+func (readWriteNopCloser) Close() error { return nil }
