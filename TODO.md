@@ -142,7 +142,7 @@
 - [x] **Diagnostic API endpoints**: `GET /api/debug/state`, `POST /api/config/validate`, `GET /api/system/resources`
 
 ### P2 — GUI & Server Enhancements
-- [ ] **Logs page search & filter**: Log level filter dropdown, text search, export with date range
+- [x] **Logs page search & filter**: Log level filter toggles, text search, protocol/action filters, reactive derived filtering
 - [x] **Dashboard transport breakdown**: `GET /api/transports/stats` with per-transport stream grouping
 - [x] **Routing dry-run**: `POST /api/routing/test` with `Router.DryRun()` (backend API complete)
 - [x] **Server admin backup/restore**: `GET /api/backup` + `POST /api/restore` with user list & redacted config
