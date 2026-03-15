@@ -5,9 +5,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math"
 	"net"
 	"net/http"
 	"net/url"
+	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -25,6 +27,9 @@ import (
 	"github.com/shuttle-proxy/shuttle/sysproxy"
 	"github.com/shuttle-proxy/shuttle/update"
 )
+
+// apiStartTime records when the API package was initialised, used for uptime calculation.
+var apiStartTime = time.Now()
 
 // Handler creates the HTTP handler for the shuttle API.
 func Handler(eng *engine.Engine) http.Handler {
@@ -1148,6 +1153,52 @@ func handlerWithAllOptions(eng *engine.Engine, subMgr *subscription.Manager, sta
 			"addresses": ips,
 			"socks5":    cfg.Proxy.SOCKS5.Listen,
 			"http":      cfg.Proxy.HTTP.Listen,
+		})
+	})
+
+	// Diagnostic: debug state snapshot
+	mux.HandleFunc("GET /api/debug/state", func(w http.ResponseWriter, r *http.Request) {
+		status := eng.Status()
+		writeJSON(w, map[string]any{
+			"engine_state":   status.State,
+			"circuit_breaker": status.CircuitState,
+			"streams":        status.Streams,
+			"transport":      status.Transport,
+			"uptime_seconds": int64(time.Since(apiStartTime).Seconds()),
+			"goroutines":     runtime.NumGoroutine(),
+		})
+	})
+
+	// Diagnostic: validate a client config without applying it
+	mux.HandleFunc("POST /api/config/validate", func(w http.ResponseWriter, r *http.Request) {
+		var cfg config.ClientConfig
+		if err := decodeJSON(r, &cfg); err != nil {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		r.Body.Close()
+
+		var errs []string
+		if err := cfg.Validate(); err != nil {
+			errs = append(errs, err.Error())
+		}
+		writeJSON(w, map[string]any{
+			"valid":  len(errs) == 0,
+			"errors": errs,
+		})
+	})
+
+	// Diagnostic: system resource usage
+	mux.HandleFunc("GET /api/system/resources", func(w http.ResponseWriter, r *http.Request) {
+		var m runtime.MemStats
+		runtime.ReadMemStats(&m)
+		writeJSON(w, map[string]any{
+			"goroutines":     runtime.NumGoroutine(),
+			"mem_alloc_mb":   math.Round(float64(m.Alloc)/1024/1024*100) / 100,
+			"mem_sys_mb":     math.Round(float64(m.Sys)/1024/1024*100) / 100,
+			"mem_gc_cycles":  m.NumGC,
+			"num_cpu":        runtime.NumCPU(),
+			"uptime_seconds": int64(time.Since(apiStartTime).Seconds()),
 		})
 	})
 

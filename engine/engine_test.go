@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/shuttle-proxy/shuttle/config"
+	"github.com/shuttle-proxy/shuttle/obfs"
 )
 
 // mockStream implements transport.Stream for testing streamConn.
@@ -607,3 +608,146 @@ func TestEmitSetsTimestamp(t *testing.T) {
 		t.Errorf("Timestamp %v not between %v and %v", ev.Timestamp, before, after)
 	}
 }
+
+// ---------------------------------------------------------------------------
+// TestBuildShaperConfig
+// ---------------------------------------------------------------------------
+
+func TestBuildShaperConfig(t *testing.T) {
+	t.Run("disabled when ShapingEnabled is false", func(t *testing.T) {
+		cfg := config.ObfsConfig{ShapingEnabled: false}
+		sc := buildShaperConfig(cfg)
+		if sc.Enabled {
+			t.Error("expected Enabled=false when ShapingEnabled is false")
+		}
+	})
+
+	t.Run("enabled with defaults", func(t *testing.T) {
+		cfg := config.ObfsConfig{ShapingEnabled: true}
+		sc := buildShaperConfig(cfg)
+		if !sc.Enabled {
+			t.Fatal("expected Enabled=true")
+		}
+		// Should use DefaultShaperConfig values
+		if sc.ChunkMinSize != 64 {
+			t.Errorf("ChunkMinSize = %d, want 64", sc.ChunkMinSize)
+		}
+		if sc.ChunkMaxSize != 1400 {
+			t.Errorf("ChunkMaxSize = %d, want 1400", sc.ChunkMaxSize)
+		}
+		if sc.MaxDelay != 50*time.Millisecond {
+			t.Errorf("MaxDelay = %v, want 50ms", sc.MaxDelay)
+		}
+	})
+
+	t.Run("custom delays", func(t *testing.T) {
+		cfg := config.ObfsConfig{
+			ShapingEnabled: true,
+			MinDelay:       "5ms",
+			MaxDelay:       "100ms",
+		}
+		sc := buildShaperConfig(cfg)
+		if sc.MinDelay != 5*time.Millisecond {
+			t.Errorf("MinDelay = %v, want 5ms", sc.MinDelay)
+		}
+		if sc.MaxDelay != 100*time.Millisecond {
+			t.Errorf("MaxDelay = %v, want 100ms", sc.MaxDelay)
+		}
+	})
+
+	t.Run("custom chunk size large", func(t *testing.T) {
+		cfg := config.ObfsConfig{
+			ShapingEnabled: true,
+			ChunkSize:      1024,
+		}
+		sc := buildShaperConfig(cfg)
+		if sc.ChunkMinSize != 1024 {
+			t.Errorf("ChunkMinSize = %d, want 1024", sc.ChunkMinSize)
+		}
+		if sc.ChunkMaxSize != 2048 {
+			t.Errorf("ChunkMaxSize = %d, want 2048 (2x min)", sc.ChunkMaxSize)
+		}
+	})
+
+	t.Run("small chunk size uses 1400 max", func(t *testing.T) {
+		cfg := config.ObfsConfig{
+			ShapingEnabled: true,
+			ChunkSize:      100,
+		}
+		sc := buildShaperConfig(cfg)
+		if sc.ChunkMaxSize != 1400 {
+			t.Errorf("ChunkMaxSize = %d, want 1400 (floor)", sc.ChunkMaxSize)
+		}
+	})
+
+	t.Run("invalid delay strings ignored", func(t *testing.T) {
+		cfg := config.ObfsConfig{
+			ShapingEnabled: true,
+			MinDelay:       "notaduration",
+			MaxDelay:       "alsobad",
+		}
+		sc := buildShaperConfig(cfg)
+		if !sc.Enabled {
+			t.Fatal("should still be enabled despite bad durations")
+		}
+		// Should fall back to default values
+		if sc.MinDelay != 0 {
+			t.Errorf("MinDelay = %v, want 0 (default)", sc.MinDelay)
+		}
+		if sc.MaxDelay != 50*time.Millisecond {
+			t.Errorf("MaxDelay = %v, want 50ms (default)", sc.MaxDelay)
+		}
+	})
+}
+
+// ---------------------------------------------------------------------------
+// TestSapedConnWriteGoesThruShaper
+// ---------------------------------------------------------------------------
+
+func TestSapedConnWriteGoesThruShaper(t *testing.T) {
+	ms := newMockStream(nil)
+	sc := &streamConn{stream: ms, addr: "example.com:443"}
+
+	// Create a shaper with no delay so the test is fast, but chunk splitting
+	// is active (min=2, max=4), proving writes go through the Shaper.
+	cfg := config.ObfsConfig{
+		ShapingEnabled: true,
+		MinDelay:       "0s",
+		MaxDelay:       "0s",
+		ChunkSize:      2,
+	}
+	shaperCfg := buildShaperConfig(cfg)
+
+	shaper := obfs.NewShaper(ms, shaperCfg)
+	shaped := &shapedConn{streamConn: sc, shaper: shaper}
+
+	data := []byte("ABCDEFGH")
+	n, err := shaped.Write(data)
+	if err != nil {
+		t.Fatalf("Write error: %v", err)
+	}
+	if n != len(data) {
+		t.Errorf("Write returned %d, want %d", n, len(data))
+	}
+
+	// The written bytes should appear in the underlying buffer.
+	if ms.String() != "ABCDEFGH" {
+		t.Errorf("underlying buffer = %q, want %q", ms.String(), "ABCDEFGH")
+	}
+
+	// Read passes through unchanged.
+	ms2 := newMockStream([]byte("response"))
+	sc2 := &streamConn{stream: ms2, addr: "example.com:443"}
+	shaper2 := obfs.NewShaper(ms2, shaperCfg)
+	shaped2 := &shapedConn{streamConn: sc2, shaper: shaper2}
+
+	buf := make([]byte, 8)
+	rn, err := shaped2.Read(buf)
+	if err != nil {
+		t.Fatalf("Read error: %v", err)
+	}
+	if string(buf[:rn]) != "response" {
+		t.Errorf("Read = %q, want %q", string(buf[:rn]), "response")
+	}
+}
+

@@ -655,6 +655,105 @@ func TestAPIResponseContentType(t *testing.T) {
 	}
 }
 
+func TestAPIDebugState(t *testing.T) {
+	h, _, _ := newTestHandler()
+
+	rr := doRequest(h, "GET", "/api/debug/state", "")
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rr.Code)
+	}
+
+	var result map[string]interface{}
+	if err := json.Unmarshal(rr.Body.Bytes(), &result); err != nil {
+		t.Fatalf("invalid JSON: %v", err)
+	}
+
+	for _, key := range []string{"engine_state", "circuit_breaker", "transport", "uptime_seconds", "goroutines"} {
+		if _, ok := result[key]; !ok {
+			t.Errorf("missing %q field in debug state", key)
+		}
+	}
+
+	if state, ok := result["engine_state"].(string); !ok || state != "stopped" {
+		t.Fatalf("expected engine_state 'stopped', got %v", result["engine_state"])
+	}
+	if g, ok := result["goroutines"].(float64); !ok || g <= 0 {
+		t.Fatalf("expected goroutines > 0, got %v", result["goroutines"])
+	}
+}
+
+func TestAPIConfigValidate(t *testing.T) {
+	h, _, _ := newTestHandler()
+
+	// Valid config — disable transports that require additional fields (domain, keys)
+	validCfg := config.DefaultClientConfig()
+	validCfg.Transport.CDN.Enabled = false
+	validCfg.Transport.Reality.Enabled = false
+	body, _ := json.Marshal(validCfg)
+	rr := doRequest(h, "POST", "/api/config/validate", string(body))
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rr.Code)
+	}
+	var valid map[string]interface{}
+	if err := json.Unmarshal(rr.Body.Bytes(), &valid); err != nil {
+		t.Fatalf("invalid JSON: %v", err)
+	}
+	if v, ok := valid["valid"].(bool); !ok || !v {
+		t.Fatalf("expected valid:true for default config, got %v; errors: %v", valid["valid"], valid["errors"])
+	}
+	errs, _ := valid["errors"].([]interface{})
+	if len(errs) != 0 {
+		t.Fatalf("expected 0 errors for valid config, got %d: %v", len(errs), errs)
+	}
+
+	// Invalid config — bad transport preference
+	invalidCfg := config.DefaultClientConfig()
+	invalidCfg.Transport.Preferred = "invalid_transport"
+	body, _ = json.Marshal(invalidCfg)
+	rr = doRequest(h, "POST", "/api/config/validate", string(body))
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rr.Code)
+	}
+	var invalid map[string]interface{}
+	if err := json.Unmarshal(rr.Body.Bytes(), &invalid); err != nil {
+		t.Fatalf("invalid JSON: %v", err)
+	}
+	if v, ok := invalid["valid"].(bool); !ok || v {
+		t.Fatalf("expected valid:false for invalid config, got %v", invalid["valid"])
+	}
+	errs, _ = invalid["errors"].([]interface{})
+	if len(errs) == 0 {
+		t.Fatal("expected at least 1 error for invalid config")
+	}
+}
+
+func TestAPISystemResources(t *testing.T) {
+	h, _, _ := newTestHandler()
+
+	rr := doRequest(h, "GET", "/api/system/resources", "")
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rr.Code)
+	}
+
+	var result map[string]interface{}
+	if err := json.Unmarshal(rr.Body.Bytes(), &result); err != nil {
+		t.Fatalf("invalid JSON: %v", err)
+	}
+
+	for _, key := range []string{"goroutines", "mem_alloc_mb", "mem_sys_mb", "mem_gc_cycles", "num_cpu", "uptime_seconds"} {
+		if _, ok := result[key]; !ok {
+			t.Errorf("missing %q field in system resources", key)
+		}
+	}
+
+	if g, ok := result["goroutines"].(float64); !ok || g <= 0 {
+		t.Fatalf("expected goroutines > 0, got %v", result["goroutines"])
+	}
+	if cpu, ok := result["num_cpu"].(float64); !ok || cpu <= 0 {
+		t.Fatalf("expected num_cpu > 0, got %v", result["num_cpu"])
+	}
+}
+
 // TestAPIWriteJSON_Encoding verifies the writeJSON helper produces valid JSON
 // by checking a known endpoint's output is parseable.
 func TestAPIWriteJSON_Encoding(t *testing.T) {

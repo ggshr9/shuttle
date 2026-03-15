@@ -13,6 +13,7 @@ import (
 	"github.com/shuttle-proxy/shuttle/config"
 	"github.com/shuttle-proxy/shuttle/mesh"
 	"github.com/shuttle-proxy/shuttle/congestion"
+	"github.com/shuttle-proxy/shuttle/obfs"
 	"github.com/shuttle-proxy/shuttle/internal/logutil"
 	"github.com/shuttle-proxy/shuttle/internal/netmon"
 	"github.com/shuttle-proxy/shuttle/internal/procnet"
@@ -422,6 +423,7 @@ func buildRetryConfig(cfg config.RetryConfig) RetryConfig {
 func (e *Engine) createDialer(cfg *config.ClientConfig, rt *router.Router, dnsResolver *router.DNSResolver) func(context.Context, string, string) (net.Conn, error) {
 	serverAddr := cfg.Server.Addr
 	retryCfg := buildRetryConfig(cfg.Retry)
+	shaperCfg := buildShaperConfig(cfg.Obfs)
 	return func(dialCtx context.Context, network, addr string) (net.Conn, error) {
 		host, port, _ := net.SplitHostPort(addr)
 
@@ -500,7 +502,12 @@ func (e *Engine) createDialer(cfg *config.ClientConfig, rt *router.Router, dnsRe
 				measured.Close()
 				return nil, fmt.Errorf("send target: %w", err)
 			}
-			return &streamConn{stream: measured, addr: addr}, nil
+			sc := &streamConn{stream: measured, addr: addr}
+			if shaperCfg.Enabled {
+				shaper := obfs.NewShaper(measured, shaperCfg)
+				return &shapedConn{streamConn: sc, shaper: shaper}, nil
+			}
+			return sc, nil
 		}
 	}
 }
@@ -1033,6 +1040,49 @@ func (e *Engine) wrapDialer(
 		}
 		return &chainConn{Conn: wrapped, chain: chain}, nil
 	}
+}
+
+// buildShaperConfig converts config.ObfsConfig into an obfs.ShaperConfig.
+// Returns a zero-value (Enabled=false) config if shaping is disabled or parsing fails.
+func buildShaperConfig(cfg config.ObfsConfig) obfs.ShaperConfig {
+	if !cfg.ShapingEnabled {
+		return obfs.ShaperConfig{}
+	}
+	sc := obfs.DefaultShaperConfig()
+	sc.Enabled = true
+	if cfg.MinDelay != "" {
+		if d, err := time.ParseDuration(cfg.MinDelay); err == nil {
+			sc.MinDelay = d
+		}
+	}
+	if cfg.MaxDelay != "" {
+		if d, err := time.ParseDuration(cfg.MaxDelay); err == nil {
+			sc.MaxDelay = d
+		}
+	}
+	if cfg.ChunkSize > 0 {
+		sc.ChunkMinSize = cfg.ChunkSize
+		// Set max to 2x min or at least 1400, whichever is larger
+		sc.ChunkMaxSize = cfg.ChunkSize * 2
+		if sc.ChunkMaxSize < 1400 {
+			sc.ChunkMaxSize = 1400
+		}
+	}
+	return sc
+}
+
+// shapedConn wraps a streamConn so that writes go through an obfs.Shaper
+// (randomized chunking and inter-packet delays) while reads pass through unchanged.
+type shapedConn struct {
+	*streamConn
+	shaper *obfs.Shaper
+}
+
+func (c *shapedConn) Write(b []byte) (int, error) { return c.shaper.Write(b) }
+
+// ReadFrom disables zero-copy so that writes always go through the Shaper.
+func (c *shapedConn) ReadFrom(r io.Reader) (int64, error) {
+	return io.Copy(struct{ io.Writer }{c}, r)
 }
 
 // streamConn wraps a transport.Stream as a net.Conn.

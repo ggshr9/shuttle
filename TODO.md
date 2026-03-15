@@ -129,17 +129,17 @@
 ## Phase 11: Robustness & Observability
 
 ### P0 — Config Validation & Error Recovery
-- [ ] **Config deep validation**: Validate URLs, CIDRs, port ranges, DNS servers, transport mode compatibility in `ClientConfig.Validate()` / `ServerConfig.Validate()`
-- [ ] **Engine circuit breaker**: Track consecutive failures, auto-pause reconnect after N failures, emit `EventConnectionError` with backoff info
-- [ ] **Goroutine leak prevention**: Ensure all background goroutines cancel on error/shutdown paths in shuttled and engine
+- [x] **Config deep validation**: Validate URLs, CIDRs, port ranges, DNS servers, transport mode compatibility in `ClientConfig.Validate()` / `ServerConfig.Validate()`
+- [x] **Engine circuit breaker**: Track consecutive failures, auto-pause reconnect after N failures, emit `EventConnectionError` with backoff info
+- [x] **Goroutine leak prevention**: Ensure all background goroutines cancel on error/shutdown paths in shuttled and engine
 
 ### P1 — Test Coverage & Feature Wiring
-- [ ] **Test coverage: speedtest**: Mock HTTP server tests for latency/download/upload measurement logic
-- [ ] **Test coverage: stats**: Window calculation, sampling, edge cases
-- [ ] **Test coverage: limiter**: Token bucket allow/deny, burst, refill timing
-- [ ] **Test coverage: qos**: Port classifier, protocol detection, DSCP marking rules
-- [ ] **Obfs pipeline integration**: Wire `obfs.Shaper` into transport streams via engine config, with on/off toggle
-- [ ] **Diagnostic API endpoints**: `GET /api/debug/state`, `POST /api/config/validate`, `GET /api/system/resources`
+- [x] **Test coverage: speedtest**: Mock HTTP server tests for latency/download/upload measurement logic
+- [x] **Test coverage: stats**: Window calculation, sampling, edge cases
+- [x] **Test coverage: limiter**: Token bucket allow/deny, burst, refill timing
+- [x] **Test coverage: qos**: Port classifier, protocol detection, DSCP marking rules
+- [x] **Obfs pipeline integration**: Wire `obfs.Shaper` into transport streams via engine config, with on/off toggle
+- [x] **Diagnostic API endpoints**: `GET /api/debug/state`, `POST /api/config/validate`, `GET /api/system/resources`
 
 ### P2 — GUI & Server Enhancements
 - [ ] **Logs page search & filter**: Log level filter dropdown, text search, export with date range
