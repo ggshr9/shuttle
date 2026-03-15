@@ -127,8 +127,9 @@ type ServerEndpoint struct {
 
 // TransportConfig configures available transports.
 type TransportConfig struct {
-	Preferred         string        `yaml:"preferred" json:"preferred"`                   // "h3", "reality", "cdn", "webrtc", "auto", "multipath"
-	MultipathSchedule string        `yaml:"multipath_schedule" json:"multipath_schedule"` // "weighted" (default), "min-latency", "load-balance"
+	Preferred         string        `yaml:"preferred" json:"preferred"`                                     // "h3", "reality", "cdn", "webrtc", "auto", "multipath"
+	MultipathSchedule string        `yaml:"multipath_schedule" json:"multipath_schedule"`                   // "weighted" (default), "min-latency", "load-balance"
+	WarmUpConns       int           `yaml:"warm_up_conns,omitempty" json:"warm_up_conns,omitempty"`         // pre-dial N connections on startup to eliminate cold-start latency
 	H3                H3Config      `yaml:"h3" json:"h3"`
 	Reality           RealityConfig `yaml:"reality" json:"reality"`
 	CDN               CDNConfig     `yaml:"cdn" json:"cdn"`
@@ -680,6 +681,9 @@ func (c *ServerConfig) Validate() error {
 }
 
 // LoadClientConfig loads client config from a YAML file.
+// If the keystore is initialized, any "ENC:"-prefixed sensitive fields
+// are automatically decrypted. Plaintext values pass through unchanged
+// for backward compatibility.
 func LoadClientConfig(path string) (*ClientConfig, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -693,13 +697,43 @@ func LoadClientConfig(path string) (*ClientConfig, error) {
 	if cfg.Version == 0 {
 		cfg.Version = CurrentClientConfigVersion
 	}
+	// Auto-decrypt sensitive fields if keystore is available.
+	if key, err := GetKey(); err == nil {
+		if err := decryptSensitiveFields(&cfg, key); err != nil {
+			return nil, fmt.Errorf("decrypt config: %w", err)
+		}
+	}
 	if err := cfg.Validate(); err != nil {
 		return nil, fmt.Errorf("config validation: %w", err)
 	}
 	return &cfg, nil
 }
 
+// SaveClientConfig writes a client config to a YAML file.
+// If the keystore is initialized, sensitive fields are encrypted before
+// writing. The in-memory config is not modified.
+func SaveClientConfig(path string, cfg *ClientConfig) error {
+	// Work on a copy so we don't mutate the caller's config.
+	cp := cfg.DeepCopy()
+
+	// Encrypt sensitive fields if keystore is available.
+	if key, err := GetKey(); err == nil {
+		if err := encryptSensitiveFields(cp, key); err != nil {
+			return fmt.Errorf("encrypt config: %w", err)
+		}
+	}
+
+	data, err := yaml.Marshal(cp)
+	if err != nil {
+		return fmt.Errorf("marshal config: %w", err)
+	}
+	return os.WriteFile(path, data, 0600)
+}
+
 // LoadServerConfig loads server config from a YAML file.
+// If the keystore is initialized, any "ENC:"-prefixed sensitive fields
+// are automatically decrypted. Plaintext values pass through unchanged
+// for backward compatibility.
 func LoadServerConfig(path string) (*ServerConfig, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -712,6 +746,12 @@ func LoadServerConfig(path string) (*ServerConfig, error) {
 	applyServerDefaults(&cfg)
 	if cfg.Version == 0 {
 		cfg.Version = CurrentServerConfigVersion
+	}
+	// Auto-decrypt sensitive fields if keystore is available.
+	if key, err := GetKey(); err == nil {
+		if err := decryptServerSensitiveFields(&cfg, key); err != nil {
+			return nil, fmt.Errorf("decrypt config: %w", err)
+		}
 	}
 	if err := cfg.Validate(); err != nil {
 		return nil, fmt.Errorf("config validation: %w", err)
@@ -922,8 +962,29 @@ func DefaultServerConfig() *ServerConfig {
 }
 
 // SaveServerConfig writes a server config to a YAML file.
+// If the keystore is initialized, sensitive fields (password, private key,
+// admin token, cluster secret) are encrypted before writing. The in-memory
+// config is not modified.
+//
+// TODO: Add `shuttle encrypt-config` / `shuttled encrypt-config` CLI subcommand
+// to encrypt an existing plaintext config file in place.
 func SaveServerConfig(path string, cfg *ServerConfig) error {
-	data, err := yaml.Marshal(cfg)
+	// Deep copy to avoid mutating the caller's config.
+	cp := *cfg
+	// Copy slices that may be modified.
+	if cfg.Admin.Users != nil {
+		cp.Admin.Users = make([]User, len(cfg.Admin.Users))
+		copy(cp.Admin.Users, cfg.Admin.Users)
+	}
+
+	// Encrypt sensitive fields if keystore is available.
+	if key, err := GetKey(); err == nil {
+		if err := encryptServerSensitiveFields(&cp, key); err != nil {
+			return fmt.Errorf("encrypt config: %w", err)
+		}
+	}
+
+	data, err := yaml.Marshal(&cp)
 	if err != nil {
 		return fmt.Errorf("marshal config: %w", err)
 	}

@@ -7,13 +7,13 @@
   import SpeedChart from '../lib/SpeedChart.svelte'
   import ConnectionQualityChart from '../lib/ConnectionQualityChart.svelte'
   import MeshTopologyChart from '../lib/MeshTopologyChart.svelte'
+  import TrafficChart from '../lib/TrafficChart.svelte'
   import { t } from '../lib/i18n/index'
 
   let status = $state(null)
   let connected = $state(false)
   let speed = $state({ upload: 0, download: 0 })
   let loading = $state(false)
-  let history = $state([])
   let prevConnected = $state(null)
   let notificationsEnabled = $state(false)
   let transportStats: TransportStats[] = $state([])
@@ -28,7 +28,6 @@
 
   onMount(() => {
     refresh()
-    loadHistory()
     // Request notification permission on mount
     requestPermission().then(granted => {
       notificationsEnabled = granted
@@ -112,24 +111,7 @@
     return (bytes / 1024 / 1024 / 1024).toFixed(2) + ' GB'
   }
 
-  async function loadHistory() {
-    try {
-      const data = await api.getStatsHistory(7)
-      history = data.history || []
-    } catch {
-      // Stats not available
-    }
-  }
 
-  function getMaxTraffic(h) {
-    return Math.max(...h.map(d => d.bytes_sent + d.bytes_received), 1)
-  }
-
-  function getDayLabel(dateStr) {
-    const date = new Date(dateStr)
-    const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
-    return days[date.getDay()]
-  }
 </script>
 
 <div class="dashboard">
@@ -275,28 +257,7 @@
     {/if}
   {/if}
 
-  {#if history.length > 0}
-    <h3>{t('dashboard.trafficHistory')}</h3>
-    <div class="history-chart">
-      {#each history as day}
-        {@const maxTraffic = getMaxTraffic(history)}
-        {@const totalBytes = day.bytes_sent + day.bytes_received}
-        {@const heightPercent = Math.max((totalBytes / maxTraffic) * 100, 2)}
-        <div class="chart-bar-container">
-          <div class="chart-bar" style="height: {heightPercent}%">
-            <div class="bar-upload" style="height: {day.bytes_sent / (totalBytes || 1) * 100}%"></div>
-            <div class="bar-download" style="height: {day.bytes_received / (totalBytes || 1) * 100}%"></div>
-          </div>
-          <span class="chart-label">{getDayLabel(day.date)}</span>
-          <span class="chart-value">{formatBytes(totalBytes)}</span>
-        </div>
-      {/each}
-    </div>
-    <div class="chart-legend">
-      <span class="legend-item"><span class="legend-color upload"></span> {t('dashboard.upload')}</span>
-      <span class="legend-item"><span class="legend-color download"></span> {t('dashboard.download')}</span>
-    </div>
-  {/if}
+  <TrafficChart />
 </div>
 
 <style>
@@ -505,84 +466,6 @@
     opacity: 0.4;
   }
 
-  .history-chart {
-    display: flex;
-    gap: 8px;
-    justify-content: center;
-    align-items: flex-end;
-    height: 120px;
-    background: var(--bg-secondary);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 16px;
-    margin: 8px 0;
-  }
-
-  .chart-bar-container {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    flex: 1;
-    max-width: 60px;
-  }
-
-  .chart-bar {
-    width: 100%;
-    max-width: 40px;
-    display: flex;
-    flex-direction: column;
-    border-radius: 4px 4px 0 0;
-    overflow: hidden;
-    min-height: 2px;
-  }
-
-  .bar-upload {
-    background: var(--accent);
-  }
-
-  .bar-download {
-    background: var(--accent-green);
-  }
-
-  .chart-label {
-    font-size: 10px;
-    color: var(--text-secondary);
-    margin-top: 4px;
-  }
-
-  .chart-value {
-    font-size: 9px;
-    color: #6e7681;
-  }
-
-  .chart-legend {
-    display: flex;
-    justify-content: center;
-    gap: 16px;
-    margin-top: 8px;
-  }
-
-  .legend-item {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    font-size: 11px;
-    color: var(--text-secondary);
-  }
-
-  .legend-color {
-    width: 12px;
-    height: 12px;
-    border-radius: 2px;
-  }
-
-  .legend-color.upload {
-    background: var(--accent);
-  }
-
-  .legend-color.download {
-    background: var(--accent-green);
-  }
 
   .realtime-chart {
     margin: 24px 0;

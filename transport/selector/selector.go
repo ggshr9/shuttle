@@ -28,8 +28,10 @@ type Selector struct {
 	probes            map[string]*ProbeResult
 	migrator          *Migrator
 	multipathPool     *MultipathPool
+	connPool          *ConnPool
 	serverAddr        string
 	multipathSchedule string
+	warmUpConns       int
 	mu                sync.RWMutex
 	logger            *slog.Logger
 }
@@ -49,6 +51,7 @@ type Config struct {
 	ProbeInterval     time.Duration
 	MultipathSchedule string // "weighted" (default), "min-latency", "load-balance"
 	ServerAddr        string // needed by multipath pool to dial persistent connections
+	WarmUpConns       int    // pre-dial N connections on startup (0 = disabled)
 }
 
 // New creates a new transport selector.
@@ -68,6 +71,7 @@ func New(transports []transport.ClientTransport, cfg *Config, logger *slog.Logge
 		probes:            make(map[string]*ProbeResult),
 		serverAddr:        cfg.ServerAddr,
 		multipathSchedule: cfg.MultipathSchedule,
+		warmUpConns:       cfg.WarmUpConns,
 		logger:            logger,
 	}
 	s.migrator = NewMigrator(s, logger)
@@ -82,6 +86,7 @@ func New(transports []transport.ClientTransport, cfg *Config, logger *slog.Logge
 
 // Start begins periodic probing of all transports.
 // For multipath strategy, it also creates the MultipathPool with persistent connections.
+// If WarmUpConns > 0, it creates a ConnPool and pre-dials connections.
 func (s *Selector) Start(ctx context.Context) {
 	if s.strategy == StrategyMultipath {
 		sched := newScheduler(s.multipathSchedule)
@@ -90,6 +95,17 @@ func (s *Selector) Start(ctx context.Context) {
 		s.multipathPool = pool
 		s.mu.Unlock()
 	}
+
+	if s.warmUpConns > 0 && len(s.transports) > 0 && s.serverAddr != "" {
+		// Use the first transport for the connection pool.
+		cp := NewConnPool(s.transports[0], s.serverAddr, s.warmUpConns, s.logger)
+		s.mu.Lock()
+		s.connPool = cp
+		s.mu.Unlock()
+		cp.WarmUp(ctx, s.warmUpConns)
+		go cp.evictLoop(ctx)
+	}
+
 	go s.probeLoop(ctx)
 }
 
@@ -206,14 +222,25 @@ func (s *Selector) autoSelect() transport.ClientTransport {
 
 // Dial connects using the currently selected transport.
 // In multipath mode, it returns a virtual connection that distributes streams.
+// If a connection pool is configured, it tries to retrieve an idle connection first.
 func (s *Selector) Dial(ctx context.Context, addr string) (transport.Connection, error) {
 	s.mu.RLock()
 	pool := s.multipathPool
+	cp := s.connPool
 	active := s.active
 	s.mu.RUnlock()
 
 	if s.strategy == StrategyMultipath && pool != nil {
 		return pool.VirtualConn(), nil
+	}
+
+	// Try the connection pool first for a pre-warmed connection.
+	if cp != nil {
+		conn, err := cp.Get(ctx)
+		if err == nil {
+			return conn, nil
+		}
+		// Pool exhausted or error — fall through to normal dial.
 	}
 
 	if active == nil {
@@ -301,9 +328,14 @@ func (s *Selector) Close() error {
 	s.mu.Lock()
 	pool := s.multipathPool
 	s.multipathPool = nil
+	cp := s.connPool
+	s.connPool = nil
 	s.mu.Unlock()
 	if pool != nil {
 		pool.Close()
+	}
+	if cp != nil {
+		cp.Close()
 	}
 	for _, t := range s.transports {
 		t.Close()

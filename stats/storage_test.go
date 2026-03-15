@@ -146,6 +146,153 @@ func TestStorageHandleReset(t *testing.T) {
 	}
 }
 
+func TestGetWeeklySummary(t *testing.T) {
+	dir := t.TempDir()
+	s, err := NewStorage(dir)
+	if err != nil {
+		t.Fatalf("NewStorage() error = %v", err)
+	}
+	defer s.Close()
+
+	// Seed 14 days of data ending today
+	now := time.Now()
+	s.mu.Lock()
+	for i := 13; i >= 0; i-- {
+		date := now.AddDate(0, 0, -i).Format("2006-01-02")
+		s.stats[date] = &DailyStats{
+			Date:          date,
+			BytesSent:     1000,
+			BytesReceived: 2000,
+			Connections:   5,
+		}
+	}
+	s.mu.Unlock()
+
+	result := s.GetWeeklySummary(4)
+	if len(result) == 0 {
+		t.Fatal("GetWeeklySummary returned empty slice")
+	}
+
+	// Verify total across all weeks matches 14 days of data
+	var totalSent, totalRecv, totalConns int64
+	var totalDays int
+	for _, p := range result {
+		totalSent += p.BytesSent
+		totalRecv += p.BytesRecv
+		totalConns += p.Connections
+		totalDays += p.Days
+		if p.Period == "" {
+			t.Error("Period should not be empty")
+		}
+	}
+
+	if totalDays != 14 {
+		t.Errorf("Total days = %d, want 14", totalDays)
+	}
+	if totalSent != 14000 {
+		t.Errorf("Total BytesSent = %d, want 14000", totalSent)
+	}
+	if totalRecv != 28000 {
+		t.Errorf("Total BytesRecv = %d, want 28000", totalRecv)
+	}
+	if totalConns != 70 {
+		t.Errorf("Total Connections = %d, want 70", totalConns)
+	}
+
+	// Verify periods are sorted
+	for i := 1; i < len(result); i++ {
+		if result[i].Period < result[i-1].Period {
+			t.Errorf("Periods not sorted: %q before %q", result[i-1].Period, result[i].Period)
+		}
+	}
+}
+
+func TestGetMonthlySummary(t *testing.T) {
+	dir := t.TempDir()
+	s, err := NewStorage(dir)
+	if err != nil {
+		t.Fatalf("NewStorage() error = %v", err)
+	}
+	defer s.Close()
+
+	// Seed 60 days of data ending today, spanning at least 2 months
+	now := time.Now()
+	s.mu.Lock()
+	for i := 59; i >= 0; i-- {
+		date := now.AddDate(0, 0, -i).Format("2006-01-02")
+		s.stats[date] = &DailyStats{
+			Date:          date,
+			BytesSent:     500,
+			BytesReceived: 1000,
+			Connections:   2,
+		}
+	}
+	s.mu.Unlock()
+
+	result := s.GetMonthlySummary(3)
+	if len(result) < 2 {
+		t.Fatalf("GetMonthlySummary returned %d periods, want at least 2", len(result))
+	}
+
+	// Verify total across all months matches 60 days
+	var totalSent, totalRecv, totalConns int64
+	var totalDays int
+	for _, p := range result {
+		totalSent += p.BytesSent
+		totalRecv += p.BytesRecv
+		totalConns += p.Connections
+		totalDays += p.Days
+		// Verify period format "YYYY-MM"
+		if len(p.Period) != 7 || p.Period[4] != '-' {
+			t.Errorf("Invalid period format: %q", p.Period)
+		}
+	}
+
+	if totalDays != 60 {
+		t.Errorf("Total days = %d, want 60", totalDays)
+	}
+	if totalSent != 30000 {
+		t.Errorf("Total BytesSent = %d, want 30000", totalSent)
+	}
+	if totalRecv != 60000 {
+		t.Errorf("Total BytesRecv = %d, want 60000", totalRecv)
+	}
+
+	// Verify periods are sorted
+	for i := 1; i < len(result); i++ {
+		if result[i].Period < result[i-1].Period {
+			t.Errorf("Periods not sorted: %q before %q", result[i-1].Period, result[i].Period)
+		}
+	}
+}
+
+func TestEmptyPeriods(t *testing.T) {
+	dir := t.TempDir()
+	s, err := NewStorage(dir)
+	if err != nil {
+		t.Fatalf("NewStorage() error = %v", err)
+	}
+	defer s.Close()
+
+	weekly := s.GetWeeklySummary(4)
+	if weekly != nil && len(weekly) != 0 {
+		t.Errorf("GetWeeklySummary with no data returned %d items, want 0", len(weekly))
+	}
+
+	monthly := s.GetMonthlySummary(6)
+	if monthly != nil && len(monthly) != 0 {
+		t.Errorf("GetMonthlySummary with no data returned %d items, want 0", len(monthly))
+	}
+
+	// Zero/negative input
+	if result := s.GetWeeklySummary(0); result != nil {
+		t.Error("GetWeeklySummary(0) should return nil")
+	}
+	if result := s.GetMonthlySummary(-1); result != nil {
+		t.Error("GetMonthlySummary(-1) should return nil")
+	}
+}
+
 func TestDailyStatsStruct(t *testing.T) {
 	ds := DailyStats{
 		Date:          "2024-01-15",

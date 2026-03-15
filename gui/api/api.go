@@ -796,6 +796,36 @@ func handlerWithAllOptions(eng *engine.Engine, subMgr *subscription.Manager, sta
 		}
 	})
 
+	// Stats weekly endpoint
+	mux.HandleFunc("GET /api/stats/weekly", func(w http.ResponseWriter, r *http.Request) {
+		weeks := 4
+		if v := r.URL.Query().Get("weeks"); v != "" {
+			if parsed, err := strconv.Atoi(v); err == nil && parsed > 0 && parsed <= 52 {
+				weeks = parsed
+			}
+		}
+		if statsStore != nil {
+			writeJSON(w, statsStore.GetWeeklySummary(weeks))
+		} else {
+			writeJSON(w, []stats.PeriodStats{})
+		}
+	})
+
+	// Stats monthly endpoint
+	mux.HandleFunc("GET /api/stats/monthly", func(w http.ResponseWriter, r *http.Request) {
+		months := 6
+		if v := r.URL.Query().Get("months"); v != "" {
+			if parsed, err := strconv.Atoi(v); err == nil && parsed > 0 && parsed <= 24 {
+				months = parsed
+			}
+		}
+		if statsStore != nil {
+			writeJSON(w, statsStore.GetMonthlySummary(months))
+		} else {
+			writeJSON(w, []stats.PeriodStats{})
+		}
+	})
+
 	// Log export endpoint
 	mux.HandleFunc("GET /api/logs/export", func(w http.ResponseWriter, r *http.Request) {
 		// Get recent logs from the log buffer (if available)

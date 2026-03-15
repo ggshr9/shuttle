@@ -232,6 +232,16 @@
     "connectNow": "Connect Now",
     "configureLater": "Configure later"
   },
+  "traffic": {
+    "title": "Traffic Usage",
+    "daily": "Daily",
+    "weekly": "Weekly",
+    "monthly": "Monthly",
+    "sent": "Sent",
+    "received": "Received",
+    "total": "Total",
+    "noData": "No traffic data available"
+  },
   "emptyState": {
     "noServers": "No Servers Yet",
     "addToStart": "Add a proxy server to get started",

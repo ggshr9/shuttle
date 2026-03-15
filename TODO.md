@@ -148,6 +148,78 @@
 - [x] **Server admin backup/restore**: `GET /api/backup` + `POST /api/restore` with user list & redacted config
 - [x] **Connection quality tracing**: ConnID correlation through engine→stream, `GET /api/connections/{id}/streams`
 
+## Phase 12: Performance Optimization
+
+### P0
+- [ ] **Connection pool warm-up**: Pre-dial connections on engine startup to eliminate cold-start latency. `ConnPool` in `transport/selector/pool.go` with `Get()`/`Put()`/`WarmUp()`, idle eviction (60s TTL). Config: `transport.warm_up_conns`. Integrate into `Selector.Start()` → async dial N connections.
+
+### P1
+- [ ] **Zero-copy splice path**: Linux `splice(2)` in `internal/relay/`. Platform files: `splice_linux.go` (pipe pair + `unix.Splice` loop), `splice_other.go` (fallback). `Relay()` auto-detects `syscall.Conn` on both sides. Skip when `CountedReadWriter` is wrapping (intentional — counting needs to see bytes).
+- [ ] **DNS prefetch optimization**: `router/dns_prefetch.go` — `Prefetcher` maintains domain frequency table, re-resolves top-N (default 100) at 75% TTL. `Record(domain)` called after each resolve. Config: `dns.prefetch` (already in struct, needs wiring).
+
+### P2
+- [ ] **Memory allocation profiling**: Add 32KB tier to `internal/pool`. Replace `fmt.Sprintf("%08x")` with `strconv.FormatUint` on hot path (engine.go connID). Pool the UDP header byte slice. Add `pool.Stats()` hit/miss counters. Benchmark tests for relay/DNS/stream-open.
+
+## Phase 13: User Experience
+
+### P0
+- [ ] **Traffic usage statistics**: `stats/storage.go` — add `GetWeeklySummary()`/`GetMonthlySummary()` aggregation. `TrafficChart.svelte` bar chart with day/week/month toggle. Backend data already exists via `GET /api/stats/history`.
+- [ ] **Speed test history**: `speedtest/history.go` — `HistoryStorage` persists `[]HistoryEntry` to `~/.shuttle/speedtest_history.json`. `GET /api/speedtest/history?days=30`. `SpeedTestHistoryChart.svelte` trend line in Dashboard. Record on each `POST /api/speedtest`.
+
+### P1
+- [ ] **Rule import/export UI**: Drag-and-drop zone in Routing.svelte (`on:drop`/`on:dragover`, `FileReader`). Visual feedback + JSON schema validation before import. Merge vs replace toggle. Backend: accept `multipart/form-data` on `POST /api/routing/import`. Export as `.json` download.
+- [ ] **One-click diagnostics**: `diagnostics/diagnostics.go` — `Diagnostician.Run()` returns `Report` (TCP/QUIC latency, DNS resolve time, per-transport connectivity, system info). No raw ICMP — use transport retransmission stats for packet loss. `POST /api/diagnostics/run`, `GET /api/diagnostics/export`. Color-coded pass/warn/fail UI.
+
+## Phase 14: Deployment & Operations
+
+### P0
+- [ ] **Docker Compose one-click deploy**: Expand `deploy/docker-compose.yml` — shuttled + Caddy (auto-HTTPS via ACME) + optional Prometheus/Grafana. `deploy/.env.example` template (`SHUTTLE_DOMAIN`, `SHUTTLE_PASSWORD`, `SHUTTLE_EMAIL`). Enhanced `entrypoint.sh` (auto-gen password, cert wait). `deploy/caddy/Caddyfile` for TLS termination.
+- [ ] **Config encryption at rest**: `config/encrypt.go` — AES-256-GCM envelope encryption. `EncryptedField` type with transparent YAML marshal/unmarshal. Platform key derivation: `encrypt_darwin.go` (Keychain), `encrypt_linux.go` (keyfile 0600), `encrypt_windows.go` (DPAPI). Backward-compatible: detects plaintext vs encrypted on load, auto-encrypts on save. `shuttle encrypt-config` subcommand.
+
+### P1
+- [ ] **CI/CD pipeline optimization**: Enhance `.github/workflows/build.yml` — Go module caching (`actions/cache`), `-trimpath` for reproducible builds, `-ldflags` version injection, SBOM generation (syft), changelog generation (git-cliff). Optional: cosign binary signing.
+- [ ] **Prometheus + Grafana dashboards**: `server/metrics.go` — native Prometheus text exposition (`/metrics` behind auth). Gauges: active_conns, per-transport breakdown. Counters: total_conns, bytes_in/out. Histograms: conn_duration. `deploy/grafana/shuttle-dashboard.json` pre-built panels. `deploy/prometheus/prometheus.yml` scrape config. Add `prometheus/client_golang` dependency.
+
+## Phase 15: Protocol Evolution
+
+### P0
+- [ ] **Graceful stream migration**: Rewrite `transport/selector/migrate.go` — `trackedConn` with `activeStreams` counter and `draining` flag. `Migrator.Migrate()` marks old connections as draining; `OpenStream()` on draining connections returns error (new streams go to new connection). Background goroutine closes drained connections when `activeStreams == 0`. `WrapStream()` auto-decrements counter on close.
+
+### P1
+- [ ] **Post-quantum key exchange**: `crypto/pqkem.go` — hybrid KEM combining X25519 + ML-KEM-768 (FIPS 203). Shared secret = `SHA-256(X25519_shared || MLKEM_shared)`. Implements `noise.DHFunc` interface. Version byte in Noise handshake (0x01=classical, 0x02=hybrid-PQ) for backward compatibility. Config: `reality.post_quantum: true`. Dependency: `cloudflare/circl`. Key sizes increase (~1184B PQ pubkey) but fit single TLS record.
+
+### P2
+- [ ] **QUIC multipath**: Enhance application-level multipath in `transport/selector/multipath.go` — packet-level scheduling (not just stream-level). `multipath_reorder.go` reordering buffer for cross-path packets. `PacketScheduler` interface in `scheduler.go`. Config: `transport.multipath_mode: "stream"|"packet"`. Long-term: integrate native QUIC multipath when quic-go adds support.
+
+---
+
+## Implementation Schedule
+
+### Sprint 1 (weeks 1–2)
+- 12.1 Connection Pool Warm-up (M)
+- 14.4 Config Encryption at Rest (M)
+- 13.1 Traffic Usage Statistics (S)
+
+### Sprint 2 (weeks 3–4)
+- 15.1 Graceful Stream Migration (L)
+- 12.4 DNS Prefetch Optimization (M)
+- 13.4 Rule Import/Export UI (S)
+
+### Sprint 3 (weeks 5–6)
+- 14.1 Docker Compose One-Click Deploy (M)
+- 13.2 Speed Test History (M)
+- 12.3 Memory Allocation Profiling (S)
+
+### Sprint 4 (weeks 7–8)
+- 15.3 Post-Quantum Key Exchange (L)
+- 14.3 Prometheus + Grafana Dashboards (M)
+- 12.2 Zero-Copy Splice Path (M)
+
+### Sprint 5 (weeks 9–10)
+- 13.3 One-Click Diagnostics (M)
+- 14.2 CI/CD Pipeline Optimization (S)
+- 15.2 QUIC Multipath (L)
+
 ---
 
 ## Recently Completed

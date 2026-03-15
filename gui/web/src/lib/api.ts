@@ -149,6 +149,14 @@ export interface Status {
   bytes_recv?: number
 }
 
+export interface PeriodStats {
+  period: string
+  bytes_sent: number
+  bytes_recv: number
+  connections: number
+  days: number
+}
+
 export interface TransportStats {
   transport: string
   active_streams: number
@@ -191,6 +199,8 @@ export const api = {
   exportLogs: () => `${BASE}/api/logs/export`,
   // Stats
   getStatsHistory: (days = 7) => request<StatsHistory>('GET', `/api/stats/history?days=${days}`),
+  getWeeklyStats: (weeks = 4) => request<PeriodStats[]>('GET', `/api/stats/weekly?weeks=${weeks}`),
+  getMonthlyStats: (months = 6) => request<PeriodStats[]>('GET', `/api/stats/monthly?months=${months}`),
   // Backup/Restore
   backupUrl: () => `${BASE}/api/backup`,
   restore: (backup: unknown) => request<void>('POST', '/api/restore', backup),

@@ -175,6 +175,7 @@ func (e *Engine) startInternal(ctx context.Context) error {
 		Strategy:          strategy,
 		ServerAddr:        cfgSnap.Server.Addr,
 		MultipathSchedule: cfgSnap.Transport.MultipathSchedule,
+		WarmUpConns:       cfgSnap.Transport.WarmUpConns,
 	}, e.logger)
 	sel.Start(ctx)
 

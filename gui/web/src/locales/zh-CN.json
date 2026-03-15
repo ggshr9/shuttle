@@ -232,6 +232,16 @@
     "connectNow": "立即连接",
     "configureLater": "稍后配置"
   },
+  "traffic": {
+    "title": "流量统计",
+    "daily": "每日",
+    "weekly": "每周",
+    "monthly": "每月",
+    "sent": "上传",
+    "received": "下载",
+    "total": "总计",
+    "noData": "暂无流量数据"
+  },
   "emptyState": {
     "noServers": "暂无服务器",
     "addToStart": "添加代理服务器以开始使用",
