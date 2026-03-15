@@ -36,6 +36,9 @@ class ShuttleVpnService : VpnService() {
         var isRunning = false
             private set
 
+        var apiAddress: String? = null
+            private set
+
         var lastError: String? = null
             private set
 
@@ -182,12 +185,14 @@ class ShuttleVpnService : VpnService() {
         Log.i(TAG, "VPN established, fd=$fd")
 
         apiAddr = mobile.Mobile.startWithTUN(configJson, fd.toLong())
+        apiAddress = apiAddr
         isRunning = true
         Log.i(TAG, "Engine started, API at $apiAddr")
     }
 
     override fun onDestroy() {
         isRunning = false
+        apiAddress = null
         try {
             // Get final stats
             val status = mobile.Mobile.status()

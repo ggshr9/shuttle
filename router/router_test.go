@@ -450,6 +450,169 @@ func TestRouterDefaultActionEmpty(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
+// Network-type routing tests
+// ---------------------------------------------------------------------------
+
+func TestRouterNetworkTypeRuleDomainMatch(t *testing.T) {
+	r := newTestRouter([]Rule{
+		{Type: "domain", Values: []string{"example.com"}, Action: ActionDirect, NetworkType: "wifi"},
+	}, ActionProxy)
+
+	// Without setting network type, the network rule should not match.
+	got := r.Match("example.com", nil, "", "")
+	if got != ActionProxy {
+		t.Errorf("Match without network type = %q, want %q", got, ActionProxy)
+	}
+
+	// Set network type to wifi — now it should match.
+	r.SetNetworkType("wifi")
+	got = r.Match("example.com", nil, "", "")
+	if got != ActionDirect {
+		t.Errorf("Match with wifi = %q, want %q", got, ActionDirect)
+	}
+
+	// Set network type to cellular — should not match the wifi rule.
+	r.SetNetworkType("cellular")
+	got = r.Match("example.com", nil, "", "")
+	if got != ActionProxy {
+		t.Errorf("Match with cellular = %q, want %q", got, ActionProxy)
+	}
+}
+
+func TestRouterNetworkTypeRuleIPMatch(t *testing.T) {
+	r := newTestRouter([]Rule{
+		{Type: "ip-cidr", Values: []string{"10.0.0.0/8"}, Action: ActionDirect, NetworkType: "cellular"},
+	}, ActionProxy)
+
+	// Without network type, should fall through to default.
+	got := r.Match("", net.ParseIP("10.1.2.3"), "", "")
+	if got != ActionProxy {
+		t.Errorf("Match IP without network type = %q, want %q", got, ActionProxy)
+	}
+
+	// Set to cellular — should match.
+	r.SetNetworkType("cellular")
+	got = r.Match("", net.ParseIP("10.1.2.3"), "", "")
+	if got != ActionDirect {
+		t.Errorf("Match IP with cellular = %q, want %q", got, ActionDirect)
+	}
+}
+
+func TestRouterNetworkTypeRuleProcessMatch(t *testing.T) {
+	r := newTestRouter([]Rule{
+		{Type: "process", Values: []string{"chrome"}, Action: ActionReject, NetworkType: "ethernet"},
+	}, ActionProxy)
+
+	r.SetNetworkType("ethernet")
+	got := r.Match("", nil, "chrome", "")
+	if got != ActionReject {
+		t.Errorf("Match process with ethernet = %q, want %q", got, ActionReject)
+	}
+
+	r.SetNetworkType("wifi")
+	got = r.Match("", nil, "chrome", "")
+	if got != ActionProxy {
+		t.Errorf("Match process with wifi = %q, want %q", got, ActionProxy)
+	}
+}
+
+func TestRouterNetworkTypeRuleProtocolMatch(t *testing.T) {
+	r := newTestRouter([]Rule{
+		{Type: "protocol", Values: []string{"bittorrent"}, Action: ActionReject, NetworkType: "cellular"},
+	}, ActionProxy)
+
+	r.SetNetworkType("cellular")
+	got := r.Match("", nil, "", "bittorrent")
+	if got != ActionReject {
+		t.Errorf("Match protocol with cellular = %q, want %q", got, ActionReject)
+	}
+
+	r.SetNetworkType("wifi")
+	got = r.Match("", nil, "", "bittorrent")
+	if got != ActionProxy {
+		t.Errorf("Match protocol with wifi = %q, want %q", got, ActionProxy)
+	}
+}
+
+func TestRouterNetworkTypeGetSet(t *testing.T) {
+	r := newTestRouter(nil, ActionProxy)
+
+	if got := r.NetworkType(); got != "" {
+		t.Errorf("initial NetworkType() = %q, want empty", got)
+	}
+
+	r.SetNetworkType("WiFi")
+	if got := r.NetworkType(); got != "wifi" {
+		t.Errorf("NetworkType() = %q, want \"wifi\"", got)
+	}
+}
+
+func TestRouterNetworkTypePriorityOverRegular(t *testing.T) {
+	// Network-type rules should take priority over regular rules.
+	r := newTestRouter([]Rule{
+		{Type: "domain", Values: []string{"example.com"}, Action: ActionDirect},                              // regular
+		{Type: "domain", Values: []string{"example.com"}, Action: ActionReject, NetworkType: "cellular"}, // network-type
+	}, ActionProxy)
+
+	// When on cellular, the network-type rule should win.
+	r.SetNetworkType("cellular")
+	got := r.Match("example.com", nil, "", "")
+	if got != ActionReject {
+		t.Errorf("Match with network-type rule on cellular = %q, want %q", got, ActionReject)
+	}
+
+	// When on wifi, the regular rule should apply.
+	r.SetNetworkType("wifi")
+	got = r.Match("example.com", nil, "", "")
+	if got != ActionDirect {
+		t.Errorf("Match with regular rule on wifi = %q, want %q", got, ActionDirect)
+	}
+}
+
+func TestRouterNetworkTypeWildcardDomain(t *testing.T) {
+	r := newTestRouter([]Rule{
+		{Type: "domain", Values: []string{"+.example.com"}, Action: ActionDirect, NetworkType: "wifi"},
+	}, ActionProxy)
+
+	r.SetNetworkType("wifi")
+
+	got := r.Match("sub.example.com", nil, "", "")
+	if got != ActionDirect {
+		t.Errorf("Match wildcard subdomain with wifi = %q, want %q", got, ActionDirect)
+	}
+
+	got = r.Match("example.com", nil, "", "")
+	if got != ActionDirect {
+		t.Errorf("Match bare domain with wifi = %q, want %q", got, ActionDirect)
+	}
+
+	got = r.Match("other.com", nil, "", "")
+	if got != ActionProxy {
+		t.Errorf("Match non-matching domain with wifi = %q, want %q", got, ActionProxy)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Benchmarks
+// ---------------------------------------------------------------------------
+
+func BenchmarkRouterMatchWithNetworkType(b *testing.B) {
+	r := newTestRouter([]Rule{
+		{Type: "domain", Values: []string{"example.com"}, Action: ActionDirect, NetworkType: "wifi"},
+		{Type: "domain", Values: []string{"+.google.com"}, Action: ActionProxy, NetworkType: "cellular"},
+		{Type: "ip-cidr", Values: []string{"10.0.0.0/8"}, Action: ActionDirect, NetworkType: "wifi"},
+		{Type: "domain", Values: []string{"fallback.com"}, Action: ActionDirect},
+	}, ActionProxy)
+	r.SetNetworkType("wifi")
+
+	ip := net.ParseIP("10.1.2.3")
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_ = r.Match("example.com", ip, "", "")
+	}
+}
+
+// ---------------------------------------------------------------------------
 // DNSCache tests
 // ---------------------------------------------------------------------------
 

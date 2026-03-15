@@ -237,3 +237,109 @@ func TestDefaultClientConfig(t *testing.T) {
 		t.Errorf("Congestion.Mode = %q", cfg.Congestion.Mode)
 	}
 }
+
+func TestClientConfigValidate(t *testing.T) {
+	tests := []struct {
+		name    string
+		modify  func(*ClientConfig)
+		wantErr bool
+	}{
+		{"valid default", func(c *ClientConfig) {}, false},
+		{"invalid transport", func(c *ClientConfig) { c.Transport.Preferred = "invalid" }, true},
+		{"invalid routing default", func(c *ClientConfig) { c.Routing.Default = "invalid" }, true},
+		{"invalid socks5 listen", func(c *ClientConfig) { c.Proxy.SOCKS5.Listen = "not-valid" }, true},
+		{"invalid http listen", func(c *ClientConfig) { c.Proxy.HTTP.Listen = "not-valid" }, true},
+		{"invalid congestion mode", func(c *ClientConfig) { c.Congestion.Mode = "invalid" }, true},
+		{"valid congestion bbr", func(c *ClientConfig) { c.Congestion.Mode = "bbr" }, false},
+		{"valid congestion brutal", func(c *ClientConfig) { c.Congestion.Mode = "brutal" }, false},
+		{"invalid obfs max_delay", func(c *ClientConfig) { c.Obfs.MaxDelay = "not-a-duration" }, true},
+		{"invalid split route CIDR", func(c *ClientConfig) {
+			c.Mesh.SplitRoutes = []SplitRoute{{CIDR: "invalid", Action: "mesh"}}
+		}, true},
+		{"invalid split route action", func(c *ClientConfig) {
+			c.Mesh.SplitRoutes = []SplitRoute{{CIDR: "10.0.0.0/24", Action: "invalid"}}
+		}, true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := DefaultClientConfig()
+			tt.modify(cfg)
+			err := cfg.Validate()
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("Validate() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestServerConfigValidate(t *testing.T) {
+	tests := []struct {
+		name    string
+		modify  func(*ServerConfig)
+		wantErr bool
+	}{
+		{"valid default", func(c *ServerConfig) {}, false},
+		{"invalid listen", func(c *ServerConfig) { c.Listen = "not-valid" }, true},
+		{"invalid cover mode", func(c *ServerConfig) { c.Cover.Mode = "invalid" }, true},
+		{"cluster missing node name", func(c *ServerConfig) {
+			c.Cluster.Enabled = true
+			c.Cluster.Secret = "s"
+		}, true},
+		{"cluster missing secret", func(c *ServerConfig) {
+			c.Cluster.Enabled = true
+			c.Cluster.NodeName = "n"
+		}, true},
+		{"cluster invalid peer addr", func(c *ServerConfig) {
+			c.Cluster.Enabled = true
+			c.Cluster.NodeName = "n"
+			c.Cluster.Secret = "s"
+			c.Cluster.Peers = []ClusterPeer{{Name: "p", Addr: "invalid"}}
+		}, true},
+		{"cluster invalid interval", func(c *ServerConfig) {
+			c.Cluster.Enabled = true
+			c.Cluster.NodeName = "n"
+			c.Cluster.Secret = "s"
+			c.Cluster.Interval = "invalid"
+		}, true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := DefaultServerConfig()
+			tt.modify(cfg)
+			err := cfg.Validate()
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("Validate() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestSaveServerConfig(t *testing.T) {
+	cfg := DefaultServerConfig()
+	dir := t.TempDir()
+	path := filepath.Join(dir, "out.yaml")
+
+	err := SaveServerConfig(path, cfg)
+	if err != nil {
+		t.Fatalf("SaveServerConfig: %v", err)
+	}
+
+	loaded, err := LoadServerConfig(path)
+	if err != nil {
+		t.Fatalf("reload: %v", err)
+	}
+	if loaded.Listen != cfg.Listen {
+		t.Fatalf("Listen mismatch after round-trip")
+	}
+}
+
+func TestConfigVersionConstants(t *testing.T) {
+	if CurrentClientConfigVersion != 1 {
+		t.Fatalf("CurrentClientConfigVersion = %d", CurrentClientConfigVersion)
+	}
+	if CurrentServerConfigVersion != 1 {
+		t.Fatalf("CurrentServerConfigVersion = %d", CurrentServerConfigVersion)
+	}
+}

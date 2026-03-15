@@ -52,7 +52,7 @@ jobs:
           docker compose exec -T client-b pgrep -x shuttle || exit 1
           echo "All services healthy!"
 
-      - name: Run connectivity tests
+      - name: Verify network connectivity
         working-directory: sandbox
         run: |
           echo "Testing client-a -> router (net-a)..."
@@ -60,6 +60,18 @@ jobs:
           echo "Testing client-b -> router (net-b)..."
           docker compose exec -T client-b ping -c 1 -W 2 10.100.2.1
           echo "Connectivity tests passed!"
+
+      - name: Run shell integration tests
+        working-directory: sandbox
+        run: ./sandbox/run.sh test
+
+      - name: Run Go integration tests
+        working-directory: sandbox
+        timeout-minutes: 10
+        run: |
+          docker compose up -d gotest
+          sleep 5
+          docker compose exec -T gotest go test -v -tags sandbox -count=1 -timeout 5m ./test/e2e/ ./mesh/p2p/
 
       - name: Collect logs on failure
         if: failure()
@@ -69,6 +81,7 @@ jobs:
           docker compose logs client-a
           docker compose logs client-b
           docker compose logs router
+          docker compose logs gotest
 
       - name: Cleanup
         if: always()

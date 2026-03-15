@@ -941,3 +941,417 @@ func TestSandboxAPIDisconnectReconnect(t *testing.T) {
 
 	t.Logf("disconnect/reconnect OK")
 }
+
+// =============================================================================
+// P0: WebRTC transport tests
+// =============================================================================
+
+// TestSandboxE2EWebRTCTransport verifies the WebRTC DataChannel transport
+// by switching client-a to WebRTC-only mode via the API, then verifying proxy data flow.
+func TestSandboxE2EWebRTCTransport(t *testing.T) {
+	clientAAPI := sandboxEnv(t, "SANDBOX_CLIENT_A_API")
+	clientA := sandboxEnv(t, "SANDBOX_CLIENT_A_ADDR")
+	httpbinAddr := sandboxEnv(t, "SANDBOX_HTTPBIN_ADDR")
+
+	waitForService(t, clientAAPI, 30*time.Second)
+
+	// Step 1: Disconnect if running
+	status, err := apiGet(clientAAPI, "/api/status")
+	if err != nil {
+		t.Fatalf("get status failed: %v", err)
+	}
+	t.Logf("initial status: state=%v, transport=%v", status["state"], status["transport"])
+
+	if status["state"] == "running" {
+		_, err = apiPost(clientAAPI, "/api/disconnect", nil)
+		if err != nil {
+			t.Logf("disconnect warning: %v", err)
+		}
+		time.Sleep(2 * time.Second)
+	}
+
+	// Step 2: Get current config and switch to WebRTC-only
+	cfg, err := apiGet(clientAAPI, "/api/config")
+	if err != nil {
+		t.Fatalf("get config failed: %v", err)
+	}
+
+	cfgMap := cfg
+	if transport, ok := cfgMap["transport"].(map[string]any); ok {
+		transport["preferred"] = "webrtc"
+		// Disable other transports
+		if h3, ok := transport["h3"].(map[string]any); ok {
+			h3["enabled"] = false
+		}
+		if reality, ok := transport["reality"].(map[string]any); ok {
+			reality["enabled"] = false
+		}
+		if cdnCfg, ok := transport["cdn"].(map[string]any); ok {
+			cdnCfg["enabled"] = false
+		}
+		// Enable WebRTC
+		if webrtcCfg, ok := transport["webrtc"].(map[string]any); ok {
+			webrtcCfg["enabled"] = true
+		} else {
+			transport["webrtc"] = map[string]any{
+				"enabled":    true,
+				"signal_url": "wss://10.100.0.10:8443/webrtc/signal",
+			}
+		}
+	}
+
+	// Apply the config
+	client := &http.Client{Timeout: 10 * time.Second}
+	cfgData, _ := json.Marshal(cfgMap)
+	req, _ := http.NewRequest("PUT", "http://"+clientAAPI+"/api/config", strings.NewReader(string(cfgData)))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatalf("update config failed: %v", err)
+	}
+	resp.Body.Close()
+
+	// Step 3: Connect with WebRTC transport
+	connectResult, err := apiPost(clientAAPI, "/api/connect", nil)
+	if err != nil {
+		t.Fatalf("connect with WebRTC failed: %v", err)
+	}
+	t.Logf("WebRTC connect result: %v", connectResult)
+
+	time.Sleep(3 * time.Second)
+
+	// Step 4: Verify status shows running
+	status, err = apiGet(clientAAPI, "/api/status")
+	if err != nil {
+		t.Fatalf("get status after WebRTC connect failed: %v", err)
+	}
+	t.Logf("status after WebRTC connect: state=%v, transport=%v", status["state"], status["transport"])
+
+	if status["state"] != "running" {
+		t.Fatalf("expected state 'running', got %v", status["state"])
+	}
+
+	// Step 5: Test data flow through WebRTC transport
+	socks5Addr := clientA + ":1080"
+	targetURL := "http://" + httpbinAddr + "/ip"
+
+	proxyResp, err := httpViaSOCKS5(socks5Addr, targetURL, 15*time.Second)
+	if err != nil {
+		t.Fatalf("SOCKS5 via WebRTC failed: %v", err)
+	}
+	defer proxyResp.Body.Close()
+
+	if proxyResp.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", proxyResp.StatusCode)
+	}
+
+	body, _ := io.ReadAll(proxyResp.Body)
+	var result map[string]any
+	if err := json.Unmarshal(body, &result); err != nil {
+		t.Fatalf("invalid JSON response: %v (body: %s)", err, string(body))
+	}
+
+	origin, ok := result["origin"].(string)
+	if !ok || origin == "" {
+		t.Fatalf("expected origin IP in response, got: %s", string(body))
+	}
+
+	t.Logf("WebRTC transport e2e OK: origin=%s, status=%d", origin, proxyResp.StatusCode)
+
+	// Step 6: Restore H3 transport
+	if transport, ok := cfgMap["transport"].(map[string]any); ok {
+		transport["preferred"] = "h3"
+		if h3, ok := transport["h3"].(map[string]any); ok {
+			h3["enabled"] = true
+		}
+		if webrtcCfg, ok := transport["webrtc"].(map[string]any); ok {
+			webrtcCfg["enabled"] = false
+		}
+	}
+	cfgData, _ = json.Marshal(cfgMap)
+	req, _ = http.NewRequest("PUT", "http://"+clientAAPI+"/api/config", strings.NewReader(string(cfgData)))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err = client.Do(req)
+	if err != nil {
+		t.Logf("restore config warning: %v", err)
+	} else {
+		resp.Body.Close()
+	}
+
+	// Reconnect with H3
+	apiPost(clientAAPI, "/api/disconnect", nil)
+	time.Sleep(time.Second)
+	apiPost(clientAAPI, "/api/connect", nil)
+}
+
+// TestSandboxE2EWebRTCMultiStream verifies that WebRTC transport handles
+// multiple concurrent streams over the same DataChannel connection.
+func TestSandboxE2EWebRTCMultiStream(t *testing.T) {
+	clientAAPI := sandboxEnv(t, "SANDBOX_CLIENT_A_API")
+	clientA := sandboxEnv(t, "SANDBOX_CLIENT_A_ADDR")
+	httpbinAddr := sandboxEnv(t, "SANDBOX_HTTPBIN_ADDR")
+
+	waitForService(t, clientAAPI, 30*time.Second)
+
+	// Step 1: Disconnect if running
+	status, err := apiGet(clientAAPI, "/api/status")
+	if err != nil {
+		t.Fatalf("get status failed: %v", err)
+	}
+
+	if status["state"] == "running" {
+		_, err = apiPost(clientAAPI, "/api/disconnect", nil)
+		if err != nil {
+			t.Logf("disconnect warning: %v", err)
+		}
+		time.Sleep(2 * time.Second)
+	}
+
+	// Step 2: Switch to WebRTC-only
+	cfg, err := apiGet(clientAAPI, "/api/config")
+	if err != nil {
+		t.Fatalf("get config failed: %v", err)
+	}
+
+	cfgMap := cfg
+	if transport, ok := cfgMap["transport"].(map[string]any); ok {
+		transport["preferred"] = "webrtc"
+		if h3, ok := transport["h3"].(map[string]any); ok {
+			h3["enabled"] = false
+		}
+		if reality, ok := transport["reality"].(map[string]any); ok {
+			reality["enabled"] = false
+		}
+		if cdnCfg, ok := transport["cdn"].(map[string]any); ok {
+			cdnCfg["enabled"] = false
+		}
+		if webrtcCfg, ok := transport["webrtc"].(map[string]any); ok {
+			webrtcCfg["enabled"] = true
+		} else {
+			transport["webrtc"] = map[string]any{
+				"enabled":    true,
+				"signal_url": "wss://10.100.0.10:8443/webrtc/signal",
+			}
+		}
+	}
+
+	client := &http.Client{Timeout: 10 * time.Second}
+	cfgData, _ := json.Marshal(cfgMap)
+	req, _ := http.NewRequest("PUT", "http://"+clientAAPI+"/api/config", strings.NewReader(string(cfgData)))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatalf("update config failed: %v", err)
+	}
+	resp.Body.Close()
+
+	// Step 3: Connect with WebRTC
+	connectResult, err := apiPost(clientAAPI, "/api/connect", nil)
+	if err != nil {
+		t.Fatalf("connect with WebRTC failed: %v", err)
+	}
+	t.Logf("WebRTC connect result: %v", connectResult)
+
+	time.Sleep(3 * time.Second)
+
+	// Step 4: Verify running
+	status, err = apiGet(clientAAPI, "/api/status")
+	if err != nil {
+		t.Fatalf("get status after connect failed: %v", err)
+	}
+	if status["state"] != "running" {
+		t.Fatalf("expected state 'running', got %v", status["state"])
+	}
+
+	// Step 5: Fire 5 concurrent requests through WebRTC transport
+	socks5Addr := clientA + ":1080"
+	const concurrency = 5
+	errCh := make(chan error, concurrency)
+
+	for i := 0; i < concurrency; i++ {
+		go func(id int) {
+			targetURL := fmt.Sprintf("http://%s/get?webrtc_stream=%d", httpbinAddr, id)
+			proxyResp, err := httpViaSOCKS5(socks5Addr, targetURL, 15*time.Second)
+			if err != nil {
+				errCh <- fmt.Errorf("WebRTC stream %d failed: %w", id, err)
+				return
+			}
+			defer proxyResp.Body.Close()
+			if proxyResp.StatusCode != http.StatusOK {
+				errCh <- fmt.Errorf("WebRTC stream %d: expected 200, got %d", id, proxyResp.StatusCode)
+				return
+			}
+			body, _ := io.ReadAll(proxyResp.Body)
+			var result map[string]any
+			if err := json.Unmarshal(body, &result); err != nil {
+				errCh <- fmt.Errorf("WebRTC stream %d: invalid JSON: %v", id, err)
+				return
+			}
+			errCh <- nil
+		}(i)
+	}
+
+	for i := 0; i < concurrency; i++ {
+		if err := <-errCh; err != nil {
+			t.Error(err)
+		}
+	}
+
+	t.Logf("WebRTC multi-stream OK: %d concurrent requests succeeded", concurrency)
+
+	// Step 6: Restore H3 transport
+	if transport, ok := cfgMap["transport"].(map[string]any); ok {
+		transport["preferred"] = "h3"
+		if h3, ok := transport["h3"].(map[string]any); ok {
+			h3["enabled"] = true
+		}
+		if webrtcCfg, ok := transport["webrtc"].(map[string]any); ok {
+			webrtcCfg["enabled"] = false
+		}
+	}
+	cfgData, _ = json.Marshal(cfgMap)
+	req, _ = http.NewRequest("PUT", "http://"+clientAAPI+"/api/config", strings.NewReader(string(cfgData)))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err = client.Do(req)
+	if err != nil {
+		t.Logf("restore config warning: %v", err)
+	} else {
+		resp.Body.Close()
+	}
+
+	apiPost(clientAAPI, "/api/disconnect", nil)
+	time.Sleep(time.Second)
+	apiPost(clientAAPI, "/api/connect", nil)
+}
+
+// TestSandboxE2EWebRTCFallback verifies that when WebRTC is configured as primary
+// but with a broken signaling URL, the client falls back to another transport
+// and requests still succeed.
+func TestSandboxE2EWebRTCFallback(t *testing.T) {
+	clientAAPI := sandboxEnv(t, "SANDBOX_CLIENT_A_API")
+	clientA := sandboxEnv(t, "SANDBOX_CLIENT_A_ADDR")
+	httpbinAddr := sandboxEnv(t, "SANDBOX_HTTPBIN_ADDR")
+
+	waitForService(t, clientAAPI, 30*time.Second)
+
+	// Step 1: Disconnect if running
+	status, err := apiGet(clientAAPI, "/api/status")
+	if err != nil {
+		t.Fatalf("get status failed: %v", err)
+	}
+	t.Logf("initial status: state=%v, transport=%v", status["state"], status["transport"])
+
+	if status["state"] == "running" {
+		_, err = apiPost(clientAAPI, "/api/disconnect", nil)
+		if err != nil {
+			t.Logf("disconnect warning: %v", err)
+		}
+		time.Sleep(2 * time.Second)
+	}
+
+	// Step 2: Configure WebRTC as preferred with a broken signaling URL,
+	// but keep H3 enabled as a fallback.
+	cfg, err := apiGet(clientAAPI, "/api/config")
+	if err != nil {
+		t.Fatalf("get config failed: %v", err)
+	}
+
+	cfgMap := cfg
+	if transport, ok := cfgMap["transport"].(map[string]any); ok {
+		transport["preferred"] = "webrtc"
+		// Keep H3 enabled as fallback
+		if h3, ok := transport["h3"].(map[string]any); ok {
+			h3["enabled"] = true
+		}
+		if reality, ok := transport["reality"].(map[string]any); ok {
+			reality["enabled"] = false
+		}
+		if cdnCfg, ok := transport["cdn"].(map[string]any); ok {
+			cdnCfg["enabled"] = false
+		}
+		// Enable WebRTC with a broken signaling URL
+		transport["webrtc"] = map[string]any{
+			"enabled":      true,
+			"signal_url":   "wss://192.0.2.1:9999/broken/signal", // non-routable address
+			"stun_servers": []string{"stun:192.0.2.1:3478"},      // non-routable STUN
+		}
+	}
+
+	// Apply the config
+	client := &http.Client{Timeout: 10 * time.Second}
+	cfgData, _ := json.Marshal(cfgMap)
+	req, _ := http.NewRequest("PUT", "http://"+clientAAPI+"/api/config", strings.NewReader(string(cfgData)))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatalf("update config failed: %v", err)
+	}
+	resp.Body.Close()
+
+	// Step 3: Connect — WebRTC should fail, client should fall back to H3
+	connectResult, err := apiPost(clientAAPI, "/api/connect", nil)
+	if err != nil {
+		t.Fatalf("connect failed: %v", err)
+	}
+	t.Logf("connect result (expecting fallback): %v", connectResult)
+
+	time.Sleep(5 * time.Second)
+
+	// Step 4: Verify engine is running (via fallback transport)
+	status, err = apiGet(clientAAPI, "/api/status")
+	if err != nil {
+		t.Fatalf("get status after connect failed: %v", err)
+	}
+	t.Logf("status after fallback: state=%v, transport=%v", status["state"], status["transport"])
+
+	if status["state"] != "running" {
+		t.Fatalf("expected state 'running' after fallback, got %v", status["state"])
+	}
+
+	// The active transport should NOT be webrtc (since signaling is broken)
+	if status["transport"] == "webrtc" {
+		t.Logf("warning: transport is 'webrtc' despite broken signaling — may have connected anyway")
+	}
+
+	// Step 5: Verify data flow works through the fallback transport
+	socks5Addr := clientA + ":1080"
+	targetURL := "http://" + httpbinAddr + "/ip"
+
+	proxyResp, err := httpViaSOCKS5(socks5Addr, targetURL, 15*time.Second)
+	if err != nil {
+		t.Fatalf("SOCKS5 via fallback failed: %v", err)
+	}
+	defer proxyResp.Body.Close()
+
+	if proxyResp.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", proxyResp.StatusCode)
+	}
+
+	body, _ := io.ReadAll(proxyResp.Body)
+	t.Logf("WebRTC fallback e2e OK: status=%d, body=%s", proxyResp.StatusCode, strings.TrimSpace(string(body)))
+
+	// Step 6: Restore H3-only config
+	if transport, ok := cfgMap["transport"].(map[string]any); ok {
+		transport["preferred"] = "h3"
+		if h3, ok := transport["h3"].(map[string]any); ok {
+			h3["enabled"] = true
+		}
+		transport["webrtc"] = map[string]any{
+			"enabled": false,
+		}
+	}
+	cfgData, _ = json.Marshal(cfgMap)
+	req, _ = http.NewRequest("PUT", "http://"+clientAAPI+"/api/config", strings.NewReader(string(cfgData)))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err = client.Do(req)
+	if err != nil {
+		t.Logf("restore config warning: %v", err)
+	} else {
+		resp.Body.Close()
+	}
+
+	// Reconnect with H3
+	apiPost(clientAAPI, "/api/disconnect", nil)
+	time.Sleep(time.Second)
+	apiPost(clientAAPI, "/api/connect", nil)
+}

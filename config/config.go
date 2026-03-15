@@ -224,13 +224,14 @@ type GeoDataConfig struct {
 
 // RouteRule defines a single routing rule.
 type RouteRule struct {
-	Domains  string   `yaml:"domains,omitempty" json:"domains,omitempty"`
-	GeoSite  string   `yaml:"geosite,omitempty" json:"geosite,omitempty"`
-	GeoIP    string   `yaml:"geoip,omitempty" json:"geoip,omitempty"`
-	Process  []string `yaml:"process,omitempty" json:"process,omitempty"`
-	Protocol string   `yaml:"protocol,omitempty" json:"protocol,omitempty"`
-	IPCIDR   []string `yaml:"ip_cidr,omitempty" json:"ip_cidr,omitempty"`
-	Action   string   `yaml:"action" json:"action"`
+	Domains     string   `yaml:"domains,omitempty" json:"domains,omitempty"`
+	GeoSite     string   `yaml:"geosite,omitempty" json:"geosite,omitempty"`
+	GeoIP       string   `yaml:"geoip,omitempty" json:"geoip,omitempty"`
+	Process     []string `yaml:"process,omitempty" json:"process,omitempty"`
+	Protocol    string   `yaml:"protocol,omitempty" json:"protocol,omitempty"`
+	IPCIDR      []string `yaml:"ip_cidr,omitempty" json:"ip_cidr,omitempty"`
+	NetworkType string   `yaml:"network_type,omitempty" json:"network_type,omitempty"` // "wifi", "cellular", "ethernet"
+	Action      string   `yaml:"action" json:"action"`
 }
 
 // DNSConfig configures DNS resolution.

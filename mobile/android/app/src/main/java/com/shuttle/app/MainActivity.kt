@@ -32,6 +32,8 @@ class MainActivity : Activity() {
 
     companion object {
         private const val VPN_REQUEST_CODE = 1001
+        private const val MAX_POLL_ATTEMPTS = 40
+        private const val POLL_INTERVAL_MS = 500L
     }
 
     private lateinit var webView: WebView
@@ -122,28 +124,40 @@ class MainActivity : Activity() {
 
     private fun pollForApiServer() {
         var attempts = 0
-        val maxAttempts = 20
-        val pollInterval = 500L
 
         statusCheckRunnable = object : Runnable {
             override fun run() {
                 if (ShuttleVpnService.isRunning) {
-                    // Try to connect to API
+                    // Get the actual API address from the VPN service
+                    val addr = ShuttleVpnService.apiAddress
+                    if (addr != null) {
+                        apiAddr = addr
+                        webView.loadUrl("http://$addr")
+                        return
+                    }
+
+                    // Fallback: try to detect from engine status
                     val status = try {
                         mobile.Mobile.status()
                     } catch (e: Exception) { null }
 
                     if (status != null && status.contains("running")) {
-                        // API is ready, load WebView
-                        // Parse status to get API address
-                        webView.loadUrl("http://127.0.0.1:12345")
-                        return
+                        // Engine is running but we don't have the address — try status parsing
+                        try {
+                            val json = org.json.JSONObject(status)
+                            val detectedAddr = json.optString("api_addr", "")
+                            if (detectedAddr.isNotEmpty()) {
+                                apiAddr = detectedAddr
+                                webView.loadUrl("http://$detectedAddr")
+                                return
+                            }
+                        } catch (_: Exception) {}
                     }
                 }
 
                 attempts++
-                if (attempts < maxAttempts) {
-                    handler.postDelayed(this, pollInterval)
+                if (attempts < MAX_POLL_ATTEMPTS) {
+                    handler.postDelayed(this, POLL_INTERVAL_MS)
                 } else {
                     Toast.makeText(this@MainActivity, "Failed to connect to VPN service", Toast.LENGTH_SHORT).show()
                 }
