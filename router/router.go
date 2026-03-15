@@ -263,6 +263,38 @@ func (r *Router) MatchProtocol(proto string) Action {
 	return r.defaultAct
 }
 
+// DryRunResult describes the routing decision for a given input.
+type DryRunResult struct {
+	Domain    string `json:"domain"`
+	Action    string `json:"action"`               // "proxy", "direct", "reject"
+	MatchedBy string `json:"matched_by"`            // "domain_rule", "geosite", "default"
+	Rule      string `json:"rule,omitempty"`         // the matched rule pattern
+}
+
+// DryRun tests routing for a domain without actually proxying or doing DNS resolution.
+// It checks domain rules only and falls back to the default action.
+func (r *Router) DryRun(domain string) DryRunResult {
+	result := DryRunResult{
+		Domain: domain,
+	}
+
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	if domain != "" {
+		if action, found := r.domainTrie.Lookup(domain); found {
+			result.Action = action
+			result.MatchedBy = "domain_rule"
+			result.Rule = domain
+			return result
+		}
+	}
+
+	result.Action = string(r.defaultAct)
+	result.MatchedBy = "default"
+	return result
+}
+
 // GeoSiteDB returns the GeoSite database used by this router.
 func (r *Router) GeoSiteDB() *GeoSiteDB {
 	return r.geoSite

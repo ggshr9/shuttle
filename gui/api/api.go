@@ -493,6 +493,75 @@ func handlerWithAllOptions(eng *engine.Engine, subMgr *subscription.Manager, sta
 		writeJSON(w, map[string]string{"status": "applied", "template": templateID})
 	})
 
+	// Routing dry-run: test how a domain would be routed without proxying.
+	mux.HandleFunc("POST /api/routing/test", func(w http.ResponseWriter, r *http.Request) {
+		var req struct {
+			URL string `json:"url"`
+		}
+		if err := decodeJSON(r, &req); err != nil {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		r.Body.Close()
+
+		if req.URL == "" {
+			writeError(w, http.StatusBadRequest, "url is required")
+			return
+		}
+
+		// Extract domain from the input — it may be a bare domain or a full URL.
+		domain := req.URL
+		if strings.Contains(domain, "://") {
+			if u, err := url.Parse(domain); err == nil && u.Hostname() != "" {
+				domain = u.Hostname()
+			}
+		}
+		// Strip port if present.
+		if h, _, err := net.SplitHostPort(domain); err == nil {
+			domain = h
+		}
+
+		rt := eng.CurrentRouter()
+		if rt == nil {
+			// Build a temporary router from config when engine is not running.
+			cfg := eng.Config()
+			routerCfg := &router.RouterConfig{
+				DefaultAction: router.Action(cfg.Routing.Default),
+			}
+			for _, rule := range cfg.Routing.Rules {
+				rr := router.Rule{Action: router.Action(rule.Action)}
+				switch {
+				case rule.Domains != "":
+					rr.Type = "domain"
+					rr.Values = []string{rule.Domains}
+				case rule.GeoSite != "":
+					rr.Type = "geosite"
+					rr.Values = []string{rule.GeoSite}
+				case rule.GeoIP != "":
+					rr.Type = "geoip"
+					rr.Values = []string{rule.GeoIP}
+				case len(rule.IPCIDR) > 0:
+					rr.Type = "ip-cidr"
+					rr.Values = rule.IPCIDR
+				}
+				routerCfg.Rules = append(routerCfg.Rules, rr)
+			}
+			rt = router.NewRouter(routerCfg, nil, nil, nil)
+		}
+
+		result := rt.DryRun(domain)
+		writeJSON(w, result)
+	})
+
+	mux.HandleFunc("GET /api/transports/stats", func(w http.ResponseWriter, r *http.Request) {
+		status := eng.Status()
+		if status.TransportBreakdown != nil {
+			writeJSON(w, status.TransportBreakdown)
+		} else {
+			writeJSON(w, []struct{}{})
+		}
+	})
+
 	mux.HandleFunc("GET /api/processes", func(w http.ResponseWriter, r *http.Request) {
 		procs, err := procnet.ListNetworkProcesses()
 		if err != nil {
@@ -774,6 +843,56 @@ func handlerWithAllOptions(eng *engine.Engine, subMgr *subscription.Manager, sta
 		} else {
 			writeJSON(w, []connlog.Entry{})
 		}
+	})
+
+	// Streams by connection ID endpoint
+	mux.HandleFunc("GET /api/connections/", func(w http.ResponseWriter, r *http.Request) {
+		// Extract path: /api/connections/{id}/streams
+		path := strings.TrimPrefix(r.URL.Path, "/api/connections/")
+		parts := strings.Split(path, "/")
+		if len(parts) != 2 || parts[1] != "streams" {
+			writeError(w, http.StatusNotFound, "not found")
+			return
+		}
+		connID := parts[0]
+		if connID == "" {
+			writeError(w, http.StatusBadRequest, "connection id required")
+			return
+		}
+
+		st := eng.StreamTracker()
+		if st == nil {
+			writeJSON(w, []any{})
+			return
+		}
+
+		streams := st.ByConnID(connID)
+		type streamInfo struct {
+			StreamID      uint64 `json:"stream_id"`
+			ConnID        string `json:"conn_id"`
+			Target        string `json:"target"`
+			Transport     string `json:"transport"`
+			BytesSent     int64  `json:"bytes_sent"`
+			BytesReceived int64  `json:"bytes_received"`
+			Errors        int64  `json:"errors"`
+			Closed        bool   `json:"closed"`
+			DurationMs    int64  `json:"duration_ms"`
+		}
+		out := make([]streamInfo, 0, len(streams))
+		for _, m := range streams {
+			out = append(out, streamInfo{
+				StreamID:      m.StreamID,
+				ConnID:        m.ConnID,
+				Target:        m.Target,
+				Transport:     m.Transport,
+				BytesSent:     m.BytesSent.Load(),
+				BytesReceived: m.BytesReceived.Load(),
+				Errors:        m.Errors.Load(),
+				Closed:        m.Closed.Load(),
+				DurationMs:    m.GetDuration().Milliseconds(),
+			})
+		}
+		writeJSON(w, out)
 	})
 
 	// Update check endpoint

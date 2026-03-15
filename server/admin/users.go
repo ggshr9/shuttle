@@ -121,6 +121,16 @@ func (s *UserStore) SetEnabled(token string, enabled bool) bool {
 	return true
 }
 
+// ReplaceAll clears all users and replaces them with the given list.
+func (s *UserStore) ReplaceAll(users []config.User) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.users = make(map[string]*UserState, len(users))
+	for _, u := range users {
+		s.users[u.Token] = &UserState{User: u}
+	}
+}
+
 // ToConfig returns the current users as config entries.
 func (s *UserStore) ToConfig() []config.User {
 	s.mu.RLock()

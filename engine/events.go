@@ -1,6 +1,10 @@
 package engine
 
-import "time"
+import (
+	"time"
+
+	"github.com/shuttle-proxy/shuttle/stream"
+)
 
 // EventType identifies the kind of engine event.
 type EventType int
@@ -112,8 +116,9 @@ type EngineStatus struct {
 	Transports     []TransportInfo `json:"transports"`
 	MultipathPaths []PathInfo      `json:"multipath_paths,omitempty"`
 	Mesh           *MeshStatus     `json:"mesh,omitempty"`
-	Streams        *StreamStats    `json:"streams,omitempty"`
-	CircuitState   string          `json:"circuit_state,omitempty"`
+	Streams             *StreamStats           `json:"streams,omitempty"`
+	TransportBreakdown  []stream.TransportStats `json:"transport_breakdown,omitempty"`
+	CircuitState        string                  `json:"circuit_state,omitempty"`
 }
 
 // StreamStats summarises per-stream metrics for the API.

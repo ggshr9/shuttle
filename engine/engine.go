@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/quic-go/quic-go"
@@ -76,6 +77,9 @@ type Engine struct {
 
 	// Background goroutine tracking for clean shutdown
 	bgWg sync.WaitGroup
+
+	// Connection sequence counter for generating correlation IDs
+	connSeq uint64
 
 	// Event subscribers — stores bidirectional channels, Subscribe returns receive-only view
 	subMu sync.Mutex
@@ -483,12 +487,14 @@ func (e *Engine) createDialer(cfg *config.ClientConfig, rt *router.Router, dnsRe
 				cb.RecordSuccess()
 			}
 			// Wrap with measured stream for per-stream metrics.
+			connID := fmt.Sprintf("%08x", atomic.AddUint64(&e.connSeq, 1))
 			st := e.streamTracker
 			transportType := ""
 			if curSel != nil {
 				transportType = curSel.ActiveTransport()
 			}
 			metrics := st.Track(rawStream.StreamID(), addr, transportType)
+			metrics.ConnID = connID
 			measured := stream.NewMeasuredStream(rawStream, metrics)
 
 			// For UDP streams, prepend the UDP marker so the server uses UDP relay.
@@ -818,6 +824,7 @@ func (e *Engine) Status() EngineStatus {
 			TotalBytesRecv: sum.TotalBytesRecv,
 			AvgDurationMs:  sum.AvgDuration.Milliseconds(),
 		}
+		status.TransportBreakdown = st.ByTransport()
 	}
 
 	if sel != nil {
@@ -883,6 +890,13 @@ func (e *Engine) StreamStats() stream.StreamSummary {
 		return stream.StreamSummary{}
 	}
 	return st.Summary()
+}
+
+// StreamTracker returns the current stream tracker, or nil if the engine is not running.
+func (e *Engine) StreamTracker() *stream.StreamTracker {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	return e.streamTracker
 }
 
 // Config returns a deep copy of the current config.

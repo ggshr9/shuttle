@@ -101,6 +101,59 @@ func (t *StreamTracker) Recent(n int) []*StreamMetrics {
 	return out
 }
 
+// TransportStats holds aggregate stats for a single transport type.
+type TransportStats struct {
+	Transport    string `json:"transport"`
+	ActiveStreams int64  `json:"active_streams"`
+	TotalStreams  int64  `json:"total_streams"`
+	BytesSent    int64  `json:"bytes_sent"`
+	BytesRecv    int64  `json:"bytes_recv"`
+}
+
+// ByTransport returns per-transport aggregate stats.
+func (t *StreamTracker) ByTransport() []TransportStats {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+
+	groups := make(map[string]*TransportStats)
+	for _, m := range t.index {
+		if m == nil {
+			continue
+		}
+		ts, ok := groups[m.Transport]
+		if !ok {
+			ts = &TransportStats{Transport: m.Transport}
+			groups[m.Transport] = ts
+		}
+		ts.TotalStreams++
+		if !m.Closed.Load() {
+			ts.ActiveStreams++
+		}
+		ts.BytesSent += m.BytesSent.Load()
+		ts.BytesRecv += m.BytesReceived.Load()
+	}
+
+	out := make([]TransportStats, 0, len(groups))
+	for _, ts := range groups {
+		out = append(out, *ts)
+	}
+	return out
+}
+
+// ByConnID returns all stream metrics for a given connection ID.
+func (t *StreamTracker) ByConnID(connID string) []*StreamMetrics {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+
+	var out []*StreamMetrics
+	for _, m := range t.index {
+		if m != nil && m.ConnID == connID {
+			out = append(out, m)
+		}
+	}
+	return out
+}
+
 // Summary returns an aggregate snapshot of all tracked streams.
 func (t *StreamTracker) Summary() StreamSummary {
 	t.mu.RLock()

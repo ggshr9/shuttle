@@ -11,6 +11,7 @@ type StreamMetrics struct {
 	StreamID  uint64
 	Target    string
 	Transport string
+	ConnID    string // correlation ID linking stream to proxy connection
 
 	StartTime     time.Time
 	FirstByteTime atomic.Pointer[time.Time] // set once on first Read

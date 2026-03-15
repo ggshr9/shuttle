@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -176,5 +177,118 @@ func TestMetrics(t *testing.T) {
 	}
 	if resp["goroutines"] == nil {
 		t.Error("goroutines missing")
+	}
+}
+
+func TestBackup(t *testing.T) {
+	info, cfg := testSetup()
+	users := NewUserStore([]config.User{
+		{Name: "alice", Token: "tok-alice", MaxBytes: 1000, Enabled: true},
+		{Name: "bob", Token: "tok-bob", MaxBytes: 0, Enabled: false},
+	})
+	handler := Handler(info, cfg, "", users, nil)
+
+	req := httptest.NewRequest("GET", "/api/backup", nil)
+	req.Header.Set("Authorization", "Bearer test-token-abc123")
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("GET /api/backup status = %d, want 200", w.Code)
+	}
+
+	var backup BackupPayload
+	if err := json.NewDecoder(w.Body).Decode(&backup); err != nil {
+		t.Fatalf("decode backup: %v", err)
+	}
+
+	if backup.Version != 1 {
+		t.Errorf("version = %d, want 1", backup.Version)
+	}
+	if backup.Timestamp == "" {
+		t.Error("timestamp is empty")
+	}
+	if len(backup.Users) != 2 {
+		t.Fatalf("users count = %d, want 2", len(backup.Users))
+	}
+	if backup.Config == nil {
+		t.Fatal("config is nil")
+	}
+	// Secrets should be redacted
+	if backup.Config.Auth.Password != "***" {
+		t.Errorf("password not redacted: %q", backup.Config.Auth.Password)
+	}
+	if backup.Config.Auth.PrivateKey != "***" {
+		t.Errorf("private_key not redacted: %q", backup.Config.Auth.PrivateKey)
+	}
+	if backup.Config.Admin.Token != "***" {
+		t.Errorf("admin token not redacted: %q", backup.Config.Admin.Token)
+	}
+}
+
+func TestRestoreUsers(t *testing.T) {
+	info, cfg := testSetup()
+	users := NewUserStore([]config.User{
+		{Name: "old-user", Token: "tok-old", MaxBytes: 0, Enabled: true},
+	})
+	handler := Handler(info, cfg, "", users, nil)
+
+	body := `{
+		"version": 1,
+		"users": [
+			{"name": "alice", "token": "tok-alice", "max_bytes": 5000, "enabled": true},
+			{"name": "bob", "token": "tok-bob", "max_bytes": 0, "enabled": false}
+		]
+	}`
+	req := httptest.NewRequest("POST", "/api/restore", strings.NewReader(body))
+	req.Header.Set("Authorization", "Bearer test-token-abc123")
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("POST /api/restore status = %d, want 200; body: %s", w.Code, w.Body.String())
+	}
+
+	var resp map[string]string
+	json.NewDecoder(w.Body).Decode(&resp)
+	if resp["status"] != "restored" {
+		t.Errorf("status = %q, want restored", resp["status"])
+	}
+	if resp["count"] != "2" {
+		t.Errorf("count = %q, want 2", resp["count"])
+	}
+
+	// Verify old user is gone and new users exist
+	listed := users.List()
+	if len(listed) != 2 {
+		t.Fatalf("user count = %d, want 2", len(listed))
+	}
+
+	// Check that alice is authenticated
+	if u := users.Authenticate("tok-alice"); u == nil {
+		t.Error("alice should be authenticated")
+	}
+	// Check that bob is disabled
+	if u := users.Authenticate("tok-bob"); u != nil {
+		t.Error("bob should not be authenticated (disabled)")
+	}
+	// Old user should be gone
+	if u := users.Authenticate("tok-old"); u != nil {
+		t.Error("old-user should have been removed")
+	}
+}
+
+func TestRestoreInvalidJSON(t *testing.T) {
+	info, cfg := testSetup()
+	users := NewUserStore(cfg.Admin.Users)
+	handler := Handler(info, cfg, "", users, nil)
+
+	req := httptest.NewRequest("POST", "/api/restore", strings.NewReader("{not valid json"))
+	req.Header.Set("Authorization", "Bearer test-token-abc123")
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("POST /api/restore with bad JSON status = %d, want 400", w.Code)
 	}
 }

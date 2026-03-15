@@ -754,6 +754,116 @@ func TestAPISystemResources(t *testing.T) {
 	}
 }
 
+func TestAPIRoutingTest(t *testing.T) {
+	h, _, _ := newTestHandler()
+
+	// Test with a bare domain
+	rr := doRequest(h, "POST", "/api/routing/test", `{"url":"example.com"}`)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rr.Code, rr.Body.String())
+	}
+
+	var result map[string]interface{}
+	if err := json.Unmarshal(rr.Body.Bytes(), &result); err != nil {
+		t.Fatalf("invalid JSON: %v", err)
+	}
+
+	// Should have all expected fields
+	for _, key := range []string{"domain", "action", "matched_by"} {
+		if _, ok := result[key]; !ok {
+			t.Errorf("missing %q field in routing test result", key)
+		}
+	}
+
+	domain, _ := result["domain"].(string)
+	if domain != "example.com" {
+		t.Errorf("expected domain 'example.com', got %q", domain)
+	}
+
+	// Default config uses "proxy" as default action
+	action, _ := result["action"].(string)
+	if action != "proxy" {
+		t.Errorf("expected action 'proxy' for default config, got %q", action)
+	}
+
+	matchedBy, _ := result["matched_by"].(string)
+	if matchedBy != "default" {
+		t.Errorf("expected matched_by 'default', got %q", matchedBy)
+	}
+}
+
+func TestAPIRoutingTest_FullURL(t *testing.T) {
+	h, _, _ := newTestHandler()
+
+	// Test with a full URL — domain should be extracted
+	rr := doRequest(h, "POST", "/api/routing/test", `{"url":"https://example.com/path?query=1"}`)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rr.Code, rr.Body.String())
+	}
+
+	var result map[string]interface{}
+	if err := json.Unmarshal(rr.Body.Bytes(), &result); err != nil {
+		t.Fatalf("invalid JSON: %v", err)
+	}
+
+	domain, _ := result["domain"].(string)
+	if domain != "example.com" {
+		t.Errorf("expected domain 'example.com' extracted from URL, got %q", domain)
+	}
+}
+
+func TestAPIRoutingTest_MissingURL(t *testing.T) {
+	h, _, _ := newTestHandler()
+
+	rr := doRequest(h, "POST", "/api/routing/test", `{"url":""}`)
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for empty url, got %d", rr.Code)
+	}
+}
+
+func TestAPITransportStats(t *testing.T) {
+	h, _, _ := newTestHandler()
+
+	rr := doRequest(h, "GET", "/api/transports/stats", "")
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rr.Code)
+	}
+
+	// Engine is stopped, so transport breakdown is empty — should be a valid JSON array.
+	var stats []interface{}
+	if err := json.Unmarshal(rr.Body.Bytes(), &stats); err != nil {
+		t.Fatalf("invalid JSON array: %v", err)
+	}
+}
+
+func TestAPIConnectionStreams(t *testing.T) {
+	h, _, _ := newTestHandler()
+
+	// Engine is stopped so StreamTracker is nil — should return empty array.
+	rr := doRequest(h, "GET", "/api/connections/test-conn-id/streams", "")
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rr.Code, rr.Body.String())
+	}
+
+	var streams []interface{}
+	if err := json.Unmarshal(rr.Body.Bytes(), &streams); err != nil {
+		t.Fatalf("invalid JSON: %v", err)
+	}
+	if len(streams) != 0 {
+		t.Fatalf("expected empty streams list, got %d", len(streams))
+	}
+}
+
+func TestAPIConnectionStreams_BadPath(t *testing.T) {
+	h, _, _ := newTestHandler()
+
+	// Missing /streams suffix should return 404.
+	rr := doRequest(h, "GET", "/api/connections/test-id/invalid", "")
+	if rr.Code != http.StatusNotFound {
+		t.Fatalf("expected 404, got %d", rr.Code)
+	}
+}
+
 // TestAPIWriteJSON_Encoding verifies the writeJSON helper produces valid JSON
 // by checking a known endpoint's output is parseable.
 func TestAPIWriteJSON_Encoding(t *testing.T) {

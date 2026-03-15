@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
+	"io"
 	"net/http"
 	"runtime"
 	"strconv"
@@ -27,6 +28,14 @@ type ServerInfo struct {
 	TotalConns  atomic.Int64
 	BytesSent   atomic.Int64
 	BytesRecv   atomic.Int64
+}
+
+// BackupPayload is the JSON structure for backup/restore operations.
+type BackupPayload struct {
+	Version   int                  `json:"version"`
+	Timestamp string               `json:"timestamp,omitempty"`
+	Users     []config.User        `json:"users"`
+	Config    *config.ServerConfig `json:"config,omitempty"`
 }
 
 // Handler creates the admin API HTTP handler.
@@ -245,6 +254,52 @@ func Handler(info *ServerInfo, cfg *config.ServerConfig, configPath string, user
 		cfg.Admin.Users = users.ToConfig()
 		cfgMu.Unlock()
 		writeJSON(w, map[string]string{"status": "updated"})
+	}))
+
+	mux.HandleFunc("GET /api/backup", auth(func(w http.ResponseWriter, r *http.Request) {
+		cfgMu.RLock()
+		redacted := *cfg
+		cfgMu.RUnlock()
+		redacted.Auth.Password = "***"
+		redacted.Auth.PrivateKey = "***"
+		redacted.Admin.Token = "***"
+		redacted.Cluster.Secret = "***"
+
+		writeJSON(w, BackupPayload{
+			Version:   1,
+			Timestamp: time.Now().UTC().Format(time.RFC3339),
+			Users:     users.ToConfig(),
+			Config:    &redacted,
+		})
+	}))
+
+	mux.HandleFunc("POST /api/restore", auth(func(w http.ResponseWriter, r *http.Request) {
+		body := io.LimitReader(r.Body, 10<<20) // 10MB max
+		var payload BackupPayload
+		if err := json.NewDecoder(body).Decode(&payload); err != nil {
+			writeError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
+			return
+		}
+		if payload.Users == nil {
+			writeError(w, http.StatusBadRequest, "missing users array")
+			return
+		}
+		// Validate user entries
+		for i, u := range payload.Users {
+			if u.Name == "" {
+				writeError(w, http.StatusBadRequest, fmt.Sprintf("user[%d]: name is required", i))
+				return
+			}
+			if u.Token == "" {
+				writeError(w, http.StatusBadRequest, fmt.Sprintf("user[%d]: token is required", i))
+				return
+			}
+		}
+		users.ReplaceAll(payload.Users)
+		cfgMu.Lock()
+		cfg.Admin.Users = users.ToConfig()
+		cfgMu.Unlock()
+		writeJSON(w, map[string]string{"status": "restored", "count": strconv.Itoa(len(payload.Users))})
 	}))
 
 	mux.HandleFunc("GET /api/audit", auth(func(w http.ResponseWriter, r *http.Request) {

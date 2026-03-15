@@ -181,6 +181,127 @@ func TestStreamTracker_ConcurrentAccess(t *testing.T) {
 	wg.Wait()
 }
 
+func TestStreamTracker_ByTransport(t *testing.T) {
+	tr := NewStreamTracker(10)
+
+	// Track 2 h3 streams and 1 reality stream.
+	m1 := tr.Track(1, "a.com:443", "h3")
+	m1.BytesSent.Store(100)
+	m1.BytesReceived.Store(200)
+
+	m2 := tr.Track(2, "b.com:443", "h3")
+	m2.BytesSent.Store(50)
+	m2.BytesReceived.Store(75)
+	m2.Closed.Store(true)
+
+	m3 := tr.Track(3, "c.com:443", "reality")
+	m3.BytesSent.Store(300)
+	m3.BytesReceived.Store(400)
+
+	stats := tr.ByTransport()
+	if len(stats) != 2 {
+		t.Fatalf("ByTransport() returned %d groups, want 2", len(stats))
+	}
+
+	// Build a map for easier assertions.
+	byName := make(map[string]TransportStats)
+	for _, s := range stats {
+		byName[s.Transport] = s
+	}
+
+	h3 := byName["h3"]
+	if h3.TotalStreams != 2 {
+		t.Fatalf("h3 TotalStreams = %d, want 2", h3.TotalStreams)
+	}
+	if h3.ActiveStreams != 1 {
+		t.Fatalf("h3 ActiveStreams = %d, want 1", h3.ActiveStreams)
+	}
+	if h3.BytesSent != 150 {
+		t.Fatalf("h3 BytesSent = %d, want 150", h3.BytesSent)
+	}
+	if h3.BytesRecv != 275 {
+		t.Fatalf("h3 BytesRecv = %d, want 275", h3.BytesRecv)
+	}
+
+	reality := byName["reality"]
+	if reality.TotalStreams != 1 {
+		t.Fatalf("reality TotalStreams = %d, want 1", reality.TotalStreams)
+	}
+	if reality.ActiveStreams != 1 {
+		t.Fatalf("reality ActiveStreams = %d, want 1", reality.ActiveStreams)
+	}
+	if reality.BytesSent != 300 {
+		t.Fatalf("reality BytesSent = %d, want 300", reality.BytesSent)
+	}
+	if reality.BytesRecv != 400 {
+		t.Fatalf("reality BytesRecv = %d, want 400", reality.BytesRecv)
+	}
+}
+
+func TestStreamTracker_ByConnID(t *testing.T) {
+	tr := NewStreamTracker(10)
+
+	// Track several streams with different ConnIDs.
+	m1 := tr.Track(1, "a:80", "h3")
+	m1.ConnID = "conn0001"
+
+	m2 := tr.Track(2, "b:80", "reality")
+	m2.ConnID = "conn0001"
+
+	m3 := tr.Track(3, "c:443", "h3")
+	m3.ConnID = "conn0002"
+
+	m4 := tr.Track(4, "d:443", "cdn")
+	_ = m4 // no ConnID set
+
+	// Look up conn0001 — should return m1 and m2.
+	results := tr.ByConnID("conn0001")
+	if len(results) != 2 {
+		t.Fatalf("ByConnID(conn0001) returned %d results, want 2", len(results))
+	}
+	ids := map[uint64]bool{}
+	for _, r := range results {
+		ids[r.StreamID] = true
+	}
+	if !ids[1] || !ids[2] {
+		t.Fatalf("expected stream IDs {1,2}, got %v", ids)
+	}
+
+	// Look up conn0002 — should return m3 only.
+	results = tr.ByConnID("conn0002")
+	if len(results) != 1 {
+		t.Fatalf("ByConnID(conn0002) returned %d results, want 1", len(results))
+	}
+	if results[0].StreamID != 3 {
+		t.Fatalf("expected stream ID 3, got %d", results[0].StreamID)
+	}
+
+	// Look up nonexistent — should return empty.
+	results = tr.ByConnID("nonexistent")
+	if len(results) != 0 {
+		t.Fatalf("ByConnID(nonexistent) returned %d results, want 0", len(results))
+	}
+}
+
+func TestStreamTracker_ByConnID_AfterEviction(t *testing.T) {
+	tr := NewStreamTracker(3)
+
+	m1 := tr.Track(1, "a:80", "h3")
+	m1.ConnID = "conn0001"
+
+	tr.Track(2, "b:80", "h3")
+	tr.Track(3, "c:80", "h3")
+
+	// This evicts stream 1.
+	tr.Track(4, "d:80", "h3")
+
+	// conn0001 should return empty now that stream 1 is evicted.
+	results := tr.ByConnID("conn0001")
+	if len(results) != 0 {
+		t.Fatalf("ByConnID after eviction returned %d results, want 0", len(results))
+	}
+}
+
 // --- MeasuredStream tests ---
 
 func TestMeasuredStream_ReadWrite(t *testing.T) {

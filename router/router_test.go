@@ -450,6 +450,78 @@ func TestRouterDefaultActionEmpty(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
+// DryRun tests
+// ---------------------------------------------------------------------------
+
+func TestDryRun_DomainMatch(t *testing.T) {
+	r := newTestRouter([]Rule{
+		{Type: "domain", Values: []string{"example.com"}, Action: ActionDirect},
+		{Type: "domain", Values: []string{"+.blocked.com"}, Action: ActionReject},
+	}, ActionProxy)
+
+	// Exact domain match
+	result := r.DryRun("example.com")
+	if result.Action != "direct" {
+		t.Errorf("DryRun(example.com).Action = %q, want \"direct\"", result.Action)
+	}
+	if result.MatchedBy != "domain_rule" {
+		t.Errorf("DryRun(example.com).MatchedBy = %q, want \"domain_rule\"", result.MatchedBy)
+	}
+	if result.Domain != "example.com" {
+		t.Errorf("DryRun(example.com).Domain = %q, want \"example.com\"", result.Domain)
+	}
+
+	// Wildcard domain match
+	result = r.DryRun("sub.blocked.com")
+	if result.Action != "reject" {
+		t.Errorf("DryRun(sub.blocked.com).Action = %q, want \"reject\"", result.Action)
+	}
+	if result.MatchedBy != "domain_rule" {
+		t.Errorf("DryRun(sub.blocked.com).MatchedBy = %q, want \"domain_rule\"", result.MatchedBy)
+	}
+}
+
+func TestDryRun_NoMatch(t *testing.T) {
+	r := newTestRouter([]Rule{
+		{Type: "domain", Values: []string{"example.com"}, Action: ActionDirect},
+	}, ActionProxy)
+
+	result := r.DryRun("unknown.org")
+	if result.Action != "proxy" {
+		t.Errorf("DryRun(unknown.org).Action = %q, want \"proxy\"", result.Action)
+	}
+	if result.MatchedBy != "default" {
+		t.Errorf("DryRun(unknown.org).MatchedBy = %q, want \"default\"", result.MatchedBy)
+	}
+}
+
+func TestDryRun_EmptyDomain(t *testing.T) {
+	r := newTestRouter([]Rule{
+		{Type: "domain", Values: []string{"example.com"}, Action: ActionDirect},
+	}, ActionProxy)
+
+	result := r.DryRun("")
+	if result.Action != "proxy" {
+		t.Errorf("DryRun(\"\").Action = %q, want \"proxy\"", result.Action)
+	}
+	if result.MatchedBy != "default" {
+		t.Errorf("DryRun(\"\").MatchedBy = %q, want \"default\"", result.MatchedBy)
+	}
+}
+
+func TestDryRun_DefaultDirect(t *testing.T) {
+	r := newTestRouter(nil, ActionDirect)
+
+	result := r.DryRun("anything.com")
+	if result.Action != "direct" {
+		t.Errorf("DryRun(anything.com).Action = %q, want \"direct\"", result.Action)
+	}
+	if result.MatchedBy != "default" {
+		t.Errorf("DryRun(anything.com).MatchedBy = %q, want \"default\"", result.MatchedBy)
+	}
+}
+
+// ---------------------------------------------------------------------------
 // Network-type routing tests
 // ---------------------------------------------------------------------------
 
