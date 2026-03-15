@@ -70,6 +70,16 @@ export interface SpeedtestResult {
   latency: number
 }
 
+export interface SpeedtestHistoryEntry {
+  timestamp: string
+  server_addr: string
+  server_name?: string
+  latency_ms: number
+  download_bps?: number
+  upload_bps?: number
+  available: boolean
+}
+
 export interface AutoSelectResult {
   server: Server
   latency: number
@@ -196,6 +206,7 @@ export const api = {
   testRouting: (url: string) => request<DryRunResult>('POST', '/api/routing/test', { url }),
   // Speedtest
   speedtest: (addrs: string[]) => request<SpeedtestResult[]>('POST', '/api/speedtest', { addrs }),
+  getSpeedtestHistory: (days = 30) => request<SpeedtestHistoryEntry[]>('GET', `/api/speedtest/history?days=${days}`),
   // Subscriptions
   getSubscriptions: () => request<Subscription[]>('GET', '/api/subscriptions'),
   addSubscription: (name: string, url: string) => request<Subscription>('POST', '/api/subscriptions', { name, url }),

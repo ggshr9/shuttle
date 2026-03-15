@@ -1,17 +1,55 @@
+# Shuttle Proxy — Docker Compose Production Stack
+#
+# Quick start:
+#   cp .env.example .env   # edit with your domain & password
+#   docker compose up -d
+#
+# This stack runs:
+#   - shuttled: the proxy server (H3/QUIC + Reality/TLS on port 443)
+#   - caddy:    reverse proxy with auto-HTTPS for the admin panel
+
 services:
   shuttled:
     build:
       context: ..
       dockerfile: deploy/Dockerfile
+    restart: unless-stopped
     ports:
-      - "443:443/tcp"
-      - "443:443/udp"
+      - "443:443/tcp"   # Reality/CDN transport
+      - "443:443/udp"   # H3/QUIC transport
     volumes:
-      - shuttle-config:/etc/shuttle
+      - shuttle-data:/data
+      - caddy-certs:/certs:ro
     environment:
       - SHUTTLE_DOMAIN=${SHUTTLE_DOMAIN:-}
       - SHUTTLE_PASSWORD=${SHUTTLE_PASSWORD:-}
+      - SHUTTLE_ADMIN_TOKEN=${SHUTTLE_ADMIN_TOKEN:-}
+      - SHUTTLE_DATA_DIR=/data
+      - SHUTTLE_DEBUG=${SHUTTLE_DEBUG:-false}
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:9090/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  caddy:
+    image: caddy:2-alpine
     restart: unless-stopped
+    ports:
+      - "80:80"       # HTTP → HTTPS redirect + ACME challenge
+      - "8443:443"    # Admin panel HTTPS
+    volumes:
+      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-certs:/certs
+    environment:
+      - SHUTTLE_DOMAIN=${SHUTTLE_DOMAIN:-localhost}
+      - SHUTTLE_EMAIL=${SHUTTLE_EMAIL:-}
+    depends_on:
+      shuttled:
+        condition: service_healthy
 
 volumes:
-  shuttle-config:
+  shuttle-data:
+  caddy-data:
+  caddy-certs:

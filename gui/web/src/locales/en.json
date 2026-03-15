@@ -243,6 +243,18 @@
     "connectNow": "Connect Now",
     "configureLater": "Configure later"
   },
+  "speedtest": {
+    "history": "Speed Test History",
+    "avgLatency": "Avg Latency",
+    "bestLatency": "Best Latency",
+    "worstLatency": "Worst Latency",
+    "availability": "Availability",
+    "noHistory": "No speed test history yet. Run a speed test to start recording.",
+    "timeRange": "Time Range",
+    "days7": "7d",
+    "days30": "30d",
+    "days90": "90d"
+  },
   "traffic": {
     "title": "Traffic Usage",
     "daily": "Daily",

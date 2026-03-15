@@ -80,9 +80,9 @@ func copyBuffer(dst io.Writer, src io.Reader) (int64, error) {
 		return io.Copy(dst, src)
 	}
 
-	// Fall back to pooled buffer.
-	buf := pool.Get(32 * 1024)
+	// Fall back to pooled 32KB buffer (exact MedLarge tier, no waste).
+	buf := pool.GetMedLarge()
 	n, err := io.CopyBuffer(dst, src, buf)
-	pool.Put(buf)
+	pool.PutMedLarge(buf)
 	return n, err
 }

@@ -23,6 +23,7 @@ import (
 	"github.com/shuttle-proxy/shuttle/gui"
 	"github.com/shuttle-proxy/shuttle/gui/api"
 	"github.com/shuttle-proxy/shuttle/gui/tray"
+	"github.com/shuttle-proxy/shuttle/speedtest"
 	"github.com/shuttle-proxy/shuttle/stats"
 	"github.com/shuttle-proxy/shuttle/subscription"
 )
@@ -128,6 +129,9 @@ func main() {
 		app.connStore = connStore
 	}
 
+	// Initialize speedtest history storage
+	stHistory := speedtest.NewHistoryStorage(dataDir)
+
 	// Initialize subscription manager
 	subMgr := subscription.NewManager()
 	if len(cfg.Subscriptions) > 0 {
@@ -135,7 +139,7 @@ func main() {
 	}
 
 	// Build one shared API handler for both the Wails asset handler and standalone server.
-	sharedHandler := api.HandlerWithConnLog(eng, subMgr, statsStore, connStore)
+	sharedHandler := api.HandlerWithAllStores(eng, subMgr, statsStore, connStore, stHistory)
 	app.apiHandler = sharedHandler
 
 	// Wire stats recording and connlog: subscribe to engine events.

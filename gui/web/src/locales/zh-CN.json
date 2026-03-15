@@ -243,6 +243,18 @@
     "connectNow": "立即连接",
     "configureLater": "稍后配置"
   },
+  "speedtest": {
+    "history": "测速历史",
+    "avgLatency": "平均延迟",
+    "bestLatency": "最低延迟",
+    "worstLatency": "最高延迟",
+    "availability": "可用率",
+    "noHistory": "暂无测速历史记录。运行测速后开始记录。",
+    "timeRange": "时间范围",
+    "days7": "7天",
+    "days30": "30天",
+    "days90": "90天"
+  },
   "traffic": {
     "title": "流量统计",
     "daily": "每日",

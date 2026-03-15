@@ -43,15 +43,20 @@ func HandlerWithSubscriptions(eng *engine.Engine, subMgr *subscription.Manager) 
 
 // HandlerWithConnLog creates the HTTP handler with all options including connection log storage.
 func HandlerWithConnLog(eng *engine.Engine, subMgr *subscription.Manager, statsStore *stats.Storage, connStore *connlog.Storage) http.Handler {
-	return handlerWithAllOptions(eng, subMgr, statsStore, connStore)
+	return handlerWithAllOptions(eng, subMgr, statsStore, connStore, nil)
+}
+
+// HandlerWithAllStores creates the HTTP handler with all storage backends including speedtest history.
+func HandlerWithAllStores(eng *engine.Engine, subMgr *subscription.Manager, statsStore *stats.Storage, connStore *connlog.Storage, stHistory *speedtest.HistoryStorage) http.Handler {
+	return handlerWithAllOptions(eng, subMgr, statsStore, connStore, stHistory)
 }
 
 // HandlerWithOptions creates the HTTP handler with all options.
 func HandlerWithOptions(eng *engine.Engine, subMgr *subscription.Manager, statsStore *stats.Storage) http.Handler {
-	return handlerWithAllOptions(eng, subMgr, statsStore, nil)
+	return handlerWithAllOptions(eng, subMgr, statsStore, nil, nil)
 }
 
-func handlerWithAllOptions(eng *engine.Engine, subMgr *subscription.Manager, statsStore *stats.Storage, connStore *connlog.Storage) http.Handler {
+func handlerWithAllOptions(eng *engine.Engine, subMgr *subscription.Manager, statsStore *stats.Storage, connStore *connlog.Storage, stHistory *speedtest.HistoryStorage) http.Handler {
 	mux := http.NewServeMux()
 	updateChecker := update.NewChecker()
 
@@ -690,9 +695,43 @@ func handlerWithAllOptions(eng *engine.Engine, subMgr *subscription.Manager, sta
 		results := tester.TestAll(r.Context(), servers)
 		speedtest.SortByLatency(results)
 
+		// Persist results to history storage
+		if stHistory != nil {
+			now := time.Now()
+			var histEntries []speedtest.HistoryEntry
+			for _, r := range results {
+				histEntries = append(histEntries, speedtest.HistoryEntry{
+					Timestamp:  now,
+					ServerAddr: r.ServerAddr,
+					ServerName: r.ServerName,
+					LatencyMs:  r.LatencyMs,
+					Available:  r.Available,
+				})
+			}
+			_ = stHistory.Record(histEntries)
+		}
+
 		writeJSON(w, map[string]any{
 			"results": results,
 		})
+	})
+
+	// Speedtest history endpoint
+	mux.HandleFunc("GET /api/speedtest/history", func(w http.ResponseWriter, r *http.Request) {
+		days := 30
+		if d := r.URL.Query().Get("days"); d != "" {
+			if v, err := strconv.Atoi(d); err == nil && v > 0 {
+				days = v
+			}
+		}
+		var entries []speedtest.HistoryEntry
+		if stHistory != nil {
+			entries = stHistory.GetHistory(days)
+		}
+		if entries == nil {
+			entries = []speedtest.HistoryEntry{}
+		}
+		writeJSON(w, entries)
 	})
 
 	// Auto-select best server based on latency

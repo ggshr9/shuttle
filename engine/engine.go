@@ -6,6 +6,7 @@ import (
 	"io"
 	"log/slog"
 	"net"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -499,7 +500,8 @@ func (e *Engine) createDialer(cfg *config.ClientConfig, rt *router.Router, dnsRe
 				cb.RecordSuccess()
 			}
 			// Wrap with measured stream for per-stream metrics.
-			connID := fmt.Sprintf("%08x", atomic.AddUint64(&e.connSeq, 1))
+			seq := atomic.AddUint64(&e.connSeq, 1)
+			connID := strconv.FormatUint(seq, 16)
 			st := e.streamTracker
 			transportType := ""
 			if curSel != nil {

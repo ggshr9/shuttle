@@ -1,0 +1,7 @@
+{$SHUTTLE_DOMAIN} {
+    # Admin panel reverse proxy
+    reverse_proxy shuttled:9090
+
+    # TLS via Let's Encrypt
+    tls {$SHUTTLE_EMAIL}
+}

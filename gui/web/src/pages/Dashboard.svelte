@@ -8,6 +8,7 @@
   import ConnectionQualityChart from '../lib/ConnectionQualityChart.svelte'
   import MeshTopologyChart from '../lib/MeshTopologyChart.svelte'
   import TrafficChart from '../lib/TrafficChart.svelte'
+  import SpeedTestHistory from '../lib/SpeedTestHistory.svelte'
   import { t } from '../lib/i18n/index'
 
   let status = $state(null)
@@ -256,6 +257,8 @@
       <ConnectionQualityChart peers={status.mesh.peers || []} height={150} />
     {/if}
   {/if}
+
+  <SpeedTestHistory />
 
   <TrafficChart />
 </div>
