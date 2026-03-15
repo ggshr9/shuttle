@@ -13,30 +13,61 @@ package fault
 
 import (
 	"fmt"
+	"math/rand"
 	"net"
 	"sync"
 
 	"github.com/shuttle-proxy/shuttle/testkit/observe"
+	"github.com/shuttle-proxy/shuttle/testkit/vnet"
 	"github.com/shuttle-proxy/shuttle/transport"
 )
 
 // Injector holds fault injection rules and wraps connections/streams.
+// It uses a Clock interface for time operations (defaults to RealClock)
+// and a seeded RNG for deterministic probabilistic behavior.
 type Injector struct {
 	readRules  []Rule
 	writeRules []Rule
 	dialRules  []Rule
 	mu         sync.Mutex
 	recorder   *observe.Recorder
+	clock      vnet.Clock
+	rng        *rand.Rand
 }
 
 // New creates a new fault Injector with no rules.
+// By default it uses wall-clock time and seed 0 for deterministic behavior.
+// Use WithClock and WithRNG to override for virtual-clock testing.
 func New() *Injector {
-	return &Injector{}
+	return &Injector{
+		clock: vnet.RealClock{},
+		rng:   rand.New(rand.NewSource(0)),
+	}
 }
 
 // WithRecorder attaches a Recorder so that fault activations are logged.
 func (fi *Injector) WithRecorder(r *observe.Recorder) *Injector {
 	fi.recorder = r
+	return fi
+}
+
+// WithClock sets the clock used for time-based rule evaluation (After, Delay).
+// Pass a vnet.VirtualClock for deterministic testing.
+func (fi *Injector) WithClock(c vnet.Clock) *Injector {
+	fi.clock = c
+	return fi
+}
+
+// WithRNG sets the random number generator for probabilistic rules.
+// Pass a seeded rand.Rand for deterministic behavior.
+func (fi *Injector) WithRNG(rng *rand.Rand) *Injector {
+	fi.rng = rng
+	return fi
+}
+
+// WithSeed sets the RNG seed for deterministic probabilistic behavior.
+func (fi *Injector) WithSeed(seed int64) *Injector {
+	fi.rng = rand.New(rand.NewSource(seed))
 	return fi
 }
 

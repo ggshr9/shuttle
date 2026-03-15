@@ -153,8 +153,16 @@ func (l *link) deliver(dst io.Writer, data []byte) {
 		}
 	}
 
-	// Write (ignore errors — the conn will surface them)
-	_, _ = dst.Write(data)
+	// Write — record errors if a recorder is attached (the conn will also
+	// surface them to the reader).
+	if _, err := dst.Write(data); err != nil && l.recorder != nil {
+		l.recorder.Record(observe.Event{
+			Kind:   "write_error",
+			From:   "link",
+			Detail: err.Error(),
+			Size:   len(data),
+		})
+	}
 }
 
 // waitForTokens blocks until enough bandwidth tokens are available.

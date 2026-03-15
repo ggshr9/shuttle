@@ -255,7 +255,9 @@ type DNSRemote struct {
 type ObfsConfig struct {
 	PaddingEnabled bool   `yaml:"padding_enabled" json:"padding_enabled"`
 	ShapingEnabled bool   `yaml:"shaping_enabled" json:"shaping_enabled"`
+	MinDelay       string `yaml:"min_delay" json:"min_delay"` // duration string, default "0s"
 	MaxDelay       string `yaml:"max_delay" json:"max_delay"` // duration string, default "50ms"
+	ChunkSize      int    `yaml:"chunk_size" json:"chunk_size"` // min chunk size for splitting (default 64)
 }
 
 // LogConfig configures logging.

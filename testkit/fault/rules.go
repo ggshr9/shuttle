@@ -3,29 +3,10 @@ package fault
 import (
 	"fmt"
 	"math/rand"
-	"sync"
 	"time"
+
+	"github.com/shuttle-proxy/shuttle/testkit/vnet"
 )
-
-// defaultRng is a package-level seeded RNG for deterministic fault injection.
-var (
-	defaultRng   = rand.New(rand.NewSource(0))
-	defaultRngMu sync.Mutex
-)
-
-// SetSeed sets the global seed for fault injection randomness.
-// Call this at test setup for deterministic behavior.
-func SetSeed(seed int64) {
-	defaultRngMu.Lock()
-	defaultRng = rand.New(rand.NewSource(seed))
-	defaultRngMu.Unlock()
-}
-
-func seededFloat64() float64 {
-	defaultRngMu.Lock()
-	defer defaultRngMu.Unlock()
-	return defaultRng.Float64()
-}
 
 // Action defines a fault behavior applied to read/write data.
 type Action interface {
@@ -36,13 +17,14 @@ type Action interface {
 	Name() string
 }
 
-// delayAction sleeps for a fixed duration before passing data through.
+// delayAction sleeps for a fixed duration using the injector's clock.
 type delayAction struct {
-	d time.Duration
+	d     time.Duration
+	clock vnet.Clock
 }
 
 func (a *delayAction) Apply(data []byte) ([]byte, error) {
-	time.Sleep(a.d)
+	a.clock.Sleep(a.d)
 	return data, nil
 }
 func (a *delayAction) Name() string { return fmt.Sprintf("delay(%v)", a.d) }
@@ -67,23 +49,16 @@ func (a *dropAction) Name() string { return "drop" }
 
 // corruptAction flips random bits in the data.
 type corruptAction struct {
-	seed int64
-	mu   sync.Mutex
-	rng  *rand.Rand
+	rng *rand.Rand
 }
 
 func (a *corruptAction) Apply(data []byte) ([]byte, error) {
 	if len(data) == 0 {
 		return data, nil
 	}
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	if a.rng == nil {
-		a.rng = rand.New(rand.NewSource(a.seed))
-	}
 	out := make([]byte, len(data))
 	copy(out, data)
-	// Flip 1 to ~12.5% of bits
+	// Flip 1 bit at a random position
 	idx := a.rng.Intn(len(out))
 	bit := byte(1 << uint(a.rng.Intn(8)))
 	out[idx] ^= bit
@@ -99,21 +74,26 @@ type Rule struct {
 	maxTimes    int           // max activations; 0 = unlimited
 	timesUsed   int
 	createdAt   time.Time
+	clock       vnet.Clock // clock used for time checks
+	rng         *rand.Rand // RNG used for probability checks
 }
 
 // matches checks whether this rule should fire, updating internal counters.
 // Caller must hold the injector mutex.
 func (r *Rule) matches() bool {
-	// Check time constraint.
-	if r.after > 0 && time.Since(r.createdAt) < r.after {
-		return false
+	// Check time constraint using the injector's clock.
+	if r.after > 0 {
+		elapsed := r.clock.Now().Sub(r.createdAt)
+		if elapsed < r.after {
+			return false
+		}
 	}
 	// Check usage limit.
 	if r.maxTimes > 0 && r.timesUsed >= r.maxTimes {
 		return false
 	}
 	// Check probability.
-	if r.probability < 1.0 && seededFloat64() >= r.probability {
+	if r.probability < 1.0 && r.rng.Float64() >= r.probability {
 		return false
 	}
 	r.timesUsed++
@@ -129,7 +109,7 @@ type RuleBuilder struct {
 
 // Delay adds a delay action to the rule.
 func (rb *RuleBuilder) Delay(d time.Duration) *RuleBuilder {
-	rb.rule.action = &delayAction{d: d}
+	rb.rule.action = &delayAction{d: d, clock: rb.injector.clock}
 	return rb
 }
 
@@ -146,8 +126,9 @@ func (rb *RuleBuilder) Drop() *RuleBuilder {
 }
 
 // Corrupt adds a bit-flipping action to the rule.
+// Uses the injector's RNG for deterministic corruption.
 func (rb *RuleBuilder) Corrupt(seed int64) *RuleBuilder {
-	rb.rule.action = &corruptAction{seed: seed}
+	rb.rule.action = &corruptAction{rng: rand.New(rand.NewSource(seed))}
 	return rb
 }
 
@@ -157,7 +138,8 @@ func (rb *RuleBuilder) WithProbability(p float64) *RuleBuilder {
 	return rb
 }
 
-// After sets a delay before the rule becomes active (wall-clock since creation).
+// After sets a delay before the rule becomes active (relative to creation time,
+// measured by the injector's Clock).
 func (rb *RuleBuilder) After(d time.Duration) *RuleBuilder {
 	rb.rule.after = d
 	return rb
@@ -171,7 +153,9 @@ func (rb *RuleBuilder) Times(n int) *RuleBuilder {
 
 // Install finalizes the rule and adds it to the injector.
 func (rb *RuleBuilder) Install() {
-	rb.rule.createdAt = time.Now()
+	rb.rule.createdAt = rb.injector.clock.Now()
+	rb.rule.clock = rb.injector.clock
+	rb.rule.rng = rb.injector.rng
 	rb.injector.mu.Lock()
 	defer rb.injector.mu.Unlock()
 	switch rb.target {

@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/shuttle-proxy/shuttle/testkit/vnet"
 	"github.com/shuttle-proxy/shuttle/transport"
 )
 
@@ -211,33 +212,34 @@ func TestCorrupt(t *testing.T) {
 
 func TestProbability(t *testing.T) {
 	errFault := errors.New("prob error")
+
+	// Use a single injector so the RNG sequence progresses across calls.
+	fi := New().WithSeed(42)
+	fi.OnWrite().Error(errFault).WithProbability(0.5).Install()
+
+	a, b := net.Pipe()
+	defer a.Close()
+	defer b.Close()
+
+	// Drain reader so non-error writes don't block.
+	go func() {
+		buf := make([]byte, 64)
+		for {
+			if _, err := b.Read(buf); err != nil {
+				return
+			}
+		}
+	}()
+
+	wrapped := fi.WrapConn(a)
+
 	hits := 0
 	total := 200
-
 	for i := 0; i < total; i++ {
-		fi := New()
-		fi.OnWrite().Error(errFault).WithProbability(0.5).Install()
-
-		a, b := net.Pipe()
-
-		// Drain reader so non-error writes don't block.
-		go func() {
-			buf := make([]byte, 64)
-			for {
-				if _, err := b.Read(buf); err != nil {
-					return
-				}
-			}
-		}()
-
-		wrapped := fi.WrapConn(a)
-
 		_, err := wrapped.Write([]byte("x"))
 		if errors.Is(err, errFault) {
 			hits++
 		}
-		a.Close()
-		b.Close()
 	}
 
 	ratio := float64(hits) / float64(total)
@@ -464,14 +466,13 @@ func TestClearAllRules(t *testing.T) {
 	}
 }
 
-func TestSetSeed(t *testing.T) {
-	// Verify that SetSeed produces deterministic results.
+func TestWithSeed(t *testing.T) {
+	// Verify that WithSeed produces deterministic results.
 	results := make([]int, 2)
 	for trial := 0; trial < 2; trial++ {
-		SetSeed(42)
 		hits := 0
 		for i := 0; i < 100; i++ {
-			fi := New()
+			fi := New().WithSeed(42 + int64(i))
 			fi.OnWrite().Error(errors.New("x")).WithProbability(0.5).Install()
 			a, b := net.Pipe()
 			go func() {
@@ -493,7 +494,7 @@ func TestSetSeed(t *testing.T) {
 		results[trial] = hits
 	}
 	if results[0] != results[1] {
-		t.Fatalf("SetSeed not deterministic: trial1=%d, trial2=%d", results[0], results[1])
+		t.Fatalf("WithSeed not deterministic: trial1=%d, trial2=%d", results[0], results[1])
 	}
 }
 
@@ -535,5 +536,78 @@ func TestChainedBuilder(t *testing.T) {
 	}
 	if !bytes.Equal(buf[:n], []byte("more")) {
 		t.Fatalf("got %q, want %q", buf[:n], "more")
+	}
+}
+
+func TestVirtualClockAfter(t *testing.T) {
+	// Verify that fault injection with VirtualClock works deterministically
+	// without wall-clock sleeps.
+	vc := vnet.NewVirtualClock(time.Time{})
+	fi := New().WithClock(vc)
+
+	errFault := errors.New("virtual after error")
+	fi.OnWrite().Error(errFault).After(500 * time.Millisecond).Install()
+
+	a, b := net.Pipe()
+	defer a.Close()
+	defer b.Close()
+
+	wrapped := fi.WrapConn(a)
+
+	// Before the "After" threshold — should pass through.
+	go func() {
+		buf := make([]byte, 64)
+		_, _ = b.Read(buf)
+	}()
+	_, err := wrapped.Write([]byte("early"))
+	if err != nil {
+		t.Fatalf("expected no error before 'after' duration, got %v", err)
+	}
+
+	// Advance virtual clock past the threshold.
+	vc.Advance(600 * time.Millisecond)
+
+	_, err = wrapped.Write([]byte("late"))
+	if !errors.Is(err, errFault) {
+		t.Fatalf("got err=%v, want %v", err, errFault)
+	}
+}
+
+func TestVirtualClockDelay(t *testing.T) {
+	// Verify that Delay action uses VirtualClock, not wall-clock time.
+	vc := vnet.NewVirtualClock(time.Time{})
+	fi := New().WithClock(vc)
+
+	fi.OnRead().Delay(1 * time.Second).Install()
+
+	a, b := net.Pipe()
+	defer a.Close()
+	defer b.Close()
+
+	wrapped := fi.WrapConn(a)
+
+	go func() {
+		_, _ = b.Write([]byte("data"))
+	}()
+
+	// Start read in a goroutine — it should block on virtual delay
+	done := make(chan error, 1)
+	go func() {
+		buf := make([]byte, 64)
+		_, err := wrapped.Read(buf)
+		done <- err
+	}()
+
+	// Wait for the virtual clock waiter to be registered, then advance
+	vc.BlockUntilWaiters(1)
+	vc.Advance(2 * time.Second)
+
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("read blocked on wall-clock — VirtualClock not working")
 	}
 }
