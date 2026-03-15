@@ -810,7 +810,7 @@ func DefaultClientConfig() *ClientConfig {
 	cfg.Proxy.HTTP.Enabled = true
 	cfg.Transport.H3.Enabled = true
 	cfg.Transport.Reality.Enabled = true
-	cfg.Transport.CDN.Enabled = true
+	cfg.Transport.CDN.Enabled = false // requires explicit domain configuration
 	cfg.Congestion.Mode = "adaptive"
 	cfg.Routing.GeoData.Enabled = true
 	cfg.Routing.GeoData.AutoUpdate = true

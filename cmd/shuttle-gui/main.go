@@ -146,7 +146,14 @@ func main() {
 	log.Printf("API auth token: %s", authToken)
 
 	// Build one shared API handler for both the Wails asset handler and standalone server.
-	sharedHandler := api.AuthenticatedHandlerWithAllStores(eng, subMgr, statsStore, connStore, stHistory, authToken)
+	sharedHandler := api.NewHandler(api.HandlerConfig{
+		Engine:       eng,
+		SubMgr:       subMgr,
+		Stats:        statsStore,
+		ConnLog:      connStore,
+		SpeedHistory: stHistory,
+		AuthToken:    authToken,
+	})
 	app.apiHandler = sharedHandler
 
 	// Wire stats recording and connlog: subscribe to engine events.

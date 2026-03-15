@@ -18,6 +18,7 @@
   let prevConnected = $state(null)
   let notificationsEnabled = $state(false)
   let transportStats: TransportStats[] = $state([])
+  let apiError = $state(false)
 
   // Real-time speed history for chart (last 5 minutes = 60 data points at 5s intervals)
   const MAX_CHART_POINTS = 60
@@ -71,8 +72,9 @@
     try {
       status = await api.status()
       connected = status.state === 'running'
+      apiError = false
     } catch {
-      // API unavailable, keep last state
+      apiError = true
     }
     try {
       if (connected) {
@@ -116,6 +118,13 @@
 </script>
 
 <div class="dashboard">
+  {#if apiError}
+    <div class="api-error-banner">
+      <span class="api-error-icon">&#9888;</span>
+      <span>{t('dashboard.connectionLost')}</span>
+    </div>
+  {/if}
+
   <div class="hero">
     <button class="toggle" class:on={connected} onclick={toggle} disabled={loading} title="Toggle connection ({toggleShortcut})">
       <span class="icon">{connected ? '⬤' : '○'}</span>
@@ -515,5 +524,23 @@
     margin: 12px 0 8px;
     text-align: left;
     font-weight: normal;
+  }
+
+  .api-error-banner {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 8px 16px;
+    background: rgba(210, 153, 34, 0.1);
+    border: 1px solid #d29922;
+    border-radius: 8px;
+    margin-bottom: 16px;
+    font-size: 13px;
+    color: #d29922;
+  }
+
+  .api-error-icon {
+    font-size: 16px;
   }
 </style>

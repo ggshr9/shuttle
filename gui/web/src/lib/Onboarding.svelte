@@ -28,7 +28,7 @@
     try {
       if (addMethod === 'subscription') {
         if (!subscriptionUrl.trim()) {
-          error = 'Please enter a subscription URL'
+          error = t('onboarding.errors.enterSubscriptionUrl')
           return
         }
         // Add subscription
@@ -41,7 +41,7 @@
         }
       } else if (addMethod === 'import') {
         if (!importData.trim()) {
-          error = 'Please paste configuration data'
+          error = t('onboarding.errors.pasteConfig')
           return
         }
         const result = await api.importConfig(importData.trim())
@@ -51,12 +51,12 @@
         }
         addedServers = result.servers || []
         if (addedServers.length === 0) {
-          error = 'No servers found in the configuration'
+          error = t('onboarding.errors.noServersFound')
           return
         }
       } else if (addMethod === 'manual') {
         if (!manualAddr.trim()) {
-          error = 'Please enter server address'
+          error = t('onboarding.errors.enterServerAddress')
           return
         }
         await api.addServer({
@@ -70,7 +70,7 @@
       // Success - go to next step
       step = 3
     } catch (err) {
-      error = err.message || 'Failed to add server'
+      error = err.message || t('onboarding.errors.failedToAdd')
     } finally {
       loading = false
     }
@@ -105,7 +105,7 @@
 
       onComplete?.()
     } catch (err) {
-      error = err.message || 'Failed to complete setup'
+      error = err.message || t('onboarding.errors.failedToComplete')
     } finally {
       loading = false
     }
@@ -137,29 +137,29 @@
     {#if step === 1}
       <div class="content">
         <div class="icon">🚀</div>
-        <h2 id="onboarding-title">Welcome to Shuttle</h2>
-        <p class="subtitle">Fast, secure proxy for unrestricted internet access</p>
+        <h2 id="onboarding-title">{t('onboarding.welcome')}</h2>
+        <p class="subtitle">{t('onboarding.subtitle')}</p>
 
         <div class="features">
           <div class="feature">
             <span class="emoji">⚡</span>
-            <span>Multiple protocols (H3, Reality, CDN)</span>
+            <span>{t('onboarding.feature1')}</span>
           </div>
           <div class="feature">
             <span class="emoji">🔒</span>
-            <span>Advanced encryption & obfuscation</span>
+            <span>{t('onboarding.feature2')}</span>
           </div>
           <div class="feature">
             <span class="emoji">🌍</span>
-            <span>Smart routing with GeoIP rules</span>
+            <span>{t('onboarding.feature3')}</span>
           </div>
         </div>
 
         <button class="primary" onclick={() => step = 2}>
-          Get Started
+          {t('onboarding.getStarted')}
         </button>
         <button class="text" onclick={skip}>
-          Skip setup
+          {t('onboarding.skip')}
         </button>
       </div>
     {/if}
@@ -167,54 +167,54 @@
     <!-- Step 2: Add Server -->
     {#if step === 2}
       <div class="content">
-        <h2>Add a Server</h2>
-        <p class="subtitle">Choose how to add your proxy server</p>
+        <h2>{t('onboarding.addServer')}</h2>
+        <p class="subtitle">{t('onboarding.addServerDesc')}</p>
 
         <div class="method-tabs">
           <button
             class:active={addMethod === 'subscription'}
             onclick={() => addMethod = 'subscription'}
           >
-            Subscription
+            {t('onboarding.subscription')}
           </button>
           <button
             class:active={addMethod === 'import'}
             onclick={() => addMethod = 'import'}
           >
-            Import
+            {t('onboarding.import')}
           </button>
           <button
             class:active={addMethod === 'manual'}
             onclick={() => addMethod = 'manual'}
           >
-            Manual
+            {t('onboarding.manual')}
           </button>
         </div>
 
         <div class="form">
           {#if addMethod === 'subscription'}
             <label>
-              <span>Subscription URL</span>
+              <span>{t('onboarding.subscriptionUrl')}</span>
               <input
                 type="url"
                 bind:value={subscriptionUrl}
                 placeholder="https://example.com/subscribe/..."
               />
             </label>
-            <p class="hint">Paste the subscription link from your provider</p>
+            <p class="hint">{t('onboarding.subscriptionHint')}</p>
           {:else if addMethod === 'import'}
             <label>
-              <span>Configuration</span>
+              <span>{t('onboarding.configuration')}</span>
               <textarea
                 bind:value={importData}
                 placeholder="Paste ss://, vmess://, shuttle://, or JSON config..."
                 rows="4"
               ></textarea>
             </label>
-            <p class="hint">Supports Base64, JSON, and URI formats</p>
+            <p class="hint">{t('onboarding.importHint')}</p>
           {:else if addMethod === 'manual'}
             <label>
-              <span>Server Address</span>
+              <span>{t('onboarding.serverAddress')}</span>
               <input
                 type="text"
                 bind:value={manualAddr}
@@ -222,11 +222,11 @@
               />
             </label>
             <label>
-              <span>Password</span>
+              <span>{t('onboarding.password')}</span>
               <input
                 type="password"
                 bind:value={manualPassword}
-                placeholder="Optional"
+                placeholder={t('onboarding.optional')}
               />
             </label>
           {/if}
@@ -237,12 +237,12 @@
         {/if}
 
         <div class="buttons">
-          <button class="secondary" onclick={() => step = 1}>Back</button>
+          <button class="secondary" onclick={() => step = 1}>{t('onboarding.back')}</button>
           <button class="primary" onclick={handleAddServer} disabled={loading}>
-            {loading ? 'Adding...' : 'Add Server'}
+            {loading ? t('onboarding.adding') : t('onboarding.addServerBtn')}
           </button>
         </div>
-        <button class="text" onclick={skip}>Skip for now</button>
+        <button class="text" onclick={skip}>{t('onboarding.skipForNow')}</button>
       </div>
     {/if}
 
@@ -250,9 +250,9 @@
     {#if step === 3}
       <div class="content">
         <div class="icon success">✓</div>
-        <h2>Ready to Connect!</h2>
+        <h2>{t('onboarding.ready')}</h2>
         <p class="subtitle">
-          {addedServers.length} server{addedServers.length !== 1 ? 's' : ''} added successfully
+          {t('onboarding.serversAdded', { count: addedServers.length })}
         </p>
 
         <div class="server-preview">
@@ -264,7 +264,7 @@
           {/each}
           {#if addedServers.length > 3}
             <div class="server-item more">
-              +{addedServers.length - 3} more
+              +{addedServers.length - 3} {t('common.more')}
             </div>
           {/if}
         </div>
@@ -272,8 +272,8 @@
         <label class="checkbox-option">
           <input type="checkbox" bind:checked={enableSystemProxy} />
           <div>
-            <span class="option-title">Enable System Proxy</span>
-            <span class="option-desc">Automatically configure system proxy on connect</span>
+            <span class="option-title">{t('onboarding.enableSystemProxy')}</span>
+            <span class="option-desc">{t('onboarding.systemProxyDesc')}</span>
           </div>
         </label>
 
@@ -282,9 +282,9 @@
         {/if}
 
         <button class="primary large" onclick={handleComplete} disabled={loading}>
-          {loading ? 'Connecting...' : 'Connect Now'}
+          {loading ? t('onboarding.connecting') : t('onboarding.connectNow')}
         </button>
-        <button class="text" onclick={skip}>Configure later</button>
+        <button class="text" onclick={skip}>{t('onboarding.configureLater')}</button>
       </div>
     {/if}
   </div>

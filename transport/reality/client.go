@@ -82,7 +82,7 @@ func (c *Client) Dial(ctx context.Context, addr string) (transport.Connection, e
 	if c.config.PublicKey != "" {
 		pubBytes, err := hex.DecodeString(c.config.PublicKey)
 		if err != nil || len(pubBytes) != 32 {
-			return nil, fmt.Errorf("invalid server public key")
+			return nil, fmt.Errorf("invalid server public key: expected 64-char hex, got %d chars", len(c.config.PublicKey))
 		}
 		copy(remotePub[:], pubBytes)
 	}

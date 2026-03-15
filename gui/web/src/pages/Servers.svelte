@@ -21,6 +21,9 @@
   let testProgress = $state({ done: 0, total: 0 })
   let testResults = $state({}) // addr -> result
 
+  // Delete confirmation state
+  let confirmDelete = $state(null) // server addr to delete
+
   // Auto-select state
   let autoSelecting = $state(false)
 
@@ -67,7 +70,13 @@
     }
   }
 
-  async function removeServer(addr) {
+  function removeServer(addr) {
+    confirmDelete = addr
+  }
+
+  async function confirmRemove() {
+    const addr = confirmDelete
+    confirmDelete = null
     try {
       await api.deleteServer(addr)
       const idx = servers.findIndex(s => s.addr === addr)
@@ -290,6 +299,32 @@
         <button class="btn-primary" onclick={doImport} disabled={importing || !importData.trim()}>
           {importing ? t('import.importing') : t('import.import')}
         </button>
+      </div>
+    </div>
+  </div>
+{/if}
+
+{#if confirmDelete}
+  <div
+    class="modal-overlay"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="delete-confirm-title"
+    onclick={() => (confirmDelete = null)}
+    onkeydown={(e) => e.key === 'Escape' && (confirmDelete = null)}
+  >
+    <div class="modal" onclick={(e) => e.stopPropagation()}>
+      <div class="modal-header">
+        <h3 id="delete-confirm-title">{t('servers.confirmDelete')}</h3>
+        <button class="modal-close" onclick={() => (confirmDelete = null)}>&times;</button>
+      </div>
+      <div class="modal-body">
+        <p class="help-text">{t('servers.confirmDeleteMsg')}</p>
+        <p class="delete-addr">{confirmDelete}</p>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-cancel" onclick={() => (confirmDelete = null)}>{t('common.cancel')}</button>
+        <button class="btn-primary btn-danger-confirm" onclick={confirmRemove}>{t('servers.remove')}</button>
       </div>
     </div>
   </div>
@@ -632,4 +667,20 @@
   }
   .btn-primary:hover { background: var(--btn-bg-hover); }
   .btn-primary:disabled { opacity: 0.5; }
+
+  .btn-danger-confirm {
+    background: var(--accent-red) !important;
+    border-color: var(--accent-red) !important;
+  }
+  .btn-danger-confirm:hover { opacity: 0.85; }
+
+  .delete-addr {
+    font-family: 'Cascadia Code', 'Fira Code', monospace;
+    font-size: 13px;
+    color: var(--text-primary);
+    background: var(--bg-surface);
+    padding: 8px 12px;
+    border-radius: 6px;
+    margin: 8px 0 0;
+  }
 </style>

@@ -24,7 +24,7 @@ func newTestEngine() *engine.Engine {
 func newTestHandler() (http.Handler, *engine.Engine, *subscription.Manager) {
 	eng := newTestEngine()
 	subMgr := subscription.NewManager()
-	h := HandlerWithSubscriptions(eng, subMgr)
+	h := NewHandler(HandlerConfig{Engine: eng, SubMgr: subMgr})
 	return h, eng, subMgr
 }
 
@@ -882,7 +882,7 @@ func TestAPIWriteJSON_Encoding(t *testing.T) {
 // newAuthHandler creates an authenticated API handler for testing.
 func newAuthHandler(token string) (http.Handler, *engine.Engine) {
 	eng := newTestEngine()
-	h := AuthenticatedHandler(eng, token)
+	h := NewHandler(HandlerConfig{Engine: eng, AuthToken: token})
 	return h, eng
 }
 

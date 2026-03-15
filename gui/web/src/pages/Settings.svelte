@@ -8,6 +8,7 @@
   let saving = $state(false)
   let restoring = $state(false)
   let msg = $state('')
+  let msgType = $state('') // 'success' or 'error'
   let selectedLocale = $state(getLocale())
   let availableLocales = getLocales()
   let selectedTheme = $state(getTheme())
@@ -152,9 +153,19 @@
   async function save() {
     saving = true
     msg = ''
+    msgType = ''
     try {
       const res = await api.putConfig(config)
-      msg = res.error || 'Saved & Reloaded'
+      if (res.error) {
+        msg = res.error
+        msgType = 'error'
+      } else {
+        msg = 'Saved & Reloaded'
+        msgType = 'success'
+      }
+    } catch (err) {
+      msg = err.message || 'Save failed'
+      msgType = 'error'
     } finally {
       saving = false
     }
@@ -470,7 +481,7 @@
   <button class="save" onclick={save} disabled={saving}>
     {saving ? t('settings.saving') : t('settings.saveReload')}
   </button>
-  {#if msg}<p class="msg">{msg}</p>{/if}
+  {#if msg}<p class="msg" class:msg-success={msgType === 'success'} class:msg-error={msgType === 'error'}>{msg}</p>{/if}
 
   <section class="export-section">
     <h3>{t('settings.export')}</h3>
@@ -762,6 +773,8 @@
 
   .save:disabled { opacity: 0.5; }
   .msg { font-size: 13px; color: var(--text-secondary); margin-top: 8px; }
+  .msg-success { color: var(--accent-green); }
+  .msg-error { color: var(--accent-red); }
 
   .export-section {
     margin-top: 24px;

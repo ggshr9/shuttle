@@ -126,7 +126,7 @@ func (c *Client) Dial(ctx context.Context, addr string) (transport.Connection, e
 	}
 	if resp[0] != 0x01 {
 		qconn.CloseWithError(2, "auth rejected")
-		return nil, fmt.Errorf("h3 auth rejected by server")
+		return nil, fmt.Errorf("h3 auth rejected: verify password matches server config")
 	}
 
 	h3conn := &h3Connection{qconn: qconn, padder: c.padder}

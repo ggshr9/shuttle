@@ -159,7 +159,7 @@ func (e *Engine) startInternal(ctx context.Context) error {
 	ccAdapter := e.buildCongestionControl(cfgSnap)
 	transports := e.buildTransports(cfgSnap, ccAdapter)
 	if len(transports) == 0 {
-		return fail(fmt.Errorf("no transports enabled"))
+		return fail(fmt.Errorf("no transports enabled; enable at least one in config (transport.h3, transport.reality, transport.cdn, or transport.webrtc)"))
 	}
 
 	strategy := selector.StrategyAuto
@@ -506,7 +506,7 @@ func (e *Engine) createDialer(cfg *config.ClientConfig, rt *router.Router, dnsRe
 			}
 			// Check circuit breaker before attempting connection.
 			if cb := e.circuitBreaker; cb != nil && !cb.Allow() {
-				return nil, fmt.Errorf("circuit breaker open")
+				return nil, fmt.Errorf("circuit breaker open for %s, retry after cooldown", serverAddr)
 			}
 			var conn transport.Connection
 			var rawStream transport.Stream

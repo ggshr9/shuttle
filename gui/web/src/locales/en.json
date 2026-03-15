@@ -36,7 +36,9 @@
     "sent": "Sent",
     "received": "Received",
     "virtualIP": "Virtual IP",
-    "network": "Network"
+    "network": "Network",
+    "apiError": "Unable to reach the backend API",
+    "connectionLost": "Connection to backend lost — data may be stale"
   },
   "servers": {
     "activeServer": "Active Server",
@@ -56,7 +58,9 @@
     "testing": "Testing ({done}/{total})...",
     "autoSelect": "Auto Select",
     "selecting": "Selecting...",
-    "sni": "SNI (optional)"
+    "sni": "SNI (optional)",
+    "confirmDelete": "Remove Server",
+    "confirmDeleteMsg": "Are you sure you want to remove this server?"
   },
   "import": {
     "title": "Import Servers",
@@ -135,7 +139,9 @@
     "invalidFile": "Invalid file: expected JSON with a \"rules\" array",
     "importSuccess": "Imported {count} rule(s) successfully",
     "exportSuccess": "Rules exported",
-    "noRules": "No rules to export"
+    "noRules": "No rules to export",
+    "confirmTemplate": "Apply Template",
+    "confirmTemplateMsg": "This will replace all existing routing rules. Are you sure?"
   },
   "logs": {
     "title": "Logs",
@@ -274,7 +280,8 @@
     "loading": "Loading...",
     "error": "Error",
     "success": "Success",
-    "timeout": "timeout"
+    "timeout": "timeout",
+    "more": "more"
   },
   "onboarding": {
     "welcome": "Welcome to Shuttle",
@@ -306,7 +313,15 @@
     "systemProxyDesc": "Automatically configure system proxy on connect",
     "connecting": "Connecting...",
     "connectNow": "Connect Now",
-    "configureLater": "Configure later"
+    "configureLater": "Configure later",
+    "errors": {
+      "enterSubscriptionUrl": "Please enter a subscription URL",
+      "pasteConfig": "Please paste configuration data",
+      "noServersFound": "No servers found in the configuration",
+      "enterServerAddress": "Please enter server address",
+      "failedToAdd": "Failed to add server",
+      "failedToComplete": "Failed to complete setup"
+    }
   },
   "speedtest": {
     "history": "Speed Test History",

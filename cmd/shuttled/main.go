@@ -1,27 +1,20 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"flag"
 	"fmt"
-	"io"
 	"log/slog"
-	"net"
 	"net/http"
 	"net/http/pprof"
 	"os"
 	"os/signal"
-	"strings"
 	"sync"
-	"sync/atomic"
 	"syscall"
 	"time"
 
 	"github.com/shuttle-proxy/shuttle/config"
 	"github.com/shuttle-proxy/shuttle/congestion"
-	"github.com/shuttle-proxy/shuttle/internal/relay"
-	"github.com/shuttle-proxy/shuttle/proxy"
 	"github.com/shuttle-proxy/shuttle/crypto"
 	"github.com/shuttle-proxy/shuttle/internal/logutil"
 	"github.com/shuttle-proxy/shuttle/internal/qrterm"
@@ -32,7 +25,6 @@ import (
 	"github.com/shuttle-proxy/shuttle/server/admin"
 	"github.com/shuttle-proxy/shuttle/server/audit"
 	"github.com/shuttle-proxy/shuttle/server/metrics"
-	"github.com/shuttle-proxy/shuttle/transport"
 	"github.com/shuttle-proxy/shuttle/transport/cdn"
 	"github.com/shuttle-proxy/shuttle/transport/h3"
 	"github.com/shuttle-proxy/shuttle/transport/reality"
@@ -601,7 +593,20 @@ func run(configPath string) {
 
 	logger.Info("shuttled is running", "listen", cfg.Listen)
 
-	streamSem := make(chan struct{}, maxConcurrentStreams)
+	// Create the connection handler with all dependencies
+	h := &server.Handler{
+		Users:      users,
+		Reputation: reputation,
+		AuditLog:   auditLog,
+		PeerTable:  peerTable,
+		Allocator:  ipAllocator,
+		SignalHub:  signalHub,
+		Metrics:    metricsCollector,
+		AdminInfo:  adminInfo,
+		StreamSem:  make(chan struct{}, maxConcurrentStreams),
+		Logger:     logger,
+	}
+
 	var connWg sync.WaitGroup
 
 	// Handle connections
@@ -618,7 +623,7 @@ func run(configPath string) {
 
 			// Check IP reputation before processing connection
 			if reputation != nil {
-				remoteIP := extractIP(conn.RemoteAddr())
+				remoteIP := server.ExtractIP(conn.RemoteAddr())
 				if reputation.IsBanned(remoteIP) {
 					logger.Debug("rejecting banned IP", "ip", remoteIP)
 					conn.Close()
@@ -642,7 +647,7 @@ func run(configPath string) {
 			connWg.Add(1)
 			go func() {
 				defer connWg.Done()
-				handleConnection(ctx, conn, peerTable, ipAllocator, signalHub, streamSem, users, reputation, auditLog, adminInfo, metricsCollector, logger)
+				h.HandleConnection(ctx, conn)
 				if adminInfo != nil {
 					adminInfo.ActiveConns.Add(-1)
 				}
@@ -729,522 +734,3 @@ func run(configPath string) {
 	close(shutdownDone)
 	logger.Info("shuttled stopped gracefully")
 }
-
-func handleConnection(ctx context.Context, conn transport.Connection, peerTable *mesh.PeerTable, allocator *mesh.IPAllocator, signalHub *meshsignal.Hub, streamSem chan struct{}, users *admin.UserStore, reputation *server.Reputation, auditLog *audit.Logger, adminInfo *admin.ServerInfo, mc *metrics.Collector, logger *slog.Logger) {
-	defer conn.Close()
-
-	remoteIP := extractIP(conn.RemoteAddr())
-
-	for {
-		stream, err := conn.AcceptStream(ctx)
-		if err != nil {
-			if ctx.Err() == nil {
-				logger.Debug("accept stream error", "err", err)
-			}
-			return
-		}
-
-		select {
-		case streamSem <- struct{}{}:
-		default:
-			logger.Warn("stream limit reached, rejecting")
-			stream.Close()
-			continue
-		}
-
-		mc.StreamOpened()
-		go func() {
-			defer func() {
-				<-streamSem
-				mc.StreamClosed()
-			}()
-			handleStream(ctx, stream, remoteIP, peerTable, allocator, signalHub, users, reputation, auditLog, adminInfo, mc, logger)
-		}()
-	}
-}
-
-func handleStream(ctx context.Context, stream transport.Stream, remoteIP string, peerTable *mesh.PeerTable, allocator *mesh.IPAllocator, signalHub *meshsignal.Hub, users *admin.UserStore, reputation *server.Reputation, auditLog *audit.Logger, adminInfo *admin.ServerInfo, mc *metrics.Collector, logger *slog.Logger) {
-	defer stream.Close()
-
-	// Read target address (first line). Use a buffered approach to avoid
-	// losing bytes that come after the \n delimiter in the same read.
-	// Set a deadline so a slow/malicious client cannot hold a goroutine forever.
-	if dl, ok := stream.(interface{ SetReadDeadline(time.Time) error }); ok {
-		dl.SetReadDeadline(time.Now().Add(10 * time.Second))
-	}
-	buf := make([]byte, 512)
-	total := 0
-	for {
-		n, err := stream.Read(buf[total:])
-		if err != nil {
-			return
-		}
-		total += n
-		// Look for newline in what we've read so far.
-		if idx := findNewline(buf[:total]); idx >= 0 {
-			header := string(buf[:idx])
-
-			// Parse header: "TOKEN:target" or just "target" (backward compatible).
-			// Tokens are 64-char hex strings, so we look for the first colon
-			// and try to authenticate the prefix. If it fails (or no users
-			// configured), treat the entire header as the target address.
-			var target string
-			var user *admin.UserState
-			if users != nil && users.HasUsers() {
-				if colonIdx := strings.IndexByte(header, ':'); colonIdx > 0 {
-					token := header[:colonIdx]
-					if u := users.Authenticate(token); u != nil {
-						user = u
-						target = header[colonIdx+1:]
-						// Record successful auth for reputation
-						if reputation != nil {
-							reputation.RecordSuccess(remoteIP)
-						}
-					} else {
-						// Token didn't match — reject the stream
-						if reputation != nil {
-							if reputation.RecordFailure(remoteIP) {
-								logger.Warn("IP banned after auth failures", "ip", remoteIP)
-							}
-						}
-						logger.Debug("auth failed, rejecting stream", "ip", remoteIP)
-						mc.RecordAuthFailure()
-						return
-					}
-				} else {
-					// No token provided but users are configured — reject
-					logger.Debug("no auth token provided, rejecting stream", "ip", remoteIP)
-					mc.RecordAuthFailure()
-					if reputation != nil {
-						if reputation.RecordFailure(remoteIP) {
-							logger.Warn("IP banned after auth failures", "ip", remoteIP)
-						}
-					}
-					return
-				}
-			} else {
-				target = header
-			}
-
-			// If user authenticated, enforce quota.
-			if user != nil && user.QuotaExceeded() {
-				logger.Info("quota exceeded, rejecting stream", "user", user.Name)
-				return
-			}
-
-			// Check for mesh magic
-			if target == "MESH" && peerTable != nil && allocator != nil {
-				handleMeshStream(ctx, stream, peerTable, allocator, signalHub, logger)
-				return
-			}
-
-			residual := buf[idx+1 : total] // bytes after \n
-
-			// Clear the header-read deadline before relaying data.
-			if dl, ok := stream.(interface{ SetReadDeadline(time.Time) error }); ok {
-				dl.SetReadDeadline(time.Time{})
-			}
-
-			// Check for UDP prefix: "UDP:target" → UDP relay mode.
-			isUDP := false
-			if strings.HasPrefix(target, proxy.UDPStreamPrefix) {
-				target = strings.TrimPrefix(target, proxy.UDPStreamPrefix)
-				isUDP = true
-			}
-
-			logger.Debug("proxying", "target", target, "udp", isUDP)
-
-			// SSRF protection: block connections to internal/private networks
-			if isBlockedTarget(target) {
-				logger.Warn("blocked SSRF attempt to internal target", "target", target, "ip", remoteIP)
-				return
-			}
-
-			if isUDP {
-				// UDP relay mode: read framed datagrams from stream, send as UDP.
-				handleUDPRelay(ctx, stream, target, residual, logger)
-				return
-			}
-
-			remote, err := net.DialTimeout("tcp", target, 10*time.Second)
-			if err != nil {
-				logger.Debug("dial target failed", "target", target, "err", err)
-				return
-			}
-			defer remote.Close() //nolint:gocritic // not a real loop; reads until newline then returns
-
-			// Forward any residual bytes that were read past the header.
-			if len(residual) > 0 {
-				if _, err := remote.Write(residual); err != nil {
-					return
-				}
-			}
-
-			// If user authenticated, wrap stream with byte counting and
-			// track active connections.
-			var rw io.ReadWriter = stream
-			var counter *countingReadWriter
-			if user != nil {
-				user.ActiveConns.Add(1)
-				defer user.ActiveConns.Add(-1) //nolint:gocritic // not a real loop; reads until newline then returns
-				counter = &countingReadWriter{
-					inner: stream,
-					user:  user,
-				}
-				rw = counter
-			}
-
-			// Relay bidirectionally.
-			startTime := time.Now()
-			serverRelay(rw, remote)
-
-			// Record bytes in metrics collector
-			if counter != nil {
-				mc.RecordBytes(counter.bytesIn.Load(), counter.bytesOut.Load())
-			}
-
-			// Record audit entry after relay completes.
-			if auditLog != nil {
-				entry := audit.Entry{
-					Timestamp:  startTime,
-					Target:     target,
-					DurationMs: time.Since(startTime).Milliseconds(),
-				}
-				if user != nil {
-					entry.User = user.Name
-				}
-				if counter != nil {
-					entry.BytesIn = counter.bytesIn.Load()
-					entry.BytesOut = counter.bytesOut.Load()
-				}
-				if adminInfo != nil {
-					adminInfo.BytesSent.Add(entry.BytesOut)
-					adminInfo.BytesRecv.Add(entry.BytesIn)
-				}
-				auditLog.Log(&entry)
-			}
-			return
-		}
-		if total >= len(buf) {
-			logger.Debug("target header too long")
-			return
-		}
-	}
-}
-
-// countingReadWriter wraps an io.ReadWriter and updates a user's byte counters.
-// It also tracks per-stream byte counts for audit logging.
-type countingReadWriter struct {
-	inner    io.ReadWriter
-	user     *admin.UserState
-	bytesIn  atomic.Int64 // bytes read (client → server)
-	bytesOut atomic.Int64 // bytes written (server → client)
-}
-
-func (c *countingReadWriter) Read(p []byte) (int, error) {
-	n, err := c.inner.Read(p)
-	if n > 0 {
-		c.bytesIn.Add(int64(n))
-		c.user.BytesRecv.Add(int64(n))
-	}
-	return n, err
-}
-
-func (c *countingReadWriter) Write(p []byte) (int, error) {
-	n, err := c.inner.Write(p)
-	if n > 0 {
-		c.bytesOut.Add(int64(n))
-		c.user.BytesSent.Add(int64(n))
-	}
-	return n, err
-}
-
-func handleMeshStream(ctx context.Context, stream transport.Stream, peerTable *mesh.PeerTable, allocator *mesh.IPAllocator, signalHub *meshsignal.Hub, logger *slog.Logger) {
-	ip, err := allocator.Allocate()
-	if err != nil {
-		logger.Error("mesh: IP allocation failed", "err", err)
-		return
-	}
-	defer allocator.Release(ip)
-
-	// Send handshake: IP + mask + gateway
-	handshake := mesh.EncodeHandshake(ip, allocator.Mask(), allocator.Gateway())
-	if _, err := stream.Write(handshake); err != nil {
-		logger.Error("mesh: handshake write failed", "err", err)
-		return
-	}
-
-	// Register peer with a frame-writing wrapper
-	fw := &meshFrameWriter{stream: stream}
-	peerTable.Register(ip, fw)
-	defer peerTable.Unregister(ip)
-
-	// Register peer with signal hub if P2P is enabled
-	if signalHub != nil {
-		signalHub.Register(ip, fw)
-		defer signalHub.Unregister(ip)
-	}
-
-	logger.Info("mesh peer connected", "ip", ip)
-
-	// Read frames from this peer and forward to destination peers
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		default:
-		}
-
-		pkt, err := mesh.ReadFrame(stream)
-		if err != nil {
-			logger.Debug("mesh peer disconnected", "ip", ip, "err", err)
-			return
-		}
-
-		// Check if this is a signaling message
-		if signalHub != nil && isSignalingPacket(pkt) {
-			if err := signalHub.HandleMessage(pkt, ip); err != nil {
-				logger.Debug("mesh: signal handling failed", "err", err)
-			}
-			continue
-		}
-
-		// Regular mesh packet - forward to destination
-		if !peerTable.Forward(pkt) {
-			logger.Debug("mesh: no route for packet", "src", ip)
-		}
-	}
-}
-
-// isSignalingPacket checks if a packet is a signaling message.
-// Signaling messages have a specific format starting with a type byte
-// in the range 0x01-0xFF (non-IP packet).
-func isSignalingPacket(pkt []byte) bool {
-	if len(pkt) < meshsignal.HeaderSize {
-		return false
-	}
-	// Check if it looks like a signaling message by checking the type
-	// Valid signaling types are 0x01-0x08 and 0xFF
-	msgType := pkt[0]
-	switch msgType {
-	case meshsignal.SignalCandidate,
-		meshsignal.SignalConnect,
-		meshsignal.SignalConnectAck,
-		meshsignal.SignalDisconnect,
-		meshsignal.SignalPing,
-		meshsignal.SignalPong,
-		meshsignal.SignalError:
-		return true
-	default:
-		// Check if it starts with IPv4 version (0x4X)
-		// If not, it might be a signaling message
-		return (pkt[0] >> 4) != 4
-	}
-}
-
-// meshFrameWriter wraps a stream to write length-prefixed frames.
-type meshFrameWriter struct {
-	mu     sync.Mutex
-	stream io.WriteCloser
-}
-
-func (fw *meshFrameWriter) Write(p []byte) (int, error) {
-	fw.mu.Lock()
-	defer fw.mu.Unlock()
-	if err := mesh.WriteFrame(fw.stream, p); err != nil {
-		return 0, err
-	}
-	return len(p), nil
-}
-
-func (fw *meshFrameWriter) Close() error {
-	return fw.stream.Close()
-}
-
-// handleUDPRelay relays UDP datagrams between a transport stream and a remote
-// UDP endpoint. It reads framed datagrams from the stream, sends them via UDP,
-// and sends responses back as framed datagrams on the stream.
-func handleUDPRelay(ctx context.Context, stream io.ReadWriteCloser, target string, residual []byte, logger *slog.Logger) {
-	udpAddr, err := net.ResolveUDPAddr("udp", target)
-	if err != nil {
-		logger.Debug("udp relay: resolve failed", "target", target, "err", err)
-		return
-	}
-	udpConn, err := net.DialUDP("udp", nil, udpAddr)
-	if err != nil {
-		logger.Debug("udp relay: dial failed", "target", target, "err", err)
-		return
-	}
-	defer udpConn.Close()
-
-	// If there are residual bytes from header parsing, prepend them for frame reading.
-	var reader io.Reader = stream
-	if len(residual) > 0 {
-		reader = io.MultiReader(bytes.NewReader(residual), stream)
-	}
-
-	// Stream → UDP: read frames from stream, send as UDP datagrams.
-	done := make(chan struct{}, 2)
-	go func() {
-		defer func() { done <- struct{}{} }()
-		for {
-			if ctx.Err() != nil {
-				return
-			}
-			_, payload, err := proxy.ReadUDPFrame(reader)
-			if err != nil {
-				if err != io.EOF {
-					logger.Debug("udp relay: read frame error", "err", err)
-				}
-				return
-			}
-			if _, err := udpConn.Write(payload); err != nil {
-				logger.Debug("udp relay: udp write error", "err", err)
-				return
-			}
-		}
-	}()
-
-	// UDP → Stream: read UDP responses, write as frames back on stream.
-	go func() {
-		defer func() { done <- struct{}{} }()
-		buf := make([]byte, 65535)
-		for {
-			if ctx.Err() != nil {
-				return
-			}
-			udpConn.SetReadDeadline(time.Now().Add(5 * time.Second))
-			n, err := udpConn.Read(buf)
-			if err != nil {
-				if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
-					// Idle timeout — no more responses expected.
-					return
-				}
-				logger.Debug("udp relay: udp read error", "err", err)
-				return
-			}
-			if err := proxy.WriteUDPFrame(stream, target, buf[:n]); err != nil {
-				logger.Debug("udp relay: write frame error", "err", err)
-				return
-			}
-		}
-	}()
-
-	<-done
-	// Once one direction is done, close everything and wait for the other.
-	udpConn.Close()
-	stream.Close()
-	<-done
-}
-
-func findNewline(b []byte) int {
-	return bytes.IndexByte(b, '\n')
-}
-
-// extractIP extracts the IP address (without port) from a net.Addr.
-func extractIP(addr net.Addr) string {
-	if addr == nil {
-		return ""
-	}
-	s := addr.String()
-	host, _, err := net.SplitHostPort(s)
-	if err != nil {
-		// Try parsing as bare IP (no port)
-		if ip := net.ParseIP(s); ip != nil {
-			return ip.String()
-		}
-		return s
-	}
-	return host
-}
-
-// isBlockedTarget checks whether the target address points to an internal or
-// private network. It resolves the hostname to IP addresses first to prevent
-// DNS rebinding attacks, then checks each resolved IP against blocked ranges.
-func isBlockedTarget(target string) bool {
-	host, _, err := net.SplitHostPort(target)
-	if err != nil {
-		// target might not have a port; try as-is
-		host = target
-	}
-
-	// Resolve hostname to IPs (also handles literal IPs)
-	ips, err := net.LookupHost(host)
-	if err != nil {
-		// If we can't resolve, check if it's a literal IP
-		if ip := net.ParseIP(host); ip != nil {
-			return isBlockedIP(ip)
-		}
-		// Can't resolve — block by default to be safe
-		return true
-	}
-
-	for _, ipStr := range ips {
-		ip := net.ParseIP(ipStr)
-		if ip == nil {
-			continue
-		}
-		if isBlockedIP(ip) {
-			return true
-		}
-	}
-	return false
-}
-
-// blockedCIDRs contains the CIDR ranges that should be blocked from proxying.
-var blockedCIDRs = func() []*net.IPNet {
-	cidrs := []string{
-		"127.0.0.0/8",    // loopback
-		"10.0.0.0/8",     // private
-		"172.16.0.0/12",  // private
-		"192.168.0.0/16", // private
-		"169.254.0.0/16", // link-local
-		"0.0.0.0/8",      // unspecified
-		"::1/128",        // loopback v6
-		"fe80::/10",      // link-local v6
-		"fc00::/7",       // unique local v6
-		"::/128",         // unspecified v6
-	}
-	nets := make([]*net.IPNet, 0, len(cidrs))
-	for _, cidr := range cidrs {
-		_, n, err := net.ParseCIDR(cidr)
-		if err != nil {
-			panic("invalid blocked CIDR: " + cidr)
-		}
-		nets = append(nets, n)
-	}
-	return nets
-}()
-
-func isBlockedIP(ip net.IP) bool {
-	for _, n := range blockedCIDRs {
-		if n.Contains(ip) {
-			return true
-		}
-	}
-	return false
-}
-
-// serverRelay copies data bidirectionally using the shared relay package,
-// which supports zero-copy (splice) when both sides are raw TCP connections.
-// It wraps io.ReadWriter arguments into io.ReadWriteCloser when necessary.
-func serverRelay(a io.ReadWriter, b io.ReadWriter) {
-	rwcA := asReadWriteCloser(a)
-	rwcB := asReadWriteCloser(b)
-	relay.Relay(rwcA, rwcB)
-}
-
-// asReadWriteCloser returns the value unchanged if it already implements
-// io.ReadWriteCloser, otherwise wraps it with a no-op Close.
-func asReadWriteCloser(rw io.ReadWriter) io.ReadWriteCloser {
-	if rwc, ok := rw.(io.ReadWriteCloser); ok {
-		return rwc
-	}
-	return readWriteNopCloser{rw}
-}
-
-type readWriteNopCloser struct {
-	io.ReadWriter
-}
-
-func (readWriteNopCloser) Close() error { return nil }

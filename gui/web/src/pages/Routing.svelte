@@ -14,6 +14,7 @@
   let templates = $state([])
   let showTemplates = $state(false)
   let applyingTemplate = $state(false)
+  let confirmTemplate = $state(null) // template id to confirm
 
   // Import
   let showImport = $state(false)
@@ -144,7 +145,12 @@
     }
   }
 
+  function requestApplyTemplate(id) {
+    confirmTemplate = id
+  }
+
   async function applyTemplate(id) {
+    confirmTemplate = null
     applyingTemplate = true
     try {
       await api.applyRoutingTemplate(id)
@@ -423,13 +429,28 @@
     <p class="modal-hint">{t('routing.templateHint')}</p>
     <div class="template-list">
       {#each templates as t}
-        <button class="template-item" onclick={() => applyTemplate(t.id)} disabled={applyingTemplate}>
+        <button class="template-item" onclick={() => requestApplyTemplate(t.id)} disabled={applyingTemplate}>
           <span class="template-name">{t.name}</span>
           <span class="template-desc">{t.description}</span>
         </button>
       {/each}
     </div>
     <button class="close-btn" onclick={() => (showTemplates = false)}>{t('common.cancel')}</button>
+  </div>
+</div>
+{/if}
+
+{#if confirmTemplate}
+<div class="overlay" onclick={() => (confirmTemplate = null)} role="dialog" aria-modal="true" aria-labelledby="confirm-template-title" onkeydown={(e) => e.key === 'Escape' && (confirmTemplate = null)}>
+  <div class="modal" onclick={(e) => e.stopPropagation()}>
+    <h3 id="confirm-template-title">{t('routing.confirmTemplate')}</h3>
+    <p class="modal-hint">{t('routing.confirmTemplateMsg')}</p>
+    <div class="modal-actions">
+      <button class="close-btn" onclick={() => (confirmTemplate = null)}>{t('common.cancel')}</button>
+      <button class="apply-btn" onclick={() => applyTemplate(confirmTemplate)} disabled={applyingTemplate}>
+        {applyingTemplate ? t('routing.saving') : t('routing.replace')}
+      </button>
+    </div>
   </div>
 </div>
 {/if}

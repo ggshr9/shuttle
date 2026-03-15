@@ -36,7 +36,9 @@
     "sent": "已发送",
     "received": "已接收",
     "virtualIP": "虚拟 IP",
-    "network": "网络"
+    "network": "网络",
+    "apiError": "无法连接到后端 API",
+    "connectionLost": "与后端的连接已断开 — 数据可能已过时"
   },
   "servers": {
     "activeServer": "当前服务器",
@@ -56,7 +58,9 @@
     "testing": "测试中 ({done}/{total})...",
     "autoSelect": "自动选择",
     "selecting": "选择中...",
-    "sni": "SNI（可选）"
+    "sni": "SNI（可选）",
+    "confirmDelete": "移除服务器",
+    "confirmDeleteMsg": "确定要移除此服务器吗？"
   },
   "import": {
     "title": "导入服务器",
@@ -135,7 +139,9 @@
     "invalidFile": "无效文件：需要包含 \"rules\" 数组的 JSON",
     "importSuccess": "成功导入 {count} 条规则",
     "exportSuccess": "规则已导出",
-    "noRules": "没有可导出的规则"
+    "noRules": "没有可导出的规则",
+    "confirmTemplate": "应用模板",
+    "confirmTemplateMsg": "这将替换所有现有路由规则。确定要继续吗？"
   },
   "logs": {
     "title": "日志",
@@ -274,7 +280,8 @@
     "loading": "加载中...",
     "error": "错误",
     "success": "成功",
-    "timeout": "超时"
+    "timeout": "超时",
+    "more": "更多"
   },
   "onboarding": {
     "welcome": "欢迎使用 Shuttle",
@@ -306,7 +313,15 @@
     "systemProxyDesc": "连接时自动配置系统代理",
     "connecting": "连接中...",
     "connectNow": "立即连接",
-    "configureLater": "稍后配置"
+    "configureLater": "稍后配置",
+    "errors": {
+      "enterSubscriptionUrl": "请输入订阅链接",
+      "pasteConfig": "请粘贴配置数据",
+      "noServersFound": "配置中未找到服务器",
+      "enterServerAddress": "请输入服务器地址",
+      "failedToAdd": "添加服务器失败",
+      "failedToComplete": "完成设置失败"
+    }
   },
   "speedtest": {
     "history": "测速历史",
