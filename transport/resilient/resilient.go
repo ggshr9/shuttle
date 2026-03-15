@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"math/rand/v2"
 	"net"
 	"sync"
 	"sync/atomic"
@@ -180,11 +181,17 @@ func (rc *ResilientConn) reconnect(ctx context.Context, staleConn transport.Conn
 			if delay > rc.maxDelay {
 				delay = rc.maxDelay
 			}
+			// Add jitter: ±25% to prevent thundering herd on mass reconnect.
+			// Cap the jittered value at maxDelay so we never exceed it.
+			jitter := time.Duration(float64(delay) * (0.75 + rand.Float64()*0.5))
+			if jitter > rc.maxDelay {
+				jitter = rc.maxDelay
+			}
 			select {
 			case <-ctx.Done():
 				return nil, ctx.Err()
 			default:
-				rc.sleepFn(delay)
+				rc.sleepFn(jitter)
 			}
 		}
 

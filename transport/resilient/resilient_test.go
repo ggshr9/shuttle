@@ -145,8 +145,8 @@ func TestExponentialBackoffTiming(t *testing.T) {
 		t.Fatalf("expected success after retries, got %v", err)
 	}
 
-	// Attempts: 0 (no sleep), 1 (sleep 100ms), 2 (sleep 200ms), 3 (sleep 400ms) → success
-	// So we expect 3 sleeps with delays: 100ms, 200ms, 400ms
+	// Attempts: 0 (no sleep), 1 (sleep ~100ms), 2 (sleep ~200ms), 3 (sleep ~400ms) → success
+	// So we expect 3 sleeps with delays approximately: 100ms, 200ms, 400ms (±25% jitter)
 	mu.Lock()
 	defer mu.Unlock()
 
@@ -154,10 +154,12 @@ func TestExponentialBackoffTiming(t *testing.T) {
 		t.Fatalf("expected 3 backoff sleeps, got %d: %v", len(delays), delays)
 	}
 
-	expected := []time.Duration{100 * time.Millisecond, 200 * time.Millisecond, 400 * time.Millisecond}
-	for i, exp := range expected {
-		if delays[i] != exp {
-			t.Errorf("delay[%d] = %v, want %v", i, delays[i], exp)
+	baseDurations := []time.Duration{100 * time.Millisecond, 200 * time.Millisecond, 400 * time.Millisecond}
+	for i, base := range baseDurations {
+		lo := time.Duration(float64(base) * 0.74) // slightly below 75% to account for float precision
+		hi := time.Duration(float64(base) * 1.26)
+		if delays[i] < lo || delays[i] > hi {
+			t.Errorf("delay[%d] = %v, want between %v and %v (base %v ±25%%)", i, delays[i], lo, hi, base)
 		}
 	}
 }

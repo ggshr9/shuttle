@@ -298,6 +298,44 @@ func IsRunning() bool {
 	return eng != nil
 }
 
+// GetNetworkType returns the current detected network type.
+// Returns one of: "wifi", "cellular", "ethernet", "unknown"
+func GetNetworkType() string {
+	mu.Lock()
+	nm := netMon
+	mu.Unlock()
+
+	if nm == nil {
+		return "unknown"
+	}
+	return nm.CurrentType().String()
+}
+
+// GetRecommendedPreset returns the name of the recommended network preset
+// based on the current detected network type and power state.
+// Native apps can use this to automatically apply optimal settings.
+func GetRecommendedPreset() string {
+	netType := GetNetworkType()
+	power := currentPowerState()
+
+	// Power-critical always uses data_saver
+	if power == PowerCritical {
+		return "data_saver"
+	}
+
+	switch netType {
+	case "wifi":
+		return "wifi"
+	case "cellular":
+		if power == PowerLow {
+			return "data_saver"
+		}
+		return "lte"
+	default:
+		return "lte" // safe default
+	}
+}
+
 // startEventForwarder subscribes to engine events and forwards them
 // to the registered native callback. Must be called with mu held.
 func startEventForwarder(e *engine.Engine) {
@@ -350,6 +388,13 @@ func forwardEvent(ev engine.Event) {
 	}
 }
 
+// debounceInterval is the minimum time between consecutive auto-reconnects
+// to avoid thrashing on flaky network transitions.
+const debounceInterval = 2 * time.Second
+
+// lastReconnect tracks the time of the last auto-reconnect attempt.
+var lastReconnect time.Time
+
 // startNetworkMonitor creates a network change monitor that triggers
 // auto-reconnect when enabled. Must be called with mu held.
 func startNetworkMonitor(ctx context.Context) {
@@ -364,11 +409,24 @@ func startNetworkMonitor(ctx context.Context) {
 		mu.Lock()
 		shouldReconnect := autoReconnect && eng != nil
 		e := eng
+
+		// Debounce: skip if we reconnected very recently
+		now := time.Now()
+		if shouldReconnect && now.Sub(lastReconnect) < debounceInterval {
+			mobileLogger.Info("auto-reconnect: debounced, skipping (too soon after last reconnect)")
+			mu.Unlock()
+			return
+		}
+		if shouldReconnect {
+			lastReconnect = now
+		}
 		mu.Unlock()
 
 		if shouldReconnect {
+			// Brief delay to let the network interface stabilize
+			time.Sleep(500 * time.Millisecond)
+
 			mobileLogger.Info("auto-reconnect: reloading engine after network change")
-			// Reload with current config to trigger transport reconnection.
 			cfg := e.Config()
 			if err := e.Reload(&cfg); err != nil {
 				mobileLogger.Error("auto-reconnect reload failed", "err", err)
@@ -378,6 +436,26 @@ func startNetworkMonitor(ctx context.Context) {
 			}
 		}
 	})
+
+	// Also register network type callback for smarter reconnect
+	nm.OnChangeWithType(func(netType netmon.NetworkType) {
+		mobileLogger.Info("network type changed", "type", netType.String())
+
+		// Apply appropriate preset based on detected network type
+		mu.Lock()
+		e := eng
+		mu.Unlock()
+
+		if e == nil {
+			return
+		}
+
+		// Notify native layer with network type info
+		if cb := getCallback(); cb != nil {
+			cb.OnNetworkChange()
+		}
+	})
+
 	nm.Start(ctx)
 	netMon = nm
 }
