@@ -15,23 +15,42 @@ jobs:
   lint:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
-      - uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
         with:
           go-version: '1.24'
-      - uses: golangci/golangci-lint-action@4afd733a84b2f1a21c7ce21404f413136a96b55d # v6
+      - name: Go module cache
+        uses: actions/cache@v4
         with:
-          version: v1.64.8
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+          key: go-lint-${{ runner.os }}-${{ hashFiles('go.sum') }}
+          restore-keys: |
+            go-lint-${{ runner.os }}-
+      - uses: golangci/golangci-lint-action@v6
+        with:
+          version: latest
+      - run: go vet ./...
 
   security:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
-      - uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
         with:
           go-version: '1.24'
+      - name: Go module cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+          key: go-security-${{ runner.os }}-${{ hashFiles('go.sum') }}
+          restore-keys: |
+            go-security-${{ runner.os }}-
       - name: Run gosec
-        uses: securego/gosec@d1d26e5c5e0006235c806e2a6fc911ff11e7f3a6 # v2.21.4
+        uses: securego/gosec@v2.21.4
         with:
           args: -exclude-dir=quicfork ./...
 
@@ -40,68 +59,109 @@ jobs:
     permissions:
       security-events: write
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
-      - uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
         with:
           go-version: '1.24'
+      - name: Go module cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+          key: go-codeql-${{ runner.os }}-${{ hashFiles('go.sum') }}
+          restore-keys: |
+            go-codeql-${{ runner.os }}-
       - name: Initialize CodeQL
-        uses: github/codeql-action/init@ff0a06b14023c00a6b09cce92fba90e6b0bd6607 # v3
+        uses: github/codeql-action/init@v3
         with:
           languages: go
       - name: Build
         run: go build ./...
       - name: Perform CodeQL Analysis
-        uses: github/codeql-action/analyze@ff0a06b14023c00a6b09cce92fba90e6b0bd6607 # v3
+        uses: github/codeql-action/analyze@v3
 
   test:
     strategy:
+      fail-fast: false
       matrix:
         include:
           - os: ubuntu-latest
+            group: core
+            packages: ./config/... ./engine/... ./router/... ./stats/... ./proxy/... ./stream/... ./connlog/... ./obfs/... ./plugin/... ./qos/... ./subscription/...
+            deps: sudo apt-get update && sudo apt-get install -y gcc libayatana-appindicator3-dev libgtk-3-dev
+          - os: ubuntu-latest
+            group: transport
+            packages: ./transport/... ./congestion/... ./crypto/...
+            deps: sudo apt-get update && sudo apt-get install -y gcc libayatana-appindicator3-dev libgtk-3-dev
+          - os: ubuntu-latest
+            group: infra
+            packages: ./mesh/... ./internal/... ./server/... ./speedtest/... ./update/...
             deps: sudo apt-get update && sudo apt-get install -y gcc libayatana-appindicator3-dev libgtk-3-dev
           - os: windows-latest
+            group: all
+            packages: ./...
             deps: ''
           - os: macos-latest
+            group: all
+            packages: ./...
             deps: ''
+    name: test (${{ matrix.os }}/${{ matrix.group }})
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
-      - uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
         with:
           go-version: '1.24'
+      - name: Go module cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+          key: go-test-${{ runner.os }}-${{ matrix.group }}-${{ hashFiles('go.sum') }}
+          restore-keys: |
+            go-test-${{ runner.os }}-${{ matrix.group }}-
+            go-test-${{ runner.os }}-
       - name: Install dependencies
         if: matrix.deps != ''
         run: ${{ matrix.deps }}
       - run: go build ./...
       - run: go vet ./...
-      - name: Run tests  # Host-safe tier; network tests auto-skip via t.Skip()
-        run: go test -count=1 -v ${{ matrix.os == 'ubuntu-latest' && '-race' || '' }} ./...
+      - name: Run tests
+        shell: bash
+        run: |
+          # Use scripts/test.sh — never invoke go test directly.
+          # Host-safe tier only; network/system tests auto-skip via t.Skip().
+          for pkg in ${{ matrix.packages }}; do
+            ./scripts/test.sh --pkg "$pkg" ${{ matrix.os == 'ubuntu-latest' && '--race' || '' }}
+          done
       - name: Run tests with coverage
-        if: matrix.os == 'ubuntu-latest'
-        run: go test -race -coverprofile=coverage.out ./...
+        if: matrix.os == 'ubuntu-latest' && matrix.group == 'core'
+        run: ./scripts/test.sh --cover
       - name: Upload coverage
-        if: matrix.os == 'ubuntu-latest'
-        uses: codecov/codecov-action@18283e04ce6e62d37312384ff67231eb8fd56d24 # v4
+        if: matrix.os == 'ubuntu-latest' && matrix.group == 'core'
+        uses: codecov/codecov-action@v4
         with:
           files: coverage.out
         env:
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
       - name: Performance budget check
-        if: matrix.os == 'ubuntu-latest'
-        run: |
-          go build -o checkperf ./cmd/checkperf
-          go test -bench=. -benchmem -timeout 120s -run='^$' -json ./... | ./checkperf
+        if: matrix.os == 'ubuntu-latest' && matrix.group == 'core'
+        run: ./scripts/test.sh --perf
 
   build-frontend:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
-      - uses: actions/setup-node@cdca7365b2dadb8aad0a33bc7601856ffabcc48e # v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: gui/web/package-lock.json
       - working-directory: gui/web
         run: npm ci && npm run build
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      - uses: actions/upload-artifact@v4
         with:
           name: web-dist
           path: gui/web/dist/
@@ -143,11 +203,20 @@ jobs:
             ext: ''
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
-      - uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
         with:
           go-version: '1.24'
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+      - name: Go module cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+          key: go-build-${{ matrix.goos }}-${{ matrix.goarch }}-${{ hashFiles('go.sum') }}
+          restore-keys: |
+            go-build-${{ matrix.goos }}-${{ matrix.goarch }}-
+      - uses: actions/download-artifact@v4
         with:
           name: web-dist
           path: gui/web/dist/
@@ -160,7 +229,7 @@ jobs:
         run: |
           go build -ldflags="-s -w" -o shuttle-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }} ./cmd/shuttle
           go build -ldflags="-s -w" -o shuttled-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }} ./cmd/shuttled
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      - uses: actions/upload-artifact@v4
         with:
           name: cli-${{ matrix.goos }}-${{ matrix.goarch }}
           path: |
@@ -191,11 +260,20 @@ jobs:
             deps: ''
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
-      - uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
         with:
           go-version: '1.24'
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+      - name: Go module cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+          key: go-gui-${{ matrix.goos }}-${{ matrix.goarch }}-${{ hashFiles('go.sum') }}
+          restore-keys: |
+            go-gui-${{ matrix.goos }}-${{ matrix.goarch }}-
+      - uses: actions/download-artifact@v4
         with:
           name: web-dist
           path: gui/web/dist/
@@ -207,7 +285,7 @@ jobs:
           CGO_ENABLED: '1'
           CGO_LDFLAGS: ${{ matrix.goos == 'darwin' && '-framework UniformTypeIdentifiers' || '' }}
         run: go build -tags desktop,production -ldflags="-s -w" -o shuttle-gui-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }} ./cmd/shuttle-gui
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      - uses: actions/upload-artifact@v4
         with:
           name: gui-${{ matrix.goos }}-${{ matrix.goarch }}
           path: shuttle-gui-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }}
@@ -225,8 +303,8 @@ jobs:
             nfpm_arch: arm64
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
         with:
           name: cli-linux-${{ matrix.goarch }}
           path: dist/
@@ -240,7 +318,7 @@ jobs:
         run: |
           nfpm pkg --packager deb --target dist/shuttle-${{ matrix.goarch }}.deb -f build/package/nfpm.yaml
           nfpm pkg --packager rpm --target dist/shuttle-${{ matrix.goarch }}.rpm -f build/package/nfpm.yaml
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      - uses: actions/upload-artifact@v4
         with:
           name: packages-linux-${{ matrix.goarch }}
           path: |
@@ -252,19 +330,21 @@ jobs:
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/')
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
-      - uses: docker/setup-buildx-action@b5ca514318bd6ebac0fb2aedd5d36ec1b5c232a2 # v3
-      - uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772 # v3
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - uses: docker/build-push-action@14487ce63c7a62a4a324b0bfb37086795e31c6c1 # v5
+      - uses: docker/build-push-action@v5
         with:
           context: .
           file: deploy/Dockerfile
           platforms: linux/amd64,linux/arm64
           push: true
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
           tags: |
             ghcr.io/${{ github.repository_owner }}/shuttled:latest
             ghcr.io/${{ github.repository_owner }}/shuttled:${{ github.sha }}
@@ -273,15 +353,24 @@ jobs:
     needs: [test, build-frontend]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
-      - uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
         with:
           go-version: '1.24'
-      - uses: actions/setup-java@c5195efecf7bdfc987ee8bae7a71cb8b11521c00 # v4
+      - name: Go module cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+          key: go-android-${{ runner.os }}-${{ hashFiles('go.sum') }}
+          restore-keys: |
+            go-android-${{ runner.os }}-
+      - uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: '17'
-      - uses: android-actions/setup-android@00854ea68c109d98c75d956347303bf7c45b0277 # v3
+      - uses: android-actions/setup-android@v3
       - name: Install NDK
         run: sdkmanager "ndk;27.2.12479018"
       - name: Install gomobile
@@ -296,7 +385,7 @@ jobs:
         run: |
           mkdir -p mobile/android/app/libs
           gomobile bind -target=android/arm64,android/arm -androidapi 21 -o mobile/android/app/libs/shuttle.aar ./mobile
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      - uses: actions/upload-artifact@v4
         with:
           name: android-aar
           path: mobile/android/app/libs/shuttle.aar
@@ -305,10 +394,19 @@ jobs:
     needs: [test, build-frontend]
     runs-on: macos-latest
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
-      - uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
         with:
           go-version: '1.24'
+      - name: Go module cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/go/pkg/mod
+            ~/Library/Caches/go-build
+          key: go-ios-${{ runner.os }}-${{ hashFiles('go.sum') }}
+          restore-keys: |
+            go-ios-${{ runner.os }}-
       - name: Install gomobile
         run: |
           go get golang.org/x/mobile/bind@latest
@@ -317,7 +415,7 @@ jobs:
           gomobile init
       - name: Build .xcframework
         run: gomobile bind -target=ios -o mobile/ios/Shuttle.xcframework ./mobile
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      - uses: actions/upload-artifact@v4
         with:
           name: ios-xcframework
           path: mobile/ios/Shuttle.xcframework/
@@ -327,7 +425,10 @@ jobs:
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/')
     steps:
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/download-artifact@v4
         with:
           path: artifacts/
       - name: Prepare release files
@@ -344,13 +445,26 @@ jobs:
           zip -r release/shuttle-ios.xcframework.zip artifacts/ios-xcframework/ || true
           ls -la release/
       - name: Generate checksums
-        if: startsWith(github.ref, 'refs/tags/')
         run: |
           cd release
           sha256sum * > checksums.txt
           cat checksums.txt
+      - name: Generate changelog
+        id: changelog
+        run: |
+          # Get previous tag
+          PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+          if [ -n "$PREV_TAG" ]; then
+            echo "## Changes since ${PREV_TAG}" > changelog.md
+            echo "" >> changelog.md
+            git log --pretty=format:"- %s (%h)" "${PREV_TAG}..HEAD" >> changelog.md
+          else
+            echo "## Initial Release" > changelog.md
+          fi
+          cat changelog.md
       - name: Create Release
-        uses: softprops/action-gh-release@da05d552573ad5aba039eaac05058a918a7bf631 # v2
+        uses: softprops/action-gh-release@v2
         with:
           files: release/*
+          body_path: changelog.md
           generate_release_notes: true

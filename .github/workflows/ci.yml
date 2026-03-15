@@ -1,0 +1,134 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+      - name: Go module cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+          key: go-lint-${{ runner.os }}-${{ hashFiles('go.sum') }}
+          restore-keys: |
+            go-lint-${{ runner.os }}-
+      - uses: golangci/golangci-lint-action@v6
+        with:
+          version: latest
+      - run: go vet ./...
+
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        group:
+          - name: core
+            packages: ./config/... ./engine/... ./router/... ./stats/... ./proxy/... ./stream/... ./connlog/... ./obfs/... ./plugin/... ./qos/... ./subscription/...
+          - name: transport
+            packages: ./transport/... ./congestion/... ./crypto/...
+          - name: infra
+            packages: ./mesh/... ./internal/... ./server/... ./speedtest/... ./update/...
+    name: test (${{ matrix.group.name }})
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+      - name: Go module cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+          key: go-test-${{ runner.os }}-${{ hashFiles('go.sum') }}
+          restore-keys: |
+            go-test-${{ runner.os }}-
+      - name: Install dependencies
+        run: sudo apt-get update && sudo apt-get install -y gcc libayatana-appindicator3-dev libgtk-3-dev
+      - name: Run tests (${{ matrix.group.name }})
+        run: |
+          # Use scripts/test.sh for each package in this group.
+          # test.sh wraps go test safely — never invoke go test directly.
+          for pkg in ${{ matrix.group.packages }}; do
+            ./scripts/test.sh --pkg "$pkg" --race
+          done
+      - name: Run tests with coverage (${{ matrix.group.name }})
+        run: |
+          for pkg in ${{ matrix.group.packages }}; do
+            ./scripts/test.sh --pkg "$pkg" --cover
+          done
+      - name: Upload coverage
+        if: matrix.group.name == 'core'
+        uses: codecov/codecov-action@v4
+        with:
+          files: coverage.out
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+
+  build:
+    needs: [lint, test]
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - goos: linux
+            goarch: amd64
+            ext: ''
+          - goos: linux
+            goarch: arm64
+            ext: ''
+          - goos: darwin
+            goarch: amd64
+            ext: ''
+          - goos: darwin
+            goarch: arm64
+            ext: ''
+          - goos: windows
+            goarch: amd64
+            ext: '.exe'
+    name: build (${{ matrix.goos }}/${{ matrix.goarch }})
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+      - name: Go module cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+          key: go-build-${{ matrix.goos }}-${{ matrix.goarch }}-${{ hashFiles('go.sum') }}
+          restore-keys: |
+            go-build-${{ matrix.goos }}-${{ matrix.goarch }}-
+      - name: Build shuttle & shuttled
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: '0'
+        run: |
+          go build -ldflags="-s -w" -o shuttle-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }} ./cmd/shuttle
+          go build -ldflags="-s -w" -o shuttled-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }} ./cmd/shuttled
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cli-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: |
+            shuttle-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }}
+            shuttled-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }}
+          retention-days: 14

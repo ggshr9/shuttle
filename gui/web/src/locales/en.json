@@ -200,7 +200,11 @@
     "geodataUpdating": "Updating...",
     "geodataAutoUpdate": "Auto-update (every 24h)",
     "geodataNever": "Never updated",
-    "geodataError": "Error"
+    "geodataError": "Error",
+    "diagnostics": "Diagnostics",
+    "downloadDiagnostics": "Download Diagnostics Bundle",
+    "diagnosticsDesc": "Collect system info, redacted config, connection state, and runtime data into a ZIP file for debugging.",
+    "downloading": "Downloading..."
   },
   "common": {
     "cancel": "Cancel",
@@ -264,6 +268,19 @@
     "received": "Received",
     "total": "Total",
     "noData": "No traffic data available"
+  },
+  "multipath": {
+    "title": "Multipath",
+    "interface": "Interface",
+    "rtt": "RTT (ms)",
+    "lossRate": "Loss Rate",
+    "bytesSent": "Bytes Sent",
+    "bytesRecv": "Bytes Received",
+    "available": "Available",
+    "mode": "Mode",
+    "failover": "Failover",
+    "aggregate": "Aggregate",
+    "redundant": "Redundant"
   },
   "emptyState": {
     "noServers": "No Servers Yet",

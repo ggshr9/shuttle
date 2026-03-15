@@ -27,6 +27,9 @@
   let autostartEnabled = $state(false)
   let autostartLoading = $state(false)
 
+  // Diagnostics state
+  let downloadingDiag = $state(false)
+
   // LAN sharing state
   let lanInfo = $state(null)
 
@@ -196,6 +199,17 @@
       msg = 'GeoData update failed: ' + (err.message || err)
     } finally {
       updatingGeo = false
+    }
+  }
+
+  async function downloadDiagnostics() {
+    downloadingDiag = true
+    try {
+      await api.downloadDiagnostics()
+    } catch (err) {
+      msg = t('settings.diagnostics') + ' failed: ' + (err.message || err)
+    } finally {
+      downloadingDiag = false
     }
   }
 
@@ -561,6 +575,14 @@
       disabled={checkingUpdate}
     >
       {checkingUpdate ? t('settings.checking') : t('settings.checkUpdates')}
+    </button>
+  </section>
+
+  <section class="diagnostics-section">
+    <h3>{t('settings.diagnostics')}</h3>
+    <p class="section-hint">{t('settings.diagnosticsDesc')}</p>
+    <button class="diag-btn" onclick={downloadDiagnostics} disabled={downloadingDiag}>
+      {downloadingDiag ? t('settings.downloading') : t('settings.downloadDiagnostics')}
     </button>
   </section>
 </div>
@@ -1207,6 +1229,31 @@
   .picker-name { font-weight: 500; }
   .picker-conns { font-size: 11px; color: var(--text-muted); }
   .picker-empty { font-size: 13px; color: var(--text-muted); }
+
+  .diagnostics-section {
+    margin-top: 24px;
+  }
+
+  .diag-btn {
+    width: 100%;
+    padding: 10px;
+    background: var(--bg-tertiary);
+    color: var(--accent);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 13px;
+    transition: background 0.2s;
+  }
+
+  .diag-btn:hover:not(:disabled) {
+    background: #30363d;
+  }
+
+  .diag-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
 
   .picker-close {
     margin-top: 12px;

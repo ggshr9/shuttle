@@ -327,6 +327,15 @@ func (s *Selector) ActivePaths() []PathInfo {
 	return pool.PathInfos()
 }
 
+// Transports returns a copy of the configured transport list.
+func (s *Selector) Transports() []transport.ClientTransport {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	out := make([]transport.ClientTransport, len(s.transports))
+	copy(out, s.transports)
+	return out
+}
+
 func (s *Selector) Type() string { return "selector" }
 
 func (s *Selector) Close() error {

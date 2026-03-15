@@ -234,4 +234,20 @@ export const api = {
   updateGeoData: () => request<GeoDataStatus>('POST', '/api/geodata/update', {}, 120000),
   // Transport stats
   getTransportStats: () => request<TransportStats[]>('GET', '/api/transports/stats'),
+  // Diagnostics
+  downloadDiagnostics: async (): Promise<void> => {
+    const res = await fetch(`${BASE}/api/diagnostics`)
+    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    const blob = await res.blob()
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    const disposition = res.headers.get('Content-Disposition')
+    const match = disposition?.match(/filename="(.+)"/)
+    a.download = match?.[1] || 'shuttle-diagnostics.zip'
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+  },
 }

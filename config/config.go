@@ -136,11 +136,20 @@ type TransportConfig struct {
 	WebRTC            WebRTCConfig  `yaml:"webrtc" json:"webrtc"`
 }
 
+// MultipathConfig configures QUIC multipath behavior for H3 transport.
+type MultipathConfig struct {
+	Enabled       bool     `yaml:"enabled" json:"enabled"`
+	Interfaces    []string `yaml:"interfaces,omitempty" json:"interfaces,omitempty"` // bind to specific interfaces, empty = auto-detect
+	Mode          string   `yaml:"mode" json:"mode"`                                 // "redundant" | "aggregate" | "failover"
+	ProbeInterval string   `yaml:"probe_interval,omitempty" json:"probe_interval,omitempty"` // duration string, e.g. "5s"
+}
+
 // H3Config configures HTTP/3 transport.
 type H3Config struct {
-	Enabled            bool   `yaml:"enabled" json:"enabled"`
-	PathPrefix         string `yaml:"path_prefix" json:"path_prefix"`
-	InsecureSkipVerify bool   `yaml:"insecure_skip_verify,omitempty" json:"insecure_skip_verify,omitempty"`
+	Enabled            bool            `yaml:"enabled" json:"enabled"`
+	PathPrefix         string          `yaml:"path_prefix" json:"path_prefix"`
+	InsecureSkipVerify bool            `yaml:"insecure_skip_verify,omitempty" json:"insecure_skip_verify,omitempty"`
+	Multipath          MultipathConfig `yaml:"multipath,omitempty" json:"multipath,omitempty"`
 }
 
 // RealityConfig configures Reality transport.

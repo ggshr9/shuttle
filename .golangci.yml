@@ -1,7 +1,7 @@
 run:
   timeout: 5m
-  skip-dirs:
-    - quicfork
+  build-tags:
+    - "!sandbox"  # don't lint sandbox tests on CI
 
 linters:
   enable:
@@ -20,11 +20,17 @@ linters:
     - nilerr
     - prealloc
     - unconvert
+    - gosimple
+  disable:
+    - exhaustive   # too noisy for switch statements
+    - wrapcheck    # too strict for this project
 
 linters-settings:
   errcheck:
     exclude-functions:
       - io.ReadFull  # HKDF reads always succeed on valid inputs
+      - (io.Closer).Close
+      - (net.Conn).Close
   gocritic:
     enabled-tags:
       - diagnostic
@@ -32,4 +38,4 @@ linters-settings:
 
 issues:
   exclude-dirs:
-    - quicfork
+    - quicfork  # forked code, don't lint

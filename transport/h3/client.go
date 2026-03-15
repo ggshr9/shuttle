@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"fmt"
 	"io"
+	"log/slog"
 	"net"
 	"sync"
 	"sync/atomic"
@@ -24,14 +25,16 @@ type ClientConfig struct {
 	PathPrefix         string
 	InsecureSkipVerify bool                   // skip TLS cert verification (for self-signed certs)
 	CongestionControl  quic.CongestionControl // optional custom CC (e.g., BBR/Brutal adaptive)
+	Multipath          *MultipathConfig       // optional multipath configuration
 }
 
 type Client struct {
-	config *ClientConfig
-	mu     sync.Mutex
-	conn   *h3Connection
-	closed atomic.Bool
-	padder *obfs.Padder
+	config    *ClientConfig
+	mu        sync.Mutex
+	conn      *h3Connection
+	closed    atomic.Bool
+	padder    *obfs.Padder
+	multipath *MultipathManager // nil when multipath is disabled
 }
 
 func NewClient(cfg *ClientConfig) *Client {
@@ -128,13 +131,37 @@ func (c *Client) Dial(ctx context.Context, addr string) (transport.Connection, e
 
 	h3conn := &h3Connection{qconn: qconn, padder: c.padder}
 	c.conn = h3conn
+
+	// If multipath is enabled, wrap with multipathConn.
+	if c.config.Multipath != nil && c.config.Multipath.Enabled {
+		if c.multipath == nil {
+			c.multipath = NewMultipathManager(c.config.Multipath, slog.Default())
+		}
+		c.multipath.AddPath("primary", h3conn)
+		mc := &multipathConn{manager: c.multipath, primary: h3conn}
+		c.multipath.StartProbes(ctx)
+		return mc, nil
+	}
+
 	return h3conn, nil
+}
+
+// MultipathStats returns per-path statistics if multipath is active, or nil otherwise.
+func (c *Client) MultipathStats() []PathStats {
+	if c.multipath == nil {
+		return nil
+	}
+	return c.multipath.Stats()
 }
 
 func (c *Client) Close() error {
 	c.closed.Store(true)
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	if c.multipath != nil {
+		c.multipath.Close()
+		c.multipath = nil
+	}
 	if c.conn != nil {
 		return c.conn.Close()
 	}

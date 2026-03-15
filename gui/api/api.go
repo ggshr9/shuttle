@@ -576,6 +576,15 @@ func handlerWithAllOptions(eng *engine.Engine, subMgr *subscription.Manager, sta
 		}
 	})
 
+	mux.HandleFunc("GET /api/multipath/stats", func(w http.ResponseWriter, r *http.Request) {
+		mpStats := eng.MultipathStats()
+		if mpStats == nil {
+			writeJSON(w, []struct{}{})
+			return
+		}
+		writeJSON(w, mpStats)
+	})
+
 	mux.HandleFunc("GET /api/processes", func(w http.ResponseWriter, r *http.Request) {
 		procs, err := procnet.ListNetworkProcesses()
 		if err != nil {
@@ -1386,6 +1395,16 @@ func handlerWithAllOptions(eng *engine.Engine, subMgr *subscription.Manager, sta
 	})
 
 	// Diagnostic: system resource usage
+	mux.HandleFunc("GET /api/diagnostics", func(w http.ResponseWriter, r *http.Request) {
+		ts := time.Now().Format("20060102-150405")
+		w.Header().Set("Content-Type", "application/zip")
+		w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="shuttle-diagnostics-%s.zip"`, ts))
+		if err := eng.ExportDiagnosticsZIP(w); err != nil {
+			// Headers already sent, log error
+			_ = err
+		}
+	})
+
 	mux.HandleFunc("GET /api/system/resources", func(w http.ResponseWriter, r *http.Request) {
 		var m runtime.MemStats
 		runtime.ReadMemStats(&m)

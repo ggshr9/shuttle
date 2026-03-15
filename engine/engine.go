@@ -273,14 +273,29 @@ func (e *Engine) buildTransports(cfg *config.ClientConfig, ccAdapter quic.Conges
 	var transports []transport.ClientTransport
 
 	if cfg.Transport.H3.Enabled {
-		transports = append(transports, h3.NewClient(&h3.ClientConfig{
+		h3Cfg := &h3.ClientConfig{
 			ServerAddr:         cfg.Server.Addr,
 			ServerName:         cfg.Server.SNI,
 			Password:           cfg.Server.Password,
 			PathPrefix:         cfg.Transport.H3.PathPrefix,
 			InsecureSkipVerify: cfg.Transport.H3.InsecureSkipVerify,
 			CongestionControl:  ccAdapter,
-		}))
+		}
+		if cfg.Transport.H3.Multipath.Enabled {
+			probeInterval := 5 * time.Second
+			if cfg.Transport.H3.Multipath.ProbeInterval != "" {
+				if d, err := time.ParseDuration(cfg.Transport.H3.Multipath.ProbeInterval); err == nil {
+					probeInterval = d
+				}
+			}
+			h3Cfg.Multipath = &h3.MultipathConfig{
+				Enabled:       true,
+				Interfaces:    cfg.Transport.H3.Multipath.Interfaces,
+				Mode:          cfg.Transport.H3.Multipath.Mode,
+				ProbeInterval: probeInterval,
+			}
+		}
+		transports = append(transports, h3.NewClient(h3Cfg))
 	}
 
 	if cfg.Transport.Reality.Enabled {
@@ -912,6 +927,24 @@ func (e *Engine) StreamStats() stream.StreamSummary {
 		return stream.StreamSummary{}
 	}
 	return st.Summary()
+}
+
+// MultipathStats returns per-path statistics from the H3 multipath manager, or nil if multipath is not active.
+func (e *Engine) MultipathStats() []h3.PathStats {
+	e.mu.RLock()
+	sel := e.sel
+	e.mu.RUnlock()
+	if sel == nil {
+		return nil
+	}
+	for _, t := range sel.Transports() {
+		if h3Client, ok := t.(*h3.Client); ok {
+			if stats := h3Client.MultipathStats(); stats != nil {
+				return stats
+			}
+		}
+	}
+	return nil
 }
 
 // StreamTracker returns the current stream tracker, or nil if the engine is not running.

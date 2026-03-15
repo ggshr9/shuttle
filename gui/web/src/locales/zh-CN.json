@@ -200,7 +200,11 @@
     "geodataUpdating": "更新中...",
     "geodataAutoUpdate": "自动更新（每24小时）",
     "geodataNever": "从未更新",
-    "geodataError": "错误"
+    "geodataError": "错误",
+    "diagnostics": "诊断",
+    "downloadDiagnostics": "下载诊断包",
+    "diagnosticsDesc": "收集系统信息、脱敏配置、连接状态和运行时数据，打包为 ZIP 文件用于调试。",
+    "downloading": "下载中..."
   },
   "common": {
     "cancel": "取消",
@@ -264,6 +268,19 @@
     "received": "下载",
     "total": "总计",
     "noData": "暂无流量数据"
+  },
+  "multipath": {
+    "title": "多路径",
+    "interface": "网络接口",
+    "rtt": "延迟 (ms)",
+    "lossRate": "丢包率",
+    "bytesSent": "已发送字节",
+    "bytesRecv": "已接收字节",
+    "available": "可用",
+    "mode": "模式",
+    "failover": "故障转移",
+    "aggregate": "聚合",
+    "redundant": "冗余"
   },
   "emptyState": {
     "noServers": "暂无服务器",
