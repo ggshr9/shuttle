@@ -17,6 +17,7 @@ import (
 
 	"github.com/shuttle-proxy/shuttle/config"
 	"github.com/shuttle-proxy/shuttle/server/audit"
+	"github.com/shuttle-proxy/shuttle/server/metrics"
 )
 
 // ServerInfo tracks runtime server metrics.
@@ -39,7 +40,7 @@ type BackupPayload struct {
 }
 
 // Handler creates the admin API HTTP handler.
-func Handler(info *ServerInfo, cfg *config.ServerConfig, configPath string, users *UserStore, auditLog *audit.Logger) http.Handler {
+func Handler(info *ServerInfo, cfg *config.ServerConfig, configPath string, users *UserStore, auditLog *audit.Logger, mc *metrics.Collector) http.Handler {
 	mux := http.NewServeMux()
 	var cfgMu sync.RWMutex // protects concurrent access to cfg
 	token := cfg.Admin.Token
@@ -164,7 +165,11 @@ func Handler(info *ServerInfo, cfg *config.ServerConfig, configPath string, user
 
 	mux.HandleFunc("GET /metrics", auth(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/plain; version=0.0.4; charset=utf-8")
-		WritePrometheusMetrics(w, info, users)
+		if mc != nil {
+			mc.Handler().ServeHTTP(w, r)
+		} else {
+			WritePrometheusMetrics(w, info, users)
+		}
 	}))
 
 	mux.HandleFunc("POST /api/reload", auth(func(w http.ResponseWriter, r *http.Request) {
@@ -322,7 +327,7 @@ func Handler(info *ServerInfo, cfg *config.ServerConfig, configPath string, user
 // ListenAndServe starts the admin API server and returns the *http.Server
 // so the caller can call Shutdown() for graceful termination.
 // If the admin API is disabled, it returns (nil, nil).
-func ListenAndServe(cfg *config.AdminConfig, info *ServerInfo, serverCfg *config.ServerConfig, configPath string, users *UserStore, auditLog *audit.Logger) (*http.Server, error) {
+func ListenAndServe(cfg *config.AdminConfig, info *ServerInfo, serverCfg *config.ServerConfig, configPath string, users *UserStore, auditLog *audit.Logger, mc *metrics.Collector) (*http.Server, error) {
 	if !cfg.Enabled {
 		return nil, nil
 	}
@@ -337,7 +342,7 @@ func ListenAndServe(cfg *config.AdminConfig, info *ServerInfo, serverCfg *config
 		return nil, fmt.Errorf("admin listen: %w", err)
 	}
 
-	handler := Handler(info, serverCfg, configPath, users, auditLog)
+	handler := Handler(info, serverCfg, configPath, users, auditLog, mc)
 	server := &http.Server{
 		Handler:      handler,
 		ReadTimeout:  10 * time.Second,

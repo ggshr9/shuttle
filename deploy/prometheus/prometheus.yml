@@ -1,0 +1,15 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: 'shuttle'
+    scheme: https
+    basic_auth:
+      username: admin
+      password_file: /etc/prometheus/shuttle_password
+    tls_config:
+      insecure_skip_verify: true
+    static_configs:
+      - targets: ['shuttled:9090']
+    metrics_path: /metrics

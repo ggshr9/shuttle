@@ -34,7 +34,7 @@ func testSetup() (*ServerInfo, *config.ServerConfig) {
 
 func TestHealthNoAuth(t *testing.T) {
 	info, cfg := testSetup()
-	handler := Handler(info, cfg, "", NewUserStore(cfg.Admin.Users), nil)
+	handler := Handler(info, cfg, "", NewUserStore(cfg.Admin.Users), nil, nil)
 
 	req := httptest.NewRequest("GET", "/api/health", nil)
 	w := httptest.NewRecorder()
@@ -53,7 +53,7 @@ func TestHealthNoAuth(t *testing.T) {
 
 func TestStatusRequiresAuth(t *testing.T) {
 	info, cfg := testSetup()
-	handler := Handler(info, cfg, "", NewUserStore(cfg.Admin.Users), nil)
+	handler := Handler(info, cfg, "", NewUserStore(cfg.Admin.Users), nil, nil)
 
 	// No auth header
 	req := httptest.NewRequest("GET", "/api/status", nil)
@@ -77,7 +77,7 @@ func TestStatusRequiresAuth(t *testing.T) {
 
 func TestStatusWithAuth(t *testing.T) {
 	info, cfg := testSetup()
-	handler := Handler(info, cfg, "", NewUserStore(cfg.Admin.Users), nil)
+	handler := Handler(info, cfg, "", NewUserStore(cfg.Admin.Users), nil, nil)
 
 	req := httptest.NewRequest("GET", "/api/status", nil)
 	req.Header.Set("Authorization", "Bearer test-token-abc123")
@@ -104,7 +104,7 @@ func TestStatusWithAuth(t *testing.T) {
 
 func TestConfigRedactsSecrets(t *testing.T) {
 	info, cfg := testSetup()
-	handler := Handler(info, cfg, "", NewUserStore(cfg.Admin.Users), nil)
+	handler := Handler(info, cfg, "", NewUserStore(cfg.Admin.Users), nil, nil)
 
 	req := httptest.NewRequest("GET", "/api/config", nil)
 	req.Header.Set("Authorization", "Bearer test-token-abc123")
@@ -134,7 +134,7 @@ func TestShareURI(t *testing.T) {
 	cfg.Transport.H3.Enabled = true
 	cfg.Transport.Reality.Enabled = true
 	cfg.Transport.Reality.ShortIDs = []string{"abcd1234"}
-	handler := Handler(info, cfg, "", NewUserStore(cfg.Admin.Users), nil)
+	handler := Handler(info, cfg, "", NewUserStore(cfg.Admin.Users), nil, nil)
 
 	req := httptest.NewRequest("GET", "/api/share?addr=example.com:443", nil)
 	req.Header.Set("Authorization", "Bearer test-token-abc123")
@@ -158,7 +158,7 @@ func TestShareURI(t *testing.T) {
 
 func TestMetrics(t *testing.T) {
 	info, cfg := testSetup()
-	handler := Handler(info, cfg, "", NewUserStore(cfg.Admin.Users), nil)
+	handler := Handler(info, cfg, "", NewUserStore(cfg.Admin.Users), nil, nil)
 
 	req := httptest.NewRequest("GET", "/api/metrics", nil)
 	req.Header.Set("Authorization", "Bearer test-token-abc123")
@@ -186,7 +186,7 @@ func TestBackup(t *testing.T) {
 		{Name: "alice", Token: "tok-alice", MaxBytes: 1000, Enabled: true},
 		{Name: "bob", Token: "tok-bob", MaxBytes: 0, Enabled: false},
 	})
-	handler := Handler(info, cfg, "", users, nil)
+	handler := Handler(info, cfg, "", users, nil, nil)
 
 	req := httptest.NewRequest("GET", "/api/backup", nil)
 	req.Header.Set("Authorization", "Bearer test-token-abc123")
@@ -231,7 +231,7 @@ func TestRestoreUsers(t *testing.T) {
 	users := NewUserStore([]config.User{
 		{Name: "old-user", Token: "tok-old", MaxBytes: 0, Enabled: true},
 	})
-	handler := Handler(info, cfg, "", users, nil)
+	handler := Handler(info, cfg, "", users, nil, nil)
 
 	body := `{
 		"version": 1,
@@ -281,7 +281,7 @@ func TestRestoreUsers(t *testing.T) {
 func TestRestoreInvalidJSON(t *testing.T) {
 	info, cfg := testSetup()
 	users := NewUserStore(cfg.Admin.Users)
-	handler := Handler(info, cfg, "", users, nil)
+	handler := Handler(info, cfg, "", users, nil, nil)
 
 	req := httptest.NewRequest("POST", "/api/restore", strings.NewReader("{not valid json"))
 	req.Header.Set("Authorization", "Bearer test-token-abc123")

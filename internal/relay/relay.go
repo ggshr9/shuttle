@@ -18,6 +18,12 @@ import (
 //
 // Returns the total bytes transferred in each direction and the first error.
 func Relay(a, b io.ReadWriteCloser) (sent, received int64, err error) {
+	// Try zero-copy splice first (Linux only, raw TCP connections).
+	if n1, n2, ok := trySplice(a, b); ok {
+		return n1, n2, nil
+	}
+
+	// Fallback to userspace copy with pooled buffers.
 	var (
 		wg      sync.WaitGroup
 		errOnce sync.Once

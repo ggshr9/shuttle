@@ -145,10 +145,11 @@ type H3Config struct {
 
 // RealityConfig configures Reality transport.
 type RealityConfig struct {
-	Enabled    bool   `yaml:"enabled" json:"enabled"`
-	ServerName string `yaml:"server_name" json:"server_name"`
-	ShortID    string `yaml:"short_id" json:"short_id"`
-	PublicKey  string `yaml:"public_key" json:"public_key"`
+	Enabled      bool   `yaml:"enabled" json:"enabled"`
+	ServerName   string `yaml:"server_name" json:"server_name"`
+	ShortID      string `yaml:"short_id" json:"short_id"`
+	PublicKey    string `yaml:"public_key" json:"public_key"`
+	PostQuantum  bool   `yaml:"post_quantum,omitempty" json:"post_quantum,omitempty"` // Enable hybrid X25519 + ML-KEM-768 key exchange
 }
 
 // CDNConfig configures CDN transport.
@@ -399,10 +400,11 @@ type ServerH3Config struct {
 
 // ServerRealityConfig configures server Reality.
 type ServerRealityConfig struct {
-	Enabled    bool     `yaml:"enabled" json:"enabled"`
-	TargetSNI  string   `yaml:"target_sni" json:"target_sni"`
-	TargetAddr string   `yaml:"target_addr" json:"target_addr"`
-	ShortIDs   []string `yaml:"short_ids" json:"short_ids"`
+	Enabled     bool     `yaml:"enabled" json:"enabled"`
+	TargetSNI   string   `yaml:"target_sni" json:"target_sni"`
+	TargetAddr  string   `yaml:"target_addr" json:"target_addr"`
+	ShortIDs    []string `yaml:"short_ids" json:"short_ids"`
+	PostQuantum bool     `yaml:"post_quantum,omitempty" json:"post_quantum,omitempty"` // Enable hybrid X25519 + ML-KEM-768 key exchange
 }
 
 // ServerWebRTCConfig configures server-side WebRTC DataChannel transport.

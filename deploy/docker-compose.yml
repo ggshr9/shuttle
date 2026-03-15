@@ -49,7 +49,36 @@ services:
       shuttled:
         condition: service_healthy
 
+  # --- Monitoring Stack (uncomment to enable) ---
+  # prometheus:
+  #   image: prom/prometheus:latest
+  #   restart: unless-stopped
+  #   ports:
+  #     - "9091:9090"
+  #   volumes:
+  #     - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+  #     - prometheus-data:/prometheus
+  #   depends_on:
+  #     shuttled:
+  #       condition: service_healthy
+
+  # grafana:
+  #   image: grafana/grafana:latest
+  #   restart: unless-stopped
+  #   ports:
+  #     - "3000:3000"
+  #   volumes:
+  #     - ./grafana/shuttle-dashboard.json:/var/lib/grafana/dashboards/shuttle.json:ro
+  #     - grafana-data:/var/lib/grafana
+  #   environment:
+  #     - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin}
+  #     - GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH=/var/lib/grafana/dashboards/shuttle.json
+  #   depends_on:
+  #     - prometheus
+
 volumes:
   shuttle-data:
   caddy-data:
   caddy-certs:
+  # prometheus-data:
+  # grafana-data:

@@ -31,6 +31,7 @@ import (
 	"github.com/shuttle-proxy/shuttle/server"
 	"github.com/shuttle-proxy/shuttle/server/admin"
 	"github.com/shuttle-proxy/shuttle/server/audit"
+	"github.com/shuttle-proxy/shuttle/server/metrics"
 	"github.com/shuttle-proxy/shuttle/transport"
 	"github.com/shuttle-proxy/shuttle/transport/cdn"
 	"github.com/shuttle-proxy/shuttle/transport/h3"
@@ -546,6 +547,9 @@ func run(configPath string) {
 		}
 	}
 
+	// Create metrics collector
+	metricsCollector := metrics.NewCollector()
+
 	// Start admin API if enabled
 	var adminInfo *admin.ServerInfo
 	var adminServer *http.Server
@@ -556,7 +560,7 @@ func run(configPath string) {
 			ConfigPath: configPath,
 		}
 		var err error
-		adminServer, err = admin.ListenAndServe(&cfg.Admin, adminInfo, cfg, configPath, users, auditLog)
+		adminServer, err = admin.ListenAndServe(&cfg.Admin, adminInfo, cfg, configPath, users, auditLog, metricsCollector)
 		if err != nil {
 			logger.Error("failed to start admin API", "err", err)
 		} else {
@@ -621,13 +625,23 @@ func run(configPath string) {
 				adminInfo.TotalConns.Add(1)
 				adminInfo.ActiveConns.Add(1)
 			}
+
+			// Determine transport name from connection metadata
+			transportName := "unknown"
+			if tn, ok := conn.(interface{ TransportName() string }); ok {
+				transportName = tn.TransportName()
+			}
+			metricsCollector.ConnOpened(transportName)
+			connStart := time.Now()
+
 			connWg.Add(1)
 			go func() {
 				defer connWg.Done()
-				handleConnection(ctx, conn, peerTable, ipAllocator, signalHub, streamSem, users, reputation, auditLog, adminInfo, logger)
+				handleConnection(ctx, conn, peerTable, ipAllocator, signalHub, streamSem, users, reputation, auditLog, adminInfo, metricsCollector, logger)
 				if adminInfo != nil {
 					adminInfo.ActiveConns.Add(-1)
 				}
+				metricsCollector.ConnClosed(transportName, time.Since(connStart))
 			}()
 		}
 	}()
@@ -711,7 +725,7 @@ func run(configPath string) {
 	logger.Info("shuttled stopped gracefully")
 }
 
-func handleConnection(ctx context.Context, conn transport.Connection, peerTable *mesh.PeerTable, allocator *mesh.IPAllocator, signalHub *meshsignal.Hub, streamSem chan struct{}, users *admin.UserStore, reputation *server.Reputation, auditLog *audit.Logger, adminInfo *admin.ServerInfo, logger *slog.Logger) {
+func handleConnection(ctx context.Context, conn transport.Connection, peerTable *mesh.PeerTable, allocator *mesh.IPAllocator, signalHub *meshsignal.Hub, streamSem chan struct{}, users *admin.UserStore, reputation *server.Reputation, auditLog *audit.Logger, adminInfo *admin.ServerInfo, mc *metrics.Collector, logger *slog.Logger) {
 	defer conn.Close()
 
 	remoteIP := extractIP(conn.RemoteAddr())
@@ -733,14 +747,18 @@ func handleConnection(ctx context.Context, conn transport.Connection, peerTable 
 			continue
 		}
 
+		mc.StreamOpened()
 		go func() {
-			defer func() { <-streamSem }()
-			handleStream(ctx, stream, remoteIP, peerTable, allocator, signalHub, users, reputation, auditLog, adminInfo, logger)
+			defer func() {
+				<-streamSem
+				mc.StreamClosed()
+			}()
+			handleStream(ctx, stream, remoteIP, peerTable, allocator, signalHub, users, reputation, auditLog, adminInfo, mc, logger)
 		}()
 	}
 }
 
-func handleStream(ctx context.Context, stream transport.Stream, remoteIP string, peerTable *mesh.PeerTable, allocator *mesh.IPAllocator, signalHub *meshsignal.Hub, users *admin.UserStore, reputation *server.Reputation, auditLog *audit.Logger, adminInfo *admin.ServerInfo, logger *slog.Logger) {
+func handleStream(ctx context.Context, stream transport.Stream, remoteIP string, peerTable *mesh.PeerTable, allocator *mesh.IPAllocator, signalHub *meshsignal.Hub, users *admin.UserStore, reputation *server.Reputation, auditLog *audit.Logger, adminInfo *admin.ServerInfo, mc *metrics.Collector, logger *slog.Logger) {
 	defer stream.Close()
 
 	// Read target address (first line). Use a buffered approach to avoid
@@ -785,11 +803,13 @@ func handleStream(ctx context.Context, stream transport.Stream, remoteIP string,
 							}
 						}
 						logger.Debug("auth failed, rejecting stream", "ip", remoteIP)
+						mc.RecordAuthFailure()
 						return
 					}
 				} else {
 					// No token provided but users are configured — reject
 					logger.Debug("no auth token provided, rejecting stream", "ip", remoteIP)
+					mc.RecordAuthFailure()
 					if reputation != nil {
 						if reputation.RecordFailure(remoteIP) {
 							logger.Warn("IP banned after auth failures", "ip", remoteIP)
@@ -872,6 +892,11 @@ func handleStream(ctx context.Context, stream transport.Stream, remoteIP string,
 			// Relay bidirectionally.
 			startTime := time.Now()
 			serverRelay(rw, remote)
+
+			// Record bytes in metrics collector
+			if counter != nil {
+				mc.RecordBytes(counter.bytesIn.Load(), counter.bytesOut.Load())
+			}
 
 			// Record audit entry after relay completes.
 			if auditLog != nil {
