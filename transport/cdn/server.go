@@ -91,7 +91,7 @@ func (s *Server) Listen(ctx context.Context) error {
 		addr = ":443"
 	}
 
-	ln, err := tls.Listen("tcp", addr, tlsConf)
+	ln, err := net.Listen("tcp", addr)
 	if err != nil {
 		return fmt.Errorf("cdn listen: %w", err)
 	}
@@ -102,16 +102,20 @@ func (s *Server) Listen(ctx context.Context) error {
 
 	s.httpServer = &http.Server{
 		Handler:           mux,
+		TLSConfig:         tlsConf,
 		ReadHeaderTimeout: 10 * time.Second,
 		IdleTimeout:       300 * time.Second,
 	}
 
-	s.logger.Info("cdn server listening (HTTP/2)", "addr", addr, "path", s.config.Path)
+	s.logger.Info("cdn server listening (HTTP/2)", "addr", ln.Addr().String(), "path", s.config.Path)
 
 	s.wg.Add(1)
 	go func() {
 		defer s.wg.Done()
-		if err := s.httpServer.Serve(ln); err != nil && err != http.ErrServerClosed {
+		// ServeTLS with empty cert/key paths uses the TLSConfig.Certificates
+		// already set above. This properly enables HTTP/2 via Go's built-in
+		// h2 support (unlike tls.Listen + Serve which bypasses HTTP/2 setup).
+		if err := s.httpServer.ServeTLS(ln, "", ""); err != nil && err != http.ErrServerClosed {
 			if !s.closed.Load() {
 				s.logger.Error("cdn http server error", "err", err)
 			}

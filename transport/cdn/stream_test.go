@@ -6,7 +6,6 @@ import (
 	"crypto/rand"
 	"fmt"
 	"io"
-	"net"
 	"sync"
 	"testing"
 	"time"
@@ -14,23 +13,12 @@ import (
 	"github.com/shuttle-proxy/shuttle/transport"
 )
 
-// getFreePort finds a free TCP port by binding to :0 and releasing it.
-func getFreePort(t *testing.T) int {
-	t.Helper()
-	ln, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatalf("get free port: %v", err)
-	}
-	port := ln.Addr().(*net.TCPAddr).Port
-	ln.Close()
-	return port
-}
-
-// startServer creates and starts a CDN server on the given port.
-func startServer(t *testing.T, port int, password string) *Server {
+// startTestServer creates and starts a CDN server on a random port.
+// Returns the server and the actual listen address (host:port).
+func startTestServer(t *testing.T, password string) (*Server, string) {
 	t.Helper()
 	cfg := &ServerConfig{
-		ListenAddr: fmt.Sprintf(":%d", port),
+		ListenAddr: "127.0.0.1:0",
 		Password:   password,
 		Path:       "/cdn/stream",
 	}
@@ -39,15 +27,16 @@ func startServer(t *testing.T, port int, password string) *Server {
 		t.Fatalf("server listen: %v", err)
 	}
 	t.Cleanup(func() { srv.Close() })
-	return srv
+	addr := srv.listener.Addr().String()
+	return srv, addr
 }
 
-// makeClient creates an H2Client configured for the given port and password.
-func makeClient(t *testing.T, port int, password string) *H2Client {
+// makeTestClient creates an H2Client configured for the given server address and password.
+func makeTestClient(t *testing.T, addr string, password string) *H2Client {
 	t.Helper()
 	cfg := &H2Config{
-		ServerAddr:         fmt.Sprintf("127.0.0.1:%d", port),
-		CDNDomain:          fmt.Sprintf("127.0.0.1:%d", port),
+		ServerAddr:         addr,
+		CDNDomain:          addr,
 		Path:               "/cdn/stream",
 		Password:           password,
 		InsecureSkipVerify: true,
@@ -56,9 +45,8 @@ func makeClient(t *testing.T, port int, password string) *H2Client {
 }
 
 func TestCDNH2RoundTrip(t *testing.T) {
-	port := getFreePort(t)
-	srv := startServer(t, port, "test-password")
-	client := makeClient(t, port, "test-password")
+	srv, addr := startTestServer(t, "test-password")
+	client := makeTestClient(t, addr, "test-password")
 	defer client.Close()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -141,9 +129,8 @@ func TestCDNH2RoundTrip(t *testing.T) {
 }
 
 func TestCDNH2MultipleStreams(t *testing.T) {
-	port := getFreePort(t)
-	srv := startServer(t, port, "test-password")
-	client := makeClient(t, port, "test-password")
+	srv, addr := startTestServer(t, "test-password")
+	client := makeTestClient(t, addr, "test-password")
 	defer client.Close()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -239,9 +226,8 @@ func TestCDNH2MultipleStreams(t *testing.T) {
 }
 
 func TestCDNH2LargePayload(t *testing.T) {
-	port := getFreePort(t)
-	srv := startServer(t, port, "test-password")
-	client := makeClient(t, port, "test-password")
+	srv, addr := startTestServer(t, "test-password")
+	client := makeTestClient(t, addr, "test-password")
 	defer client.Close()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -310,10 +296,9 @@ func TestCDNH2LargePayload(t *testing.T) {
 }
 
 func TestCDNH2AuthFailure(t *testing.T) {
-	port := getFreePort(t)
-	_ = startServer(t, port, "correct-password")
+	_, addr := startTestServer(t, "correct-password")
 
-	client := makeClient(t, port, "wrong-password")
+	client := makeTestClient(t, addr, "wrong-password")
 	defer client.Close()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -398,9 +383,8 @@ func TestCDNGRPCFrameRoundTrip(t *testing.T) {
 }
 
 func TestCDNH2ServerClose(t *testing.T) {
-	port := getFreePort(t)
 	cfg := &ServerConfig{
-		ListenAddr: fmt.Sprintf(":%d", port),
+		ListenAddr: "127.0.0.1:0",
 		Password:   "test-password",
 		Path:       "/cdn/stream",
 	}
@@ -408,6 +392,7 @@ func TestCDNH2ServerClose(t *testing.T) {
 	if err := srv.Listen(context.Background()); err != nil {
 		t.Fatalf("server listen: %v", err)
 	}
+	addr := srv.listener.Addr().String()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -420,7 +405,7 @@ func TestCDNH2ServerClose(t *testing.T) {
 		}
 	}()
 
-	client := makeClient(t, port, "test-password")
+	client := makeTestClient(t, addr, "test-password")
 	defer client.Close()
 
 	clientConn, err := client.Dial(ctx, "")
