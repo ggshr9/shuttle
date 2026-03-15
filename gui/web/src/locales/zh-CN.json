@@ -95,7 +95,18 @@
     "testPlaceholder": "输入域名或 URL 进行测试...",
     "test": "测试",
     "testing": "测试中...",
-    "matchedBy": "匹配规则"
+    "matchedBy": "匹配规则",
+    "importExport": "导入 / 导出",
+    "import": "导入",
+    "export": "导出",
+    "dragDrop": "拖放 .json 文件到此处",
+    "dragDropHint": "或点击导入手动粘贴 JSON",
+    "mergeMode": "与现有规则合并",
+    "replaceMode": "替换所有规则",
+    "invalidFile": "无效文件：需要包含 \"rules\" 数组的 JSON",
+    "importSuccess": "成功导入 {count} 条规则",
+    "exportSuccess": "规则已导出",
+    "noRules": "没有可导出的规则"
   },
   "logs": {
     "title": "日志",

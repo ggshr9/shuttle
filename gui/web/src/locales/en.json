@@ -95,7 +95,18 @@
     "testPlaceholder": "Enter domain or URL to test...",
     "test": "Test",
     "testing": "Testing...",
-    "matchedBy": "Matched by"
+    "matchedBy": "Matched by",
+    "importExport": "Import / Export",
+    "import": "Import",
+    "export": "Export",
+    "dragDrop": "Drop .json file here",
+    "dragDropHint": "or click Import to paste JSON manually",
+    "mergeMode": "Merge with existing rules",
+    "replaceMode": "Replace all rules",
+    "invalidFile": "Invalid file: expected JSON with a \"rules\" array",
+    "importSuccess": "Imported {count} rule(s) successfully",
+    "exportSuccess": "Rules exported",
+    "noRules": "No rules to export"
   },
   "logs": {
     "title": "Logs",

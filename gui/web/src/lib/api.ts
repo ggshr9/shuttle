@@ -182,7 +182,13 @@ export const api = {
   getRouting: () => request<RoutingRules>('GET', '/api/routing/rules'),
   putRouting: (r: RoutingRules) => request<void>('PUT', '/api/routing/rules', r),
   exportRouting: () => `${BASE}/api/routing/export`,
-  importRouting: (rules: RoutingRules) => request<void>('POST', '/api/routing/import', rules),
+  exportRoutingData: async (): Promise<any> => {
+    const res = await fetch(`${BASE}/api/routing/export`)
+    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    return res.json()
+  },
+  importRouting: (rules: RoutingRules, mode: 'merge' | 'replace' = 'merge') =>
+    request<{ added: number; total: number }>('POST', '/api/routing/import', { ...rules, mode }),
   getRoutingTemplates: () => request<RoutingTemplate[]>('GET', '/api/routing/templates'),
   applyRoutingTemplate: (id: string) => request<void>('POST', `/api/routing/templates/${id}`),
   getProcesses: () => request<Process[]>('GET', '/api/processes'),

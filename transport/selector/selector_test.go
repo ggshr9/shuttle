@@ -123,57 +123,48 @@ func TestSelectorActiveTransportNone(t *testing.T) {
 	}
 }
 
-// --- Migrator tests ---
+// --- Migrator tests (basic, via selector_test; full tests in migrate_test.go) ---
 
-func TestMigratorMigrateAndCleanup(t *testing.T) {
-	transports := []transport.ClientTransport{&fakeTransport{typeName: "h3", conn: &fakeConn{}}}
-	s := New(transports, nil, nil)
-	m := NewMigrator(s, nil)
+func TestMigratorTrackAndMigrate(t *testing.T) {
+	m := NewMigrator(nil)
+	defer m.Close()
 
-	m.Migrate(context.Background(), &fakeTransport{typeName: "reality", conn: &fakeConn{}}, "")
-	m.Migrate(context.Background(), &fakeTransport{typeName: "cdn", conn: &fakeConn{}}, "")
+	conn1 := &fakeConn{}
+	conn2 := &fakeConn{}
+	tc1 := m.Track(conn1, "reality")
+	tc2 := m.Track(conn2, "cdn")
 
-	m.mu.Lock()
-	count := len(m.activeConns)
-	m.mu.Unlock()
-	if count != 2 {
-		t.Fatalf("activeConns = %d, want 2", count)
+	stats := m.Stats()
+	if len(stats) != 2 {
+		t.Fatalf("expected 2 tracked connections, got %d", len(stats))
 	}
 
-	m.Cleanup()
+	m.Migrate()
 
-	m.mu.Lock()
-	count = len(m.activeConns)
-	m.mu.Unlock()
-	if count != 1 {
-		t.Fatalf("after Cleanup: activeConns = %d, want 1", count)
+	if !tc1.draining.Load() {
+		t.Fatal("tc1 should be draining")
 	}
-}
-
-func TestMigratorCleanupSingleConn(t *testing.T) {
-	transports := []transport.ClientTransport{&fakeTransport{typeName: "h3", conn: &fakeConn{}}}
-	s := New(transports, nil, nil)
-	m := NewMigrator(s, nil)
-
-	m.Migrate(context.Background(), &fakeTransport{typeName: "reality", conn: &fakeConn{}}, "")
-	m.Cleanup()
-
-	m.mu.Lock()
-	count := len(m.activeConns)
-	m.mu.Unlock()
-	if count != 1 {
-		t.Fatalf("single conn cleanup: activeConns = %d, want 1", count)
+	if !tc2.draining.Load() {
+		t.Fatal("tc2 should be draining")
 	}
 }
 
-func TestMigratorMigrateFail(t *testing.T) {
-	transports := []transport.ClientTransport{&fakeTransport{typeName: "h3", conn: &fakeConn{}}}
-	s := New(transports, nil, nil)
-	m := NewMigrator(s, nil)
+func TestMigratorDrainIdle(t *testing.T) {
+	m := NewMigrator(nil)
+	defer m.Close()
 
-	_, err := m.Migrate(context.Background(), &fakeTransport{typeName: "bad", dialErr: errors.New("fail")}, "")
-	if err == nil {
-		t.Fatal("expected error on failed migration")
+	conn := &fakeConn{}
+	tc := m.Track(conn, "h3")
+	tc.draining.Store(true)
+
+	m.drainIdle()
+
+	if !conn.closeCalled.Load() {
+		t.Fatal("expected idle draining conn to be closed")
+	}
+	stats := m.Stats()
+	if len(stats) != 0 {
+		t.Fatalf("expected 0 connections after drain, got %d", len(stats))
 	}
 }
 

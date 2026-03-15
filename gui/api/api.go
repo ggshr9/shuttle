@@ -364,21 +364,30 @@ func handlerWithAllOptions(eng *engine.Engine, subMgr *subscription.Manager, sta
 
 	// Import routing rules
 	mux.HandleFunc("POST /api/routing/import", func(w http.ResponseWriter, r *http.Request) {
-		var routing config.RoutingConfig
-		if err := decodeJSON(r, &routing); err != nil {
+		var payload struct {
+			Rules   []config.RouteRule `json:"rules"`
+			Default string              `json:"default"`
+			Mode    string              `json:"mode"` // "merge" (default) or "replace"
+		}
+		if err := decodeJSON(r, &payload); err != nil {
 			writeError(w, http.StatusBadRequest, err.Error())
 			return
 		}
 		r.Body.Close()
 
 		cfg := eng.Config()
-		// Merge imported rules with existing
 		existingCount := len(cfg.Routing.Rules)
-		cfg.Routing.Rules = append(cfg.Routing.Rules, routing.Rules...)
+
+		if payload.Mode == "replace" {
+			cfg.Routing.Rules = payload.Rules
+		} else {
+			// Default: merge (append)
+			cfg.Routing.Rules = append(cfg.Routing.Rules, payload.Rules...)
+		}
 
 		// Apply default action if specified in import
-		if routing.Default != "" {
-			cfg.Routing.Default = routing.Default
+		if payload.Default != "" {
+			cfg.Routing.Default = payload.Default
 		}
 
 		if err := eng.Reload(&cfg); err != nil {
@@ -388,7 +397,7 @@ func handlerWithAllOptions(eng *engine.Engine, subMgr *subscription.Manager, sta
 
 		writeJSON(w, map[string]any{
 			"status":   "imported",
-			"added":    len(routing.Rules),
+			"added":    len(payload.Rules),
 			"total":    len(cfg.Routing.Rules),
 			"existing": existingCount,
 		})

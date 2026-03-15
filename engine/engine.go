@@ -184,7 +184,10 @@ func (e *Engine) startInternal(ctx context.Context) error {
 	e.cancel = cancel
 	e.mu.Unlock()
 
-	rt, dnsResolver := e.buildRouter(cfgSnap)
+	rt, dnsResolver, prefetcher := e.buildRouter(cfgSnap)
+	if prefetcher != nil {
+		go prefetcher.Start(ctx)
+	}
 	if cfgSnap.Routing.GeoData.Enabled && cfgSnap.Routing.GeoData.AutoUpdate {
 		if gm := e.GeoManager(); gm != nil {
 			gm.Start(ctx)
@@ -326,7 +329,7 @@ func (e *Engine) buildTransports(cfg *config.ClientConfig, ccAdapter quic.Conges
 }
 
 // buildRouter creates the routing engine including GeoIP/GeoSite and DNS.
-func (e *Engine) buildRouter(cfg *config.ClientConfig) (*router.Router, *router.DNSResolver) {
+func (e *Engine) buildRouter(cfg *config.ClientConfig) (*router.Router, *router.DNSResolver, *router.Prefetcher) {
 	geoIPDB := router.NewGeoIPDB()
 	geoSiteDB := router.NewGeoSiteDB()
 
@@ -369,11 +372,18 @@ func (e *Engine) buildRouter(cfg *config.ClientConfig) (*router.Router, *router.
 		RemoteViaProxy: cfg.Routing.DNS.Remote.Via == "proxy",
 		CacheSize:      10000,
 		CacheTTL:       10 * time.Minute,
+		Prefetch:       cfg.Routing.DNS.Prefetch,
 		LeakPrevention: cfg.Routing.DNS.LeakPrevention,
 		DomesticDoH:    cfg.Routing.DNS.DomesticDoH,
 		StripECS:       cfg.Routing.DNS.StripECS,
 		PersistentConn: persistentConn,
 	}, geoIPDB, e.logger)
+
+	var prefetcher *router.Prefetcher
+	if cfg.Routing.DNS.Prefetch {
+		prefetcher = router.NewPrefetcher(dnsResolver, 100, 30*time.Second, e.logger)
+		dnsResolver.SetPrefetcher(prefetcher)
+	}
 
 	routerCfg := &router.RouterConfig{
 		DefaultAction: router.Action(cfg.Routing.Default),
@@ -403,7 +413,7 @@ func (e *Engine) buildRouter(cfg *config.ClientConfig) (*router.Router, *router.
 		routerCfg.Rules = append(routerCfg.Rules, r)
 	}
 	rt := router.NewRouter(routerCfg, geoIPDB, geoSiteDB, e.logger)
-	return rt, dnsResolver
+	return rt, dnsResolver, prefetcher
 }
 
 // buildRetryConfig converts config.RetryConfig to engine.RetryConfig with parsed durations.

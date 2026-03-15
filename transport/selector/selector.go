@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"net"
 	"sync"
 	"time"
 
@@ -74,7 +75,7 @@ func New(transports []transport.ClientTransport, cfg *Config, logger *slog.Logge
 		warmUpConns:       cfg.WarmUpConns,
 		logger:            logger,
 	}
-	s.migrator = NewMigrator(s, logger)
+	s.migrator = NewMigrator(logger)
 	for _, t := range transports {
 		s.probes[t.Type()] = &ProbeResult{
 			Transport: t,
@@ -106,6 +107,7 @@ func (s *Selector) Start(ctx context.Context) {
 		go cp.evictLoop(ctx)
 	}
 
+	s.migrator.StartDrainLoop()
 	go s.probeLoop(ctx)
 }
 
@@ -163,8 +165,8 @@ func (s *Selector) maybeSwitch() {
 		return
 	}
 	s.logger.Info("switching transport", "from", s.activeType(), "to", best.Type())
+	s.migrator.Migrate()
 	s.active = best
-	s.migrator.Cleanup()
 }
 
 func (s *Selector) activeType() string {
@@ -253,7 +255,8 @@ func (s *Selector) Dial(ctx context.Context, addr string) (transport.Connection,
 					s.active = t
 				}
 				s.mu.Unlock()
-				return conn, nil
+				tc := s.migrator.Track(conn, t.Type())
+				return &migratedConn{tc: tc, migrator: s.migrator, sel: s, addr: addr}, nil
 			}
 			s.logger.Debug("transport dial failed", "type", t.Type(), "err", err)
 		}
@@ -266,22 +269,24 @@ func (s *Selector) Dial(ctx context.Context, addr string) (transport.Connection,
 		s.logger.Warn("active transport failed, trying fallback", "type", active.Type(), "err", err)
 		return s.dialFallback(ctx, addr, active)
 	}
-	return conn, nil
+	tc := s.migrator.Track(conn, active.Type())
+	return &migratedConn{tc: tc, migrator: s.migrator, sel: s, addr: addr}, nil
 }
 
 func (s *Selector) dialFallback(ctx context.Context, addr string, failed transport.ClientTransport) (transport.Connection, error) {
+	s.migrator.Migrate() // drain existing connections
 	for _, t := range s.transports {
 		if t.Type() == failed.Type() {
 			continue
 		}
-		conn, err := s.migrator.Migrate(ctx, t, addr)
+		conn, err := t.Dial(ctx, addr)
 		if err == nil {
 			s.mu.Lock()
 			s.active = t
 			s.mu.Unlock()
-			s.migrator.Cleanup()
+			tc := s.migrator.Track(conn, t.Type())
 			s.logger.Info("fell back to transport", "type", t.Type())
-			return conn, nil
+			return &migratedConn{tc: tc, migrator: s.migrator, sel: s, addr: addr}, nil
 		}
 	}
 	return nil, fmt.Errorf("all fallback transports failed")
@@ -337,10 +342,87 @@ func (s *Selector) Close() error {
 	if cp != nil {
 		cp.Close()
 	}
+	s.migrator.Close()
 	for _, t := range s.transports {
 		t.Close()
 	}
 	return nil
 }
 
+// migratedConn wraps a tracked connection so that OpenStream automatically
+// goes through the Migrator. If the underlying connection is draining (due to
+// a transport switch), OpenStream dials a fresh connection on the selector's
+// currently active transport and opens the stream there instead.
+type migratedConn struct {
+	tc       *migrateConn
+	migrator *Migrator
+	sel      *Selector
+	addr     string
+}
+
+func (c *migratedConn) OpenStream(ctx context.Context) (transport.Stream, error) {
+	stream, err := c.tc.conn.OpenStream(ctx)
+	if err != nil {
+		return nil, err
+	}
+	ts, err := c.migrator.WrapStream(c.tc, stream)
+	if err == ErrConnectionDraining {
+		// Connection is draining — close the stream we just opened and dial fresh.
+		stream.Close()
+		return c.dialNewAndOpen(ctx)
+	}
+	if err != nil {
+		stream.Close()
+		return nil, err
+	}
+	return ts, nil
+}
+
+func (c *migratedConn) dialNewAndOpen(ctx context.Context) (transport.Stream, error) {
+	c.sel.mu.RLock()
+	active := c.sel.active
+	c.sel.mu.RUnlock()
+
+	if active == nil {
+		return nil, fmt.Errorf("no active transport for re-dial")
+	}
+
+	conn, err := active.Dial(ctx, c.addr)
+	if err != nil {
+		return nil, fmt.Errorf("re-dial failed: %w", err)
+	}
+
+	tc := c.migrator.Track(conn, active.Type())
+	// Update our own tracked conn so future calls use the new connection.
+	c.tc = tc
+
+	stream, err := conn.OpenStream(ctx)
+	if err != nil {
+		return nil, err
+	}
+	ts, err := c.migrator.WrapStream(tc, stream)
+	if err != nil {
+		stream.Close()
+		return nil, err
+	}
+	return ts, nil
+}
+
+func (c *migratedConn) AcceptStream(ctx context.Context) (transport.Stream, error) {
+	return c.tc.conn.AcceptStream(ctx)
+}
+
+func (c *migratedConn) Close() error {
+	return c.tc.conn.Close()
+}
+
+func (c *migratedConn) LocalAddr() net.Addr {
+	return c.tc.conn.LocalAddr()
+}
+
+func (c *migratedConn) RemoteAddr() net.Addr {
+	return c.tc.conn.RemoteAddr()
+}
+
+var _ transport.Connection = (*migratedConn)(nil)
 var _ transport.ClientTransport = (*Selector)(nil)

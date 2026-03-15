@@ -37,6 +37,12 @@ type DNSResolver struct {
 	logger     *slog.Logger
 	httpClient *http.Client       // injectable HTTP client for DoH (nil = default)
 	mux        *DNSMultiplexer    // persistent connection pool + dedup (nil when disabled)
+	prefetcher *Prefetcher        // optional DNS prefetcher (nil when disabled)
+}
+
+// SetPrefetcher sets the DNS prefetcher that will be notified of successful resolutions.
+func (r *DNSResolver) SetPrefetcher(p *Prefetcher) {
+	r.prefetcher = p
 }
 
 type dnsCache struct {
@@ -143,10 +149,12 @@ func (r *DNSResolver) selectResult(domain string, domIPs []net.IP, domErr error,
 	}
 	if domErr != nil {
 		r.cache.put(domain, remIPs, r.config.CacheTTL, false)
+		r.recordPrefetch(domain)
 		return remIPs, nil
 	}
 	if remErr != nil {
 		r.cache.put(domain, domIPs, r.config.CacheTTL, true)
+		r.recordPrefetch(domain)
 		return domIPs, nil
 	}
 
@@ -154,6 +162,7 @@ func (r *DNSResolver) selectResult(domain string, domIPs []net.IP, domErr error,
 	if r.ipsMatch(domIPs, remIPs) {
 		// Results agree — use domestic (faster)
 		r.cache.put(domain, domIPs, r.config.CacheTTL, true)
+		r.recordPrefetch(domain)
 		return domIPs, nil
 	}
 
@@ -164,12 +173,21 @@ func (r *DNSResolver) selectResult(domain string, domIPs []net.IP, domErr error,
 			"domestic", domIPs,
 			"remote", remIPs)
 		r.cache.put(domain, remIPs, r.config.CacheTTL, false)
+		r.recordPrefetch(domain)
 		return remIPs, nil
 	}
 
 	// Use domestic result (probably a CDN with region-specific IPs)
 	r.cache.put(domain, domIPs, r.config.CacheTTL, true)
+	r.recordPrefetch(domain)
 	return domIPs, nil
+}
+
+// recordPrefetch notifies the prefetcher of a successful resolution.
+func (r *DNSResolver) recordPrefetch(domain string) {
+	if r.prefetcher != nil {
+		r.prefetcher.Record(domain, r.config.CacheTTL)
+	}
 }
 
 func (r *DNSResolver) ipsMatch(a, b []net.IP) bool {

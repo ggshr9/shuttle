@@ -18,6 +18,11 @@
   let showImport = $state(false)
   let importData = $state('')
   let importing = $state(false)
+  let importMode = $state<'merge' | 'replace'>('merge')
+  let dragOver = $state(false)
+  let droppedFileName = $state('')
+  let droppedRules = $state<any>(null)
+  let importError = $state('')
 
   // GeoSite categories for autocomplete
   let geositeCategories = $state([])
@@ -154,27 +159,113 @@
     }
   }
 
+  function validateRulesData(data: any): boolean {
+    if (!data || typeof data !== 'object') return false
+    if (!Array.isArray(data.rules)) return false
+    return true
+  }
+
+  function handleDragOver(e: DragEvent) {
+    e.preventDefault()
+    dragOver = true
+  }
+
+  function handleDragLeave(e: DragEvent) {
+    e.preventDefault()
+    dragOver = false
+  }
+
+  function handleDrop(e: DragEvent) {
+    e.preventDefault()
+    dragOver = false
+    importError = ''
+    const file = e.dataTransfer?.files?.[0]
+    if (!file) return
+    if (!file.name.endsWith('.json')) {
+      importError = 'Only .json files are supported'
+      return
+    }
+    const reader = new FileReader()
+    reader.onload = () => {
+      try {
+        const parsed = JSON.parse(reader.result as string)
+        if (!validateRulesData(parsed)) {
+          importError = 'Invalid file: expected JSON with a "rules" array'
+          droppedRules = null
+          droppedFileName = ''
+          return
+        }
+        droppedRules = parsed
+        droppedFileName = file.name
+        importData = JSON.stringify(parsed, null, 2)
+        importError = ''
+      } catch {
+        importError = 'Failed to parse JSON file'
+        droppedRules = null
+        droppedFileName = ''
+      }
+    }
+    reader.readAsText(file)
+  }
+
   async function doImport() {
-    if (!importData.trim()) return
     importing = true
+    importError = ''
     try {
-      const parsed = JSON.parse(importData)
-      const result = await api.importRouting(parsed)
+      let parsed: any
+      if (droppedRules) {
+        parsed = droppedRules
+      } else if (importData.trim()) {
+        parsed = JSON.parse(importData)
+      } else {
+        return
+      }
+      if (!validateRulesData(parsed)) {
+        importError = 'Invalid file: expected JSON with a "rules" array'
+        return
+      }
+      const result = await api.importRouting(parsed, importMode)
       // Reload rules
       routing = await api.getRouting()
       routing.rules = routing.rules.map(normalizeRule)
       showImport = false
       importData = ''
+      droppedRules = null
+      droppedFileName = ''
+      importMode = 'merge'
       msg = `Imported ${result.added} rule(s)`
     } catch (e) {
-      msg = 'Import failed: ' + e.message
+      importError = 'Import failed: ' + e.message
     } finally {
       importing = false
     }
   }
 
-  function exportRules() {
-    window.open(api.exportRouting(), '_blank')
+  function closeImport() {
+    showImport = false
+    importData = ''
+    droppedRules = null
+    droppedFileName = ''
+    importError = ''
+    importMode = 'merge'
+  }
+
+  async function exportRules() {
+    try {
+      const data = await api.exportRoutingData()
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = 'shuttle-rules.json'
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      window.URL.revokeObjectURL(url)
+      msg = 'Rules exported'
+    } catch (e) {
+      msg = 'Export failed: ' + e.message
+    }
   }
 </script>
 
@@ -270,6 +361,52 @@
     </button>
   </div>
   {#if msg}<p class="msg">{msg}</p>{/if}
+
+  <div class="import-export-section">
+    <h3 class="section-title">Import / Export</h3>
+    <div
+      class="drop-zone"
+      class:drop-zone-active={dragOver}
+      class:drop-zone-has-file={!!droppedFileName}
+      ondragover={handleDragOver}
+      ondragleave={handleDragLeave}
+      ondrop={handleDrop}
+      role="region"
+      aria-label="Drop zone for importing rule files"
+    >
+      {#if droppedFileName}
+        <span class="drop-file-icon">&#128196;</span>
+        <span class="drop-file-name">{droppedFileName}</span>
+        <span class="drop-file-hint">{droppedRules?.rules?.length ?? 0} rule(s) found</span>
+        <button class="drop-clear" onclick={() => { droppedFileName = ''; droppedRules = null; importData = ''; importError = '' }}>Clear</button>
+      {:else}
+        <span class="drop-icon">&#8615;</span>
+        <span class="drop-text">Drop .json file here</span>
+        <span class="drop-hint">or click Import to paste JSON manually</span>
+      {/if}
+    </div>
+    {#if importError}
+      <p class="import-error">{importError}</p>
+    {/if}
+    <div class="import-mode-row">
+      <label class="mode-label">
+        <input type="radio" name="importMode" value="merge" bind:group={importMode} />
+        Merge with existing rules
+      </label>
+      <label class="mode-label">
+        <input type="radio" name="importMode" value="replace" bind:group={importMode} />
+        Replace all rules
+      </label>
+    </div>
+    <div class="import-export-actions">
+      <button class="btn-import-action" onclick={() => { if (droppedRules) { doImport() } else { showImport = true } }} disabled={importing}>
+        {importing ? 'Importing...' : 'Import'}
+      </button>
+      <button class="btn-export-action" onclick={exportRules}>
+        Export
+      </button>
+    </div>
+  </div>
 </div>
 
 <datalist id="geosite-cats">
@@ -297,7 +434,7 @@
 {/if}
 
 {#if showImport}
-<div class="overlay" onclick={() => (showImport = false)} role="dialog" aria-modal="true" aria-labelledby="import-rules-dialog-title" onkeydown={(e) => e.key === 'Escape' && (showImport = false)}>
+<div class="overlay" onclick={closeImport} role="dialog" aria-modal="true" aria-labelledby="import-rules-dialog-title" onkeydown={(e) => e.key === 'Escape' && closeImport()}>
   <div class="modal" onclick={(e) => e.stopPropagation()}>
     <h3 id="import-rules-dialog-title">Import Rules</h3>
     <p class="modal-hint">Paste JSON rules configuration</p>
@@ -306,8 +443,21 @@
       placeholder={'{"rules": [{"geosite": "cn", "action": "direct"}], "default": "proxy"}'}
       rows="8"
     ></textarea>
+    {#if importError}
+      <p class="import-error">{importError}</p>
+    {/if}
+    <div class="import-mode-row modal-mode-row">
+      <label class="mode-label">
+        <input type="radio" name="modalImportMode" value="merge" bind:group={importMode} />
+        Merge
+      </label>
+      <label class="mode-label">
+        <input type="radio" name="modalImportMode" value="replace" bind:group={importMode} />
+        Replace
+      </label>
+    </div>
     <div class="modal-actions">
-      <button class="close-btn" onclick={() => (showImport = false)}>Cancel</button>
+      <button class="close-btn" onclick={closeImport}>Cancel</button>
       <button class="apply-btn" onclick={doImport} disabled={importing || !importData.trim()}>
         {importing ? 'Importing...' : 'Import'}
       </button>
@@ -693,4 +843,152 @@
 
   .apply-btn:hover { background: var(--btn-bg-hover); }
   .apply-btn:disabled { opacity: 0.5; }
+
+  /* Import / Export section */
+  .import-export-section {
+    margin-top: 24px;
+    padding: 16px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+  }
+
+  .section-title {
+    font-size: 14px;
+    font-weight: 600;
+    margin: 0 0 12px;
+    color: var(--text-primary);
+  }
+
+  .drop-zone {
+    border: 2px dashed var(--border);
+    border-radius: 8px;
+    padding: 24px;
+    text-align: center;
+    cursor: default;
+    transition: border-color 0.2s, background 0.2s;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .drop-zone-active {
+    border-color: var(--accent);
+    background: rgba(88, 166, 255, 0.06);
+  }
+
+  .drop-zone-has-file {
+    border-color: var(--accent-green);
+    border-style: solid;
+    background: rgba(63, 185, 80, 0.06);
+  }
+
+  .drop-icon {
+    font-size: 24px;
+    color: var(--text-muted);
+    line-height: 1;
+  }
+
+  .drop-text {
+    font-size: 13px;
+    color: var(--text-secondary);
+    font-weight: 500;
+  }
+
+  .drop-hint {
+    font-size: 11px;
+    color: var(--text-muted);
+  }
+
+  .drop-file-icon {
+    font-size: 20px;
+    line-height: 1;
+  }
+
+  .drop-file-name {
+    font-size: 13px;
+    color: var(--accent-green);
+    font-weight: 500;
+  }
+
+  .drop-file-hint {
+    font-size: 11px;
+    color: var(--text-secondary);
+  }
+
+  .drop-clear {
+    background: none;
+    border: none;
+    color: var(--accent-red);
+    font-size: 11px;
+    cursor: pointer;
+    padding: 2px 6px;
+    margin-top: 4px;
+  }
+
+  .drop-clear:hover {
+    text-decoration: underline;
+  }
+
+  .import-error {
+    font-size: 12px;
+    color: var(--accent-red);
+    margin: 8px 0 0;
+  }
+
+  .import-mode-row {
+    display: flex;
+    gap: 16px;
+    margin-top: 12px;
+  }
+
+  .modal-mode-row {
+    margin-top: 8px;
+    margin-bottom: 0;
+  }
+
+  .mode-label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: var(--text-secondary);
+    cursor: pointer;
+  }
+
+  .mode-label input[type="radio"] {
+    accent-color: var(--accent);
+  }
+
+  .import-export-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 12px;
+  }
+
+  .btn-import-action {
+    background: var(--bg-tertiary);
+    color: var(--accent);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 8px 16px;
+    cursor: pointer;
+    font-size: 13px;
+  }
+
+  .btn-import-action:hover { background: #30363d; }
+  .btn-import-action:disabled { opacity: 0.5; cursor: default; }
+
+  .btn-export-action {
+    background: var(--bg-tertiary);
+    color: var(--accent-green);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 8px 16px;
+    cursor: pointer;
+    font-size: 13px;
+  }
+
+  .btn-export-action:hover { background: #30363d; }
 </style>

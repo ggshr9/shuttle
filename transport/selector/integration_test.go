@@ -204,7 +204,7 @@ func TestSelectorMigratePreservesStreams(t *testing.T) {
 		t.Fatalf("initial Dial failed: %v", err)
 	}
 
-	// Open a stream on the h3 connection.
+	// Open a stream on the h3 connection (tracked by the migrator).
 	stream, err := conn.OpenStream(context.Background())
 	if err != nil {
 		t.Fatalf("OpenStream failed: %v", err)
@@ -214,14 +214,13 @@ func TestSelectorMigratePreservesStreams(t *testing.T) {
 		t.Fatalf("expected h3 active, got %s", s.ActiveTransport())
 	}
 
-	// Migrate to reality via the migrator.
-	newConn, err := s.migrator.Migrate(context.Background(), reality, "localhost:443")
-	if err != nil {
-		t.Fatalf("Migrate failed: %v", err)
-	}
-	if newConn == nil {
-		t.Fatal("Migrate returned nil connection")
-	}
+	// Trigger migration — marks all current connections as draining.
+	s.migrator.Migrate()
+
+	// Switch active transport to reality (simulating what maybeSwitch does).
+	s.mu.Lock()
+	s.active = reality
+	s.mu.Unlock()
 
 	// The old stream should still be usable (Write should succeed on fakeStream).
 	data := []byte("hello")
@@ -233,15 +232,16 @@ func TestSelectorMigratePreservesStreams(t *testing.T) {
 		t.Fatalf("Write returned %d, want %d", n, len(data))
 	}
 
-	// Old connection should not be closed yet (cleanup keeps latest).
+	// Old connection should not be closed yet (has active streams).
 	if h3Conn.closeCalled.Load() {
-		t.Fatal("old h3 connection should not be closed before cleanup")
+		t.Fatal("old h3 connection should not be closed while streams are active")
 	}
 
-	// Open a stream on the new connection to verify it works.
-	newStream, err := newConn.OpenStream(context.Background())
+	// Opening a new stream on the same conn should re-dial on the new transport
+	// (since the old connection is draining).
+	newStream, err := conn.OpenStream(context.Background())
 	if err != nil {
-		t.Fatalf("OpenStream on new connection failed: %v", err)
+		t.Fatalf("OpenStream after migration should re-dial: %v", err)
 	}
 	newStream.Close()
 
