@@ -24,6 +24,7 @@ type Storage struct {
 	stats    map[string]*DailyStats // date -> stats
 	filePath string
 	dirty    bool
+	done     chan struct{} // signals autoSave goroutine to stop
 
 	// Current session counters (reset on start)
 	sessionStart  time.Time
@@ -41,6 +42,7 @@ func NewStorage(dataDir string) (*Storage, error) {
 		stats:        make(map[string]*DailyStats),
 		filePath:     filepath.Join(dataDir, "traffic_stats.json"),
 		sessionStart: time.Now(),
+		done:         make(chan struct{}),
 	}
 
 	s.load()
@@ -149,10 +151,10 @@ func (s *Storage) load() {
 }
 
 func (s *Storage) save() error {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
+	s.mu.Lock()
 
 	if !s.dirty {
+		s.mu.Unlock()
 		return nil
 	}
 
@@ -161,6 +163,11 @@ func (s *Storage) save() error {
 	for _, stat := range s.stats {
 		stats = append(stats, *stat)
 	}
+
+	// Copy filePath while holding lock
+	filePath := s.filePath
+	s.mu.Unlock()
+
 	sort.Slice(stats, func(i, j int) bool {
 		return stats[i].Date < stats[j].Date
 	})
@@ -170,9 +177,13 @@ func (s *Storage) save() error {
 		return err
 	}
 
-	if err := os.WriteFile(s.filePath, data, 0644); err != nil {
+	if err := os.WriteFile(filePath, data, 0644); err != nil {
 		return err
 	}
+
+	s.mu.Lock()
+	s.dirty = false
+	s.mu.Unlock()
 
 	return nil
 }
@@ -181,8 +192,13 @@ func (s *Storage) autoSave() {
 	ticker := time.NewTicker(5 * time.Minute)
 	defer ticker.Stop()
 
-	for range ticker.C {
-		s.save()
+	for {
+		select {
+		case <-ticker.C:
+			s.save()
+		case <-s.done:
+			return
+		}
 	}
 }
 
@@ -277,7 +293,8 @@ func (s *Storage) GetMonthlySummary(months int) []PeriodStats {
 	return result
 }
 
-// Close saves and closes the storage.
+// Close stops the autoSave goroutine and performs a final save.
 func (s *Storage) Close() error {
+	close(s.done)
 	return s.save()
 }

@@ -14,6 +14,7 @@ import (
 	"github.com/hashicorp/yamux"
 	"github.com/shuttle-proxy/shuttle/config"
 	shuttlecrypto "github.com/shuttle-proxy/shuttle/crypto"
+	"github.com/shuttle-proxy/shuttle/internal/pool"
 	"github.com/shuttle-proxy/shuttle/transport"
 	"golang.org/x/crypto/curve25519"
 )
@@ -277,8 +278,9 @@ func (s *Server) forwardToTarget(conn net.Conn) {
 	}
 	done := make(chan struct{}, 2)
 	cp := func(dst net.Conn, src net.Conn) {
-		buf := make([]byte, 32*1024)
+		buf := pool.GetMedLarge()
 		io.CopyBuffer(dst, src, buf)
+		pool.PutMedLargeNoZero(buf)
 		// Close write direction to signal EOF to peer.
 		if tc, ok := dst.(*net.TCPConn); ok {
 			tc.CloseWrite()

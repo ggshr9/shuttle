@@ -197,6 +197,16 @@ func (c *h3Connection) Close() error {
 func (c *h3Connection) LocalAddr() net.Addr  { return c.qconn.LocalAddr() }
 func (c *h3Connection) RemoteAddr() net.Addr { return c.qconn.RemoteAddr() }
 
+// IsClosed reports whether the underlying QUIC connection has been closed.
+func (c *h3Connection) IsClosed() bool {
+	select {
+	case <-c.qconn.Context().Done():
+		return true
+	default:
+		return false
+	}
+}
+
 // h3Stream wraps a quic.Stream with optional padding.
 type h3Stream struct {
 	qs     *quic.Stream

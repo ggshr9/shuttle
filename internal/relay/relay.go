@@ -87,8 +87,9 @@ func copyBuffer(dst io.Writer, src io.Reader) (int64, error) {
 	}
 
 	// Fall back to pooled 32KB buffer (exact MedLarge tier, no waste).
+	// Use NoZero variant — relay buffers contain proxied traffic, not secrets.
 	buf := pool.GetMedLarge()
 	n, err := io.CopyBuffer(dst, src, buf)
-	pool.PutMedLarge(buf)
+	pool.PutMedLargeNoZero(buf)
 	return n, err
 }

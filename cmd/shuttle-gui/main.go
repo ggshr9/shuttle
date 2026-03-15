@@ -138,8 +138,12 @@ func main() {
 		subMgr.LoadFromConfig(cfg.Subscriptions)
 	}
 
+	// Generate auth token for API security — all /api/ endpoints require Bearer auth.
+	authToken := api.GenerateAuthToken()
+	log.Printf("API auth token: %s", authToken)
+
 	// Build one shared API handler for both the Wails asset handler and standalone server.
-	sharedHandler := api.HandlerWithAllStores(eng, subMgr, statsStore, connStore, stHistory)
+	sharedHandler := api.AuthenticatedHandlerWithAllStores(eng, subMgr, statsStore, connStore, stHistory, authToken)
 	app.apiHandler = sharedHandler
 
 	// Wire stats recording and connlog: subscribe to engine events.

@@ -8,17 +8,20 @@ CONFIG="$DATA_DIR/server.yaml"
 # --- Auto-generate password if missing or placeholder ---
 if [ -z "$SHUTTLE_PASSWORD" ] || [ "$SHUTTLE_PASSWORD" = "change-me-to-a-strong-password" ]; then
     SHUTTLE_PASSWORD=$(head -c 32 /dev/urandom | base64 | tr -d '/+=' | head -c 24)
-    echo "========================================"
-    echo "  Auto-generated password: $SHUTTLE_PASSWORD"
-    echo "  Save this — it will not be shown again"
-    echo "========================================"
 fi
 
 # --- Auto-generate admin token if missing ---
 if [ -z "$SHUTTLE_ADMIN_TOKEN" ]; then
     SHUTTLE_ADMIN_TOKEN=$(head -c 32 /dev/urandom | base64 | tr -d '/+=' | head -c 32)
-    echo "Admin token: $SHUTTLE_ADMIN_TOKEN"
 fi
+
+# --- Save credentials to a file (not stdout/Docker logs) ---
+CREDS_FILE="${SHUTTLE_DATA_DIR:-/etc/shuttle}/.credentials"
+mkdir -p "$(dirname "$CREDS_FILE")"
+echo "Password: $SHUTTLE_PASSWORD" > "$CREDS_FILE"
+echo "Admin Token: $SHUTTLE_ADMIN_TOKEN" >> "$CREDS_FILE"
+chmod 600 "$CREDS_FILE"
+echo "==> Credentials saved to $CREDS_FILE"
 
 # --- Ensure data directory exists ---
 mkdir -p "$DATA_DIR"

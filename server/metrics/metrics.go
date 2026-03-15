@@ -41,6 +41,11 @@ type Collector struct {
 	durationTotal   atomic.Int64
 
 	startTime time.Time
+
+	// Cached MemStats to avoid STW pause on every /metrics scrape.
+	memMu        sync.Mutex
+	memCache     runtime.MemStats
+	memCacheTime atomic.Int64 // unix nano
 }
 
 // transportCounter tracks active and total connection counts for a transport.
@@ -120,6 +125,30 @@ func (c *Collector) Handler() http.Handler {
 		w.Header().Set("Content-Type", "text/plain; version=0.0.4; charset=utf-8")
 		c.writeMetrics(w)
 	})
+}
+
+// getMemStats returns cached MemStats, refreshing at most every 10 seconds
+// to avoid the STW pause of runtime.ReadMemStats on every /metrics scrape.
+func (c *Collector) getMemStats() runtime.MemStats {
+	const maxAge = 10 * time.Second
+	if time.Since(time.Unix(0, c.memCacheTime.Load())) < maxAge {
+		c.memMu.Lock()
+		mem := c.memCache
+		c.memMu.Unlock()
+		return mem
+	}
+	c.memMu.Lock()
+	// Double-check after acquiring lock.
+	if time.Since(time.Unix(0, c.memCacheTime.Load())) < maxAge {
+		mem := c.memCache
+		c.memMu.Unlock()
+		return mem
+	}
+	runtime.ReadMemStats(&c.memCache)
+	c.memCacheTime.Store(time.Now().UnixNano())
+	mem := c.memCache
+	c.memMu.Unlock()
+	return mem
 }
 
 // getOrCreateTransport returns the counter for a transport, creating it if needed.
@@ -215,8 +244,7 @@ func (c *Collector) writeMetrics(w io.Writer) {
 	fmt.Fprintf(w, "shuttle_uptime_seconds %s\n", formatFloat(uptime))
 
 	// --- Go runtime metrics ---
-	var mem runtime.MemStats
-	runtime.ReadMemStats(&mem)
+	mem := c.getMemStats()
 
 	writeMetric(w, "shuttle_go_goroutines", "gauge",
 		"Number of goroutines",

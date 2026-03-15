@@ -120,10 +120,21 @@ func GetMedLarge() []byte {
 }
 
 // PutMedLarge zeroes and returns a buffer to the MedLarge pool.
+// Use this for security-sensitive paths (encryption, Noise handshake).
 func PutMedLarge(buf []byte) {
 	c := cap(buf)
 	b := buf[:c]
 	clear(b)
+	medLargeStats.puts.Add(1)
+	MedLargePool.Put(&b)
+}
+
+// PutMedLargeNoZero returns a buffer to the MedLarge pool without zeroing.
+// Use this in the relay hot path where buffers contain proxied traffic (not secrets)
+// to avoid the CPU cost of clearing 32KB on every Put.
+func PutMedLargeNoZero(buf []byte) {
+	c := cap(buf)
+	b := buf[:c]
 	medLargeStats.puts.Add(1)
 	MedLargePool.Put(&b)
 }

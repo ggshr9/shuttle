@@ -18,7 +18,7 @@ type domainStats struct {
 
 // Prefetcher proactively re-resolves popular domains before their TTL expires.
 type Prefetcher struct {
-	mu             sync.Mutex
+	mu             sync.RWMutex
 	domains        map[string]*domainStats
 	resolver       *DNSResolver
 	topN           int           // number of top domains to prefetch (default 100)
@@ -87,7 +87,7 @@ func (p *Prefetcher) prefetchTop(ctx context.Context) {
 	top := p.topDomains()
 	now := time.Now()
 
-	p.mu.Lock()
+	p.mu.RLock()
 	// Build a snapshot of domains that need prefetching.
 	type prefetchItem struct {
 		domain string
@@ -111,7 +111,7 @@ func (p *Prefetcher) prefetchTop(ctx context.Context) {
 			items = append(items, prefetchItem{domain: domain, ttl: ttl})
 		}
 	}
-	p.mu.Unlock()
+	p.mu.RUnlock()
 
 	for _, item := range items {
 		if ctx.Err() != nil {
@@ -131,22 +131,25 @@ func (p *Prefetcher) prefetchTop(ctx context.Context) {
 
 // topDomains returns the top N most frequently resolved domains.
 func (p *Prefetcher) topDomains() []string {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-
 	type domainCount struct {
 		domain string
 		count  int64
 	}
+
+	p.mu.RLock()
 	all := make([]domainCount, 0, len(p.domains))
 	for d, ds := range p.domains {
 		all = append(all, domainCount{domain: d, count: ds.count})
 	}
+	topN := p.topN
+	p.mu.RUnlock()
+
+	// Sort outside the lock
 	sort.Slice(all, func(i, j int) bool {
 		return all[i].count > all[j].count
 	})
 
-	n := p.topN
+	n := topN
 	if n > len(all) {
 		n = len(all)
 	}
@@ -159,15 +162,31 @@ func (p *Prefetcher) topDomains() []string {
 
 // cleanup removes domains not seen in the last hour.
 func (p *Prefetcher) cleanup() {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-
 	cutoff := time.Now().Add(-1 * time.Hour)
+
+	// Collect stale keys under read lock.
+	p.mu.RLock()
+	var stale []string
 	for domain, ds := range p.domains {
 		if ds.lastSeen.Before(cutoff) {
+			stale = append(stale, domain)
+		}
+	}
+	p.mu.RUnlock()
+
+	if len(stale) == 0 {
+		return
+	}
+
+	// Delete under write lock.
+	p.mu.Lock()
+	for _, domain := range stale {
+		// Re-check in case it was updated between RUnlock and Lock.
+		if ds, ok := p.domains[domain]; ok && ds.lastSeen.Before(cutoff) {
 			delete(p.domains, domain)
 		}
 	}
+	p.mu.Unlock()
 }
 
 // PrefetchStats holds prefetcher statistics.
@@ -181,9 +200,9 @@ type PrefetchStats struct {
 func (p *Prefetcher) Stats() PrefetchStats {
 	top := p.topDomains()
 
-	p.mu.Lock()
+	p.mu.RLock()
 	tracked := len(p.domains)
-	p.mu.Unlock()
+	p.mu.RUnlock()
 
 	return PrefetchStats{
 		TrackedDomains: tracked,

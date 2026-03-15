@@ -456,6 +456,10 @@ func (e *Engine) createDialer(cfg *config.ClientConfig, rt *router.Router, dnsRe
 	serverAddr := cfg.Server.Addr
 	retryCfg := buildRetryConfig(cfg.Retry)
 	shaperCfg := buildShaperConfig(cfg.Obfs)
+	var classifier *qos.Classifier
+	if cfg.QoS.Enabled {
+		classifier = qos.NewClassifier(&cfg.QoS)
+	}
 	return func(dialCtx context.Context, network, addr string) (net.Conn, error) {
 		host, port, _ := net.SplitHostPort(addr)
 
@@ -527,9 +531,8 @@ func (e *Engine) createDialer(cfg *config.ClientConfig, rt *router.Router, dnsRe
 			measured := stream.NewMeasuredStream(rawStream, metrics)
 
 			// Classify traffic and set QoS priority on the stream.
-			if cfg.QoS.Enabled {
+			if classifier != nil {
 				port := extractPort(addr)
-				classifier := qos.NewClassifier(&cfg.QoS)
 				priority := classifier.ClassifyPort(port)
 				measured.SetPriority(int(priority))
 			}

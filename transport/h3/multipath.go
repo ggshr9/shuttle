@@ -24,7 +24,7 @@ type MultipathConfig struct {
 type MultipathManager struct {
 	mu          sync.RWMutex
 	paths       []*networkPath
-	activePath  int // index of primary path
+	activePath  atomic.Int32 // index of primary path
 	mode        string
 	logger      *slog.Logger
 	probeCancel context.CancelFunc
@@ -145,13 +145,14 @@ func (m *MultipathManager) SelectPath() *networkPath {
 
 func (m *MultipathManager) selectFailover() *networkPath {
 	// Try active path first.
-	if m.activePath < len(m.paths) && m.paths[m.activePath].available.Load() {
-		return m.paths[m.activePath]
+	active := int(m.activePath.Load())
+	if active < len(m.paths) && m.paths[active].available.Load() {
+		return m.paths[active]
 	}
 	// Find first available path.
 	for i, p := range m.paths {
 		if p.available.Load() {
-			m.activePath = i
+			m.activePath.Store(int32(i))
 			return p
 		}
 	}
@@ -212,6 +213,12 @@ func (m *MultipathManager) StartProbes(ctx context.Context) {
 	}()
 }
 
+// connClosedChecker is an optional interface that connections may implement
+// to report whether they have been closed.
+type connClosedChecker interface {
+	IsClosed() bool
+}
+
 func (m *MultipathManager) probe() {
 	m.mu.RLock()
 	paths := make([]*networkPath, len(m.paths))
@@ -222,21 +229,18 @@ func (m *MultipathManager) probe() {
 		now := time.Now().UnixNano()
 		p.lastProbe.Store(now)
 
-		// Probe by attempting to open and immediately close a stream.
-		// This checks if the underlying QUIC connection is still alive.
-		start := time.Now()
-		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-		stream, err := p.conn.OpenStream(ctx)
-		cancel()
-		if err != nil {
-			p.available.Store(false)
-			m.logger.Debug("path probe failed", "interface", p.iface, "error", err)
-			continue
+		// Check connection liveness without opening application-level streams.
+		// Use IsClosed() if available; otherwise assume still alive.
+		if checker, ok := p.conn.(connClosedChecker); ok {
+			if checker.IsClosed() {
+				p.available.Store(false)
+				m.logger.Debug("path probe: connection closed", "interface", p.iface)
+			} else {
+				p.available.Store(true)
+			}
 		}
-		stream.Close()
-		rtt := time.Since(start).Nanoseconds()
-		p.rtt.Store(rtt)
-		p.available.Store(true)
+		// If the connection does not implement connClosedChecker,
+		// keep its current availability status unchanged.
 	}
 }
 

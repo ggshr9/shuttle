@@ -55,28 +55,32 @@ func (p *ConnPool) Get(ctx context.Context) (transport.Connection, error) {
 		return nil, errPoolClosed
 	}
 
+	var expired []transport.Connection
 	now := time.Now()
+	var found transport.Connection
 	for len(p.idle) > 0 {
 		// Pop from end (LIFO — most recently used connection)
 		ic := p.idle[len(p.idle)-1]
 		p.idle = p.idle[:len(p.idle)-1]
 
 		if now.Sub(ic.idleSince) > p.idleTTL {
-			// Expired — close and try next
-			p.mu.Unlock()
-			ic.conn.Close()
-			p.mu.Lock()
-			if p.closed {
-				p.mu.Unlock()
-				return nil, errPoolClosed
-			}
+			expired = append(expired, ic.conn)
 			continue
 		}
 
-		p.mu.Unlock()
-		return ic.conn, nil
+		found = ic.conn
+		break
 	}
 	p.mu.Unlock()
+
+	// Close expired connections asynchronously.
+	for _, c := range expired {
+		go c.Close()
+	}
+
+	if found != nil {
+		return found, nil
+	}
 
 	// No idle connection available — dial a new one.
 	return p.transport.Dial(ctx, p.addr)

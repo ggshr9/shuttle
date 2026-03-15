@@ -2,6 +2,8 @@ package api
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -31,27 +33,78 @@ import (
 // apiStartTime records when the API package was initialised, used for uptime calculation.
 var apiStartTime = time.Now()
 
-// Handler creates the HTTP handler for the shuttle API.
+// GenerateAuthToken generates a cryptographically random auth token.
+func GenerateAuthToken() string {
+	b := make([]byte, 32)
+	if _, err := rand.Read(b); err != nil {
+		panic("failed to generate auth token: " + err.Error())
+	}
+	return hex.EncodeToString(b)
+}
+
+// authMiddleware returns HTTP middleware that enforces Bearer token authentication
+// on all API endpoints. Static file requests (paths not starting with /api/) are exempt.
+func authMiddleware(token string, next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Exempt non-API paths (static files, etc.)
+		if !strings.HasPrefix(r.URL.Path, "/api/") {
+			next.ServeHTTP(w, r)
+			return
+		}
+
+		// Check Authorization header
+		auth := r.Header.Get("Authorization")
+		const prefix = "Bearer "
+		if !strings.HasPrefix(auth, prefix) || auth[len(prefix):] != token {
+			// Also check query param for WebSocket connections
+			if qToken := r.URL.Query().Get("token"); qToken == token {
+				next.ServeHTTP(w, r)
+				return
+			}
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusUnauthorized)
+			json.NewEncoder(w).Encode(map[string]string{"error": "unauthorized"})
+			return
+		}
+
+		next.ServeHTTP(w, r)
+	})
+}
+
+// Handler creates the HTTP handler for the shuttle API (no auth — for backward compatibility in tests).
 func Handler(eng *engine.Engine) http.Handler {
 	return HandlerWithOptions(eng, subscription.NewManager(), nil)
 }
 
-// HandlerWithSubscriptions creates the HTTP handler with subscription support.
+// HandlerWithSubscriptions creates the HTTP handler with subscription support (no auth).
 func HandlerWithSubscriptions(eng *engine.Engine, subMgr *subscription.Manager) http.Handler {
 	return HandlerWithOptions(eng, subMgr, nil)
 }
 
-// HandlerWithConnLog creates the HTTP handler with all options including connection log storage.
+// HandlerWithConnLog creates the HTTP handler with all options including connection log storage (no auth).
 func HandlerWithConnLog(eng *engine.Engine, subMgr *subscription.Manager, statsStore *stats.Storage, connStore *connlog.Storage) http.Handler {
 	return handlerWithAllOptions(eng, subMgr, statsStore, connStore, nil)
 }
 
-// HandlerWithAllStores creates the HTTP handler with all storage backends including speedtest history.
+// HandlerWithAllStores creates the HTTP handler with all storage backends including speedtest history (no auth).
 func HandlerWithAllStores(eng *engine.Engine, subMgr *subscription.Manager, statsStore *stats.Storage, connStore *connlog.Storage, stHistory *speedtest.HistoryStorage) http.Handler {
 	return handlerWithAllOptions(eng, subMgr, statsStore, connStore, stHistory)
 }
 
-// HandlerWithOptions creates the HTTP handler with all options.
+// AuthenticatedHandler creates an authenticated HTTP handler for the shuttle API.
+// The returned authToken must be passed to the GUI frontend for API access.
+func AuthenticatedHandler(eng *engine.Engine, authToken string) http.Handler {
+	return AuthenticatedHandlerWithAllStores(eng, subscription.NewManager(), nil, nil, nil, authToken)
+}
+
+// AuthenticatedHandlerWithAllStores creates an authenticated HTTP handler with all storage backends.
+// The authToken is required for all /api/ endpoints.
+func AuthenticatedHandlerWithAllStores(eng *engine.Engine, subMgr *subscription.Manager, statsStore *stats.Storage, connStore *connlog.Storage, stHistory *speedtest.HistoryStorage, authToken string) http.Handler {
+	inner := handlerWithAllOptions(eng, subMgr, statsStore, connStore, stHistory)
+	return authMiddleware(authToken, inner)
+}
+
+// HandlerWithOptions creates the HTTP handler with all options (no auth).
 func HandlerWithOptions(eng *engine.Engine, subMgr *subscription.Manager, statsStore *stats.Storage) http.Handler {
 	return handlerWithAllOptions(eng, subMgr, statsStore, nil, nil)
 }
@@ -95,6 +148,7 @@ func handlerWithAllOptions(eng *engine.Engine, subMgr *subscription.Manager, sta
 
 	mux.HandleFunc("GET /api/config", func(w http.ResponseWriter, r *http.Request) {
 		cfg := eng.Config()
+		redactClientConfig(&cfg)
 		writeJSON(w, &cfg)
 	})
 
@@ -247,6 +301,11 @@ func handlerWithAllOptions(eng *engine.Engine, subMgr *subscription.Manager, sta
 
 		cfg := eng.Config()
 
+		// Redact secrets unless explicitly requested
+		if r.URL.Query().Get("include_secrets") != "true" {
+			redactClientConfig(&cfg)
+		}
+
 		switch format {
 		case "json":
 			w.Header().Set("Content-Type", "application/json")
@@ -278,6 +337,11 @@ func handlerWithAllOptions(eng *engine.Engine, subMgr *subscription.Manager, sta
 	// Full backup - exports complete configuration including subscriptions
 	mux.HandleFunc("GET /api/backup", func(w http.ResponseWriter, r *http.Request) {
 		cfg := eng.Config()
+
+		// Redact secrets unless explicitly requested
+		if r.URL.Query().Get("include_secrets") != "true" {
+			redactClientConfig(&cfg)
+		}
 
 		// Get subscriptions from manager
 		subs := []*subscription.Subscription{}
@@ -1434,7 +1498,7 @@ func corsMiddleware(next http.Handler) http.Handler {
 			w.Header().Set("Access-Control-Allow-Origin", origin)
 		}
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
 		if r.Method == http.MethodOptions {
 			w.WriteHeader(http.StatusNoContent)
 			return
@@ -1564,4 +1628,21 @@ func getLANAddresses() []string {
 		}
 	}
 	return addrs
+}
+
+const redacted = "***"
+
+// redactClientConfig replaces sensitive fields (passwords, tokens, private keys)
+// with a placeholder so they are not leaked via the API.
+func redactClientConfig(cfg *config.ClientConfig) {
+	// Active server
+	if cfg.Server.Password != "" {
+		cfg.Server.Password = redacted
+	}
+	// Saved server list
+	for i := range cfg.Servers {
+		if cfg.Servers[i].Password != "" {
+			cfg.Servers[i].Password = redacted
+		}
+	}
 }

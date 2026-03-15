@@ -4,6 +4,7 @@ package relay
 
 import (
 	"io"
+	"runtime"
 	"sync"
 	"syscall"
 
@@ -30,6 +31,32 @@ func (p *splicePair) Close() {
 	unix.Close(p.w)
 }
 
+// splicePairPool reuses pipe pairs to avoid 4 syscalls (2x pipe2) per relay.
+var splicePairPool = sync.Pool{
+	New: func() interface{} {
+		p, err := newSplicePair()
+		if err != nil {
+			return nil
+		}
+		return p
+	},
+}
+
+func getSplicePair() *splicePair {
+	if p := splicePairPool.Get(); p != nil {
+		return p.(*splicePair)
+	}
+	p, err := newSplicePair()
+	if err != nil {
+		return nil
+	}
+	return p
+}
+
+func putSplicePair(p *splicePair) {
+	splicePairPool.Put(p)
+}
+
 // spliceOne transfers data from srcFD to dstFD through a pipe using splice(2).
 // It performs two splice calls per chunk: src->pipe, then pipe->dst.
 // Returns total bytes transferred.
@@ -37,13 +64,16 @@ func spliceOne(srcFD, dstFD int, pipe *splicePair) (int64, error) {
 	var total int64
 	for {
 		// Move data from source fd into the pipe.
-		n, err := unix.Splice(srcFD, nil, pipe.w, nil, spliceMaxSize, unix.SPLICE_F_NONBLOCK|unix.SPLICE_F_MOVE)
+		// Use blocking splice (no SPLICE_F_NONBLOCK) so the kernel blocks until
+		// data is available, avoiding a tight spin loop on EAGAIN.
+		n, err := unix.Splice(srcFD, nil, pipe.w, nil, spliceMaxSize, unix.SPLICE_F_MOVE)
 		if n > 0 {
 			// Drain the pipe into the destination fd.
 			// Must drain all n bytes; splice may return partial writes.
+			// NONBLOCK is safe here since we know data is already in the pipe.
 			remain := n
 			for remain > 0 {
-				written, werr := unix.Splice(pipe.r, nil, dstFD, nil, int(remain), unix.SPLICE_F_MOVE)
+				written, werr := unix.Splice(pipe.r, nil, dstFD, nil, int(remain), unix.SPLICE_F_MOVE|unix.SPLICE_F_NONBLOCK)
 				if written > 0 {
 					remain -= written
 					total += written
@@ -54,9 +84,10 @@ func spliceOne(srcFD, dstFD int, pipe *splicePair) (int64, error) {
 			}
 		}
 		if err != nil {
-			// EAGAIN means no data ready; treat as EOF in blocking context.
 			if err == unix.EAGAIN {
-				// Re-read; if source truly has no more data, next splice returns 0.
+				// Should be unreachable now that src->pipe is blocking,
+				// but keep as a safety net — yield instead of spinning.
+				runtime.Gosched()
 				continue
 			}
 			return total, err
@@ -71,17 +102,17 @@ func spliceOne(srcFD, dstFD int, pipe *splicePair) (int64, error) {
 // spliceRelay transfers data between two file descriptors using splice(2).
 // Returns total bytes transferred in each direction.
 func spliceRelay(aFD, bFD int) (aToB, bToA int64, err error) {
-	pipe1, err := newSplicePair()
-	if err != nil {
-		return 0, 0, err
+	pipe1 := getSplicePair()
+	if pipe1 == nil {
+		return 0, 0, unix.ENOMEM
 	}
-	defer pipe1.Close()
+	defer putSplicePair(pipe1)
 
-	pipe2, err := newSplicePair()
-	if err != nil {
-		return 0, 0, err
+	pipe2 := getSplicePair()
+	if pipe2 == nil {
+		return 0, 0, unix.ENOMEM
 	}
-	defer pipe2.Close()
+	defer putSplicePair(pipe2)
 
 	var wg sync.WaitGroup
 	var err1, err2 error
@@ -149,14 +180,14 @@ func trySplice(a, b io.ReadWriteCloser) (int64, int64, bool) {
 	}
 
 	// Try one test splice to see if it's supported on these fds.
-	// Create a throwaway pipe and attempt a zero-length splice.
-	testPipe, err := newSplicePair()
-	if err != nil {
+	// Use a pooled pipe and attempt a zero-length splice.
+	testPipe := getSplicePair()
+	if testPipe == nil {
 		return 0, 0, false
 	}
 	// Attempt a non-blocking splice of 0 bytes to verify support.
 	_, testErr := unix.Splice(aFD, nil, testPipe.w, nil, 0, unix.SPLICE_F_NONBLOCK)
-	testPipe.Close()
+	putSplicePair(testPipe)
 	if testErr != nil && testErr != unix.EAGAIN {
 		return 0, 0, false
 	}

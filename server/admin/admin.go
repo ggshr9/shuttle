@@ -199,7 +199,7 @@ func Handler(info *ServerInfo, cfg *config.ServerConfig, configPath string, user
 			Name     string `json:"name"`
 			MaxBytes int64  `json:"max_bytes"`
 		}
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		if err := decodeJSON(r, &req); err != nil {
 			writeError(w, http.StatusBadRequest, "invalid request body")
 			return
 		}
@@ -245,7 +245,7 @@ func Handler(info *ServerInfo, cfg *config.ServerConfig, configPath string, user
 		var req struct {
 			Enabled *bool `json:"enabled"`
 		}
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		if err := decodeJSON(r, &req); err != nil {
 			writeError(w, http.StatusBadRequest, "invalid request body")
 			return
 		}
@@ -351,6 +351,12 @@ func ListenAndServe(cfg *config.AdminConfig, info *ServerInfo, serverCfg *config
 
 	go server.Serve(ln)
 	return server, nil
+}
+
+// decodeJSON reads the request body (up to 10MB) and decodes it as JSON.
+func decodeJSON(r *http.Request, v interface{}) error {
+	lr := io.LimitReader(r.Body, 10<<20) // 10MB
+	return json.NewDecoder(lr).Decode(v)
 }
 
 func writeJSON(w http.ResponseWriter, v any) {
