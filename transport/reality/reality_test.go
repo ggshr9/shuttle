@@ -39,11 +39,25 @@ func TestClientClosedDial(t *testing.T) {
 }
 
 func TestNewServer(t *testing.T) {
-	s := NewServer(&ServerConfig{
+	// Valid 32-byte hex key required
+	s, err := NewServer(&ServerConfig{
 		ListenAddr: ":0",
+		PrivateKey: "0102030405060708091011121314151617181920212223242526272829303132",
 	}, nil)
+	if err != nil {
+		t.Fatalf("NewServer failed: %v", err)
+	}
 	if s.Type() != "reality" {
 		t.Fatalf("expected type reality, got %s", s.Type())
+	}
+}
+
+func TestNewServerMissingKey(t *testing.T) {
+	_, err := NewServer(&ServerConfig{
+		ListenAddr: ":0",
+	}, nil)
+	if err == nil {
+		t.Fatal("expected error for missing private key")
 	}
 }
 
@@ -54,9 +68,12 @@ func TestNewServerWithPrivateKey(t *testing.T) {
 	}
 	privHex := hex.EncodeToString(privKey)
 
-	s := NewServer(&ServerConfig{
+	s, err := NewServer(&ServerConfig{
 		PrivateKey: privHex,
 	}, nil)
+	if err != nil {
+		t.Fatalf("NewServer failed: %v", err)
+	}
 
 	clamped := make([]byte, 32)
 	copy(clamped, privKey)
@@ -71,29 +88,38 @@ func TestNewServerWithPrivateKey(t *testing.T) {
 }
 
 func TestNewServerInvalidKey(t *testing.T) {
-	s := NewServer(&ServerConfig{
+	_, err := NewServer(&ServerConfig{
 		PrivateKey: "not-hex",
 	}, nil)
-	var zeroKey [32]byte
-	if s.pubKey != zeroKey {
-		t.Fatal("expected zero public key for invalid input")
+	if err == nil {
+		t.Fatal("expected error for invalid hex key")
 	}
 }
 
 func TestServerCloseBeforeListen(t *testing.T) {
-	s := NewServer(&ServerConfig{}, nil)
-	err := s.Close()
+	s, err := NewServer(&ServerConfig{
+		PrivateKey: "0102030405060708091011121314151617181920212223242526272829303132",
+	}, nil)
+	if err != nil {
+		t.Fatalf("NewServer: %v", err)
+	}
+	err = s.Close()
 	if err != nil {
 		t.Fatalf("Close before Listen: %v", err)
 	}
 }
 
 func TestServerAcceptTimeout(t *testing.T) {
-	s := NewServer(&ServerConfig{}, nil)
+	s, err := NewServer(&ServerConfig{
+		PrivateKey: "0102030405060708091011121314151617181920212223242526272829303132",
+	}, nil)
+	if err != nil {
+		t.Fatalf("NewServer: %v", err)
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
 	defer cancel()
-	_, err := s.Accept(ctx)
-	if err == nil {
+	_, acceptErr := s.Accept(ctx)
+	if acceptErr == nil {
 		t.Fatal("expected timeout error")
 	}
 }

@@ -45,7 +45,8 @@ type Server struct {
 
 // NewServer creates a new Reality server transport.
 // The private key is parsed from hex; the public key is derived from it.
-func NewServer(cfg *ServerConfig, logger *slog.Logger) *Server {
+// Returns an error if the private key is malformed or missing.
+func NewServer(cfg *ServerConfig, logger *slog.Logger) (*Server, error) {
 	if logger == nil {
 		logger = slog.Default()
 	}
@@ -54,20 +55,27 @@ func NewServer(cfg *ServerConfig, logger *slog.Logger) *Server {
 		connCh: make(chan transport.Connection, 64),
 		logger: logger,
 	}
-	if cfg.PrivateKey != "" {
-		if keyBytes, err := hex.DecodeString(cfg.PrivateKey); err == nil && len(keyBytes) == 32 {
-			copy(s.privKey[:], keyBytes)
-			// Clamp for Curve25519
-			s.privKey[0] &= 248
-			s.privKey[31] &= 127
-			s.privKey[31] |= 64
-			pubSlice, err := curve25519.X25519(s.privKey[:], curve25519.Basepoint)
-			if err == nil {
-				copy(s.pubKey[:], pubSlice)
-			}
-		}
+	if cfg.PrivateKey == "" {
+		return nil, fmt.Errorf("reality: private key is required")
 	}
-	return s
+	privBytes, err := hex.DecodeString(cfg.PrivateKey)
+	if err != nil {
+		return nil, fmt.Errorf("reality: invalid private key hex: %w", err)
+	}
+	if len(privBytes) != 32 {
+		return nil, fmt.Errorf("reality: private key must be 32 bytes, got %d", len(privBytes))
+	}
+	copy(s.privKey[:], privBytes)
+	// Clamp for Curve25519
+	s.privKey[0] &= 248
+	s.privKey[31] &= 127
+	s.privKey[31] |= 64
+	pubSlice, err := curve25519.X25519(s.privKey[:], curve25519.Basepoint)
+	if err != nil {
+		return nil, fmt.Errorf("reality: derive public key: %w", err)
+	}
+	copy(s.pubKey[:], pubSlice)
+	return s, nil
 }
 
 // Type returns the transport type identifier.
@@ -190,11 +198,13 @@ func (s *Server) handleConn(ctx context.Context, raw net.Conn) {
 
 		pqFrame, err := readFrame(raw)
 		if err != nil {
-			s.logger.Debug("pq frame read failed, proceeding without PQ", "err", err)
-			raw.SetReadDeadline(time.Time{})
-		} else if len(pqFrame) > 0 && pqFrame[0] == shuttlecrypto.HandshakeVersionHybridPQ {
-			raw.SetReadDeadline(time.Time{})
+			s.logger.Warn("pq frame read error", "err", err)
+			raw.Close()
+			return
+		}
+		raw.SetReadDeadline(time.Time{})
 
+		if len(pqFrame) > 0 && pqFrame[0] == shuttlecrypto.HandshakeVersionHybridPQ {
 			pqPubBytes := pqFrame[1:]
 			pq, pqErr := shuttlecrypto.NewPQHandshake()
 			if pqErr != nil {
@@ -221,7 +231,6 @@ func (s *Server) handleConn(ctx context.Context, raw net.Conn) {
 			// Client sent a non-PQ frame (likely yamux). We can't un-read it,
 			// so for a fully production implementation we would need framing
 			// that distinguishes PQ from yamux. For now, log and close.
-			raw.SetReadDeadline(time.Time{})
 			s.logger.Debug("pq enabled but client sent classical frame, closing")
 			raw.Close()
 			return

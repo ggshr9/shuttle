@@ -141,6 +141,9 @@ func (s *SOCKS5Server) acceptLoop(ctx context.Context) {
 func (s *SOCKS5Server) handleConn(ctx context.Context, conn net.Conn) {
 	defer conn.Close()
 
+	// Set handshake deadline — prevent slow-loris attacks
+	conn.SetDeadline(time.Now().Add(30 * time.Second))
+
 	// 1. Auth negotiation
 	if err := s.handleAuth(conn); err != nil {
 		s.logger.Debug("socks5 auth failed", "err", err, "remote", conn.RemoteAddr())
@@ -157,6 +160,9 @@ func (s *SOCKS5Server) handleConn(ctx context.Context, conn net.Conn) {
 		s.logger.Debug("socks5 request failed", "err", err)
 		return
 	}
+
+	// Clear handshake deadline before relay
+	conn.SetDeadline(time.Time{})
 
 	// 2.5 Resolve source process
 	if s.ProcResolver != nil {

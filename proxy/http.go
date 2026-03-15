@@ -90,6 +90,9 @@ func (s *HTTPServer) acceptLoop(ctx context.Context) {
 func (s *HTTPServer) handleConn(ctx context.Context, conn net.Conn) {
 	defer conn.Close()
 
+	// Set handshake deadline — prevent slow-loris attacks
+	conn.SetDeadline(time.Now().Add(30 * time.Second))
+
 	// Resolve source process
 	if s.ProcResolver != nil {
 		if tcpAddr, ok := conn.RemoteAddr().(*net.TCPAddr); ok {
@@ -106,6 +109,9 @@ func (s *HTTPServer) handleConn(ctx context.Context, conn net.Conn) {
 		s.logger.Debug("http proxy read request failed", "err", err)
 		return
 	}
+
+	// Clear handshake deadline before relay
+	conn.SetDeadline(time.Time{})
 
 	if req.Method == http.MethodConnect {
 		s.handleConnect(ctx, conn, req)

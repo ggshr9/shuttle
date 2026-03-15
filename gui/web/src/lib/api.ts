@@ -2,6 +2,18 @@
 
 const BASE = ''
 
+// Auth token for API requests, injected by the Go backend at page load
+// via window.__SHUTTLE_AUTH_TOKEN__ or setAuthToken().
+let authToken: string = (window as any).__SHUTTLE_AUTH_TOKEN__ || ''
+
+export function setAuthToken(token: string) {
+  authToken = token
+}
+
+export function getAuthToken(): string {
+  return authToken
+}
+
 interface RequestOptions extends RequestInit {
   headers: Record<string, string>
 }
@@ -9,9 +21,13 @@ interface RequestOptions extends RequestInit {
 async function request<T>(method: string, path: string, body?: unknown, timeoutMs = 10000): Promise<T> {
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), timeoutMs)
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+  if (authToken) {
+    headers['Authorization'] = `Bearer ${authToken}`
+  }
   const opts: RequestOptions = {
     method,
-    headers: { 'Content-Type': 'application/json' },
+    headers,
     signal: controller.signal,
   }
   if (body) opts.body = JSON.stringify(body)

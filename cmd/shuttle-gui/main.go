@@ -139,7 +139,10 @@ func main() {
 	}
 
 	// Generate auth token for API security — all /api/ endpoints require Bearer auth.
-	authToken := api.GenerateAuthToken()
+	authToken, err := api.GenerateAuthToken()
+	if err != nil {
+		log.Fatalf("Failed to generate auth token: %v", err)
+	}
 	log.Printf("API auth token: %s", authToken)
 
 	// Build one shared API handler for both the Wails asset handler and standalone server.

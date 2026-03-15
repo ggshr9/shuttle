@@ -142,6 +142,29 @@ func TestPoolStatsReset(t *testing.T) {
 	}
 }
 
+func TestPutMedLargeNoZero(t *testing.T) {
+	buf := GetMedLarge()
+	// Write known data pattern.
+	for i := range buf {
+		buf[i] = 0xAB
+	}
+	PutMedLargeNoZero(buf)
+
+	// Get again — should get the same buffer from pool (no GC in between).
+	buf2 := GetMedLarge()
+	found := false
+	for _, b := range buf2 {
+		if b == 0xAB {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("PutMedLargeNoZero should not zero the buffer, but data was cleared")
+	}
+	PutMedLarge(buf2)
+}
+
 func TestPoolAutoSize(t *testing.T) {
 	ResetStats()
 

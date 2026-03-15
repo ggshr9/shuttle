@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -275,6 +276,42 @@ func TestCollectorAuthFailures(t *testing.T) {
 	c.writeMetrics(&buf)
 	if !strings.Contains(buf.String(), "shuttle_auth_failures_total 3") {
 		t.Error("expected auth_failures_total 3 in output")
+	}
+}
+
+func TestCollectorConcurrent(t *testing.T) {
+	c := NewCollector()
+	var wg sync.WaitGroup
+	for i := 0; i < 100; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			c.ConnOpened("h3")
+			c.RecordBytes(100, 200)
+			c.StreamOpened()
+			c.StreamClosed()
+			c.ConnClosed("h3", time.Millisecond)
+		}()
+	}
+	wg.Wait()
+
+	if got := c.ActiveConns.Load(); got != 0 {
+		t.Errorf("expected 0 active conns, got %d", got)
+	}
+	if got := c.TotalConns.Load(); got != 100 {
+		t.Errorf("expected 100 total conns, got %d", got)
+	}
+	if got := c.ActiveStreams.Load(); got != 0 {
+		t.Errorf("expected 0 active streams, got %d", got)
+	}
+	if got := c.TotalStreams.Load(); got != 100 {
+		t.Errorf("expected 100 total streams, got %d", got)
+	}
+	if got := c.BytesIn.Load(); got != 10000 {
+		t.Errorf("expected 10000 bytes in, got %d", got)
+	}
+	if got := c.BytesOut.Load(); got != 20000 {
+		t.Errorf("expected 20000 bytes out, got %d", got)
 	}
 }
 

@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"crypto/rand"
+	"crypto/subtle"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -34,12 +35,12 @@ import (
 var apiStartTime = time.Now()
 
 // GenerateAuthToken generates a cryptographically random auth token.
-func GenerateAuthToken() string {
+func GenerateAuthToken() (string, error) {
 	b := make([]byte, 32)
 	if _, err := rand.Read(b); err != nil {
-		panic("failed to generate auth token: " + err.Error())
+		return "", fmt.Errorf("generate auth token: %w", err)
 	}
-	return hex.EncodeToString(b)
+	return hex.EncodeToString(b), nil
 }
 
 // authMiddleware returns HTTP middleware that enforces Bearer token authentication
@@ -52,19 +53,21 @@ func authMiddleware(token string, next http.Handler) http.Handler {
 			return
 		}
 
-		// Check Authorization header
+		// Check Authorization header using constant-time comparison
+		// to prevent timing attacks on the auth token.
 		auth := r.Header.Get("Authorization")
 		const prefix = "Bearer "
-		if !strings.HasPrefix(auth, prefix) || auth[len(prefix):] != token {
+		headerOK := strings.HasPrefix(auth, prefix) &&
+			subtle.ConstantTimeCompare([]byte(auth[len(prefix):]), []byte(token)) == 1
+		if !headerOK {
 			// Also check query param for WebSocket connections
-			if qToken := r.URL.Query().Get("token"); qToken == token {
-				next.ServeHTTP(w, r)
+			qToken := r.URL.Query().Get("token")
+			if subtle.ConstantTimeCompare([]byte(qToken), []byte(token)) != 1 {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusUnauthorized)
+				json.NewEncoder(w).Encode(map[string]string{"error": "unauthorized"})
 				return
 			}
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusUnauthorized)
-			json.NewEncoder(w).Encode(map[string]string{"error": "unauthorized"})
-			return
 		}
 
 		next.ServeHTTP(w, r)

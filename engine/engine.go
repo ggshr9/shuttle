@@ -286,6 +286,8 @@ func (e *Engine) buildTransports(cfg *config.ClientConfig, ccAdapter quic.Conges
 			if cfg.Transport.H3.Multipath.ProbeInterval != "" {
 				if d, err := time.ParseDuration(cfg.Transport.H3.Multipath.ProbeInterval); err == nil {
 					probeInterval = d
+				} else {
+					e.logger.Warn("invalid duration, using default", "field", "transport.h3.multipath.probe_interval", "value", cfg.Transport.H3.Multipath.ProbeInterval, "err", err)
 				}
 			}
 			h3Cfg.Multipath = &h3.MultipathConfig{
@@ -433,7 +435,7 @@ func (e *Engine) buildRouter(cfg *config.ClientConfig) (*router.Router, *router.
 }
 
 // buildRetryConfig converts config.RetryConfig to engine.RetryConfig with parsed durations.
-func buildRetryConfig(cfg config.RetryConfig) RetryConfig {
+func (e *Engine) buildRetryConfig(cfg config.RetryConfig) RetryConfig {
 	rc := DefaultRetryConfig()
 	if cfg.MaxAttempts > 0 {
 		rc.MaxAttempts = cfg.MaxAttempts
@@ -441,11 +443,15 @@ func buildRetryConfig(cfg config.RetryConfig) RetryConfig {
 	if cfg.InitialBackoff != "" {
 		if d, err := time.ParseDuration(cfg.InitialBackoff); err == nil {
 			rc.InitialBackoff = d
+		} else {
+			e.logger.Warn("invalid duration, using default", "field", "retry.initial_backoff", "value", cfg.InitialBackoff, "err", err)
 		}
 	}
 	if cfg.MaxBackoff != "" {
 		if d, err := time.ParseDuration(cfg.MaxBackoff); err == nil {
 			rc.MaxBackoff = d
+		} else {
+			e.logger.Warn("invalid duration, using default", "field", "retry.max_backoff", "value", cfg.MaxBackoff, "err", err)
 		}
 	}
 	return rc
@@ -454,14 +460,18 @@ func buildRetryConfig(cfg config.RetryConfig) RetryConfig {
 // createDialer builds the proxy dialer function.
 func (e *Engine) createDialer(cfg *config.ClientConfig, rt *router.Router, dnsResolver *router.DNSResolver) func(context.Context, string, string) (net.Conn, error) {
 	serverAddr := cfg.Server.Addr
-	retryCfg := buildRetryConfig(cfg.Retry)
-	shaperCfg := buildShaperConfig(cfg.Obfs)
+	retryCfg := e.buildRetryConfig(cfg.Retry)
+	shaperCfg := e.buildShaperConfig(cfg.Obfs)
 	var classifier *qos.Classifier
 	if cfg.QoS.Enabled {
 		classifier = qos.NewClassifier(&cfg.QoS)
 	}
 	return func(dialCtx context.Context, network, addr string) (net.Conn, error) {
-		host, port, _ := net.SplitHostPort(addr)
+		host, port, err := net.SplitHostPort(addr)
+		if err != nil {
+			host = addr // fallback: use addr directly (e.g. bare hostname)
+			port = ""
+		}
 
 		var ip net.IP
 		if parsedIP := net.ParseIP(host); parsedIP != nil {
@@ -474,6 +484,9 @@ func (e *Engine) createDialer(cfg *config.ClientConfig, rt *router.Router, dnsRe
 					return nil, fmt.Errorf("dns resolve %s: %w", host, err2)
 				}
 				ips = ips2
+			}
+			if len(ips) == 0 {
+				return nil, fmt.Errorf("no DNS results for %s", host)
 			}
 			ip = ips[0]
 		}
@@ -1116,7 +1129,7 @@ func (e *Engine) wrapDialer(
 
 // buildShaperConfig converts config.ObfsConfig into an obfs.ShaperConfig.
 // Returns a zero-value (Enabled=false) config if shaping is disabled or parsing fails.
-func buildShaperConfig(cfg config.ObfsConfig) obfs.ShaperConfig {
+func (e *Engine) buildShaperConfig(cfg config.ObfsConfig) obfs.ShaperConfig {
 	if !cfg.ShapingEnabled {
 		return obfs.ShaperConfig{}
 	}
@@ -1125,11 +1138,15 @@ func buildShaperConfig(cfg config.ObfsConfig) obfs.ShaperConfig {
 	if cfg.MinDelay != "" {
 		if d, err := time.ParseDuration(cfg.MinDelay); err == nil {
 			sc.MinDelay = d
+		} else {
+			e.logger.Warn("invalid duration, using default", "field", "obfs.min_delay", "value", cfg.MinDelay, "err", err)
 		}
 	}
 	if cfg.MaxDelay != "" {
 		if d, err := time.ParseDuration(cfg.MaxDelay); err == nil {
 			sc.MaxDelay = d
+		} else {
+			e.logger.Warn("invalid duration, using default", "field", "obfs.max_delay", "value", cfg.MaxDelay, "err", err)
 		}
 	}
 	if cfg.ChunkSize > 0 {

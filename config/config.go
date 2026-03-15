@@ -506,6 +506,37 @@ func (c *ClientConfig) Validate() error {
 		}
 	}
 
+	// Multipath mode validation
+	if c.Transport.H3.Multipath.Mode != "" {
+		switch c.Transport.H3.Multipath.Mode {
+		case "failover", "aggregate", "redundant":
+		default:
+			return fmt.Errorf("invalid transport.h3.multipath.mode: %q (must be failover, aggregate, or redundant)", c.Transport.H3.Multipath.Mode)
+		}
+	}
+
+	// Multipath probe interval validation
+	if c.Transport.H3.Multipath.ProbeInterval != "" {
+		if err := validateDuration(c.Transport.H3.Multipath.ProbeInterval, "transport.h3.multipath.probe_interval"); err != nil {
+			return err
+		}
+	}
+
+	// Retry validation
+	if c.Retry.MaxAttempts < 0 {
+		return fmt.Errorf("retry.max_attempts must be >= 0")
+	}
+	if c.Retry.InitialBackoff != "" {
+		if err := validateDuration(c.Retry.InitialBackoff, "retry.initial_backoff"); err != nil {
+			return err
+		}
+	}
+	if c.Retry.MaxBackoff != "" {
+		if err := validateDuration(c.Retry.MaxBackoff, "retry.max_backoff"); err != nil {
+			return err
+		}
+	}
+
 	// Server.Addr validation
 	if c.Server.Addr != "" {
 		if err := validateHostPort(c.Server.Addr, "server.addr"); err != nil {
@@ -855,6 +886,26 @@ func applyClientDefaults(cfg *ClientConfig) {
 	if cfg.Mesh.P2P.FallbackThreshold == 0 {
 		cfg.Mesh.P2P.FallbackThreshold = 0.3
 	}
+	// Yamux defaults
+	if cfg.Yamux.MaxStreamWindowSize == 0 {
+		cfg.Yamux.MaxStreamWindowSize = 256 * 1024 // 256KB
+	}
+	if cfg.Yamux.KeepAliveInterval == 0 {
+		cfg.Yamux.KeepAliveInterval = 30 // seconds
+	}
+	if cfg.Yamux.ConnectionWriteTimeout == 0 {
+		cfg.Yamux.ConnectionWriteTimeout = 10 // seconds
+	}
+	// Retry defaults
+	if cfg.Retry.MaxAttempts == 0 {
+		cfg.Retry.MaxAttempts = 3
+	}
+	if cfg.Retry.InitialBackoff == "" {
+		cfg.Retry.InitialBackoff = "1s"
+	}
+	if cfg.Retry.MaxBackoff == "" {
+		cfg.Retry.MaxBackoff = "30s"
+	}
 }
 
 const (
@@ -1014,5 +1065,8 @@ func applyServerDefaults(cfg *ServerConfig) {
 	}
 	if cfg.Mesh.CIDR == "" {
 		cfg.Mesh.CIDR = "10.7.0.0/24"
+	}
+	if cfg.Admin.Listen == "" {
+		cfg.Admin.Listen = "127.0.0.1:9090"
 	}
 }

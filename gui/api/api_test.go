@@ -874,3 +874,107 @@ func TestAPIWriteJSON_Encoding(t *testing.T) {
 		t.Fatalf("response is not valid JSON: %s", rr.Body.String())
 	}
 }
+
+// ---------------------------------------------------------------------------
+// Auth middleware tests
+// ---------------------------------------------------------------------------
+
+// newAuthHandler creates an authenticated API handler for testing.
+func newAuthHandler(token string) (http.Handler, *engine.Engine) {
+	eng := newTestEngine()
+	h := AuthenticatedHandler(eng, token)
+	return h, eng
+}
+
+// doAuthRequest performs a request with an Authorization: Bearer header.
+func doAuthRequest(h http.Handler, method, path, token, body string) *httptest.ResponseRecorder {
+	var req *http.Request
+	if body != "" {
+		req = httptest.NewRequest(method, path, strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+	} else {
+		req = httptest.NewRequest(method, path, nil)
+	}
+	if token != "" {
+		req.Header.Set("Authorization", "Bearer "+token)
+	}
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+	return rr
+}
+
+func TestAuthMiddleware_ValidToken(t *testing.T) {
+	token := "test-secret-token-12345"
+	h, _ := newAuthHandler(token)
+
+	rr := doAuthRequest(h, "GET", "/api/status", token, "")
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200 for valid token, got %d: %s", rr.Code, rr.Body.String())
+	}
+
+	var status map[string]interface{}
+	if err := json.Unmarshal(rr.Body.Bytes(), &status); err != nil {
+		t.Fatalf("invalid JSON: %v", err)
+	}
+	if _, ok := status["state"]; !ok {
+		t.Fatal("missing 'state' in response")
+	}
+}
+
+func TestAuthMiddleware_InvalidToken(t *testing.T) {
+	token := "correct-token"
+	h, _ := newAuthHandler(token)
+
+	rr := doAuthRequest(h, "GET", "/api/status", "wrong-token", "")
+	if rr.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 for wrong token, got %d", rr.Code)
+	}
+}
+
+func TestAuthMiddleware_MissingToken(t *testing.T) {
+	token := "correct-token"
+	h, _ := newAuthHandler(token)
+
+	// No Authorization header at all
+	rr := doAuthRequest(h, "GET", "/api/status", "", "")
+	if rr.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 for missing token, got %d", rr.Code)
+	}
+
+	var result map[string]string
+	if err := json.Unmarshal(rr.Body.Bytes(), &result); err != nil {
+		t.Fatalf("invalid JSON: %v", err)
+	}
+	if result["error"] != "unauthorized" {
+		t.Fatalf("expected error 'unauthorized', got %q", result["error"])
+	}
+}
+
+func TestAuthMiddleware_QueryParam(t *testing.T) {
+	token := "ws-token-test"
+	h, _ := newAuthHandler(token)
+
+	// WebSocket-style ?token= query parameter (no Authorization header)
+	rr := doAuthRequest(h, "GET", "/api/status?token="+token, "", "")
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200 for valid query param token, got %d: %s", rr.Code, rr.Body.String())
+	}
+}
+
+func TestAuthMiddleware_StaticFiles(t *testing.T) {
+	token := "secret-token"
+	h, _ := newAuthHandler(token)
+
+	// Non-API paths (e.g. static files) should be exempt from auth.
+	// These will likely return 404 since there's no static file handler,
+	// but the key assertion is they do NOT return 401.
+	rr := doAuthRequest(h, "GET", "/index.html", "", "")
+	if rr.Code == http.StatusUnauthorized {
+		t.Fatalf("static file path should be exempt from auth, but got 401")
+	}
+
+	rr = doAuthRequest(h, "GET", "/assets/style.css", "", "")
+	if rr.Code == http.StatusUnauthorized {
+		t.Fatalf("static file path should be exempt from auth, but got 401")
+	}
+}

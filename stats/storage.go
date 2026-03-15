@@ -24,6 +24,7 @@ type Storage struct {
 	stats    map[string]*DailyStats // date -> stats
 	filePath string
 	dirty    bool
+	gen      uint64        // incremented on each Record(); used by save() to detect concurrent writes
 	done     chan struct{} // signals autoSave goroutine to stop
 
 	// Current session counters (reset on start)
@@ -45,7 +46,9 @@ func NewStorage(dataDir string) (*Storage, error) {
 		done:         make(chan struct{}),
 	}
 
-	s.load()
+	if err := s.load(); err != nil {
+		return nil, fmt.Errorf("load stats: %w", err)
+	}
 	go s.autoSave()
 
 	return s, nil
@@ -77,6 +80,7 @@ func (s *Storage) Record(bytesSent, bytesReceived, connections int64) {
 	s.lastSent = bytesSent
 	s.lastReceived = bytesReceived
 	s.dirty = true
+	s.gen++
 }
 
 // GetHistory returns stats for the last N days.
@@ -129,15 +133,18 @@ func (s *Storage) Clean(keepDays int) {
 	}
 }
 
-func (s *Storage) load() {
+func (s *Storage) load() error {
 	data, err := os.ReadFile(s.filePath)
 	if err != nil {
-		return // File doesn't exist yet
+		if os.IsNotExist(err) {
+			return nil // File doesn't exist yet
+		}
+		return fmt.Errorf("read stats file: %w", err)
 	}
 
 	var stats []DailyStats
 	if err := json.Unmarshal(data, &stats); err != nil {
-		return
+		return fmt.Errorf("parse stats file: %w", err)
 	}
 
 	for _, stat := range stats {
@@ -148,6 +155,7 @@ func (s *Storage) load() {
 			Connections:   stat.Connections,
 		}
 	}
+	return nil
 }
 
 func (s *Storage) save() error {
@@ -158,13 +166,13 @@ func (s *Storage) save() error {
 		return nil
 	}
 
-	// Convert map to sorted slice
+	// Snapshot data and generation under lock
+	snapGen := s.gen
 	stats := make([]DailyStats, 0, len(s.stats))
 	for _, stat := range s.stats {
-		stats = append(stats, *stat)
+		cp := *stat
+		stats = append(stats, cp)
 	}
-
-	// Copy filePath while holding lock
 	filePath := s.filePath
 	s.mu.Unlock()
 
@@ -177,12 +185,17 @@ func (s *Storage) save() error {
 		return err
 	}
 
-	if err := os.WriteFile(filePath, data, 0644); err != nil {
+	if err := os.WriteFile(filePath, data, 0600); err != nil {
 		return err
 	}
 
+	// Only clear dirty if no new writes occurred since our snapshot.
+	// If Record() ran between snapshot and now, gen will have advanced
+	// and dirty stays true so the next save() persists the new data.
 	s.mu.Lock()
-	s.dirty = false
+	if s.gen == snapGen {
+		s.dirty = false
+	}
 	s.mu.Unlock()
 
 	return nil

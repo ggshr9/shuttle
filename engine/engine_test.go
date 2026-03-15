@@ -610,6 +610,11 @@ func TestEmitSetsTimestamp(t *testing.T) {
 	}
 }
 
+// testEngine returns a minimal Engine suitable for calling methods in tests.
+func testEngine() *Engine {
+	return New(&config.ClientConfig{})
+}
+
 // ---------------------------------------------------------------------------
 // TestBuildShaperConfig
 // ---------------------------------------------------------------------------
@@ -617,7 +622,7 @@ func TestEmitSetsTimestamp(t *testing.T) {
 func TestBuildShaperConfig(t *testing.T) {
 	t.Run("disabled when ShapingEnabled is false", func(t *testing.T) {
 		cfg := config.ObfsConfig{ShapingEnabled: false}
-		sc := buildShaperConfig(cfg)
+		sc := testEngine().buildShaperConfig(cfg)
 		if sc.Enabled {
 			t.Error("expected Enabled=false when ShapingEnabled is false")
 		}
@@ -625,7 +630,7 @@ func TestBuildShaperConfig(t *testing.T) {
 
 	t.Run("enabled with defaults", func(t *testing.T) {
 		cfg := config.ObfsConfig{ShapingEnabled: true}
-		sc := buildShaperConfig(cfg)
+		sc := testEngine().buildShaperConfig(cfg)
 		if !sc.Enabled {
 			t.Fatal("expected Enabled=true")
 		}
@@ -647,7 +652,7 @@ func TestBuildShaperConfig(t *testing.T) {
 			MinDelay:       "5ms",
 			MaxDelay:       "100ms",
 		}
-		sc := buildShaperConfig(cfg)
+		sc := testEngine().buildShaperConfig(cfg)
 		if sc.MinDelay != 5*time.Millisecond {
 			t.Errorf("MinDelay = %v, want 5ms", sc.MinDelay)
 		}
@@ -661,7 +666,7 @@ func TestBuildShaperConfig(t *testing.T) {
 			ShapingEnabled: true,
 			ChunkSize:      1024,
 		}
-		sc := buildShaperConfig(cfg)
+		sc := testEngine().buildShaperConfig(cfg)
 		if sc.ChunkMinSize != 1024 {
 			t.Errorf("ChunkMinSize = %d, want 1024", sc.ChunkMinSize)
 		}
@@ -675,7 +680,7 @@ func TestBuildShaperConfig(t *testing.T) {
 			ShapingEnabled: true,
 			ChunkSize:      100,
 		}
-		sc := buildShaperConfig(cfg)
+		sc := testEngine().buildShaperConfig(cfg)
 		if sc.ChunkMaxSize != 1400 {
 			t.Errorf("ChunkMaxSize = %d, want 1400 (floor)", sc.ChunkMaxSize)
 		}
@@ -687,7 +692,7 @@ func TestBuildShaperConfig(t *testing.T) {
 			MinDelay:       "notaduration",
 			MaxDelay:       "alsobad",
 		}
-		sc := buildShaperConfig(cfg)
+		sc := testEngine().buildShaperConfig(cfg)
 		if !sc.Enabled {
 			t.Fatal("should still be enabled despite bad durations")
 		}
@@ -777,7 +782,7 @@ func TestSapedConnWriteGoesThruShaper(t *testing.T) {
 		MaxDelay:       "0s",
 		ChunkSize:      2,
 	}
-	shaperCfg := buildShaperConfig(cfg)
+	shaperCfg := testEngine().buildShaperConfig(cfg)
 
 	shaper := obfs.NewShaper(ms, shaperCfg)
 	shaped := &shapedConn{streamConn: sc, shaper: shaper}

@@ -3,6 +3,7 @@ package stats
 import (
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 )
@@ -291,6 +292,39 @@ func TestEmptyPeriods(t *testing.T) {
 	if result := s.GetMonthlySummary(-1); result != nil {
 		t.Error("GetMonthlySummary(-1) should return nil")
 	}
+}
+
+func TestConcurrentRecordSave(t *testing.T) {
+	dir := t.TempDir()
+	s, err := NewStorage(dir)
+	if err != nil {
+		t.Fatalf("NewStorage() error = %v", err)
+	}
+
+	var wg sync.WaitGroup
+	// Writer goroutines
+	for i := 0; i < 10; i++ {
+		wg.Add(1)
+		go func(id int) {
+			defer wg.Done()
+			for j := 0; j < 100; j++ {
+				s.Record(int64(j), int64(j), 1)
+			}
+		}(i)
+	}
+	wg.Wait()
+	s.Close()
+
+	// Verify no data corruption by loading
+	s2, err := NewStorage(dir)
+	if err != nil {
+		t.Fatalf("NewStorage() reopen error = %v", err)
+	}
+	summary := s2.GetMonthlySummary(1)
+	if len(summary) == 0 {
+		t.Error("expected data after concurrent writes")
+	}
+	s2.Close()
 }
 
 func TestDailyStatsStruct(t *testing.T) {

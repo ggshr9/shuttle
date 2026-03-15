@@ -435,7 +435,7 @@ func run(configPath string) {
 	}
 
 	if cfg.Transport.Reality.Enabled {
-		realityServer := reality.NewServer(&reality.ServerConfig{
+		realityServer, err := reality.NewServer(&reality.ServerConfig{
 			ListenAddr: cfg.Listen,
 			PrivateKey: cfg.Auth.PrivateKey,
 			ShortIDs:   cfg.Transport.Reality.ShortIDs,
@@ -445,6 +445,11 @@ func run(configPath string) {
 			KeyFile:    cfg.TLS.KeyFile,
 			Yamux:      &cfg.Yamux,
 		}, logger)
+		if err != nil {
+			logger.Error("reality transport init failed", "err", err)
+			fmt.Fprintf(os.Stderr, "Reality transport: %v\n", err)
+			os.Exit(1)
+		}
 		ml.AddTransport(realityServer)
 	}
 
