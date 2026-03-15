@@ -44,11 +44,21 @@ func (m *StreamMetrics) GetDuration() time.Duration {
 	return time.Duration(m.Duration.Load())
 }
 
+// PriorityDistribution counts streams at each priority level (0=Critical … 4=Low).
+type PriorityDistribution struct {
+	Critical int64 `json:"critical"` // Priority 0
+	High     int64 `json:"high"`     // Priority 1
+	Normal   int64 `json:"normal"`   // Priority 2
+	Bulk     int64 `json:"bulk"`     // Priority 3
+	Low      int64 `json:"low"`      // Priority 4
+}
+
 // StreamSummary provides an aggregate view of all tracked streams.
 type StreamSummary struct {
-	TotalStreams    int64         `json:"total_streams"`
-	ActiveStreams   int64         `json:"active_streams"`
-	TotalBytesSent int64         `json:"total_bytes_sent"`
-	TotalBytesRecv int64         `json:"total_bytes_recv"`
-	AvgDuration    time.Duration `json:"avg_duration_ns"`
+	TotalStreams    int64                `json:"total_streams"`
+	ActiveStreams   int64                `json:"active_streams"`
+	TotalBytesSent int64                `json:"total_bytes_sent"`
+	TotalBytesRecv int64                `json:"total_bytes_recv"`
+	AvgDuration    time.Duration        `json:"avg_duration_ns"`
+	Priorities     PriorityDistribution `json:"priorities"`
 }

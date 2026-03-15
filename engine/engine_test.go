@@ -9,6 +9,7 @@ import (
 
 	"github.com/shuttle-proxy/shuttle/config"
 	"github.com/shuttle-proxy/shuttle/obfs"
+	"github.com/shuttle-proxy/shuttle/stream"
 )
 
 // mockStream implements transport.Stream for testing streamConn.
@@ -703,6 +704,66 @@ func TestBuildShaperConfig(t *testing.T) {
 // ---------------------------------------------------------------------------
 // TestSapedConnWriteGoesThruShaper
 // ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// TestExtractPort
+// ---------------------------------------------------------------------------
+
+func TestExtractPort(t *testing.T) {
+	tests := []struct {
+		addr string
+		want uint16
+	}{
+		{"example.com:443", 443},
+		{"example.com:80", 80},
+		{"127.0.0.1:8080", 8080},
+		{"[::1]:22", 22},
+		{"example.com:0", 0},
+		{"example.com:65535", 65535},
+		// Malformed cases
+		{"example.com", 0},
+		{"", 0},
+		{"example.com:abc", 0},
+		{"example.com:99999", 0},  // out of range
+		{"example.com:-1", 0},     // negative
+	}
+	for _, tt := range tests {
+		t.Run(tt.addr, func(t *testing.T) {
+			got := extractPort(tt.addr)
+			if got != tt.want {
+				t.Errorf("extractPort(%q) = %d, want %d", tt.addr, got, tt.want)
+			}
+		})
+	}
+}
+
+// ---------------------------------------------------------------------------
+// TestStreamPrioritySet
+// ---------------------------------------------------------------------------
+
+func TestStreamPrioritySet(t *testing.T) {
+	ms := newMockStream(nil)
+	tracker := stream.NewStreamTracker(10)
+	metrics := tracker.Track(ms.StreamID(), "example.com:22", "h3")
+	measured := stream.NewMeasuredStream(ms, metrics)
+
+	// Default priority should be 0 (Critical == 0, but unset is also 0).
+	if got := metrics.Priority.Load(); got != 0 {
+		t.Errorf("initial priority = %d, want 0", got)
+	}
+
+	// Set priority to 3 (Bulk).
+	measured.SetPriority(3)
+	if got := metrics.Priority.Load(); got != 3 {
+		t.Errorf("after SetPriority(3), priority = %d, want 3", got)
+	}
+
+	// Verify it appears in the summary.
+	summary := tracker.Summary()
+	if summary.Priorities.Bulk != 1 {
+		t.Errorf("summary Bulk = %d, want 1", summary.Priorities.Bulk)
+	}
+}
 
 func TestSapedConnWriteGoesThruShaper(t *testing.T) {
 	ms := newMockStream(nil)

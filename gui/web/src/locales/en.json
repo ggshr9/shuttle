@@ -29,7 +29,12 @@
       "stopping": "stopping",
       "loading": "loading..."
     },
-    "unavailable": "unavailable"
+    "unavailable": "unavailable",
+    "transportBreakdown": "Transport Breakdown",
+    "activeStreams": "Active",
+    "totalStreams": "Total",
+    "sent": "Sent",
+    "received": "Received"
   },
   "servers": {
     "activeServer": "Active Server",
@@ -85,7 +90,12 @@
     "direct": "Direct",
     "addRule": "Add Rule",
     "save": "Save",
-    "saving": "Saving..."
+    "saving": "Saving...",
+    "testUrl": "Test URL",
+    "testPlaceholder": "Enter domain or URL to test...",
+    "test": "Test",
+    "testing": "Testing...",
+    "matchedBy": "Matched by"
   },
   "logs": {
     "title": "Logs",
@@ -102,7 +112,13 @@
     "rule": "Rule",
     "process": "Process",
     "duration": "Duration",
-    "traffic": "Traffic"
+    "traffic": "Traffic",
+    "level": "Level",
+    "searchPlaceholder": "Search logs...",
+    "filterAll": "All",
+    "action": "Action",
+    "showing": "Showing {shown} / {total}",
+    "noMatch": "No logs match current filters"
   },
   "settings": {
     "title": "Settings",

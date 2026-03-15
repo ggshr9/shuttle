@@ -12,6 +12,7 @@ import (
 	"sync/atomic"
 
 	"github.com/hashicorp/yamux"
+	"github.com/shuttle-proxy/shuttle/config"
 	"github.com/shuttle-proxy/shuttle/crypto"
 	"github.com/shuttle-proxy/shuttle/transport"
 )
@@ -23,6 +24,7 @@ type ClientConfig struct {
 	ShortID    string
 	PublicKey  string
 	Password   string
+	Yamux      *config.YamuxConfig // optional yamux tuning
 }
 
 // Client implements transport.ClientTransport using Reality (TLS + Noise IK + yamux).
@@ -113,7 +115,7 @@ func (c *Client) Dial(ctx context.Context, addr string) (transport.Connection, e
 	}
 
 	// Step 3: yamux multiplexed session over the TLS connection
-	sess, err := yamux.Client(raw, yamux.DefaultConfig())
+	sess, err := yamux.Client(raw, transport.YamuxSessionConfig(c.config.Yamux))
 	if err != nil {
 		return nil, fmt.Errorf("yamux client: %w", err)
 	}

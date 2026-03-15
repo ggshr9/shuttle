@@ -29,7 +29,12 @@
       "stopping": "正在停止",
       "loading": "加载中..."
     },
-    "unavailable": "不可用"
+    "unavailable": "不可用",
+    "transportBreakdown": "传输分布",
+    "activeStreams": "活跃",
+    "totalStreams": "总计",
+    "sent": "已发送",
+    "received": "已接收"
   },
   "servers": {
     "activeServer": "当前服务器",
@@ -85,7 +90,12 @@
     "direct": "直连",
     "addRule": "添加规则",
     "save": "保存",
-    "saving": "保存中..."
+    "saving": "保存中...",
+    "testUrl": "测试 URL",
+    "testPlaceholder": "输入域名或 URL 进行测试...",
+    "test": "测试",
+    "testing": "测试中...",
+    "matchedBy": "匹配规则"
   },
   "logs": {
     "title": "日志",
@@ -102,7 +112,13 @@
     "rule": "规则",
     "process": "进程",
     "duration": "持续时间",
-    "traffic": "流量"
+    "traffic": "流量",
+    "level": "级别",
+    "searchPlaceholder": "搜索日志...",
+    "filterAll": "全部",
+    "action": "行为",
+    "showing": "显示 {shown} / {total}",
+    "noMatch": "没有匹配当前过滤条件的日志"
   },
   "settings": {
     "title": "设置",

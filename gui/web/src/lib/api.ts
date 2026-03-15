@@ -99,6 +99,13 @@ export interface Process {
   conns: number
 }
 
+export interface DryRunResult {
+  domain: string
+  action: string
+  matched_by: string
+  rule?: string
+}
+
 export interface StatsHistory {
   [date: string]: {
     upload: number
@@ -142,6 +149,14 @@ export interface Status {
   bytes_recv?: number
 }
 
+export interface TransportStats {
+  transport: string
+  active_streams: number
+  total_streams: number
+  bytes_sent: number
+  bytes_recv: number
+}
+
 export const api = {
   status: () => request<Status>('GET', '/api/status'),
   connect: () => request<void>('POST', '/api/connect'),
@@ -164,6 +179,7 @@ export const api = {
   applyRoutingTemplate: (id: string) => request<void>('POST', `/api/routing/templates/${id}`),
   getProcesses: () => request<Process[]>('GET', '/api/processes'),
   getGeositeCategories: () => request<string[]>('GET', '/api/geosite/categories'),
+  testRouting: (url: string) => request<DryRunResult>('POST', '/api/routing/test', { url }),
   // Speedtest
   speedtest: (addrs: string[]) => request<SpeedtestResult[]>('POST', '/api/speedtest', { addrs }),
   // Subscriptions
@@ -189,4 +205,6 @@ export const api = {
   // GeoData
   getGeoDataStatus: () => request<GeoDataStatus>('GET', '/api/geodata/status'),
   updateGeoData: () => request<GeoDataStatus>('POST', '/api/geodata/update', {}, 120000),
+  // Transport stats
+  getTransportStats: () => request<TransportStats[]>('GET', '/api/transports/stats'),
 }

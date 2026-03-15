@@ -143,10 +143,10 @@
 
 ### P2 — GUI & Server Enhancements
 - [ ] **Logs page search & filter**: Log level filter dropdown, text search, export with date range
-- [ ] **Dashboard transport breakdown**: Active connections by transport type, DNS cache hit rate
-- [ ] **Routing dry-run**: "Test URL" input → shows which rule matches and action taken
-- [ ] **Server admin backup/restore**: `POST /api/server/backup`, `POST /api/server/restore` for user list + config
-- [ ] **Connection quality tracing**: Correlation IDs through proxy chain, per-connection timing/error logs
+- [x] **Dashboard transport breakdown**: `GET /api/transports/stats` with per-transport stream grouping
+- [x] **Routing dry-run**: `POST /api/routing/test` with `Router.DryRun()` (backend API complete)
+- [x] **Server admin backup/restore**: `GET /api/backup` + `POST /api/restore` with user list & redacted config
+- [x] **Connection quality tracing**: ConnID correlation through engine→stream, `GET /api/connections/{id}/streams`
 
 ---
 

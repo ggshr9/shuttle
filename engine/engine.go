@@ -285,6 +285,7 @@ func (e *Engine) buildTransports(cfg *config.ClientConfig, ccAdapter quic.Conges
 			ShortID:    cfg.Transport.Reality.ShortID,
 			PublicKey:  cfg.Transport.Reality.PublicKey,
 			Password:   cfg.Server.Password,
+			Yamux:      &cfg.Yamux,
 		}))
 	}
 
@@ -496,6 +497,14 @@ func (e *Engine) createDialer(cfg *config.ClientConfig, rt *router.Router, dnsRe
 			metrics := st.Track(rawStream.StreamID(), addr, transportType)
 			metrics.ConnID = connID
 			measured := stream.NewMeasuredStream(rawStream, metrics)
+
+			// Classify traffic and set QoS priority on the stream.
+			if cfg.QoS.Enabled {
+				port := extractPort(addr)
+				classifier := qos.NewClassifier(&cfg.QoS)
+				priority := classifier.ClassifyPort(port)
+				measured.SetPriority(int(priority))
+			}
 
 			// For UDP streams, prepend the UDP marker so the server uses UDP relay.
 			var header []byte
@@ -1130,4 +1139,24 @@ func (c *streamConn) WriteTo(w io.Writer) (int64, error) {
 		return wt.WriteTo(w)
 	}
 	return io.Copy(w, struct{ io.Reader }{c.stream})
+}
+
+// extractPort parses a host:port address and returns the port as uint16.
+// Returns 0 if the address is malformed or the port is out of range.
+func extractPort(addr string) uint16 {
+	_, portStr, err := net.SplitHostPort(addr)
+	if err != nil {
+		return 0
+	}
+	var port int
+	for _, c := range portStr {
+		if c < '0' || c > '9' {
+			return 0
+		}
+		port = port*10 + int(c-'0')
+		if port > 65535 {
+			return 0
+		}
+	}
+	return uint16(port)
 }

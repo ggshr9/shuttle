@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { api } from '../lib/api'
+  import { api, type TransportStats } from '../lib/api'
   import { connectWS } from '../lib/ws'
   import { onMount } from 'svelte'
   import { requestPermission, notifyConnected, notifyDisconnected } from '../lib/notify'
@@ -16,6 +16,7 @@
   let history = $state([])
   let prevConnected = $state(null)
   let notificationsEnabled = $state(false)
+  let transportStats: TransportStats[] = $state([])
 
   // Real-time speed history for chart (last 5 minutes = 60 data points at 5s intervals)
   const MAX_CHART_POINTS = 60
@@ -72,6 +73,15 @@
       connected = status.state === 'running'
     } catch {
       // API unavailable, keep last state
+    }
+    try {
+      if (connected) {
+        transportStats = await api.getTransportStats() || []
+      } else {
+        transportStats = []
+      }
+    } catch {
+      // Transport stats not available
     }
   }
 
@@ -196,6 +206,46 @@
             <span>{tr.available ? `${tr.latency_ms}ms` : t('dashboard.unavailable')}</span>
           </div>
         {/each}
+      </div>
+    {/if}
+
+    {#if transportStats.length > 0}
+      <h3>{t('dashboard.transportBreakdown')}</h3>
+      <div class="transport-breakdown">
+        <table>
+          <thead>
+            <tr>
+              <th class="col-transport">{t('dashboard.transport')}</th>
+              <th class="col-num">{t('dashboard.activeStreams')}</th>
+              <th class="col-num">{t('dashboard.totalStreams')}</th>
+              <th class="col-num">{t('dashboard.sent')}</th>
+              <th class="col-num">{t('dashboard.received')}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {#each transportStats as ts}
+              <tr>
+                <td class="col-transport">{ts.transport}</td>
+                <td class="col-num">{ts.active_streams}</td>
+                <td class="col-num">{ts.total_streams}</td>
+                <td class="col-num">{formatBytes(ts.bytes_sent)}</td>
+                <td class="col-num">{formatBytes(ts.bytes_recv)}</td>
+              </tr>
+            {/each}
+          </tbody>
+        </table>
+        <div class="transport-bars">
+          {#each transportStats as ts}
+            {@const maxStreams = Math.max(...transportStats.map(s => s.total_streams), 1)}
+            <div class="transport-bar-row">
+              <span class="transport-bar-label">{ts.transport}</span>
+              <div class="transport-bar-track">
+                <div class="transport-bar-fill active" style="width: {(ts.active_streams / maxStreams) * 100}%"></div>
+                <div class="transport-bar-fill total" style="width: {((ts.total_streams - ts.active_streams) / maxStreams) * 100}%"></div>
+              </div>
+            </div>
+          {/each}
+        </div>
       </div>
     {/if}
 
@@ -373,6 +423,87 @@
   }
 
   .transport.available { border-color: var(--accent-green); }
+
+  .transport-breakdown {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px;
+    margin: 8px 0;
+  }
+
+  .transport-breakdown table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+    text-align: left;
+  }
+
+  .transport-breakdown th {
+    color: var(--text-secondary);
+    font-weight: 500;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: 6px 8px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .transport-breakdown td {
+    padding: 8px;
+    color: var(--text-primary);
+    border-bottom: 1px solid var(--bg-tertiary);
+  }
+
+  .transport-breakdown tr:last-child td {
+    border-bottom: none;
+  }
+
+  .col-transport {
+    text-align: left;
+  }
+
+  .col-num {
+    text-align: right;
+  }
+
+  .transport-bars {
+    margin-top: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .transport-bar-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .transport-bar-label {
+    font-size: 11px;
+    color: var(--text-secondary);
+    min-width: 60px;
+    text-align: right;
+  }
+
+  .transport-bar-track {
+    flex: 1;
+    height: 8px;
+    background: var(--bg-tertiary);
+    border-radius: 4px;
+    display: flex;
+    overflow: hidden;
+  }
+
+  .transport-bar-fill.active {
+    background: var(--accent-green);
+  }
+
+  .transport-bar-fill.total {
+    background: var(--accent);
+    opacity: 0.4;
+  }
 
   .history-chart {
     display: flex;

@@ -442,6 +442,7 @@ func run(configPath string) {
 			TargetAddr: cfg.Transport.Reality.TargetAddr,
 			CertFile:   cfg.TLS.CertFile,
 			KeyFile:    cfg.TLS.KeyFile,
+			Yamux:      &cfg.Yamux,
 		}, logger)
 		ml.AddTransport(realityServer)
 	}

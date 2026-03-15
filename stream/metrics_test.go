@@ -436,6 +436,56 @@ func TestMeasuredStream_ReadError(t *testing.T) {
 	}
 }
 
+func TestStreamTracker_PriorityDistribution(t *testing.T) {
+	tr := NewStreamTracker(10)
+
+	// Track streams with different priorities.
+	m1 := tr.Track(1, "ssh.example.com:22", "h3")
+	m1.Priority.Store(0) // Critical
+
+	m2 := tr.Track(2, "web.example.com:443", "h3")
+	m2.Priority.Store(2) // Normal
+
+	m3 := tr.Track(3, "torrent.example.com:6881", "reality")
+	m3.Priority.Store(4) // Low
+
+	m4 := tr.Track(4, "api.example.com:443", "h3")
+	m4.Priority.Store(2) // Normal
+
+	// Check summary priorities.
+	sum := tr.Summary()
+	if sum.Priorities.Critical != 1 {
+		t.Errorf("Critical = %d, want 1", sum.Priorities.Critical)
+	}
+	if sum.Priorities.Normal != 2 {
+		t.Errorf("Normal = %d, want 2", sum.Priorities.Normal)
+	}
+	if sum.Priorities.Low != 1 {
+		t.Errorf("Low = %d, want 1", sum.Priorities.Low)
+	}
+	if sum.Priorities.High != 0 {
+		t.Errorf("High = %d, want 0", sum.Priorities.High)
+	}
+
+	// Check ByTransport priorities.
+	stats := tr.ByTransport()
+	byName := make(map[string]TransportStats)
+	for _, s := range stats {
+		byName[s.Transport] = s
+	}
+	h3Stats := byName["h3"]
+	if h3Stats.Priorities.Critical != 1 {
+		t.Errorf("h3 Critical = %d, want 1", h3Stats.Priorities.Critical)
+	}
+	if h3Stats.Priorities.Normal != 2 {
+		t.Errorf("h3 Normal = %d, want 2", h3Stats.Priorities.Normal)
+	}
+	realityStats := byName["reality"]
+	if realityStats.Priorities.Low != 1 {
+		t.Errorf("reality Low = %d, want 1", realityStats.Priorities.Low)
+	}
+}
+
 func TestMeasuredStream_WriteError(t *testing.T) {
 	server, client := net.Pipe()
 	m := &StreamMetrics{StreamID: 1, StartTime: time.Now()}

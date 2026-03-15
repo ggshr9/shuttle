@@ -103,11 +103,12 @@ func (t *StreamTracker) Recent(n int) []*StreamMetrics {
 
 // TransportStats holds aggregate stats for a single transport type.
 type TransportStats struct {
-	Transport    string `json:"transport"`
-	ActiveStreams int64  `json:"active_streams"`
-	TotalStreams  int64  `json:"total_streams"`
-	BytesSent    int64  `json:"bytes_sent"`
-	BytesRecv    int64  `json:"bytes_recv"`
+	Transport    string               `json:"transport"`
+	ActiveStreams int64               `json:"active_streams"`
+	TotalStreams  int64               `json:"total_streams"`
+	BytesSent    int64               `json:"bytes_sent"`
+	BytesRecv    int64               `json:"bytes_recv"`
+	Priorities   PriorityDistribution `json:"priorities"`
 }
 
 // ByTransport returns per-transport aggregate stats.
@@ -131,6 +132,7 @@ func (t *StreamTracker) ByTransport() []TransportStats {
 		}
 		ts.BytesSent += m.BytesSent.Load()
 		ts.BytesRecv += m.BytesReceived.Load()
+		addToPriorityDist(&ts.Priorities, m.Priority.Load())
 	}
 
 	out := make([]TransportStats, 0, len(groups))
@@ -176,10 +178,29 @@ func (t *StreamTracker) Summary() StreamSummary {
 		} else {
 			s.ActiveStreams++
 		}
+		addToPriorityDist(&s.Priorities, m.Priority.Load())
 	}
 
 	if closedCount > 0 {
 		s.AvgDuration = time.Duration(totalDur / closedCount)
 	}
 	return s
+}
+
+// addToPriorityDist increments the appropriate counter in a PriorityDistribution.
+func addToPriorityDist(d *PriorityDistribution, priority int32) {
+	switch priority {
+	case 0:
+		d.Critical++
+	case 1:
+		d.High++
+	case 2:
+		d.Normal++
+	case 3:
+		d.Bulk++
+	case 4:
+		d.Low++
+	default:
+		d.Normal++ // unknown priority defaults to Normal
+	}
 }

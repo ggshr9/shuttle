@@ -4,17 +4,40 @@
   import { onMount } from 'svelte'
   import { t } from '../lib/i18n/index'
 
-  let logs = $state([])
+  let allLogs = $state([])  // Full unfiltered log store
   let connections = $state({}) // Map of connID -> connection details
   let autoScroll = $state(true)
   let showConnections = $state(true)
   let expandedId = $state(null)
   let container
 
+  // Filter state
+  let levelFilters = $state({ debug: true, info: true, warn: true, error: true })
+  let searchText = $state('')
+  let protocolFilter = $state('all')  // all | tcp | udp
+  let actionFilter = $state('all')    // all | proxy | direct
+
+  // Reactive filtered logs
+  let filteredLogs = $derived.by(() => {
+    const search = searchText.toLowerCase()
+    return allLogs.filter(log => {
+      // Level filter
+      if (!levelFilters[log.level]) return false
+      // Text search
+      if (search && !log.msg.toLowerCase().includes(search)) return false
+      // Connection-specific filters (only apply to connection entries)
+      if (log.type === 'connection' && log.details) {
+        if (protocolFilter !== 'all' && log.details.protocol?.toLowerCase() !== protocolFilter) return false
+        if (actionFilter !== 'all' && log.details.rule?.toLowerCase() !== actionFilter) return false
+      }
+      return true
+    })
+  })
+
   onMount(() => {
     // Subscribe to log events
     const logWs = connectWS('/api/logs', (ev) => {
-      logs = [...logs.slice(-499), {
+      allLogs = [...allLogs.slice(-499), {
         id: crypto.randomUUID(),
         time: new Date(ev.timestamp).toLocaleTimeString(),
         level: ev.level || 'info',
@@ -39,7 +62,7 @@
         connections = { ...connections }
 
         if (showConnections) {
-          logs = [...logs.slice(-499), {
+          allLogs = [...allLogs.slice(-499), {
             id: `conn-${ev.conn_id}-open`,
             connId: ev.conn_id,
             time: new Date(ev.timestamp).toLocaleTimeString(),
@@ -68,7 +91,7 @@
         connections = { ...connections }
 
         if (showConnections) {
-          logs = [...logs.slice(-499), {
+          allLogs = [...allLogs.slice(-499), {
             id: `conn-${ev.conn_id}-close`,
             connId: ev.conn_id,
             time: new Date(ev.timestamp).toLocaleTimeString(),
@@ -97,11 +120,16 @@
   }
 
   function clear() {
-    logs = []
+    allLogs = []
+  }
+
+  function toggleLevel(level: string) {
+    levelFilters[level] = !levelFilters[level]
+    levelFilters = { ...levelFilters }
   }
 
   function exportLogs() {
-    const content = logs.map(l => {
+    const content = filteredLogs.map(l => {
       let line = `[${l.time}] [${l.level.toUpperCase()}] ${l.msg}`
       if (l.details) {
         line += `\n  Target: ${l.details.target}`
@@ -162,12 +190,51 @@
         <input type="checkbox" bind:checked={autoScroll} /> {t('logs.autoScroll')}
       </label>
       <button onclick={clear}>{t('logs.clear')}</button>
-      <button onclick={exportLogs} disabled={logs.length === 0}>{t('logs.export')}</button>
+      <button onclick={exportLogs} disabled={allLogs.length === 0}>{t('logs.export')}</button>
     </div>
   </div>
 
+  <div class="filter-bar">
+    <div class="filter-group">
+      <span class="filter-label">{t('logs.level')}:</span>
+      <button class="level-toggle" class:active={levelFilters.debug} onclick={() => toggleLevel('debug')}>Debug</button>
+      <button class="level-toggle" class:active={levelFilters.info} onclick={() => toggleLevel('info')}>Info</button>
+      <button class="level-toggle warn" class:active={levelFilters.warn} onclick={() => toggleLevel('warn')}>Warn</button>
+      <button class="level-toggle error" class:active={levelFilters.error} onclick={() => toggleLevel('error')}>Error</button>
+    </div>
+    <div class="filter-group">
+      <input
+        type="text"
+        class="search-input"
+        placeholder={t('logs.searchPlaceholder')}
+        bind:value={searchText}
+      />
+    </div>
+    {#if showConnections}
+      <div class="filter-group">
+        <span class="filter-label">{t('logs.protocol')}:</span>
+        <select class="filter-select" bind:value={protocolFilter}>
+          <option value="all">{t('logs.filterAll')}</option>
+          <option value="tcp">TCP</option>
+          <option value="udp">UDP</option>
+        </select>
+      </div>
+      <div class="filter-group">
+        <span class="filter-label">{t('logs.action')}:</span>
+        <select class="filter-select" bind:value={actionFilter}>
+          <option value="all">{t('logs.filterAll')}</option>
+          <option value="proxy">{t('routing.proxy')}</option>
+          <option value="direct">{t('routing.direct')}</option>
+        </select>
+      </div>
+    {/if}
+    {#if filteredLogs.length !== allLogs.length}
+      <span class="filter-count">{t('logs.showing', { shown: filteredLogs.length, total: allLogs.length })}</span>
+    {/if}
+  </div>
+
   <div class="log-container" bind:this={container}>
-    {#each logs as log (log.id)}
+    {#each filteredLogs as log (log.id)}
       <div
         class="line"
         class:connection={log.type === 'connection'}
@@ -227,8 +294,10 @@
         {/if}
       </div>
     {/each}
-    {#if logs.length === 0}
-      <p class="empty">Waiting for log events...</p>
+    {#if allLogs.length === 0}
+      <p class="empty">{t('logs.waiting')}</p>
+    {:else if filteredLogs.length === 0}
+      <p class="empty">{t('logs.noMatch')}</p>
     {/if}
   </div>
 </div>
@@ -244,7 +313,7 @@
     gap: 12px;
   }
 
-  h2 { font-size: 18px; margin: 0; }
+  h2 { font-size: 18px; margin: 0; white-space: nowrap; }
 
   .status-badge {
     background: var(--bg-tertiary);
@@ -283,6 +352,98 @@
   .controls button:disabled {
     opacity: 0.5;
     cursor: not-allowed;
+  }
+
+  .filter-bar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 8px;
+    flex-wrap: wrap;
+  }
+
+  .filter-group {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .filter-label {
+    font-size: 11px;
+    color: var(--text-muted);
+    white-space: nowrap;
+  }
+
+  .level-toggle {
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border);
+    color: var(--text-secondary);
+    border-radius: 4px;
+    padding: 2px 8px;
+    cursor: pointer;
+    font-size: 11px;
+    opacity: 0.5;
+    transition: opacity 0.15s, background 0.15s;
+  }
+
+  .level-toggle.active {
+    opacity: 1;
+    background: rgba(88, 166, 255, 0.15);
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+
+  .level-toggle.warn.active {
+    background: rgba(210, 153, 34, 0.15);
+    border-color: #d29922;
+    color: #d29922;
+  }
+
+  .level-toggle.error.active {
+    background: rgba(248, 81, 73, 0.15);
+    border-color: var(--accent-red);
+    color: var(--accent-red);
+  }
+
+  .search-input {
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border);
+    color: var(--text-primary);
+    border-radius: 6px;
+    padding: 3px 8px;
+    font-size: 12px;
+    width: 180px;
+    outline: none;
+  }
+
+  .search-input:focus {
+    border-color: var(--accent);
+  }
+
+  .search-input::placeholder {
+    color: var(--text-muted);
+  }
+
+  .filter-select {
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border);
+    color: var(--text-primary);
+    border-radius: 6px;
+    padding: 3px 6px;
+    font-size: 11px;
+    outline: none;
+    cursor: pointer;
+  }
+
+  .filter-select:focus {
+    border-color: var(--accent);
+  }
+
+  .filter-count {
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-left: auto;
+    white-space: nowrap;
   }
 
   .log-container {

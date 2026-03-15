@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/hashicorp/yamux"
+	"github.com/shuttle-proxy/shuttle/config"
 	shuttlecrypto "github.com/shuttle-proxy/shuttle/crypto"
 	"github.com/shuttle-proxy/shuttle/transport"
 	"golang.org/x/crypto/curve25519"
@@ -26,6 +27,7 @@ type ServerConfig struct {
 	TargetAddr string
 	CertFile   string
 	KeyFile    string
+	Yamux      *config.YamuxConfig // optional yamux tuning
 }
 
 // Server implements transport.ServerTransport using Reality (TLS + Noise IK + yamux).
@@ -176,7 +178,7 @@ func (s *Server) handleConn(ctx context.Context, raw net.Conn) {
 	s.logger.Debug("reality auth success", "peer", fmt.Sprintf("%x", hs.PeerPublicKey()))
 
 	// Create yamux server session
-	sess, err := yamux.Server(raw, yamux.DefaultConfig())
+	sess, err := yamux.Server(raw, transport.YamuxSessionConfig(s.config.Yamux))
 	if err != nil {
 		s.logger.Error("yamux server error", "err", err)
 		raw.Close()
