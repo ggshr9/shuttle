@@ -67,8 +67,14 @@ type Engine struct {
 	// Stream-level metrics tracker
 	streamTracker *stream.StreamTracker
 
+	// Circuit breaker for transport connections
+	circuitBreaker *CircuitBreaker
+
 	// Plugin chain for connection tracking, filtering, and logging
 	chain *plugin.Chain
+
+	// Background goroutine tracking for clean shutdown
+	bgWg sync.WaitGroup
 
 	// Event subscribers — stores bidirectional channels, Subscribe returns receive-only view
 	subMu sync.Mutex
@@ -116,6 +122,16 @@ func (e *Engine) startInternal(ctx context.Context) error {
 	e.mu.Unlock()
 
 	sysopt.Apply(e.logger)
+
+	e.mu.Lock()
+	e.circuitBreaker = NewCircuitBreaker(CircuitBreakerConfig{
+		OnStateChange: func(state CircuitState, cooldown time.Duration) {
+			if state == CircuitOpen {
+				e.emit(Event{Type: EventConnectionError, Error: "circuit breaker open", BackoffMs: cooldown.Milliseconds()})
+			}
+		},
+	})
+	e.mu.Unlock()
 
 	ctx, cancel := context.WithCancel(ctx)
 
@@ -202,7 +218,11 @@ func (e *Engine) startInternal(ctx context.Context) error {
 	e.mu.Unlock()
 
 	e.emit(Event{Type: EventConnected, Message: "engine started"})
-	go e.speedLoop(ctx)
+	e.bgWg.Add(1)
+	go func() {
+		defer e.bgWg.Done()
+		e.speedLoop(ctx)
+	}()
 
 	// Start network change monitor to detect WiFi/cellular switches.
 	nm := netmon.New(5 * time.Second)
@@ -433,6 +453,10 @@ func (e *Engine) createDialer(cfg *config.ClientConfig, rt *router.Router, dnsRe
 			if curSel == nil {
 				return nil, fmt.Errorf("no active selector")
 			}
+			// Check circuit breaker before attempting connection.
+			if cb := e.circuitBreaker; cb != nil && !cb.Allow() {
+				return nil, fmt.Errorf("circuit breaker open")
+			}
 			var conn transport.Connection
 			var rawStream transport.Stream
 			err := retryWithBackoff(dialCtx, retryCfg, func() error {
@@ -448,7 +472,13 @@ func (e *Engine) createDialer(cfg *config.ClientConfig, rt *router.Router, dnsRe
 				return nil
 			})
 			if err != nil {
+				if cb := e.circuitBreaker; cb != nil {
+					cb.RecordFailure()
+				}
 				return nil, err
+			}
+			if cb := e.circuitBreaker; cb != nil {
+				cb.RecordSuccess()
 			}
 			// Wrap with measured stream for per-stream metrics.
 			st := e.streamTracker
@@ -584,7 +614,11 @@ func (e *Engine) connectMesh(ctx context.Context, cfg *config.ClientConfig, tunS
 		if err := tunServer.AddMeshRoute(mc.MeshCIDR()); err != nil {
 			e.logger.Warn("mesh: add route failed", "err", err)
 		}
-		go tunServer.MeshReceiveLoop(ctx)
+		e.bgWg.Add(1)
+		go func() {
+			defer e.bgWg.Done()
+			tunServer.MeshReceiveLoop(ctx)
+		}()
 		e.logger.Info("mesh connected", "virtual_ip", mc.VirtualIP(), "cidr", mc.MeshCIDR())
 		return mc
 	}
@@ -642,6 +676,18 @@ func (e *Engine) stopInternal() error {
 		e.logger.Warn("engine stop timed out, forcing shutdown")
 	}
 
+	// Wait for background goroutines (speedLoop, MeshReceiveLoop) to exit.
+	bgDone := make(chan struct{})
+	go func() {
+		e.bgWg.Wait()
+		close(bgDone)
+	}()
+	select {
+	case <-bgDone:
+	case <-time.After(5 * time.Second):
+		e.logger.Warn("background goroutines did not exit within timeout")
+	}
+
 	e.mu.Lock()
 	if e.netMon != nil {
 		e.netMon.Stop()
@@ -661,6 +707,7 @@ func (e *Engine) stopInternal() error {
 	e.cancel = nil
 	e.currentRouter = nil
 	e.streamTracker = nil
+	e.circuitBreaker = nil
 	e.mu.Unlock()
 
 	e.emit(Event{Type: EventDisconnected, Message: "engine stopped"})
@@ -734,6 +781,7 @@ func (e *Engine) Status() EngineStatus {
 	mc := e.meshClient
 	cfg := e.cfg
 	st := e.streamTracker
+	cb := e.circuitBreaker
 	e.mu.RUnlock()
 
 	stats := e.metrics.Stats()
@@ -747,6 +795,10 @@ func (e *Engine) Status() EngineStatus {
 		BytesReceived: stats["bytes_received"],
 		UploadSpeed:   up,
 		DownloadSpeed: down,
+	}
+
+	if cb != nil {
+		status.CircuitState = cb.State().String()
 	}
 
 	// Add stream-level metrics summary.

@@ -238,6 +238,16 @@ func TestDefaultClientConfig(t *testing.T) {
 	}
 }
 
+// validClientConfig returns a DefaultClientConfig with required fields filled
+// in so that it passes all validation checks. DefaultClientConfig() is a GUI
+// template and intentionally omits server-specific values like public keys.
+func validClientConfig() *ClientConfig {
+	cfg := DefaultClientConfig()
+	cfg.Transport.Reality.PublicKey = "testkey"
+	cfg.Transport.CDN.Domain = "cdn.example.com"
+	return cfg
+}
+
 func TestClientConfigValidate(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -259,11 +269,97 @@ func TestClientConfigValidate(t *testing.T) {
 		{"invalid split route action", func(c *ClientConfig) {
 			c.Mesh.SplitRoutes = []SplitRoute{{CIDR: "10.0.0.0/24", Action: "invalid"}}
 		}, true},
+
+		// server.addr
+		{"valid server addr", func(c *ClientConfig) { c.Server.Addr = "example.com:443" }, false},
+		{"invalid server addr", func(c *ClientConfig) { c.Server.Addr = "no-port" }, true},
+
+		// servers[]
+		{"valid servers list", func(c *ClientConfig) {
+			c.Servers = []ServerEndpoint{{Addr: "a.com:443"}, {Addr: "b.com:8443"}}
+		}, false},
+		{"invalid servers entry", func(c *ClientConfig) {
+			c.Servers = []ServerEndpoint{{Addr: "bad-addr"}}
+		}, true},
+
+		// subscriptions[].url
+		{"valid subscription url", func(c *ClientConfig) {
+			c.Subscriptions = []SubscriptionConfig{{URL: "https://example.com/sub"}}
+		}, false},
+		{"invalid subscription url scheme", func(c *ClientConfig) {
+			c.Subscriptions = []SubscriptionConfig{{URL: "ftp://example.com/sub"}}
+		}, true},
+
+		// routing.dns.domestic
+		{"valid dns domestic IP", func(c *ClientConfig) { c.Routing.DNS.Domestic = "8.8.8.8" }, false},
+		{"valid dns domestic host:port", func(c *ClientConfig) { c.Routing.DNS.Domestic = "dns.example.com:53" }, false},
+		{"valid dns domestic DoH URL", func(c *ClientConfig) { c.Routing.DNS.Domestic = "https://dns.alidns.com/dns-query" }, false},
+		{"invalid dns domestic", func(c *ClientConfig) { c.Routing.DNS.Domestic = "not-an-ip" }, true},
+		{"invalid dns domestic URL scheme", func(c *ClientConfig) { c.Routing.DNS.Domestic = "ftp://bad.com" }, true},
+
+		// routing.dns.remote.server
+		{"valid dns remote server", func(c *ClientConfig) { c.Routing.DNS.Remote.Server = "https://1.1.1.1/dns-query" }, false},
+		{"invalid dns remote server http", func(c *ClientConfig) { c.Routing.DNS.Remote.Server = "http://1.1.1.1/dns-query" }, true},
+		{"invalid dns remote server no scheme", func(c *ClientConfig) { c.Routing.DNS.Remote.Server = "1.1.1.1" }, true},
+
+		// routing.dns.remote.via
+		{"valid dns remote via proxy", func(c *ClientConfig) { c.Routing.DNS.Remote.Via = "proxy" }, false},
+		{"valid dns remote via direct", func(c *ClientConfig) { c.Routing.DNS.Remote.Via = "direct" }, false},
+		{"invalid dns remote via", func(c *ClientConfig) { c.Routing.DNS.Remote.Via = "invalid" }, true},
+
+		// transport.cdn
+		{"cdn enabled missing domain", func(c *ClientConfig) {
+			c.Transport.CDN.Enabled = true
+			c.Transport.CDN.Domain = ""
+		}, true},
+		{"cdn enabled invalid mode", func(c *ClientConfig) {
+			c.Transport.CDN.Enabled = true
+			c.Transport.CDN.Domain = "cdn.example.com"
+			c.Transport.CDN.Mode = "invalid"
+		}, true},
+		{"cdn enabled valid h2 mode", func(c *ClientConfig) {
+			c.Transport.CDN.Enabled = true
+			c.Transport.CDN.Domain = "cdn.example.com"
+			c.Transport.CDN.Mode = "h2"
+		}, false},
+		{"cdn enabled valid grpc mode", func(c *ClientConfig) {
+			c.Transport.CDN.Enabled = true
+			c.Transport.CDN.Domain = "cdn.example.com"
+			c.Transport.CDN.Mode = "grpc"
+		}, false},
+
+		// transport.reality
+		{"reality enabled missing public key", func(c *ClientConfig) {
+			c.Transport.Reality.Enabled = true
+			c.Transport.Reality.PublicKey = ""
+		}, true},
+
+		// transport.webrtc
+		{"webrtc enabled missing signal url", func(c *ClientConfig) {
+			c.Transport.WebRTC.Enabled = true
+			c.Transport.WebRTC.SignalURL = ""
+		}, true},
+		{"webrtc enabled invalid signal url", func(c *ClientConfig) {
+			c.Transport.WebRTC.Enabled = true
+			c.Transport.WebRTC.SignalURL = "not-a-url"
+		}, true},
+		{"webrtc enabled valid signal url", func(c *ClientConfig) {
+			c.Transport.WebRTC.Enabled = true
+			c.Transport.WebRTC.SignalURL = "https://signal.example.com"
+		}, false},
+
+		// log.level
+		{"valid log level debug", func(c *ClientConfig) { c.Log.Level = "debug" }, false},
+		{"invalid log level", func(c *ClientConfig) { c.Log.Level = "trace" }, true},
+
+		// log.format
+		{"valid log format json", func(c *ClientConfig) { c.Log.Format = "json" }, false},
+		{"invalid log format", func(c *ClientConfig) { c.Log.Format = "xml" }, true},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			cfg := DefaultClientConfig()
+			cfg := validClientConfig()
 			tt.modify(cfg)
 			err := cfg.Validate()
 			if (err != nil) != tt.wantErr {
@@ -302,6 +398,56 @@ func TestServerConfigValidate(t *testing.T) {
 			c.Cluster.Secret = "s"
 			c.Cluster.Interval = "invalid"
 		}, true},
+
+		// cover.mode == "reverse" requires reverse_url
+		{"reverse cover missing url", func(c *ServerConfig) {
+			c.Cover.Mode = "reverse"
+		}, true},
+		{"reverse cover invalid url", func(c *ServerConfig) {
+			c.Cover.Mode = "reverse"
+			c.Cover.ReverseURL = "not-a-url"
+		}, true},
+		{"reverse cover valid url", func(c *ServerConfig) {
+			c.Cover.Mode = "reverse"
+			c.Cover.ReverseURL = "https://example.com"
+		}, false},
+
+		// cover.mode == "static" requires static_dir
+		{"static cover missing dir", func(c *ServerConfig) {
+			c.Cover.Mode = "static"
+		}, true},
+		{"static cover valid dir", func(c *ServerConfig) {
+			c.Cover.Mode = "static"
+			c.Cover.StaticDir = "/var/www"
+		}, false},
+
+		// mesh.cidr when enabled
+		{"mesh enabled invalid cidr", func(c *ServerConfig) {
+			c.Mesh.Enabled = true
+			c.Mesh.CIDR = "not-a-cidr"
+		}, true},
+		{"mesh enabled valid cidr", func(c *ServerConfig) {
+			c.Mesh.Enabled = true
+			c.Mesh.CIDR = "10.7.0.0/24"
+		}, false},
+
+		// admin.listen when enabled
+		{"admin enabled invalid listen", func(c *ServerConfig) {
+			c.Admin.Enabled = true
+			c.Admin.Listen = "bad"
+		}, true},
+		{"admin enabled valid listen", func(c *ServerConfig) {
+			c.Admin.Enabled = true
+			c.Admin.Listen = "127.0.0.1:9090"
+		}, false},
+
+		// debug.pprof_listen
+		{"pprof invalid listen", func(c *ServerConfig) {
+			c.Debug.PprofListen = "bad"
+		}, true},
+		{"pprof valid listen", func(c *ServerConfig) {
+			c.Debug.PprofListen = "127.0.0.1:6060"
+		}, false},
 	}
 
 	for _, tt := range tests {

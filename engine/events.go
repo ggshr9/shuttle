@@ -113,6 +113,7 @@ type EngineStatus struct {
 	MultipathPaths []PathInfo      `json:"multipath_paths,omitempty"`
 	Mesh           *MeshStatus     `json:"mesh,omitempty"`
 	Streams        *StreamStats    `json:"streams,omitempty"`
+	CircuitState   string          `json:"circuit_state,omitempty"`
 }
 
 // StreamStats summarises per-stream metrics for the API.

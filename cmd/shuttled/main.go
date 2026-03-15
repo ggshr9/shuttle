@@ -375,20 +375,22 @@ func run(configPath string) {
 	sysopt.Apply(logger)
 
 	// Start pprof server if enabled
+	var pprofServer *http.Server
 	if cfg.Debug.PprofEnabled {
 		pprofListen := cfg.Debug.PprofListen
 		if pprofListen == "" {
 			pprofListen = "127.0.0.1:6060"
 		}
+		pprofMux := http.NewServeMux()
+		pprofMux.HandleFunc("/debug/pprof/", pprof.Index)
+		pprofMux.HandleFunc("/debug/pprof/cmdline", pprof.Cmdline)
+		pprofMux.HandleFunc("/debug/pprof/profile", pprof.Profile)
+		pprofMux.HandleFunc("/debug/pprof/symbol", pprof.Symbol)
+		pprofMux.HandleFunc("/debug/pprof/trace", pprof.Trace)
+		pprofServer = &http.Server{Addr: pprofListen, Handler: pprofMux}
 		go func() {
-			pprofMux := http.NewServeMux()
-			pprofMux.HandleFunc("/debug/pprof/", pprof.Index)
-			pprofMux.HandleFunc("/debug/pprof/cmdline", pprof.Cmdline)
-			pprofMux.HandleFunc("/debug/pprof/profile", pprof.Profile)
-			pprofMux.HandleFunc("/debug/pprof/symbol", pprof.Symbol)
-			pprofMux.HandleFunc("/debug/pprof/trace", pprof.Trace)
 			logger.Info("pprof enabled", "addr", pprofListen)
-			if err := http.ListenAndServe(pprofListen, pprofMux); err != nil { //nolint:gosec // pprof debug server, local only
+			if err := pprofServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 				logger.Error("pprof server failed", "err", err)
 			}
 		}()
@@ -647,10 +649,14 @@ func run(configPath string) {
 	}
 
 	// Start a goroutine that forces immediate exit on second signal
+	shutdownDone := make(chan struct{})
 	go func() {
-		sig := <-sigCh
-		logger.Warn("received second signal, forcing immediate exit", "signal", sig)
-		cancel()
+		select {
+		case sig := <-sigCh:
+			logger.Warn("received second signal, forcing immediate exit", "signal", sig)
+			cancel()
+		case <-shutdownDone:
+		}
 	}()
 
 	// Wait for active connections to finish, with drain timeout
@@ -672,6 +678,15 @@ func run(configPath string) {
 	// Cancel context to stop any remaining connection handlers
 	cancel()
 
+	// Shut down pprof server gracefully
+	if pprofServer != nil {
+		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
+		if err := pprofServer.Shutdown(shutdownCtx); err != nil {
+			logger.Error("pprof server shutdown error", "err", err)
+		}
+		shutdownCancel()
+	}
+
 	// Shut down admin server gracefully
 	if adminServer != nil {
 		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -691,6 +706,7 @@ func run(configPath string) {
 		auditLog.Close()
 	}
 
+	close(shutdownDone)
 	logger.Info("shuttled stopped gracefully")
 }
 
@@ -820,7 +836,7 @@ func handleStream(ctx context.Context, stream transport.Stream, remoteIP string,
 
 			if isUDP {
 				// UDP relay mode: read framed datagrams from stream, send as UDP.
-				handleUDPRelay(stream, target, residual, logger)
+				handleUDPRelay(ctx, stream, target, residual, logger)
 				return
 			}
 
@@ -1017,7 +1033,7 @@ func (fw *meshFrameWriter) Close() error {
 // handleUDPRelay relays UDP datagrams between a transport stream and a remote
 // UDP endpoint. It reads framed datagrams from the stream, sends them via UDP,
 // and sends responses back as framed datagrams on the stream.
-func handleUDPRelay(stream io.ReadWriteCloser, target string, residual []byte, logger *slog.Logger) {
+func handleUDPRelay(ctx context.Context, stream io.ReadWriteCloser, target string, residual []byte, logger *slog.Logger) {
 	udpAddr, err := net.ResolveUDPAddr("udp", target)
 	if err != nil {
 		logger.Debug("udp relay: resolve failed", "target", target, "err", err)
@@ -1041,6 +1057,9 @@ func handleUDPRelay(stream io.ReadWriteCloser, target string, residual []byte, l
 	go func() {
 		defer func() { done <- struct{}{} }()
 		for {
+			if ctx.Err() != nil {
+				return
+			}
 			_, payload, err := proxy.ReadUDPFrame(reader)
 			if err != nil {
 				if err != io.EOF {
@@ -1060,6 +1079,9 @@ func handleUDPRelay(stream io.ReadWriteCloser, target string, residual []byte, l
 		defer func() { done <- struct{}{} }()
 		buf := make([]byte, 65535)
 		for {
+			if ctx.Err() != nil {
+				return
+			}
 			udpConn.SetReadDeadline(time.Now().Add(5 * time.Second))
 			n, err := udpConn.Read(buf)
 			if err != nil {
