@@ -30,7 +30,8 @@ mkdir -p "$DATA_DIR"
 if [ ! -f "$CONFIG" ]; then
     echo "No config found at $CONFIG. Running auto-init..."
     INIT_ARGS="--dir $DATA_DIR --password $SHUTTLE_PASSWORD"
-    if [ -n "$SHUTTLE_DOMAIN" ]; then
+    INIT_ARGS="$INIT_ARGS --transport ${SHUTTLE_TRANSPORT:-both}"
+    if [ -n "${SHUTTLE_DOMAIN:-}" ]; then
         INIT_ARGS="$INIT_ARGS --domain $SHUTTLE_DOMAIN"
     fi
     shuttled init $INIT_ARGS
@@ -60,12 +61,14 @@ echo ""
 echo "========================================"
 echo "  Shuttle Server Starting"
 echo "----------------------------------------"
-if [ -n "$SHUTTLE_DOMAIN" ]; then
+if [ -n "${SHUTTLE_DOMAIN:-}" ]; then
     echo "  Domain:    $SHUTTLE_DOMAIN"
     echo "  Admin:     https://$SHUTTLE_DOMAIN"
 else
+    echo "  Mode:      IP-only"
     echo "  Listen:    :443"
 fi
+echo "  Transport: ${SHUTTLE_TRANSPORT:-both}"
 echo "  Config:    $CONFIG"
 echo "========================================"
 echo ""
