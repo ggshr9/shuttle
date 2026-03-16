@@ -12,8 +12,9 @@ import (
 
 // ImportResult holds the result of parsing an import string.
 type ImportResult struct {
-	Servers []ServerEndpoint `json:"servers"`
-	Errors  []string         `json:"errors,omitempty"`
+	Servers     []ServerEndpoint `json:"servers"`
+	Errors      []string         `json:"errors,omitempty"`
+	MeshEnabled bool             `json:"mesh_enabled,omitempty"`
 }
 
 // ImportConfig parses various configuration formats and returns server endpoints.
@@ -32,6 +33,17 @@ func ImportConfig(data string) (*ImportResult, error) {
 
 	// Try shuttle:// URI first (single or multi-line)
 	if strings.HasPrefix(data, "shuttle://") || strings.Contains(data, "\nshuttle://") {
+		// Try base64-encoded ShareURI format first (from shuttled share)
+		if !strings.Contains(data, "\n") {
+			if share, err := DecodeShareURI(data); err == nil {
+				cfg := ShareURIToClientConfig(share)
+				result := &ImportResult{
+					Servers:     []ServerEndpoint{cfg.Server},
+					MeshEnabled: share.Mesh,
+				}
+				return result, nil
+			}
+		}
 		return parseShuttleURIs(data)
 	}
 

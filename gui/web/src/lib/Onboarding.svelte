@@ -17,6 +17,8 @@
 
   // Step 3: Options
   let enableSystemProxy = $state(true)
+  let enableMesh = $state(true)
+  let meshAvailable = $state(false)
 
   // Results
   let addedServers = $state([])
@@ -54,6 +56,9 @@
           error = t('onboarding.errors.noServersFound')
           return
         }
+        if (result.mesh_enabled) {
+          meshAvailable = true
+        }
       } else if (addMethod === 'manual') {
         if (!manualAddr.trim()) {
           error = t('onboarding.errors.enterServerAddress')
@@ -89,14 +94,30 @@
         }
       }
 
-      // Enable system proxy if selected
+      // Apply options
+      const cfg = await api.getConfig()
+      let configChanged = false
+
       if (enableSystemProxy) {
-        const cfg = await api.getConfig()
         if (!cfg.proxy.system_proxy) {
           cfg.proxy.system_proxy = { enabled: true }
         } else {
           cfg.proxy.system_proxy.enabled = true
         }
+        configChanged = true
+      }
+
+      if (meshAvailable && enableMesh) {
+        if (!cfg.mesh) {
+          cfg.mesh = { enabled: true, p2p_enabled: true }
+        } else {
+          cfg.mesh.enabled = true
+          cfg.mesh.p2p_enabled = true
+        }
+        configChanged = true
+      }
+
+      if (configChanged) {
         await api.putConfig(cfg)
       }
 
@@ -276,6 +297,16 @@
             <span class="option-desc">{t('onboarding.systemProxyDesc')}</span>
           </div>
         </label>
+
+        {#if meshAvailable}
+          <label class="checkbox-option">
+            <input type="checkbox" bind:checked={enableMesh} />
+            <div>
+              <span class="option-title">{t('onboarding.enableMesh')}</span>
+              <span class="option-desc">{t('onboarding.meshDesc')}</span>
+            </div>
+          </label>
+        {/if}
 
         {#if error}
           <p class="error">{error}</p>

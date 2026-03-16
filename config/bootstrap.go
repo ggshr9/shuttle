@@ -25,6 +25,7 @@ type InitOptions struct {
 	Transports []string // default: ["h3", "reality"]
 	TargetSNI  string   // default: "www.microsoft.com"
 	Force      bool     // overwrite existing config
+	Mesh       bool     // enable mesh VPN with P2P
 }
 
 // InitResult contains the output of a successful bootstrap.
@@ -35,6 +36,8 @@ type InitResult struct {
 	PublicKey  string
 	ServerAddr string
 	AdminToken string
+	MeshEnabled bool
+	MeshCIDR    string
 }
 
 // Bootstrap generates all server prerequisites and writes config to disk.
@@ -130,6 +133,12 @@ func Bootstrap(opts *InitOptions) (*InitResult, error) {
 	cfg.Admin.Listen = "127.0.0.1:9090"
 	cfg.Admin.Token = adminToken
 
+	// Enable mesh VPN if requested
+	if opts.Mesh {
+		cfg.Mesh.Enabled = true
+		cfg.Mesh.P2PEnabled = true
+	}
+
 	// Write config
 	if err := SaveServerConfig(configPath, cfg); err != nil {
 		return nil, fmt.Errorf("save config: %w", err)
@@ -164,15 +173,18 @@ func Bootstrap(opts *InitOptions) (*InitResult, error) {
 		PublicKey: pubHex,
 		ShortID:   shortID,
 		SNI:       opts.TargetSNI,
+		Mesh:      opts.Mesh,
 	})
 
 	return &InitResult{
-		ConfigPath: configPath,
-		ShareURI:   shareURI,
-		Password:   password,
-		PublicKey:   pubHex,
-		ServerAddr: shareAddr,
-		AdminToken: adminToken,
+		ConfigPath:  configPath,
+		ShareURI:    shareURI,
+		Password:    password,
+		PublicKey:    pubHex,
+		ServerAddr:  shareAddr,
+		AdminToken:  adminToken,
+		MeshEnabled: opts.Mesh,
+		MeshCIDR:    cfg.Mesh.CIDR,
 	}, nil
 }
 

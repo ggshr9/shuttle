@@ -204,12 +204,20 @@ func registerConfigRoutes(mux *http.ServeMux, eng *engine.Engine) {
 		}
 		eng.SetConfig(&cfg)
 
+		// If the imported config has mesh enabled, apply it
+		if result.MeshEnabled {
+			cfg.Mesh.Enabled = true
+			cfg.Mesh.P2PEnabled = true
+			eng.SetConfig(&cfg)
+		}
+
 		writeJSON(w, map[string]any{
-			"status":  "imported",
-			"added":   added,
-			"total":   len(result.Servers),
-			"servers": result.Servers,
-			"errors":  result.Errors,
+			"status":       "imported",
+			"added":        added,
+			"total":        len(result.Servers),
+			"servers":      result.Servers,
+			"errors":       result.Errors,
+			"mesh_enabled": result.MeshEnabled,
 		})
 	})
 }
