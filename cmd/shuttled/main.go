@@ -31,10 +31,10 @@ import (
 	rtcTransport "github.com/shuttleX/shuttle/transport/webrtc"
 )
 
-const (
-	version         = "0.1.0"
-	maxConcurrentStreams = 1024
-)
+// version is set via ldflags at build time: -X main.version=<tag>
+var version = "0.1.0"
+
+const maxConcurrentStreams = 1024
 
 func main() {
 	if len(os.Args) < 2 {

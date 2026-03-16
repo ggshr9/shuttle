@@ -15,7 +15,8 @@ import (
 	"github.com/shuttleX/shuttle/gui/api"
 )
 
-const version = "0.1.0"
+// version is set via ldflags at build time: -X main.version=<tag>
+var version = "0.1.0"
 
 func main() {
 	if len(os.Args) < 2 {
