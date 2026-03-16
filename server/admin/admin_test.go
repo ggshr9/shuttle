@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/shuttle-proxy/shuttle/config"
+	"github.com/shuttleX/shuttle/config"
 )
 
 func testSetup() (*ServerInfo, *config.ServerConfig) {

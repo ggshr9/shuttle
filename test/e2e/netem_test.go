@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/shuttle-proxy/shuttle/test/netem"
+	"github.com/shuttleX/shuttle/test/netem"
 )
 
 // =============================================================================

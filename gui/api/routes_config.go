@@ -4,8 +4,8 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"github.com/shuttle-proxy/shuttle/config"
-	"github.com/shuttle-proxy/shuttle/engine"
+	"github.com/shuttleX/shuttle/config"
+	"github.com/shuttleX/shuttle/engine"
 )
 
 func registerConfigRoutes(mux *http.ServeMux, eng *engine.Engine) {

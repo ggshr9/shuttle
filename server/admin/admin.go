@@ -16,9 +16,9 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/shuttle-proxy/shuttle/config"
-	"github.com/shuttle-proxy/shuttle/server/audit"
-	"github.com/shuttle-proxy/shuttle/server/metrics"
+	"github.com/shuttleX/shuttle/config"
+	"github.com/shuttleX/shuttle/server/audit"
+	"github.com/shuttleX/shuttle/server/metrics"
 )
 
 // ServerInfo tracks runtime server metrics.

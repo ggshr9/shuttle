@@ -1,4 +1,4 @@
-module github.com/shuttle-proxy/shuttle
+module github.com/shuttleX/shuttle
 
 go 1.24.0
 

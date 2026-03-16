@@ -13,7 +13,7 @@ import (
 	"sync/atomic"
 
 	"github.com/hashicorp/yamux"
-	"github.com/shuttle-proxy/shuttle/transport"
+	"github.com/shuttleX/shuttle/transport"
 )
 
 // GRPCConfig configures the gRPC CDN transport.

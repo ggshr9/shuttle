@@ -6,8 +6,8 @@ import (
 
 	"nhooyr.io/websocket"
 
-	"github.com/shuttle-proxy/shuttle/engine"
-	"github.com/shuttle-proxy/shuttle/speedtest"
+	"github.com/shuttleX/shuttle/engine"
+	"github.com/shuttleX/shuttle/speedtest"
 )
 
 func handleEventWS(w http.ResponseWriter, r *http.Request, eng *engine.Engine, filter engine.EventType) {

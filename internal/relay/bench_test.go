@@ -5,7 +5,7 @@ import (
 	"net"
 	"testing"
 
-	"github.com/shuttle-proxy/shuttle/internal/pool"
+	"github.com/shuttleX/shuttle/internal/pool"
 )
 
 // BenchmarkRelayCopyBuffer benchmarks just the copyBuffer path with pooled buffers.

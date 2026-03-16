@@ -292,7 +292,7 @@
   },
   "timepicker": {},
   "timezone": "browser",
-  "title": "Shuttle Proxy Server",
+  "title": "Shuttle Server",
   "uid": "shuttle-server",
   "version": 1
 }

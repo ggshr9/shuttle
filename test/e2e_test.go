@@ -7,7 +7,7 @@ import (
 	"net"
 	"testing"
 
-	"github.com/shuttle-proxy/shuttle/proxy"
+	"github.com/shuttleX/shuttle/proxy"
 )
 
 func TestSOCKS5ServerStartStop(t *testing.T) {

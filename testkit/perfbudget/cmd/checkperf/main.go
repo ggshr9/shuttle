@@ -11,7 +11,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/shuttle-proxy/shuttle/testkit/perfbudget"
+	"github.com/shuttleX/shuttle/testkit/perfbudget"
 )
 
 func main() {

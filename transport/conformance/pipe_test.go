@@ -10,7 +10,7 @@ import (
 	"testing"
 
 	"github.com/hashicorp/yamux"
-	"github.com/shuttle-proxy/shuttle/transport"
+	"github.com/shuttleX/shuttle/transport"
 )
 
 // pipeTransport is a reference transport implementation backed by net.Pipe()

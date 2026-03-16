@@ -2,7 +2,7 @@
 # Build with OpenWrt SDK:
 #   1. Download SDK from https://downloads.openwrt.org/
 #   2. Extract and cd into SDK directory
-#   3. git clone https://github.com/shuttle-proxy/shuttle package/shuttle
+#   3. git clone https://github.com/shuttleX/shuttle package/shuttle
 #   4. make package/shuttle/compile V=s
 
 include $(TOPDIR)/rules.mk
@@ -12,19 +12,19 @@ PKG_VERSION:=0.1.0
 PKG_RELEASE:=1
 
 PKG_SOURCE_PROTO:=git
-PKG_SOURCE_URL:=https://github.com/shuttle-proxy/shuttle.git
+PKG_SOURCE_URL:=https://github.com/shuttleX/shuttle.git
 PKG_SOURCE_VERSION:=main
 PKG_MIRROR_HASH:=skip
 
 PKG_LICENSE:=MIT
-PKG_MAINTAINER:=Shuttle Proxy <shuttle@example.com>
+PKG_MAINTAINER:=Shuttle <shuttle@example.com>
 
 PKG_BUILD_DEPENDS:=golang/host
 PKG_BUILD_PARALLEL:=1
 PKG_BUILD_FLAGS:=no-mips16
 
-GO_PKG:=github.com/shuttle-proxy/shuttle
-GO_PKG_BUILD_PKG:=github.com/shuttle-proxy/shuttle/cmd/shuttle
+GO_PKG:=github.com/shuttleX/shuttle
+GO_PKG_BUILD_PKG:=github.com/shuttleX/shuttle/cmd/shuttle
 GO_PKG_LDFLAGS_X:=main.version=$(PKG_VERSION)
 
 include $(INCLUDE_DIR)/package.mk
@@ -34,15 +34,15 @@ define Package/shuttle
   SECTION:=net
   CATEGORY:=Network
   SUBMENU:=Web Servers/Proxies
-  TITLE:=Multi-transport proxy client
-  URL:=https://github.com/shuttle-proxy/shuttle
+  TITLE:=Multi-transport network toolkit
+  URL:=https://github.com/shuttleX/shuttle
   DEPENDS:=$(GO_ARCH_DEPENDS) +kmod-tun +ip-full
 endef
 
 define Package/shuttle/description
-  Shuttle is a multi-transport proxy system for high-censorship environments.
-  Features H3/QUIC, Reality/TLS+Noise, and CDN transports with adaptive
-  congestion control and intelligent routing.
+  Shuttle is a multi-transport network toolkit with adaptive routing,
+  mesh networking, and encrypted tunneling. Features H3/QUIC,
+  Reality/TLS+Noise, and CDN transports with adaptive congestion control.
 endef
 
 define Package/shuttle/conffiles
@@ -66,16 +66,16 @@ define Package/shuttled
   SECTION:=net
   CATEGORY:=Network
   SUBMENU:=Web Servers/Proxies
-  TITLE:=Multi-transport proxy server
-  URL:=https://github.com/shuttle-proxy/shuttle
+  TITLE:=Multi-transport network toolkit (server)
+  URL:=https://github.com/shuttleX/shuttle
   DEPENDS:=$(GO_ARCH_DEPENDS)
 endef
 
 define Package/shuttled/description
-  Shuttle server daemon for the multi-transport proxy system.
+  Shuttle server daemon for the multi-transport network toolkit.
 endef
 
-GO_PKG_BUILD_PKG_shuttled:=github.com/shuttle-proxy/shuttle/cmd/shuttled
+GO_PKG_BUILD_PKG_shuttled:=github.com/shuttleX/shuttle/cmd/shuttled
 
 define Package/shuttled/install
 	$(call GoPackage/Package/Install/Bin,$(PKG_INSTALL_DIR))

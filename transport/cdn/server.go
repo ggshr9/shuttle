@@ -13,9 +13,9 @@ import (
 	"time"
 
 	"github.com/hashicorp/yamux"
-	"github.com/shuttle-proxy/shuttle/crypto"
-	"github.com/shuttle-proxy/shuttle/transport"
-	"github.com/shuttle-proxy/shuttle/transport/auth"
+	"github.com/shuttleX/shuttle/crypto"
+	"github.com/shuttleX/shuttle/transport"
+	"github.com/shuttleX/shuttle/transport/auth"
 )
 
 // ServerConfig configures the CDN server transport.

@@ -7,7 +7,7 @@ import (
 	"sync"
 
 	"fyne.io/systray"
-	"github.com/shuttle-proxy/shuttle/engine"
+	"github.com/shuttleX/shuttle/engine"
 )
 
 //go:embed icon_default.png
@@ -49,7 +49,7 @@ func Run(eng *engine.Engine, cb Callbacks) {
 			systray.SetIcon(iconDefault)
 		}
 		systray.SetTitle("Shuttle")
-		systray.SetTooltip("Shuttle Proxy - Disconnected")
+		systray.SetTooltip("Shuttle - Disconnected")
 
 		// Status display (disabled, just for display)
 		state.mStatus = systray.AddMenuItem("⚪ Disconnected", "Current status")
@@ -126,7 +126,7 @@ func updateTrayStatus(status string) {
 		if len(iconConnected) > 0 {
 			systray.SetIcon(iconConnected)
 		}
-		systray.SetTooltip("Shuttle Proxy - Connected")
+		systray.SetTooltip("Shuttle - Connected")
 		state.mStatus.SetTitle("🟢 Connected")
 		state.mConnect.Hide()
 		state.mDisconnect.Show()
@@ -138,20 +138,20 @@ func updateTrayStatus(status string) {
 		} else if len(iconDefault) > 0 {
 			systray.SetIcon(iconDefault)
 		}
-		systray.SetTooltip("Shuttle Proxy - Disconnected")
+		systray.SetTooltip("Shuttle - Disconnected")
 		state.mStatus.SetTitle("⚪ Disconnected")
 		state.mConnect.Show()
 		state.mDisconnect.Hide()
 		state.running = false
 
 	case "starting":
-		systray.SetTooltip("Shuttle Proxy - Connecting...")
+		systray.SetTooltip("Shuttle - Connecting...")
 		state.mStatus.SetTitle("🟡 Connecting...")
 		state.mConnect.Hide()
 		state.mDisconnect.Hide()
 
 	case "stopping":
-		systray.SetTooltip("Shuttle Proxy - Disconnecting...")
+		systray.SetTooltip("Shuttle - Disconnecting...")
 		state.mStatus.SetTitle("🟡 Disconnecting...")
 		state.mConnect.Hide()
 		state.mDisconnect.Hide()

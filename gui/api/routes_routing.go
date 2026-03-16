@@ -6,9 +6,9 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/shuttle-proxy/shuttle/config"
-	"github.com/shuttle-proxy/shuttle/engine"
-	"github.com/shuttle-proxy/shuttle/router"
+	"github.com/shuttleX/shuttle/config"
+	"github.com/shuttleX/shuttle/engine"
+	"github.com/shuttleX/shuttle/router"
 )
 
 func registerRoutingRoutes(mux *http.ServeMux, eng *engine.Engine) {

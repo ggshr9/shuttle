@@ -13,7 +13,7 @@ import (
 	"strings"
 	"time"
 
-	shuttleCrypto "github.com/shuttle-proxy/shuttle/crypto"
+	shuttleCrypto "github.com/shuttleX/shuttle/crypto"
 )
 
 // InitOptions configures the bootstrap process.

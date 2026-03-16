@@ -11,9 +11,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/shuttle-proxy/shuttle/testkit/vnet"
-	"github.com/shuttle-proxy/shuttle/transport"
-	"github.com/shuttle-proxy/shuttle/transport/resilient"
+	"github.com/shuttleX/shuttle/testkit/vnet"
+	"github.com/shuttleX/shuttle/transport"
+	"github.com/shuttleX/shuttle/transport/resilient"
 )
 
 // ---------------------------------------------------------------------------

@@ -3,8 +3,8 @@
 
 !define PRODUCT_NAME "Shuttle"
 !define PRODUCT_VERSION "${VERSION}"
-!define PRODUCT_PUBLISHER "Shuttle Proxy"
-!define PRODUCT_WEB_SITE "https://github.com/shuttle-proxy/shuttle"
+!define PRODUCT_PUBLISHER "Shuttle"
+!define PRODUCT_WEB_SITE "https://github.com/shuttleX/shuttle"
 
 !include "MUI2.nsh"
 

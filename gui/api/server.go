@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/shuttle-proxy/shuttle/engine"
+	"github.com/shuttleX/shuttle/engine"
 )
 
 // Server wraps the API handler with SPA fallback serving.

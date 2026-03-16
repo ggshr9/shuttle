@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/shuttle-proxy/shuttle/testkit/vnet"
+	"github.com/shuttleX/shuttle/testkit/vnet"
 )
 
 // ---------------------------------------------------------------------------

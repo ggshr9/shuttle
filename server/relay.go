@@ -8,7 +8,7 @@ import (
 	"net"
 	"time"
 
-	"github.com/shuttle-proxy/shuttle/proxy"
+	"github.com/shuttleX/shuttle/proxy"
 )
 
 // HandleUDPRelay relays UDP datagrams between a transport stream and a remote

@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/shuttle-proxy/shuttle/mesh"
+	"github.com/shuttleX/shuttle/mesh"
 )
 
 // mockStream simulates a bidirectional stream using two pipes.

@@ -9,8 +9,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/shuttle-proxy/shuttle/mesh/p2p"
-	"github.com/shuttle-proxy/shuttle/mesh/signal"
+	"github.com/shuttleX/shuttle/mesh/p2p"
+	"github.com/shuttleX/shuttle/mesh/signal"
 )
 
 // MeshClient manages a mesh stream on the client side.

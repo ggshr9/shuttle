@@ -11,7 +11,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/shuttle-proxy/shuttle/internal/checkperf"
+	"github.com/shuttleX/shuttle/internal/checkperf"
 )
 
 func main() {

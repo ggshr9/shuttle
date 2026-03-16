@@ -30,7 +30,7 @@ func GenerateSelfSignedCert(hosts []string, validFor time.Duration) (certPEM, ke
 	template := &x509.Certificate{
 		SerialNumber: serialNumber,
 		Subject: pkix.Name{
-			Organization: []string{"Shuttle Proxy"},
+			Organization: []string{"Shuttle"},
 		},
 		NotBefore:             now,
 		NotAfter:              now.Add(validFor),

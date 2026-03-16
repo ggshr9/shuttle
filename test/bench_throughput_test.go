@@ -10,9 +10,9 @@ import (
 	"time"
 
 	"github.com/hashicorp/yamux"
-	"github.com/shuttle-proxy/shuttle/congestion"
-	"github.com/shuttle-proxy/shuttle/transport"
-	"github.com/shuttle-proxy/shuttle/transport/selector"
+	"github.com/shuttleX/shuttle/congestion"
+	"github.com/shuttleX/shuttle/transport"
+	"github.com/shuttleX/shuttle/transport/selector"
 )
 
 // ---------------------------------------------------------------------------

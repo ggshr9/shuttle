@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/shuttle-proxy/shuttle/testkit/fault"
-	"github.com/shuttle-proxy/shuttle/testkit/vnet"
+	"github.com/shuttleX/shuttle/testkit/fault"
+	"github.com/shuttleX/shuttle/testkit/vnet"
 )
 
 // ---------------------------------------------------------------------------

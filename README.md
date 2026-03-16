@@ -1,6 +1,6 @@
 # Shuttle
 
-A multi-transport proxy system with adaptive congestion control, designed for high-censorship environments.
+A multi-transport network toolkit with adaptive routing, mesh networking, and encrypted tunneling.
 
 ## Features
 
@@ -45,7 +45,7 @@ Client                              Server
 
 ## Download
 
-Pre-built binaries available on [GitHub Releases](https://github.com/shuttle-proxy/shuttle/releases):
+Pre-built binaries available on [GitHub Releases](https://github.com/shuttleX/shuttle/releases):
 
 - `shuttle-linux-amd64` / `shuttle-linux-arm64` - Linux CLI
 - `shuttle-linux-mipsle` - OpenWrt (MIPS soft-float)
@@ -61,7 +61,7 @@ Pre-built binaries available on [GitHub Releases](https://github.com/shuttle-pro
 
 ```bash
 # One-click install on any Linux VPS (generates config, certs, and systemd service)
-curl -fsSL https://raw.githubusercontent.com/shuttle-proxy/shuttle/main/deploy/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/shuttleX/shuttle/main/deploy/install.sh | bash
 ```
 
 The installer prints a `shuttle://` URI at the end -- copy it for the next step.
@@ -93,7 +93,7 @@ shuttle-gui
 # Paste the shuttle:// URI from the server output — done.
 ```
 
-Pre-built binaries for all platforms are on the [Releases](https://github.com/shuttle-proxy/shuttle/releases) page.
+Pre-built binaries for all platforms are on the [Releases](https://github.com/shuttleX/shuttle/releases) page.
 
 ## Import URI
 

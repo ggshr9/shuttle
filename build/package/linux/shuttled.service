@@ -1,6 +1,6 @@
 [Unit]
-Description=Shuttle Proxy Server
-Documentation=https://github.com/shuttle-proxy/shuttle
+Description=Shuttle Server
+Documentation=https://github.com/shuttleX/shuttle
 After=network.target network-online.target
 Wants=network-online.target
 

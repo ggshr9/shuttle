@@ -9,7 +9,7 @@ import (
 	"runtime"
 	"testing"
 
-	"github.com/shuttle-proxy/shuttle/config"
+	"github.com/shuttleX/shuttle/config"
 )
 
 func newTestEngine() *Engine {
