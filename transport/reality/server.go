@@ -12,10 +12,10 @@ import (
 	"time"
 
 	"github.com/hashicorp/yamux"
-	"github.com/shuttle-proxy/shuttle/config"
-	shuttlecrypto "github.com/shuttle-proxy/shuttle/crypto"
-	"github.com/shuttle-proxy/shuttle/internal/pool"
-	"github.com/shuttle-proxy/shuttle/transport"
+	"github.com/shuttleX/shuttle/config"
+	shuttlecrypto "github.com/shuttleX/shuttle/crypto"
+	"github.com/shuttleX/shuttle/internal/pool"
+	"github.com/shuttleX/shuttle/transport"
 	"golang.org/x/crypto/curve25519"
 )
 

@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/shuttle-proxy/shuttle/congestion"
+	"github.com/shuttleX/shuttle/congestion"
 )
 
 // ---------------------------------------------------------------------------

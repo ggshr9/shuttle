@@ -4,11 +4,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/shuttle-proxy/shuttle/congestion"
-	"github.com/shuttle-proxy/shuttle/crypto"
-	"github.com/shuttle-proxy/shuttle/internal/pool"
-	"github.com/shuttle-proxy/shuttle/obfs"
-	"github.com/shuttle-proxy/shuttle/router"
+	"github.com/shuttleX/shuttle/congestion"
+	"github.com/shuttleX/shuttle/crypto"
+	"github.com/shuttleX/shuttle/internal/pool"
+	"github.com/shuttleX/shuttle/obfs"
+	"github.com/shuttleX/shuttle/router"
 )
 
 func BenchmarkBBROnAck(b *testing.B) {

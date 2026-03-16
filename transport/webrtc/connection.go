@@ -10,7 +10,7 @@ import (
 
 	"github.com/hashicorp/yamux"
 	"github.com/pion/webrtc/v4"
-	"github.com/shuttle-proxy/shuttle/transport"
+	"github.com/shuttleX/shuttle/transport"
 )
 
 // wsConn is an abstraction over a WebSocket connection for reconnection signaling.

@@ -11,7 +11,7 @@ import (
 	"sync/atomic"
 
 	"github.com/hashicorp/yamux"
-	"github.com/shuttle-proxy/shuttle/transport"
+	"github.com/shuttleX/shuttle/transport"
 )
 
 // H2Config configures the CDN HTTP/2 transport.

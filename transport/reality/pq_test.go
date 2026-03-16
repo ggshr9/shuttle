@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	"github.com/hashicorp/yamux"
-	"github.com/shuttle-proxy/shuttle/crypto"
+	"github.com/shuttleX/shuttle/crypto"
 )
 
 // TestRealityPQHandshake tests a full PQ-enhanced Reality handshake round-trip

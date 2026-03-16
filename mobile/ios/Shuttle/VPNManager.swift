@@ -66,7 +66,7 @@ class VPNManager {
         // Configure the tunnel provider
         let tunnelProtocol = NETunnelProviderProtocol()
         tunnelProtocol.providerBundleIdentifier = "com.shuttle.app.extension"
-        tunnelProtocol.serverAddress = "Shuttle Proxy"
+        tunnelProtocol.serverAddress = "Shuttle"
         tunnelProtocol.providerConfiguration = ["config": config]
 
         manager.protocolConfiguration = tunnelProtocol

@@ -4,7 +4,7 @@ import (
 	"net"
 	"testing"
 
-	"github.com/shuttle-proxy/shuttle/router"
+	"github.com/shuttleX/shuttle/router"
 )
 
 func TestDomainTrie(t *testing.T) {

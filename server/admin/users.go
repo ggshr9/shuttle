@@ -6,7 +6,7 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/shuttle-proxy/shuttle/config"
+	"github.com/shuttleX/shuttle/config"
 )
 
 // UserStore manages users and tracks per-user traffic.

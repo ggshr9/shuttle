@@ -11,7 +11,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/shuttle-proxy/shuttle/config"
+	"github.com/shuttleX/shuttle/config"
 )
 
 // Subscription represents a subscription source.

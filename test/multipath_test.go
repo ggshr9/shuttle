@@ -12,8 +12,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/shuttle-proxy/shuttle/transport"
-	"github.com/shuttle-proxy/shuttle/transport/selector"
+	"github.com/shuttleX/shuttle/transport"
+	"github.com/shuttleX/shuttle/transport/selector"
 )
 
 // --- multipath-specific mock types (prefixed mp to avoid collision with mesh_test mocks) ---

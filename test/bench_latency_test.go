@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	"github.com/hashicorp/yamux"
-	"github.com/shuttle-proxy/shuttle/router"
+	"github.com/shuttleX/shuttle/router"
 )
 
 // ---------------------------------------------------------------------------

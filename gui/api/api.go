@@ -14,14 +14,14 @@ import (
 	"strings"
 	"time"
 
-	"github.com/shuttle-proxy/shuttle/config"
-	"github.com/shuttle-proxy/shuttle/connlog"
-	"github.com/shuttle-proxy/shuttle/engine"
-	"github.com/shuttle-proxy/shuttle/speedtest"
-	"github.com/shuttle-proxy/shuttle/stats"
-	"github.com/shuttle-proxy/shuttle/subscription"
-	"github.com/shuttle-proxy/shuttle/sysproxy"
-	"github.com/shuttle-proxy/shuttle/update"
+	"github.com/shuttleX/shuttle/config"
+	"github.com/shuttleX/shuttle/connlog"
+	"github.com/shuttleX/shuttle/engine"
+	"github.com/shuttleX/shuttle/speedtest"
+	"github.com/shuttleX/shuttle/stats"
+	"github.com/shuttleX/shuttle/subscription"
+	"github.com/shuttleX/shuttle/sysproxy"
+	"github.com/shuttleX/shuttle/update"
 )
 
 // apiStartTime records when the API package was initialised, used for uptime calculation.

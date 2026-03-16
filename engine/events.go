@@ -3,7 +3,7 @@ package engine
 import (
 	"time"
 
-	"github.com/shuttle-proxy/shuttle/stream"
+	"github.com/shuttleX/shuttle/stream"
 )
 
 // EventType identifies the kind of engine event.

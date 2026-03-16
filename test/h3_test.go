@@ -6,7 +6,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/shuttle-proxy/shuttle/transport/h3"
+	"github.com/shuttleX/shuttle/transport/h3"
 )
 
 func TestH3ClientCreate(t *testing.T) {

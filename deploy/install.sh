@@ -1,28 +1,42 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-REPO="shuttle-proxy/shuttle"
+REPO="shuttleX/shuttle"
 INSTALL_DIR="/usr/local/bin"
 CONFIG_DIR="/etc/shuttle"
 SERVICE_FILE="/etc/systemd/system/shuttled.service"
 
-# Colors
+# ── Colors ──
+BOLD='\033[1m'
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
+CYAN='\033[0;36m'
+DIM='\033[2m'
 NC='\033[0m'
 
-info()  { echo -e "${GREEN}[INFO]${NC} $*"; }
-warn()  { echo -e "${YELLOW}[WARN]${NC} $*"; }
-error() { echo -e "${RED}[ERROR]${NC} $*"; exit 1; }
+info()  { echo -e "${GREEN}▸${NC} $*"; }
+warn()  { echo -e "${YELLOW}▸${NC} $*"; }
+error() { echo -e "${RED}✗${NC} $*"; exit 1; }
 
-# Detect OS and arch
+banner() {
+    echo ""
+    echo -e "${CYAN}╔══════════════════════════════════════════╗${NC}"
+    echo -e "${CYAN}║${NC}   ${BOLD}Shuttle Server — Setup Wizard${NC}          ${CYAN}║${NC}"
+    echo -e "${CYAN}╚══════════════════════════════════════════╝${NC}"
+    echo ""
+}
+
+# ── Platform detection ──
+
 detect_platform() {
     OS=$(uname -s | tr '[:upper:]' '[:lower:]')
     ARCH=$(uname -m)
     case "$ARCH" in
         x86_64|amd64) ARCH="amd64" ;;
         aarch64|arm64) ARCH="arm64" ;;
+        armv7*|armv6*) ARCH="arm" ;;
+        mips*) ARCH="mipsle" ;;
         *) error "Unsupported architecture: $ARCH" ;;
     esac
     case "$OS" in
@@ -32,7 +46,8 @@ detect_platform() {
     info "Platform: ${OS}/${ARCH}"
 }
 
-# Download binary
+# ── Download binary ──
+
 download_binary() {
     local version="${1:-latest}"
     local url
@@ -43,17 +58,130 @@ download_binary() {
         url="https://github.com/${REPO}/releases/download/${version}/shuttled-${OS}-${ARCH}"
     fi
 
-    info "Downloading shuttled from ${url}..."
+    info "Downloading shuttled..."
+    echo -e "  ${DIM}${url}${NC}"
     curl -fsSL -o "${INSTALL_DIR}/shuttled" "$url" || error "Download failed. Check your network or the release URL."
     chmod +x "${INSTALL_DIR}/shuttled"
     info "Installed to ${INSTALL_DIR}/shuttled"
 }
 
-# Quick auto-init (zero interaction)
+# ── Auto-detect public IP ──
+
+detect_public_ip() {
+    local ip=""
+    # Try multiple services in case one is down
+    for svc in "https://api.ipify.org" "https://ifconfig.me" "https://icanhazip.com"; do
+        ip=$(curl -fsSL --connect-timeout 5 "$svc" 2>/dev/null | tr -d '[:space:]') && break
+    done
+    echo "$ip"
+}
+
+# ── Interactive setup wizard ──
+
+wizard() {
+    banner
+
+    local domain=""
+    local password=""
+    local transport=""
+    local addr_mode=""
+
+    # ── Step 1: Domain or IP ──
+    echo -e "${BOLD}Step 1/3 — Server Address${NC}"
+    echo ""
+    echo "  1) Use a domain name  (e.g. proxy.example.com)"
+    echo -e "     ${DIM}Recommended if you have a domain. Enables all transports.${NC}"
+    echo ""
+    echo "  2) Use server IP address"
+    echo -e "     ${DIM}No domain needed. Works with H3/QUIC and Reality transports.${NC}"
+    echo ""
+
+    while true; do
+        read -rp "  Choose [1/2] (default: 2): " addr_mode
+        addr_mode="${addr_mode:-2}"
+        case "$addr_mode" in
+            1)
+                echo ""
+                read -rp "  Enter your domain: " domain
+                [ -z "$domain" ] && { warn "Domain cannot be empty."; continue; }
+                echo ""
+                info "Using domain: ${BOLD}${domain}${NC}"
+                break
+                ;;
+            2)
+                echo ""
+                echo -e "  ${DIM}Detecting public IP...${NC}"
+                local detected_ip
+                detected_ip=$(detect_public_ip)
+                if [ -n "$detected_ip" ]; then
+                    echo ""
+                    read -rp "  Server IP [${detected_ip}]: " user_ip
+                    domain="${user_ip:-$detected_ip}"
+                else
+                    echo ""
+                    read -rp "  Could not detect IP. Enter server IP: " domain
+                    [ -z "$domain" ] && { warn "IP cannot be empty."; continue; }
+                fi
+                echo ""
+                info "Using IP: ${BOLD}${domain}${NC}"
+                break
+                ;;
+            *) warn "Please enter 1 or 2." ;;
+        esac
+    done
+
+    # ── Step 2: Password ──
+    echo ""
+    echo -e "${BOLD}Step 2/3 — Authentication${NC}"
+    echo ""
+    read -rp "  Set a password (leave empty to auto-generate): " password
+    if [ -z "$password" ]; then
+        password=$(head -c 32 /dev/urandom | base64 | tr -d '/+=' | head -c 16)
+        echo ""
+        info "Generated password: ${BOLD}${password}${NC}"
+    fi
+
+    # ── Step 3: Transport ──
+    echo ""
+    echo -e "${BOLD}Step 3/3 — Transport Protocol${NC}"
+    echo ""
+    echo "  1) Both H3 + Reality  ${DIM}(recommended)${NC}"
+    echo "  2) H3/QUIC only      ${DIM}(fast, UDP-based)${NC}"
+    echo "  3) Reality only       ${DIM}(TLS camouflage, TCP-based)${NC}"
+    echo ""
+
+    while true; do
+        read -rp "  Choose [1/2/3] (default: 1): " transport_choice
+        transport_choice="${transport_choice:-1}"
+        case "$transport_choice" in
+            1) transport="both"; break ;;
+            2) transport="h3"; break ;;
+            3) transport="reality"; break ;;
+            *) warn "Please enter 1, 2, or 3." ;;
+        esac
+    done
+
+    echo ""
+    echo -e "${CYAN}────────────────────────────────────────────${NC}"
+    echo ""
+
+    # ── Run shuttled init ──
+    local init_args="--dir ${CONFIG_DIR} --password ${password} --transport ${transport}"
+    if [ -n "$domain" ]; then
+        init_args="${init_args} --domain ${domain}"
+    fi
+
+    info "Generating config..."
+    ${INSTALL_DIR}/shuttled init ${init_args}
+}
+
+# ── Non-interactive setup (env vars or flags) ──
+
 auto_configure() {
     local domain="${SHUTTLE_DOMAIN:-}"
     local password="${SHUTTLE_PASSWORD:-}"
-    local args="--dir ${CONFIG_DIR}"
+    local transport="${SHUTTLE_TRANSPORT:-both}"
+    local args="--dir ${CONFIG_DIR} --transport ${transport}"
 
     if [ -n "$domain" ]; then
         args="$args --domain $domain"
@@ -62,96 +190,12 @@ auto_configure() {
         args="$args --password $password"
     fi
 
-    info "Running zero-config setup..."
+    info "Running auto-config..."
     ${INSTALL_DIR}/shuttled init $args
 }
 
-# Interactive config (advanced)
-configure() {
-    echo ""
-    read -rp "Server domain (e.g. example.com): " DOMAIN
-    read -rp "Password: " PASSWORD
-    echo ""
-    read -rp "Transport [h3/reality/both] (default: both): " TRANSPORT
-    TRANSPORT=${TRANSPORT:-both}
+# ── Create system user ──
 
-    info "Generating key pair..."
-    KEYS=$("${INSTALL_DIR}/shuttled" genkey 2>&1)
-    PRIVATE_KEY=$(echo "$KEYS" | grep "Private Key:" | awk -F': ' '{print $2}')
-    PUBLIC_KEY=$(echo "$KEYS" | grep "Public Key:" | awk -F': ' '{print $2}')
-
-    mkdir -p "$CONFIG_DIR"
-
-    # TLS certificate setup
-    info "Setting up TLS certificates..."
-    if command -v certbot &>/dev/null; then
-        # Check if port 80 is available for certbot standalone mode
-        if ss -tlnp 2>/dev/null | grep -q ':80 '; then
-            warn "Port 80 is in use. certbot --standalone requires port 80 to be free."
-            warn "Stop the service using port 80, or use certbot with --webroot or DNS challenge."
-            CERT_FILE="${CONFIG_DIR}/cert.pem"
-            KEY_FILE="${CONFIG_DIR}/key.pem"
-            warn "Please place your certificates at ${CERT_FILE} and ${KEY_FILE}"
-        else
-            certbot certonly --standalone -d "$DOMAIN" --non-interactive --agree-tos --register-unsafely-without-email || {
-                warn "certbot failed. Please obtain certificates manually."
-                CERT_FILE="${CONFIG_DIR}/cert.pem"
-                KEY_FILE="${CONFIG_DIR}/key.pem"
-            }
-            CERT_FILE="${CERT_FILE:-/etc/letsencrypt/live/${DOMAIN}/fullchain.pem}"
-            KEY_FILE="${KEY_FILE:-/etc/letsencrypt/live/${DOMAIN}/privkey.pem}"
-        fi
-    else
-        warn "certbot not found. Install it or provide certificates manually."
-        CERT_FILE="${CONFIG_DIR}/cert.pem"
-        KEY_FILE="${CONFIG_DIR}/key.pem"
-    fi
-
-    # Build transport config
-    local h3_enabled="false"
-    local reality_enabled="false"
-    case "$TRANSPORT" in
-        h3) h3_enabled="true" ;;
-        reality) reality_enabled="true" ;;
-        both) h3_enabled="true"; reality_enabled="true" ;;
-    esac
-
-    cat > "${CONFIG_DIR}/server.yaml" <<EOF
-listen: ":443"
-
-tls:
-  cert_file: "${CERT_FILE}"
-  key_file: "${KEY_FILE}"
-
-auth:
-  password: "${PASSWORD}"
-  private_key: "${PRIVATE_KEY}"
-  public_key: "${PUBLIC_KEY}"
-
-cover:
-  mode: "default"
-
-transport:
-  h3:
-    enabled: ${h3_enabled}
-    path_prefix: "/h3"
-  reality:
-    enabled: ${reality_enabled}
-    target_sni: "www.microsoft.com"
-    target_addr: "www.microsoft.com:443"
-    short_ids:
-      - "0123456789abcdef"
-
-log:
-  level: "info"
-EOF
-
-    # Secure config file — contains password and private key
-    chmod 600 "${CONFIG_DIR}/server.yaml"
-    info "Config written to ${CONFIG_DIR}/server.yaml (permissions: 600)"
-}
-
-# Create system user
 create_user() {
     if ! id -u shuttle &>/dev/null; then
         useradd -r -s /sbin/nologin -d /nonexistent shuttle
@@ -160,7 +204,8 @@ create_user() {
     chown -R shuttle:shuttle "$CONFIG_DIR"
 }
 
-# Install systemd service
+# ── Install systemd service ──
+
 install_service() {
     cat > "$SERVICE_FILE" <<'UNIT'
 [Unit]
@@ -202,7 +247,8 @@ UNIT
     info "shuttled service started"
 }
 
-# Uninstall
+# ── Uninstall ──
+
 uninstall() {
     info "Uninstalling shuttled..."
     systemctl stop shuttled 2>/dev/null || true
@@ -217,31 +263,92 @@ uninstall() {
     warn "To remove the user: userdel shuttle"
 }
 
-# Main
-main() {
-    [ "$(id -u)" -ne 0 ] && error "Please run as root"
+# ── Status ──
 
-    # Support subcommands
+status() {
+    if systemctl is-active --quiet shuttled 2>/dev/null; then
+        info "shuttled is ${GREEN}running${NC}"
+        systemctl status shuttled --no-pager -l 2>/dev/null | head -15
+    else
+        warn "shuttled is not running"
+        echo ""
+        echo "  Start:   systemctl start shuttled"
+        echo "  Logs:    journalctl -u shuttled -f"
+    fi
+    if [ -f "${CONFIG_DIR}/server.yaml" ]; then
+        echo ""
+        info "Config: ${CONFIG_DIR}/server.yaml"
+        echo -e "  ${DIM}View import URI: shuttled share -c ${CONFIG_DIR}/server.yaml${NC}"
+    fi
+}
+
+# ── Usage ──
+
+usage() {
+    echo ""
+    echo -e "${BOLD}Shuttle Server Installer${NC}"
+    echo ""
+    echo "Usage: $0 <command> [options]"
+    echo ""
+    echo "Commands:"
+    echo "  install          Interactive setup wizard (default)"
+    echo "  install --auto   Non-interactive setup (uses env vars)"
+    echo "  uninstall        Remove shuttled binary and service"
+    echo "  upgrade [ver]    Upgrade binary (e.g. upgrade v0.2.0)"
+    echo "  status           Show service status and config info"
+    echo ""
+    echo "Environment variables (for --auto mode):"
+    echo "  SHUTTLE_DOMAIN      Domain or IP (auto-detects IP if empty)"
+    echo "  SHUTTLE_PASSWORD    Auth password (auto-generated if empty)"
+    echo "  SHUTTLE_TRANSPORT   h3, reality, or both (default: both)"
+    echo ""
+    echo "Examples:"
+    echo "  sudo bash install.sh                           # Interactive wizard"
+    echo "  sudo SHUTTLE_PASSWORD=secret bash install.sh install --auto"
+    echo "  sudo bash install.sh upgrade v0.2.0"
+    echo ""
+}
+
+# ── Main ──
+
+main() {
     local action="${1:-install}"
     shift || true
+
+    # Allow --help anywhere
+    for arg in "$@" "$action"; do
+        case "$arg" in
+            -h|--help|help) usage; exit 0 ;;
+        esac
+    done
+
+    # Root check (except for help/status)
+    case "$action" in
+        status) status; exit 0 ;;
+    esac
+    [ "$(id -u)" -ne 0 ] && error "Please run as root (use sudo)"
 
     case "$action" in
         install)
             detect_platform
             download_binary "${1:-latest}"
-            auto_configure
+            if [ "${1:-}" = "--auto" ]; then
+                auto_configure
+            else
+                wizard
+            fi
             create_user
             install_service
-            info "Setup complete! shuttled is running."
-            info "Check the output above for the import URI and QR code."
-            ;;
-        install-advanced)
-            detect_platform
-            download_binary "${1:-latest}"
-            configure
-            create_user
-            install_service
-            info "Setup complete!"
+            echo ""
+            echo -e "${GREEN}╔══════════════════════════════════════════╗${NC}"
+            echo -e "${GREEN}║${NC}   ${BOLD}Setup complete! shuttled is running.${NC}   ${GREEN}║${NC}"
+            echo -e "${GREEN}╚══════════════════════════════════════════╝${NC}"
+            echo ""
+            echo "  Manage:   systemctl {start|stop|restart} shuttled"
+            echo "  Logs:     journalctl -u shuttled -f"
+            echo "  Status:   $0 status"
+            echo "  Share:    shuttled share -c ${CONFIG_DIR}/server.yaml"
+            echo ""
             ;;
         uninstall)
             uninstall
@@ -251,15 +358,10 @@ main() {
             systemctl stop shuttled 2>/dev/null || true
             download_binary "${1:-latest}"
             systemctl start shuttled
-            info "Upgrade complete."
+            info "Upgrade complete. shuttled restarted."
             ;;
         *)
-            echo "Usage: $0 [install|install-advanced|uninstall|upgrade] [version]"
-            echo ""
-            echo "  install          Quick zero-config setup (default)"
-            echo "  install-advanced Interactive setup with certbot"
-            echo "  uninstall        Remove shuttled"
-            echo "  upgrade          Upgrade binary"
+            usage
             exit 1
             ;;
     esac

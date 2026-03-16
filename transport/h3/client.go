@@ -12,9 +12,9 @@ import (
 	"time"
 
 	"github.com/quic-go/quic-go"
-	"github.com/shuttle-proxy/shuttle/obfs"
-	"github.com/shuttle-proxy/shuttle/transport"
-	"github.com/shuttle-proxy/shuttle/transport/auth"
+	"github.com/shuttleX/shuttle/obfs"
+	"github.com/shuttleX/shuttle/transport"
+	"github.com/shuttleX/shuttle/transport/auth"
 )
 
 type ClientConfig struct {

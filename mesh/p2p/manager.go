@@ -10,7 +10,7 @@ import (
 
 	"golang.org/x/crypto/curve25519"
 
-	"github.com/shuttle-proxy/shuttle/mesh/signal"
+	"github.com/shuttleX/shuttle/mesh/signal"
 )
 
 // ConnectionState represents the state of a peer connection.

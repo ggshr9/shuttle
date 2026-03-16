@@ -4,8 +4,8 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/shuttle-proxy/shuttle/engine"
-	"github.com/shuttle-proxy/shuttle/subscription"
+	"github.com/shuttleX/shuttle/engine"
+	"github.com/shuttleX/shuttle/subscription"
 )
 
 func registerSubscriptionRoutes(mux *http.ServeMux, eng *engine.Engine, subMgr *subscription.Manager) {

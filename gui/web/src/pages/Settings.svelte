@@ -55,6 +55,10 @@
     if (!config.proxy.tun.per_app_mode) {
       config.proxy.tun.per_app_mode = ''
     }
+    // Ensure mesh exists in config
+    if (!config.mesh) {
+      config.mesh = { enabled: false, p2p_enabled: false }
+    }
     // Ensure qos exists in config
     if (!config.qos) {
       config.qos = { enabled: false, rules: [] }
@@ -340,6 +344,26 @@
         <span class="hint">{t('settings.launchAtLoginHint')}</span>
       </label>
     </div>
+  </section>
+
+  <section>
+    <h3>{t('settings.meshVPN')}</h3>
+    <div class="system-proxy-row" style="margin-top: 0; padding-top: 0; border-top: none;">
+      <label class="system-proxy-label">
+        <input type="checkbox" bind:checked={config.mesh.enabled} />
+        <span class="label-text">{t('settings.meshEnabled')}</span>
+        <span class="hint">{t('settings.meshEnabledHint')}</span>
+      </label>
+    </div>
+    {#if config.mesh.enabled}
+      <div class="system-proxy-row">
+        <label class="system-proxy-label">
+          <input type="checkbox" bind:checked={config.mesh.p2p_enabled} />
+          <span class="label-text">{t('settings.meshP2P')}</span>
+          <span class="hint">{t('settings.meshP2PHint')}</span>
+        </label>
+      </div>
+    {/if}
   </section>
 
   <section>

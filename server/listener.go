@@ -8,7 +8,7 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/shuttle-proxy/shuttle/transport"
+	"github.com/shuttleX/shuttle/transport"
 )
 
 type ListenerConfig struct {

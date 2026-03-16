@@ -13,8 +13,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/shuttle-proxy/shuttle/internal/relay"
-	"github.com/shuttle-proxy/shuttle/qos"
+	"github.com/shuttleX/shuttle/internal/relay"
+	"github.com/shuttleX/shuttle/qos"
 )
 
 // errUDPAssociate is a sentinel error returned by handleRequest when the

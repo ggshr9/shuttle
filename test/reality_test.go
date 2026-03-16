@@ -3,7 +3,7 @@ package test
 import (
 	"testing"
 
-	"github.com/shuttle-proxy/shuttle/transport/reality"
+	"github.com/shuttleX/shuttle/transport/reality"
 )
 
 func TestRealityClientCreate(t *testing.T) {

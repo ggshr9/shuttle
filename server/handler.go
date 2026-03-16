@@ -11,14 +11,14 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/shuttle-proxy/shuttle/internal/relay"
-	"github.com/shuttle-proxy/shuttle/mesh"
-	meshsignal "github.com/shuttle-proxy/shuttle/mesh/signal"
-	"github.com/shuttle-proxy/shuttle/proxy"
-	"github.com/shuttle-proxy/shuttle/server/admin"
-	"github.com/shuttle-proxy/shuttle/server/audit"
-	"github.com/shuttle-proxy/shuttle/server/metrics"
-	"github.com/shuttle-proxy/shuttle/transport"
+	"github.com/shuttleX/shuttle/internal/relay"
+	"github.com/shuttleX/shuttle/mesh"
+	meshsignal "github.com/shuttleX/shuttle/mesh/signal"
+	"github.com/shuttleX/shuttle/proxy"
+	"github.com/shuttleX/shuttle/server/admin"
+	"github.com/shuttleX/shuttle/server/audit"
+	"github.com/shuttleX/shuttle/server/metrics"
+	"github.com/shuttleX/shuttle/transport"
 )
 
 // Handler contains the server's business logic for handling incoming

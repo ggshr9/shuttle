@@ -19,6 +19,7 @@ type ShareURI struct {
 	PublicKey string `json:"public_key,omitempty"`
 	ShortID   string `json:"short_id,omitempty"`
 	Name      string `json:"name,omitempty"`
+	Mesh      bool   `json:"mesh,omitempty"`
 }
 
 // EncodeShareURI encodes a ShareURI into a shuttle:// URI string.
@@ -112,6 +113,12 @@ func ShareURIToClientConfig(s *ShareURI) *ClientConfig {
 		{Domains: "geosite:private", Action: "direct"},
 	}
 
+	// Enable mesh if the server supports it
+	if s.Mesh {
+		cfg.Mesh.Enabled = true
+		cfg.Mesh.P2PEnabled = true
+	}
+
 	return cfg
 }
 
@@ -180,6 +187,14 @@ func RenderClientYAML(s *ShareURI) string {
 	b.WriteString("    remote:\n      server: \"https://1.1.1.1/dns-query\"\n      via: proxy\n")
 
 	b.WriteString("\ncongestion:\n  mode: adaptive\n")
+
+	// Mesh VPN section if server supports it
+	if s.Mesh {
+		b.WriteString("\nmesh:\n")
+		b.WriteString("  enabled: true\n")
+		b.WriteString("  p2p_enabled: true\n")
+	}
+
 	b.WriteString("\nlog:\n  level: info\n")
 
 	return b.String()

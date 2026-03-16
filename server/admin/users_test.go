@@ -3,7 +3,7 @@ package admin
 import (
 	"testing"
 
-	"github.com/shuttle-proxy/shuttle/config"
+	"github.com/shuttleX/shuttle/config"
 )
 
 func TestUserStoreAddAndList(t *testing.T) {

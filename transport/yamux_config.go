@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"github.com/hashicorp/yamux"
-	"github.com/shuttle-proxy/shuttle/config"
+	"github.com/shuttleX/shuttle/config"
 )
 
 // YamuxSessionConfig builds a *yamux.Config from the user-facing YamuxConfig.

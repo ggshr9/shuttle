@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Shuttle is a multi-transport proxy system written in Go for high-censorship environments. It features three transport protocols (H3/QUIC, Reality/TLS+Noise, CDN/HTTP2), adaptive congestion control, intelligent routing, and an optional mesh VPN.
+Shuttle is a multi-transport network toolkit written in Go. It features three transport protocols (H3/QUIC, Reality/TLS+Noise, CDN/HTTP2), adaptive congestion control, intelligent routing, mesh networking, and encrypted tunneling.
 
 ## Build Commands
 

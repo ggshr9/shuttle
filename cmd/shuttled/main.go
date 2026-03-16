@@ -13,28 +13,28 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/shuttle-proxy/shuttle/config"
-	"github.com/shuttle-proxy/shuttle/congestion"
-	"github.com/shuttle-proxy/shuttle/crypto"
-	"github.com/shuttle-proxy/shuttle/internal/logutil"
-	"github.com/shuttle-proxy/shuttle/internal/qrterm"
-	"github.com/shuttle-proxy/shuttle/internal/sysopt"
-	"github.com/shuttle-proxy/shuttle/mesh"
-	meshsignal "github.com/shuttle-proxy/shuttle/mesh/signal"
-	"github.com/shuttle-proxy/shuttle/server"
-	"github.com/shuttle-proxy/shuttle/server/admin"
-	"github.com/shuttle-proxy/shuttle/server/audit"
-	"github.com/shuttle-proxy/shuttle/server/metrics"
-	"github.com/shuttle-proxy/shuttle/transport/cdn"
-	"github.com/shuttle-proxy/shuttle/transport/h3"
-	"github.com/shuttle-proxy/shuttle/transport/reality"
-	rtcTransport "github.com/shuttle-proxy/shuttle/transport/webrtc"
+	"github.com/shuttleX/shuttle/config"
+	"github.com/shuttleX/shuttle/congestion"
+	"github.com/shuttleX/shuttle/crypto"
+	"github.com/shuttleX/shuttle/internal/logutil"
+	"github.com/shuttleX/shuttle/internal/qrterm"
+	"github.com/shuttleX/shuttle/internal/sysopt"
+	"github.com/shuttleX/shuttle/mesh"
+	meshsignal "github.com/shuttleX/shuttle/mesh/signal"
+	"github.com/shuttleX/shuttle/server"
+	"github.com/shuttleX/shuttle/server/admin"
+	"github.com/shuttleX/shuttle/server/audit"
+	"github.com/shuttleX/shuttle/server/metrics"
+	"github.com/shuttleX/shuttle/transport/cdn"
+	"github.com/shuttleX/shuttle/transport/h3"
+	"github.com/shuttleX/shuttle/transport/reality"
+	rtcTransport "github.com/shuttleX/shuttle/transport/webrtc"
 )
 
-const (
-	version         = "0.1.0"
-	maxConcurrentStreams = 1024
-)
+// version is set via ldflags at build time: -X main.version=<tag>
+var version = "0.1.0"
+
+const maxConcurrentStreams = 1024
 
 func main() {
 	if len(os.Args) < 2 {
@@ -55,12 +55,13 @@ func main() {
 		transport := initCmd.String("transport", "both", "transport: h3, reality, both")
 		listen := initCmd.String("listen", ":443", "listen address")
 		force := initCmd.Bool("force", false, "overwrite existing config")
+		meshFlag := initCmd.Bool("mesh", false, "enable mesh VPN with P2P")
 		initCmd.Usage = func() {
 			fmt.Fprintf(os.Stderr, "Usage: shuttled init [flags]\n\nZero-config server bootstrap. Generates keys, certificates, and config.\n\nFlags:\n")
 			initCmd.PrintDefaults()
 		}
 		initCmd.Parse(os.Args[2:])
-		initServer(*dir, *domain, *password, *transport, *listen, *force)
+		initServer(*dir, *domain, *password, *transport, *listen, *force, *meshFlag)
 	case "share":
 		shareCmd := flag.NewFlagSet("share", flag.ExitOnError)
 		configPath := shareCmd.String("c", "", "path to server config file (required)")
@@ -135,7 +136,7 @@ func printCompletion(shell string) {
             COMPREPLY=( $(compgen -f -X '!*.yaml' -- "$cur") $(compgen -f -X '!*.yml' -- "$cur") )
             ;;
         init)
-            COMPREPLY=( $(compgen -W "--dir --domain --password --transport --listen --force" -- "$cur") )
+            COMPREPLY=( $(compgen -W "--dir --domain --password --transport --listen --force --mesh" -- "$cur") )
             ;;
         --transport)
             COMPREPLY=( $(compgen -W "h3 reality both" -- "$cur") )
@@ -182,7 +183,8 @@ _shuttled() {
                         '--password[Password]:password:' \
                         '--transport[Transport]:transport:(h3 reality both)' \
                         '--listen[Listen address]:addr:' \
-                        '--force[Overwrite existing]'
+                        '--force[Overwrite existing]' \
+                        '--mesh[Enable mesh VPN]'
                     ;;
                 share)
                     _arguments \
@@ -217,6 +219,7 @@ complete -c shuttled -n '__fish_seen_subcommand_from init' -l password -d 'Passw
 complete -c shuttled -n '__fish_seen_subcommand_from init' -l transport -d 'Transport' -a 'h3 reality both'
 complete -c shuttled -n '__fish_seen_subcommand_from init' -l listen -d 'Listen address'
 complete -c shuttled -n '__fish_seen_subcommand_from init' -l force -d 'Overwrite existing'
+complete -c shuttled -n '__fish_seen_subcommand_from init' -l mesh -d 'Enable mesh VPN'
 complete -c shuttled -n '__fish_seen_subcommand_from share' -s c -d 'Config file' -rF
 complete -c shuttled -n '__fish_seen_subcommand_from share' -l addr -d 'Server address'
 complete -c shuttled -n '__fish_seen_subcommand_from share' -l name -d 'Display name'
@@ -228,7 +231,7 @@ complete -c shuttled -n '__fish_seen_subcommand_from completion' -a 'bash zsh fi
 	}
 }
 
-func initServer(dir, domain, password, transport, listen string, force bool) {
+func initServer(dir, domain, password, transport, listen string, force, mesh bool) {
 	var transports []string
 	switch transport {
 	case "h3":
@@ -246,6 +249,7 @@ func initServer(dir, domain, password, transport, listen string, force bool) {
 		Transports: transports,
 		Listen:     listen,
 		Force:      force,
+		Mesh:       mesh,
 	}
 
 	result, err := config.Bootstrap(opts)
@@ -267,6 +271,9 @@ func printInitResult(result *config.InitResult) {
 	fmt.Printf("  Server:     %s\n", result.ServerAddr)
 	fmt.Printf("  Password:   %s\n", result.Password)
 	fmt.Printf("  Admin API:  http://127.0.0.1:9090/api/ (token: %s...)\n", result.AdminToken[:8])
+	if result.MeshEnabled {
+		fmt.Printf("  Mesh VPN:   %s (P2P: on)\n", result.MeshCIDR)
+	}
 	fmt.Println()
 	fmt.Println("  ── Import URI (share with clients) ──")
 	fmt.Println()
@@ -309,6 +316,7 @@ func share(configPath, addr, name string) {
 		Addr:     addr,
 		Password: cfg.Auth.Password,
 		Name:     name,
+		Mesh:     cfg.Mesh.Enabled,
 	}
 
 	// Determine transport type

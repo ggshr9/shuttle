@@ -12,9 +12,9 @@ import (
 	"sync/atomic"
 
 	"github.com/hashicorp/yamux"
-	"github.com/shuttle-proxy/shuttle/config"
-	"github.com/shuttle-proxy/shuttle/crypto"
-	"github.com/shuttle-proxy/shuttle/transport"
+	"github.com/shuttleX/shuttle/config"
+	"github.com/shuttleX/shuttle/crypto"
+	"github.com/shuttleX/shuttle/transport"
 )
 
 // ClientConfig holds configuration for a Reality client transport.

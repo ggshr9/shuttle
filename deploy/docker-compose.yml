@@ -1,4 +1,4 @@
-# Shuttle Proxy — Docker Compose Production Stack
+# Shuttle — Docker Compose Production Stack
 #
 # Quick start:
 #   cp .env.example .env   # edit with your domain & password

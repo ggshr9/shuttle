@@ -3,8 +3,8 @@ package webrtc
 import (
 	"testing"
 
-	"github.com/shuttle-proxy/shuttle/transport"
-	"github.com/shuttle-proxy/shuttle/transport/conformance"
+	"github.com/shuttleX/shuttle/transport"
+	"github.com/shuttleX/shuttle/transport/conformance"
 )
 
 func webrtcFactory(t testing.TB) (

@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/shuttle-proxy/shuttle/transport"
+	"github.com/shuttleX/shuttle/transport"
 )
 
 func TestSelectorAutoStrategy(t *testing.T) {

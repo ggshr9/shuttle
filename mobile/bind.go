@@ -11,10 +11,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/shuttle-proxy/shuttle/config"
-	"github.com/shuttle-proxy/shuttle/engine"
-	"github.com/shuttle-proxy/shuttle/gui/api"
-	"github.com/shuttle-proxy/shuttle/internal/netmon"
+	"github.com/shuttleX/shuttle/config"
+	"github.com/shuttleX/shuttle/engine"
+	"github.com/shuttleX/shuttle/gui/api"
+	"github.com/shuttleX/shuttle/internal/netmon"
 )
 
 var (

@@ -17,9 +17,9 @@ import (
 	"net"
 	"sync"
 
-	"github.com/shuttle-proxy/shuttle/testkit/observe"
-	"github.com/shuttle-proxy/shuttle/testkit/vnet"
-	"github.com/shuttle-proxy/shuttle/transport"
+	"github.com/shuttleX/shuttle/testkit/observe"
+	"github.com/shuttleX/shuttle/testkit/vnet"
+	"github.com/shuttleX/shuttle/transport"
 )
 
 // Injector holds fault injection rules and wraps connections/streams.

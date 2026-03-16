@@ -7,9 +7,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/shuttle-proxy/shuttle/config"
-	"github.com/shuttle-proxy/shuttle/obfs"
-	"github.com/shuttle-proxy/shuttle/stream"
+	"github.com/shuttleX/shuttle/config"
+	"github.com/shuttleX/shuttle/obfs"
+	"github.com/shuttleX/shuttle/stream"
 )
 
 // mockStream implements transport.Stream for testing streamConn.

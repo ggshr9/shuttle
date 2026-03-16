@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/shuttle-proxy/shuttle/testkit/observe"
+	"github.com/shuttleX/shuttle/testkit/observe"
 )
 
 // LinkConfig describes network conditions for one direction of a link.

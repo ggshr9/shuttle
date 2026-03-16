@@ -17,7 +17,7 @@ var Version = "dev"
 
 const (
 	// GitHubRepo is the repository for releases
-	GitHubRepo = "shuttle-proxy/shuttle"
+	GitHubRepo = "shuttleX/shuttle"
 	// CheckInterval is the minimum time between update checks
 	CheckInterval = 4 * time.Hour
 )
@@ -79,7 +79,7 @@ func (c *Checker) Check(force bool) (*UpdateInfo, error) {
 		return nil, err
 	}
 	req.Header.Set("Accept", "application/vnd.github.v3+json")
-	req.Header.Set("User-Agent", "shuttle-proxy/"+Version)
+	req.Header.Set("User-Agent", "shuttleX/"+Version)
 
 	resp, err := c.client.Do(req)
 	if err != nil {

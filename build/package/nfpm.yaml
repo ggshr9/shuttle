@@ -10,13 +10,13 @@ name: shuttle
 arch: ${GOARCH}
 platform: linux
 version: ${VERSION}
-maintainer: Shuttle Proxy <shuttle@example.com>
+maintainer: Shuttle <shuttle@example.com>
 description: |
-  Multi-transport proxy system for high-censorship environments.
-  Features H3/QUIC, Reality/TLS+Noise, and CDN transports with
-  adaptive congestion control and intelligent routing.
-vendor: Shuttle Proxy
-homepage: https://github.com/shuttle-proxy/shuttle
+  Multi-transport network toolkit with adaptive routing, mesh networking,
+  and encrypted tunneling. Features H3/QUIC, Reality/TLS+Noise, and CDN
+  transports with adaptive congestion control.
+vendor: Shuttle
+homepage: https://github.com/shuttleX/shuttle
 license: MIT
 
 contents:

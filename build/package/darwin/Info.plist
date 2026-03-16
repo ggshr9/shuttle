@@ -3,7 +3,7 @@
 <plist version="1.0">
 <dict>
     <key>CFBundleIdentifier</key>
-    <string>com.shuttle-proxy.shuttle</string>
+    <string>com.shuttleX.shuttle</string>
     <key>CFBundleName</key>
     <string>Shuttle</string>
     <key>CFBundleDisplayName</key>

@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/shuttle-proxy/shuttle/update"
+	"github.com/shuttleX/shuttle/update"
 )
 
 // DiagnosticsBundle collects system state for debugging.

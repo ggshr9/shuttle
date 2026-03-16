@@ -8,8 +8,8 @@ Every release includes a `checksums.txt` file containing SHA-256 hashes for all 
 
 ```bash
 # Download the checksums file and the binary you need
-curl -LO https://github.com/<owner>/shuttle/releases/download/<tag>/checksums.txt
-curl -LO https://github.com/<owner>/shuttle/releases/download/<tag>/shuttle-linux-amd64
+curl -LO https://github.com/shuttleX/shuttle/releases/download/<tag>/checksums.txt
+curl -LO https://github.com/shuttleX/shuttle/releases/download/<tag>/shuttle-linux-amd64
 
 # Verify the hash
 sha256sum -c checksums.txt --ignore-missing
@@ -29,7 +29,7 @@ If the hash does not match, do not use the file. Re-download from the official r
 
 If you discover a security vulnerability, please report it by opening a GitHub issue:
 
-https://github.com/<owner>/shuttle/issues/new
+https://github.com/shuttleX/shuttle/issues/new
 
 Include as much detail as possible: affected version, steps to reproduce, and potential impact. We will respond promptly and coordinate a fix.
 

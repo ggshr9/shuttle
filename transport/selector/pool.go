@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/shuttle-proxy/shuttle/transport"
+	"github.com/shuttleX/shuttle/transport"
 )
 
 var errPoolClosed = errors.New("connection pool closed")
