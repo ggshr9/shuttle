@@ -114,18 +114,18 @@ func (c *Client) Dial(ctx context.Context, addr string) (transport.Connection, e
 	}
 
 	if _, err := ctrlStream.Write(authPayload); err != nil {
-		qconn.CloseWithError(1, "auth write failed")
+		_ = qconn.CloseWithError(1, "auth write failed")
 		return nil, fmt.Errorf("h3 write auth: %w", err)
 	}
 
 	// Read 1-byte server response.
 	resp := make([]byte, 1)
 	if _, err := io.ReadFull(ctrlStream, resp); err != nil {
-		qconn.CloseWithError(1, "auth response read failed")
+		_ = qconn.CloseWithError(1, "auth response read failed")
 		return nil, fmt.Errorf("h3 read auth response: %w", err)
 	}
 	if resp[0] != 0x01 {
-		qconn.CloseWithError(2, "auth rejected")
+		_ = qconn.CloseWithError(2, "auth rejected")
 		return nil, fmt.Errorf("h3 auth rejected: verify password matches server config")
 	}
 

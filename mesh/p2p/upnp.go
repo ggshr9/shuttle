@@ -140,7 +140,7 @@ func (c *UPnPClient) ssdpDiscover(ctx context.Context) (*Gateway, error) {
 
 	// Read responses
 	buf := make([]byte, 4096)
-	conn.SetReadDeadline(time.Now().Add(3 * time.Second))
+	_ = conn.SetReadDeadline(time.Now().Add(3 * time.Second))
 
 	for {
 		select {

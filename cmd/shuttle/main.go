@@ -272,7 +272,7 @@ func runAPI(configPath, listen string, autoConnect bool) {
 
 	<-ctx.Done()
 	srv.Close()
-	eng.Stop()
+	_ = eng.Stop()
 }
 
 func run(configPath string) {
@@ -299,5 +299,5 @@ func run(configPath string) {
 	}
 
 	<-ctx.Done()
-	eng.Stop()
+	_ = eng.Stop()
 }

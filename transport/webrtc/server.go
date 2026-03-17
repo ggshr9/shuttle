@@ -330,8 +330,8 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 	authMsg, err := readWSMessage(ctx, wsConn)
 	if err != nil || authMsg.Type != SignalTypeAuth {
 		s.logger.Debug("webrtc ws: expected auth message", "remote", remoteAddr)
-		sendWSMessage(ctx, wsConn, &SignalMessage{Type: SignalTypeError, Error: "expected auth"})
-		wsConn.Close(websocket.StatusPolicyViolation, "expected auth")
+		_ = sendWSMessage(ctx, wsConn, &SignalMessage{Type: SignalTypeError, Error: "expected auth"})
+		_ = wsConn.Close(websocket.StatusPolicyViolation, "expected auth")
 		return
 	}
 
@@ -340,14 +340,14 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 	nonce, ok := VerifyAuth(sigReq, s.config.Password)
 	if !ok {
 		s.logger.Debug("webrtc ws auth failed", "remote", remoteAddr)
-		sendWSMessage(ctx, wsConn, &SignalMessage{Type: SignalTypeError, Error: "auth failed"})
-		wsConn.Close(websocket.StatusPolicyViolation, "auth failed")
+		_ = sendWSMessage(ctx, wsConn, &SignalMessage{Type: SignalTypeError, Error: "auth failed"})
+		_ = wsConn.Close(websocket.StatusPolicyViolation, "auth failed")
 		return
 	}
 	if s.replayFilter.CheckBytes(nonce) {
 		s.logger.Warn("webrtc ws replay detected", "remote", remoteAddr)
-		sendWSMessage(ctx, wsConn, &SignalMessage{Type: SignalTypeError, Error: "replay"})
-		wsConn.Close(websocket.StatusPolicyViolation, "replay")
+		_ = sendWSMessage(ctx, wsConn, &SignalMessage{Type: SignalTypeError, Error: "replay"})
+		_ = wsConn.Close(websocket.StatusPolicyViolation, "replay")
 		return
 	}
 

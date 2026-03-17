@@ -172,9 +172,9 @@ func registerMiscRoutes(mux *http.ServeMux, eng *engine.Engine, subMgr *subscrip
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 		w.Header().Set("Content-Disposition", "attachment; filename=shuttle-logs.txt")
 
-		w.Write([]byte("Shuttle Log Export\n"))
-		w.Write([]byte("==================\n\n"))
-		w.Write([]byte("Engine Status:\n"))
+		_, _ = w.Write([]byte("Shuttle Log Export\n"))
+		_, _ = w.Write([]byte("==================\n\n"))
+		_, _ = w.Write([]byte("Engine Status:\n"))
 		w.Write([]byte("  State: " + status.State + "\n"))
 		w.Write([]byte("  Transport: " + status.Transport + "\n"))
 		w.Write([]byte("  Active Connections: " + fmt.Sprintf("%d", status.ActiveConns) + "\n"))
