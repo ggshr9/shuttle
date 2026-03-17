@@ -15,3 +15,7 @@ func enable(cfg *Config) error {
 func disable(cfg *Config) error {
 	return nil
 }
+
+func GetAutoStartArgs() []string {
+	return nil
+}
