@@ -1,3 +1,5 @@
+# CI — fast feedback on every PR and push to main.
+# Full release pipeline lives in release.yml (tags only).
 name: CI
 
 on:
@@ -9,28 +11,29 @@ on:
 permissions:
   contents: read
 
+env:
+  GO_VERSION: '1.24'
+  NODE_VERSION: '22'
+
 jobs:
+  # ──────────────────────────────────────────────
+  # Lint: golangci-lint + go vet
+  # ──────────────────────────────────────────────
   lint:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
-          go-version: '1.24'
-      - name: Go module cache
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/go/pkg/mod
-            ~/.cache/go-build
-          key: go-lint-${{ runner.os }}-${{ hashFiles('go.sum') }}
-          restore-keys: |
-            go-lint-${{ runner.os }}-
+          go-version: ${{ env.GO_VERSION }}
       - uses: golangci/golangci-lint-action@v6
         with:
           version: latest
       - run: go vet ./...
 
+  # ──────────────────────────────────────────────
+  # Test: three parallel groups with race detector
+  # ──────────────────────────────────────────────
   test:
     runs-on: ubuntu-latest
     strategy:
@@ -48,30 +51,18 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
-          go-version: '1.24'
-      - name: Go module cache
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/go/pkg/mod
-            ~/.cache/go-build
-          key: go-test-${{ runner.os }}-${{ hashFiles('go.sum') }}
-          restore-keys: |
-            go-test-${{ runner.os }}-
-      - name: Install dependencies
+          go-version: ${{ env.GO_VERSION }}
+      - name: Install system dependencies
         run: sudo apt-get update && sudo apt-get install -y gcc libayatana-appindicator3-dev libgtk-3-dev
-      - name: Run tests (${{ matrix.group.name }})
+      - name: Run tests with race detector
         run: |
-          # Use scripts/test.sh for each package in this group.
-          # test.sh wraps go test safely — never invoke go test directly.
+          # NEVER invoke go test directly — use scripts/test.sh.
           for pkg in ${{ matrix.group.packages }}; do
             ./scripts/test.sh --pkg "$pkg" --race
           done
-      - name: Run tests with coverage (${{ matrix.group.name }})
-        run: |
-          for pkg in ${{ matrix.group.packages }}; do
-            ./scripts/test.sh --pkg "$pkg" --cover
-          done
+      - name: Run tests with coverage
+        if: matrix.group.name == 'core'
+        run: ./scripts/test.sh --cover
       - name: Upload coverage
         if: matrix.group.name == 'core'
         uses: codecov/codecov-action@v4
@@ -80,55 +71,32 @@ jobs:
         env:
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
+  # ──────────────────────────────────────────────
+  # Build verification: just compile, no artifacts
+  # ──────────────────────────────────────────────
   build:
     needs: [lint, test]
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - goos: linux
-            goarch: amd64
-            ext: ''
-          - goos: linux
-            goarch: arm64
-            ext: ''
-          - goos: darwin
-            goarch: amd64
-            ext: ''
-          - goos: darwin
-            goarch: arm64
-            ext: ''
-          - goos: windows
-            goarch: amd64
-            ext: '.exe'
-    name: build (${{ matrix.goos }}/${{ matrix.goarch }})
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
-          go-version: '1.24'
-      - name: Go module cache
-        uses: actions/cache@v4
+          go-version: ${{ env.GO_VERSION }}
+      - name: Verify build
+        run: CGO_ENABLED=0 go build ./...
+
+  # ──────────────────────────────────────────────
+  # Security scan: gosec (push to main only)
+  # ──────────────────────────────────────────────
+  security:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
         with:
-          path: |
-            ~/go/pkg/mod
-            ~/.cache/go-build
-          key: go-build-${{ matrix.goos }}-${{ matrix.goarch }}-${{ hashFiles('go.sum') }}
-          restore-keys: |
-            go-build-${{ matrix.goos }}-${{ matrix.goarch }}-
-      - name: Build shuttle & shuttled
-        env:
-          GOOS: ${{ matrix.goos }}
-          GOARCH: ${{ matrix.goarch }}
-          CGO_ENABLED: '0'
-        run: |
-          go build -ldflags="-s -w" -o shuttle-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }} ./cmd/shuttle
-          go build -ldflags="-s -w" -o shuttled-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }} ./cmd/shuttled
-      - uses: actions/upload-artifact@v4
+          go-version: ${{ env.GO_VERSION }}
+      - name: Run gosec
+        uses: securego/gosec@v2.21.4
         with:
-          name: cli-${{ matrix.goos }}-${{ matrix.goarch }}
-          path: |
-            shuttle-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }}
-            shuttled-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }}
-          retention-days: 14
+          args: -exclude-dir=quicfork ./...
