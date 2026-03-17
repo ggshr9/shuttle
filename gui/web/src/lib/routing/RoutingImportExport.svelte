@@ -1,6 +1,6 @@
 <script lang="ts">
   import { t } from '../i18n/index'
-  import { api } from '../api'
+  import { api, type RoutingRules } from '../api'
 
   let {
     onImportComplete,
@@ -11,14 +11,14 @@
   let importMode = $state<'merge' | 'replace'>('merge')
   let dragOver = $state(false)
   let droppedFileName = $state('')
-  let droppedRules = $state<any>(null)
+  let droppedRules = $state<RoutingRules | null>(null)
   let importData = $state('')
   let importError = $state('')
   let showImportModal = $state(false)
 
-  function validateRulesData(data: any): boolean {
+  function validateRulesData(data: unknown): data is RoutingRules {
     if (!data || typeof data !== 'object') return false
-    if (!Array.isArray(data.rules)) return false
+    if (!Array.isArray((data as RoutingRules).rules)) return false
     return true
   }
 
@@ -69,11 +69,11 @@
     importing = true
     importError = ''
     try {
-      let parsed: any
+      let parsed: unknown
       if (droppedRules) {
         parsed = droppedRules
       } else if (importData.trim()) {
-        parsed = JSON.parse(importData)
+        parsed = JSON.parse(importData) as unknown
       } else {
         return
       }
@@ -90,7 +90,7 @@
       onMessage(`Imported ${result.added} rule(s)`)
       onImportComplete()
     } catch (e) {
-      importError = 'Import failed: ' + e.message
+      importError = 'Import failed: ' + (e instanceof Error ? e.message : String(e))
     } finally {
       importing = false
     }
@@ -110,7 +110,7 @@
       window.URL.revokeObjectURL(url)
       onMessage('Rules exported')
     } catch (e) {
-      onMessage('Export failed: ' + e.message)
+      onMessage('Export failed: ' + (e instanceof Error ? e.message : String(e)))
     }
   }
 

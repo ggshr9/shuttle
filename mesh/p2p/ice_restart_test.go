@@ -7,6 +7,19 @@ import (
 	"time"
 )
 
+// waitFor polls condition every 5ms until it returns true or timeout expires.
+func waitFor(t *testing.T, timeout time.Duration, condition func() bool) {
+	t.Helper()
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		if condition() {
+			return
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	t.Fatal("condition not met within timeout")
+}
+
 // noSTUNAgent returns an ICEAgentConfig with empty STUN servers
 // to prevent any external network access during tests.
 func noSTUNAgent() *ICEAgentConfig {
@@ -369,14 +382,15 @@ func TestICEAgent_RestartCount(t *testing.T) {
 	}
 
 	agent.Restart(ICERestartReasonManual)
-	time.Sleep(5 * time.Millisecond)
 
 	if agent.GetRestartCount() != 1 {
 		t.Errorf("After first restart, count = %d, want 1", agent.GetRestartCount())
 	}
 
-	agent.Restart(ICERestartReasonNetworkChange)
+	// Wait for cooldown (1ms) to expire before next restart.
 	time.Sleep(5 * time.Millisecond)
+
+	agent.Restart(ICERestartReasonNetworkChange)
 
 	if agent.GetRestartCount() != 2 {
 		t.Errorf("After second restart, count = %d, want 2", agent.GetRestartCount())
@@ -608,7 +622,8 @@ func TestICEAgent_HandleNetworkChange(t *testing.T) {
 
 	// In new state, network change should be ignored
 	agent.HandleNetworkChange()
-	time.Sleep(10 * time.Millisecond)
+	// Brief pause then verify no callback fired (negative test).
+	time.Sleep(50 * time.Millisecond)
 	if restartReason != ICERestartReason(-1) {
 		t.Error("Network change in new state should not trigger restart")
 	}
@@ -620,11 +635,7 @@ func TestICEAgent_HandleNetworkChange(t *testing.T) {
 	agent.mu.Unlock()
 
 	agent.HandleNetworkChange()
-	time.Sleep(10 * time.Millisecond)
-
-	if restartReason != ICERestartReasonNetworkChange {
-		t.Errorf("Restart reason = %v, want %v", restartReason, ICERestartReasonNetworkChange)
-	}
+	waitFor(t, time.Second, func() bool { return restartReason == ICERestartReasonNetworkChange })
 
 	// State should be disconnected
 	state := agent.GetConnectionState()
@@ -664,9 +675,8 @@ func TestICEAgent_CredentialsRegeneration(t *testing.T) {
 	oldGen := agent.localCredentials.Generation
 
 	agent.Restart(ICERestartReasonManual)
-	time.Sleep(5 * time.Millisecond)
 
-	// Credentials should be regenerated
+	// Credentials should be regenerated (Restart is synchronous)
 	creds := agent.GetLocalCredentials()
 	if creds.UsernameFragment == oldUfrag {
 		t.Error("UsernameFragment should change after restart")
@@ -719,14 +729,14 @@ func TestICEAgent_StateChangeCallback(t *testing.T) {
 	agent.setConnectionStateLocked(ICEConnectionChecking)
 	agent.mu.Unlock()
 
-	time.Sleep(10 * time.Millisecond)
+	waitFor(t, time.Second, func() bool {
+		mu.Lock()
+		defer mu.Unlock()
+		return len(stateChanges) == 1
+	})
 
 	mu.Lock()
 	defer mu.Unlock()
-	if len(stateChanges) != 1 {
-		t.Errorf("State changes = %d, want 1", len(stateChanges))
-	}
-
 	if stateChanges[0] != ICEConnectionChecking {
 		t.Errorf("State = %v, want %v", stateChanges[0], ICEConnectionChecking)
 	}
@@ -890,6 +900,7 @@ func TestICEAgentMultipleRestarts(t *testing.T) {
 		if err != nil {
 			t.Errorf("Restart %d failed: %v", i, err)
 		}
+		// Wait for cooldown (1ms) to expire before next restart.
 		time.Sleep(5 * time.Millisecond)
 	}
 

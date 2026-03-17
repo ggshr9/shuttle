@@ -1,5 +1,17 @@
 <script lang="ts">
-  import { api, type PeriodStats } from './api'
+  import { api, type PeriodStats, type StatsHistory } from './api'
+
+  interface DailyHistoryEntry {
+    date: string
+    bytes_sent: number
+    bytes_received: number
+    connections: number
+  }
+
+  interface StatsHistoryResponse {
+    history: DailyHistoryEntry[]
+    total: StatsHistory
+  }
   import { onMount } from 'svelte'
   import { t } from './i18n/index'
 
@@ -29,13 +41,13 @@
     loading = true
     try {
       const [historyRes, weeklyRes, monthlyRes] = await Promise.all([
-        api.getStatsHistory(7),
+        api.getStatsHistory(7) as Promise<StatsHistoryResponse>,
         api.getWeeklyStats(4),
         api.getMonthlyStats(6),
       ])
       // Convert daily history to PeriodStats format
-      const history = historyRes.history || []
-      dailyData = history.map((d: any) => ({
+      const history: DailyHistoryEntry[] = historyRes.history || []
+      dailyData = history.map((d) => ({
         period: d.date,
         bytes_sent: d.bytes_sent || 0,
         bytes_recv: d.bytes_received || 0,

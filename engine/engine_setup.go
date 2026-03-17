@@ -51,6 +51,7 @@ func (e *Engine) buildCongestionControl(cfg *config.ClientConfig) quic.Congestio
 func (e *Engine) buildTransports(cfg *config.ClientConfig, ccAdapter quic.CongestionControl) []transport.ClientTransport {
 	var transports []transport.ClientTransport
 
+	e.logger.Debug("transport setup", "h3", cfg.Transport.H3.Enabled, "reality", cfg.Transport.Reality.Enabled, "cdn", cfg.Transport.CDN.Enabled, "webrtc", cfg.Transport.WebRTC.Enabled)
 	if cfg.Transport.H3.Enabled {
 		h3Cfg := &h3.ClientConfig{
 			ServerAddr:         cfg.Server.Addr,
@@ -209,6 +210,7 @@ func (e *Engine) buildRouter(cfg *config.ClientConfig) (*router.Router, *router.
 		}
 		routerCfg.Rules = append(routerCfg.Rules, r)
 	}
+	e.logger.Debug("router built", "rules", len(routerCfg.Rules), "default_action", routerCfg.DefaultAction, "dns_prefetch", cfg.Routing.DNS.Prefetch)
 	rt := router.NewRouter(routerCfg, geoIPDB, geoSiteDB, e.logger)
 	return rt, dnsResolver, prefetcher
 }

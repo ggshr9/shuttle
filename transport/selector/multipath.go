@@ -141,19 +141,23 @@ func (p *MultipathPool) UpdateMetrics(probes map[string]*ProbeResult) {
 }
 
 // Close shuts down all persistent connections and stops the health loop.
-func (p *MultipathPool) Close() {
+func (p *MultipathPool) Close() error {
 	p.cancel()
 	p.mu.Lock()
 	defer p.mu.Unlock()
+	var firstErr error
 	for _, pm := range p.paths {
 		pm.mu.Lock()
 		if pm.Conn != nil {
-			pm.Conn.Close()
+			if err := pm.Conn.Close(); err != nil && firstErr == nil {
+				firstErr = err
+			}
 			pm.Conn = nil
 		}
 		pm.Available = false
 		pm.mu.Unlock()
 	}
+	return firstErr
 }
 
 // healthLoop periodically checks paths and reconnects failed ones.

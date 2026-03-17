@@ -117,16 +117,20 @@ func (p *ConnPool) WarmUp(ctx context.Context, count int) {
 }
 
 // Close closes all idle connections and marks the pool as closed.
-func (p *ConnPool) Close() {
+func (p *ConnPool) Close() error {
 	p.mu.Lock()
 	p.closed = true
 	idle := p.idle
 	p.idle = nil
 	p.mu.Unlock()
 
+	var firstErr error
 	for _, ic := range idle {
-		ic.conn.Close()
+		if err := ic.conn.Close(); err != nil && firstErr == nil {
+			firstErr = err
+		}
 	}
+	return firstErr
 }
 
 // evictLoop periodically removes connections that have been idle beyond the TTL.

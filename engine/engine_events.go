@@ -1,6 +1,9 @@
 package engine
 
-import "time"
+import (
+	"log/slog"
+	"time"
+)
 
 const eventChannelBuffer = 64
 
@@ -26,6 +29,7 @@ func (e *Engine) Unsubscribe(ch chan Event) {
 
 func (e *Engine) emit(ev Event) {
 	ev.Timestamp = time.Now()
+	e.logger.Debug("emitting event", slog.String("type", ev.Type.String()))
 	e.subMu.Lock()
 	defer e.subMu.Unlock()
 	for ch := range e.subs {
@@ -39,6 +43,7 @@ func (e *Engine) emit(ev Event) {
 // EmitConnectionEvent emits a connection event to all subscribers.
 // This is used by plugins to report connection open/close events.
 func (e *Engine) EmitConnectionEvent(connID, state, target, rule, protocol, processName string, bytesIn, bytesOut, durationMs int64) {
+	e.logger.Debug("connection state change", "conn_id", connID, "state", state, "target", target)
 	e.emit(Event{
 		Type:        EventConnection,
 		ConnID:      connID,

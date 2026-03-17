@@ -38,6 +38,7 @@ func (e *Engine) startInternal(ctx context.Context) error {
 	e.mu.Unlock()
 
 	e.emit(Event{Type: EventLog, Message: "engine starting"})
+	e.logger.Debug("engine state transition", "from", "stopped", "to", "starting")
 
 	e.mu.Lock()
 	e.streamTracker = stream.NewStreamTracker(0) // default 1000-entry ring
@@ -72,7 +73,9 @@ func (e *Engine) startInternal(ctx context.Context) error {
 	cfgSnap := e.cfg.DeepCopy()
 	e.mu.RUnlock()
 
+	e.logger.Debug("building congestion control", "mode", cfgSnap.Congestion.Mode)
 	ccAdapter := e.buildCongestionControl(cfgSnap)
+	e.logger.Debug("building transports")
 	transports := e.buildTransports(cfgSnap, ccAdapter)
 	if len(transports) == 0 {
 		return fail(fmt.Errorf("no transports enabled; enable at least one in config (transport.h3, transport.reality, transport.cdn, or transport.webrtc)"))
@@ -88,6 +91,7 @@ func (e *Engine) startInternal(ctx context.Context) error {
 		strategy = selector.StrategyPriority
 	}
 
+	e.logger.Debug("initializing transport selector", "strategy", strategy, "count", len(transports))
 	sel := selector.New(transports, &selector.Config{
 		Strategy:          strategy,
 		ServerAddr:        cfgSnap.Server.Addr,
@@ -101,6 +105,7 @@ func (e *Engine) startInternal(ctx context.Context) error {
 	e.cancel = cancel
 	e.mu.Unlock()
 
+	e.logger.Debug("building router and DNS resolver")
 	rt, dnsResolver, prefetcher := e.buildRouter(cfgSnap)
 	if prefetcher != nil {
 		go prefetcher.Start(ctx)
@@ -130,6 +135,7 @@ func (e *Engine) startInternal(ctx context.Context) error {
 	// Wrap dialer so every proxied connection flows through the plugin chain.
 	dialer = e.wrapDialer(dialer, chain)
 
+	e.logger.Debug("starting proxy listeners")
 	closers, err := e.startProxies(ctx, cfgSnap, dialer, sel, cancel)
 	if err != nil {
 		sel.Close()
@@ -143,6 +149,7 @@ func (e *Engine) startInternal(ctx context.Context) error {
 	e.state = StateRunning
 	e.mu.Unlock()
 
+	e.logger.Debug("engine state transition", "from", "starting", "to", "running")
 	e.emit(Event{Type: EventConnected, Message: "engine started"})
 	e.bgWg.Add(1)
 	go func() {
@@ -180,6 +187,7 @@ func (e *Engine) stopInternal() error {
 		return fmt.Errorf("engine not running (state: %s)", st)
 	}
 	e.state = StateStopping
+	e.logger.Debug("engine state transition", "from", "running", "to", "stopping")
 	cancel := e.cancel
 	closers := e.closers
 	sel := e.sel
@@ -241,6 +249,7 @@ func (e *Engine) stopInternal() error {
 	e.circuitBreaker = nil
 	e.mu.Unlock()
 
+	e.logger.Debug("engine state transition", "from", "stopping", "to", "stopped")
 	e.emit(Event{Type: EventDisconnected, Message: "engine stopped"})
 	return nil
 }
@@ -265,6 +274,7 @@ func (e *Engine) Reload(cfg *config.ClientConfig) error {
 		parentCtx = context.Background()
 	}
 
+	e.logger.Debug("reload triggered", "was_running", running)
 	if running {
 		if err := e.stopInternal(); err != nil {
 			return fmt.Errorf("stop for reload: %w", err)

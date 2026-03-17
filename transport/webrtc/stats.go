@@ -83,10 +83,11 @@ func (sc *statsCollector) Stats() ConnStats {
 	return sc.stats
 }
 
-func (sc *statsCollector) Close() {
+func (sc *statsCollector) Close() error {
 	select {
 	case <-sc.done:
 	default:
 		close(sc.done)
 	}
+	return nil
 }

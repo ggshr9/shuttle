@@ -8,6 +8,21 @@ import (
 	"github.com/shuttleX/shuttle/engine"
 )
 
+// modifyServers is a shared helper for POST/DELETE /api/config/servers handlers.
+// It loads the current config, applies fn to mutate the Servers slice, persists
+// the config via SetConfig, and writes cfg.Servers as JSON on success.
+func modifyServers(w http.ResponseWriter, eng *engine.Engine, fn func([]config.ServerEndpoint) ([]config.ServerEndpoint, string, int)) {
+	cfg := eng.Config()
+	servers, errMsg, code := fn(cfg.Servers)
+	if errMsg != "" {
+		writeError(w, code, errMsg)
+		return
+	}
+	cfg.Servers = servers
+	eng.SetConfig(&cfg)
+	writeJSON(w, map[string]string{"status": "ok"})
+}
+
 func registerConfigRoutes(mux *http.ServeMux, eng *engine.Engine) {
 	mux.HandleFunc("GET /api/config", func(w http.ResponseWriter, r *http.Request) {
 		cfg := eng.Config()
@@ -68,16 +83,14 @@ func registerConfigRoutes(mux *http.ServeMux, eng *engine.Engine) {
 			writeError(w, http.StatusBadRequest, "addr is required")
 			return
 		}
-		cfg := eng.Config()
-		for _, s := range cfg.Servers {
-			if s.Addr == srv.Addr {
-				writeError(w, http.StatusConflict, "server with this address already exists")
-				return
+		modifyServers(w, eng, func(servers []config.ServerEndpoint) ([]config.ServerEndpoint, string, int) {
+			for _, s := range servers {
+				if s.Addr == srv.Addr {
+					return nil, "server with this address already exists", http.StatusConflict
+				}
 			}
-		}
-		cfg.Servers = append(cfg.Servers, srv)
-		eng.SetConfig(&cfg)
-		writeJSON(w, map[string]string{"status": "added"})
+			return append(servers, srv), "", 0
+		})
 	})
 
 	mux.HandleFunc("DELETE /api/config/servers", func(w http.ResponseWriter, r *http.Request) {
@@ -93,23 +106,21 @@ func registerConfigRoutes(mux *http.ServeMux, eng *engine.Engine) {
 			writeError(w, http.StatusBadRequest, "addr is required")
 			return
 		}
-		cfg := eng.Config()
-		found := false
-		filtered := make([]config.ServerEndpoint, 0, len(cfg.Servers))
-		for _, s := range cfg.Servers {
-			if !found && s.Addr == req.Addr {
-				found = true
-				continue
+		modifyServers(w, eng, func(servers []config.ServerEndpoint) ([]config.ServerEndpoint, string, int) {
+			filtered := make([]config.ServerEndpoint, 0, len(servers))
+			found := false
+			for _, s := range servers {
+				if !found && s.Addr == req.Addr {
+					found = true
+					continue
+				}
+				filtered = append(filtered, s)
 			}
-			filtered = append(filtered, s)
-		}
-		if !found {
-			writeError(w, http.StatusNotFound, "server not found")
-			return
-		}
-		cfg.Servers = filtered
-		eng.SetConfig(&cfg)
-		writeJSON(w, map[string]string{"status": "deleted"})
+			if !found {
+				return nil, "server not found", http.StatusNotFound
+			}
+			return filtered, "", 0
+		})
 	})
 
 	mux.HandleFunc("POST /api/config/validate", func(w http.ResponseWriter, r *http.Request) {

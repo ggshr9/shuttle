@@ -141,7 +141,7 @@ func (m *Migrator) drainIdle() {
 }
 
 // Close stops the drain loop and closes all tracked connections.
-func (m *Migrator) Close() {
+func (m *Migrator) Close() error {
 	// Signal the drain loop to stop.
 	select {
 	case <-m.drainDone:
@@ -152,10 +152,14 @@ func (m *Migrator) Close() {
 
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	var firstErr error
 	for _, tc := range m.connections {
-		tc.conn.Close()
+		if err := tc.conn.Close(); err != nil && firstErr == nil {
+			firstErr = err
+		}
 	}
 	m.connections = nil
+	return firstErr
 }
 
 // ConnMigrationStats holds snapshot data about a tracked connection.

@@ -269,7 +269,7 @@ func (m *MultipathManager) Stats() []PathStats {
 }
 
 // Close stops probes and closes all paths.
-func (m *MultipathManager) Close() {
+func (m *MultipathManager) Close() error {
 	m.mu.Lock()
 	if m.probeCancel != nil {
 		m.probeCancel()
@@ -279,11 +279,15 @@ func (m *MultipathManager) Close() {
 	m.paths = nil
 	m.mu.Unlock()
 
+	var firstErr error
 	for _, p := range paths {
 		if p.conn != nil {
-			p.conn.Close()
+			if err := p.conn.Close(); err != nil && firstErr == nil {
+				firstErr = err
+			}
 		}
 	}
+	return firstErr
 }
 
 // multipathConn wraps multiple connections with path selection.

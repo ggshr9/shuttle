@@ -12,6 +12,19 @@ import (
 	"github.com/shuttleX/shuttle/transport"
 )
 
+// waitFor polls condition every 5ms until it returns true or timeout expires.
+func waitFor(t *testing.T, timeout time.Duration, condition func() bool) {
+	t.Helper()
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		if condition() {
+			return
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	t.Fatal("condition not met within timeout")
+}
+
 // ---------- test helpers ----------
 
 // mockTicker is a manually-driven ticker for deterministic tests.
@@ -114,8 +127,8 @@ func TestHeartbeatHealthyConnection(t *testing.T) {
 	// should happen.
 	for i := 0; i < 5; i++ {
 		ticker.Tick()
-		// Give the goroutine time to process.
-		time.Sleep(20 * time.Millisecond)
+		// Wait for goroutine to process the tick.
+		waitFor(t, time.Second, func() bool { return rc.IsHealthy() })
 	}
 
 	if !rc.IsHealthy() {
@@ -156,13 +169,11 @@ func TestHeartbeatDetectsStaleConnection(t *testing.T) {
 	// Fire MaxFailures heartbeats — each will fail because OpenStream fails.
 	for i := 0; i < 2; i++ {
 		ticker.Tick()
-		time.Sleep(20 * time.Millisecond)
+		time.Sleep(5 * time.Millisecond) // let goroutine pick up the tick
 	}
 
 	// After MaxFailures, the inner connection should be closed.
-	if !failing.closed.Load() {
-		t.Fatal("expected failing connection to be closed after max heartbeat failures")
-	}
+	waitFor(t, time.Second, func() bool { return failing.closed.Load() })
 
 	if rc.IsHealthy() {
 		t.Fatal("expected connection to be marked unhealthy")
@@ -202,15 +213,15 @@ func TestHeartbeatResetsFailureCountOnSuccess(t *testing.T) {
 
 	// First heartbeat: fails (failures=1).
 	ticker.Tick()
-	time.Sleep(20 * time.Millisecond)
+	waitFor(t, time.Second, func() bool { return callCount.Load() >= 1 })
 
 	// Second heartbeat: succeeds (failures reset to 0).
 	ticker.Tick()
-	time.Sleep(20 * time.Millisecond)
+	waitFor(t, time.Second, func() bool { return callCount.Load() >= 2 })
 
 	// Third heartbeat: succeeds (failures still 0).
 	ticker.Tick()
-	time.Sleep(20 * time.Millisecond)
+	waitFor(t, time.Second, func() bool { return callCount.Load() >= 3 })
 
 	// Should still be healthy because failures never reached MaxFailures.
 	if !rc.IsHealthy() {
@@ -247,17 +258,15 @@ func TestIsHealthyReflectsState(t *testing.T) {
 
 	// One failure: still healthy (below threshold).
 	ticker.Tick()
-	time.Sleep(20 * time.Millisecond)
+	// Brief pause to let goroutine process, then verify still healthy.
+	time.Sleep(50 * time.Millisecond)
 	if !rc.IsHealthy() {
 		t.Fatal("expected healthy after single failure")
 	}
 
 	// Second failure: now unhealthy.
 	ticker.Tick()
-	time.Sleep(20 * time.Millisecond)
-	if rc.IsHealthy() {
-		t.Fatal("expected unhealthy after MaxFailures")
-	}
+	waitFor(t, time.Second, func() bool { return !rc.IsHealthy() })
 }
 
 // ---------- StaleDetector tests ----------
@@ -294,11 +303,7 @@ func TestStaleDetectorFiresAfterMaxIdle(t *testing.T) {
 	nowMu.Unlock()
 
 	ticker.Tick()
-	time.Sleep(20 * time.Millisecond)
-
-	if !fired.Load() {
-		t.Fatal("expected onStale callback to fire after maxIdle")
-	}
+	waitFor(t, time.Second, func() bool { return fired.Load() })
 }
 
 func TestStaleDetectorDoesNotFireWhenActive(t *testing.T) {
@@ -336,7 +341,8 @@ func TestStaleDetectorDoesNotFireWhenActive(t *testing.T) {
 
 	// Check interval fires.
 	ticker.Tick()
-	time.Sleep(20 * time.Millisecond)
+	// Negative test: brief pause then verify callback did NOT fire.
+	time.Sleep(50 * time.Millisecond)
 
 	if fired.Load() {
 		t.Fatal("onStale should not fire when connection is active")
@@ -348,7 +354,8 @@ func TestStaleDetectorDoesNotFireWhenActive(t *testing.T) {
 	nowMu.Unlock()
 
 	ticker.Tick()
-	time.Sleep(20 * time.Millisecond)
+	// Negative test: brief pause then verify callback did NOT fire.
+	time.Sleep(50 * time.Millisecond)
 
 	if fired.Load() {
 		t.Fatal("onStale should not fire when within maxIdle of last success")
@@ -390,7 +397,8 @@ func TestStaleDetectorRecordSuccessPreventsCallback(t *testing.T) {
 		sd.RecordSuccess()
 
 		ticker.Tick()
-		time.Sleep(20 * time.Millisecond)
+		// Negative test: brief pause to let goroutine process.
+		time.Sleep(50 * time.Millisecond)
 	}
 
 	if fireCount.Load() != 0 {

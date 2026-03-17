@@ -1,10 +1,16 @@
 // API client for Shuttle GUI
 
+declare global {
+  interface Window {
+    __SHUTTLE_AUTH_TOKEN__?: string
+  }
+}
+
 const BASE = ''
 
 // Auth token for API requests, injected by the Go backend at page load
 // via window.__SHUTTLE_AUTH_TOKEN__ or setAuthToken().
-let authToken: string = (window as any).__SHUTTLE_AUTH_TOKEN__ || ''
+let authToken: string = window.__SHUTTLE_AUTH_TOKEN__ || ''
 
 export function setAuthToken(token: string) {
   authToken = token
@@ -310,7 +316,7 @@ export const api = {
   getRouting: () => request<RoutingRules>('GET', '/api/routing/rules'),
   putRouting: (r: RoutingRules) => request<void>('PUT', '/api/routing/rules', r),
   exportRouting: () => `${BASE}/api/routing/export`,
-  exportRoutingData: () => request<any>('GET', '/api/routing/export'),
+  exportRoutingData: () => request<RoutingRules>('GET', '/api/routing/export'),
   importRouting: (rules: RoutingRules, mode: 'merge' | 'replace' = 'merge') =>
     request<{ added: number; total: number }>('POST', '/api/routing/import', { ...rules, mode }),
   getRoutingTemplates: () => request<RoutingTemplate[]>('GET', '/api/routing/templates'),
@@ -366,7 +372,7 @@ export const api = {
   // Routing conflicts
   getRoutingConflicts: () => request<{ conflicts: RoutingConflict[]; count: number }>('GET', '/api/routing/conflicts'),
   // Config validation
-  validateConfig: (config: any) => request<ConfigValidation>('POST', '/api/config/validate', config),
+  validateConfig: (config: Config) => request<ConfigValidation>('POST', '/api/config/validate', config),
   // Test probe
   testProbe: (url: string, via?: string) => request<ProbeResult>('POST', '/api/test/probe', { url, via }, 20000),
   // Test probe batch
