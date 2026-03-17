@@ -13,7 +13,7 @@ type deterministicRand struct {
 }
 
 func newRand(seed int64) *deterministicRand {
-	return &deterministicRand{rng: rand.New(rand.NewSource(seed))}
+	return &deterministicRand{rng: rand.New(rand.NewSource(seed))} //nolint:gosec // G404: deterministic PRNG for reproducible test simulations
 }
 
 // Float64 returns a random float64 in [0.0, 1.0).

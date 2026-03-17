@@ -81,7 +81,7 @@ func buildResponse(txID []byte, ip net.IP, port int) []byte {
 	resp[25] = 0x01 // IPv4
 
 	// XOR port with magic cookie high 16 bits
-	xorPort := uint16(port) ^ uint16(stunMagicCookie>>16)
+	xorPort := uint16(port) ^ uint16(stunMagicCookie>>16) //nolint:gosec // port from net.UDPAddr is always 0-65535
 	binary.BigEndian.PutUint16(resp[26:28], xorPort)
 
 	// XOR IP with magic cookie

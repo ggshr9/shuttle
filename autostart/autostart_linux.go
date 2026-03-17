@@ -67,7 +67,7 @@ func enable(cfg *Config) error {
 	content := fmt.Sprintf(desktopTemplate, cfg.AppName, exec)
 
 	// Write desktop file
-	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+	if err := os.WriteFile(path, []byte(content), 0644); err != nil { //nolint:gosec // G306: .desktop file must be world-readable for XDG autostart
 		return fmt.Errorf("write desktop file: %w", err)
 	}
 

@@ -308,7 +308,7 @@ func TestReplayFilter_Concurrent(t *testing.T) {
 	for g := 0; g < numGoroutines; g++ {
 		go func(id int) {
 			defer wg.Done()
-			base := uint64(id * checksPerGoroutine)
+			base := uint64(id * checksPerGoroutine) //nolint:gosec // test code: id and checksPerGoroutine are small positive constants
 			for i := uint64(0); i < checksPerGoroutine; i++ {
 				rf.Check(base + i)
 			}

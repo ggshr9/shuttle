@@ -23,7 +23,7 @@ type cuckooFilter struct {
 type bucket [bucketSize]uint8
 
 func newCuckooFilter(capacity int) *cuckooFilter {
-	numBuckets := uint32(capacity / bucketSize)
+	numBuckets := uint32(capacity / bucketSize) //nolint:gosec // capacity is always positive and small (defaultCap=1<<20)
 	if numBuckets == 0 {
 		numBuckets = 1024
 	}
@@ -46,7 +46,7 @@ func nextPow2(v uint32) uint32 {
 }
 
 func (cf *cuckooFilter) fingerprint(x uint64) uint8 {
-	fp := uint8(x>>32) ^ uint8(x>>24) ^ uint8(x>>16) ^ uint8(x>>8) ^ uint8(x)
+	fp := uint8(x>>32) ^ uint8(x>>24) ^ uint8(x>>16) ^ uint8(x>>8) ^ uint8(x) //nolint:gosec // intentional truncation to 8-bit fingerprint
 	if fp == 0 {
 		fp = 1
 	}
@@ -54,7 +54,7 @@ func (cf *cuckooFilter) fingerprint(x uint64) uint8 {
 }
 
 func (cf *cuckooFilter) index1(x uint64) uint32 {
-	return uint32(x) & (cf.numBuckets - 1)
+	return uint32(x) & (cf.numBuckets - 1) //nolint:gosec // intentional truncation to 32-bit bucket index
 }
 
 func (cf *cuckooFilter) index2(i1 uint32, fp uint8) uint32 {
@@ -94,11 +94,11 @@ func (cf *cuckooFilter) Insert(x uint64) bool {
 	}
 
 	idx := i1
-	if rand.IntN(2) == 0 {
+	if rand.IntN(2) == 0 { //nolint:gosec // non-security: random bucket selection for cuckoo eviction
 		idx = i2
 	}
 	for k := 0; k < maxKicks; k++ {
-		slot := rand.IntN(bucketSize)
+		slot := rand.IntN(bucketSize) //nolint:gosec // non-security: random slot selection for cuckoo eviction
 		old := cf.buckets[idx][slot]
 		cf.buckets[idx][slot] = fp
 		fp = old

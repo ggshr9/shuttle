@@ -231,7 +231,7 @@ func TestOnChangeWithType(t *testing.T) {
 	var receivedType atomic.Int32
 	receivedType.Store(-1)
 	m.OnChangeWithType(func(nt NetworkType) {
-		receivedType.Store(int32(nt))
+		receivedType.Store(int32(nt)) //nolint:gosec // NetworkType is a small enum (0-3), fits int32
 	})
 
 	ctx, cancel := context.WithCancel(context.Background())

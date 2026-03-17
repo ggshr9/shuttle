@@ -63,7 +63,7 @@ jobs:
 
       - name: Run shell integration tests
         working-directory: sandbox
-        run: ./sandbox/run.sh test
+        run: ./run.sh test
 
       - name: Run Go integration tests
         working-directory: sandbox

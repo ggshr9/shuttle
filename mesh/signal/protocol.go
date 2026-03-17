@@ -504,7 +504,7 @@ func EncodeWebRTCSDP(info *WebRTCSDPInfo) []byte {
 	// Type(1) + SDPLen(2) + SDP
 	buf := make([]byte, 3+len(sdpBytes))
 	buf[0] = byte(info.Type)
-	binary.BigEndian.PutUint16(buf[1:3], uint16(len(sdpBytes)))
+	binary.BigEndian.PutUint16(buf[1:3], uint16(len(sdpBytes))) //nolint:gosec // len(sdpBytes) <= MaxWebRTCSDPSize (8192), fits uint16
 	copy(buf[3:], sdpBytes)
 
 	return buf
@@ -576,7 +576,7 @@ func EncodeWebRTCICECandidate(info *WebRTCICECandidateInfo) []byte {
 	buf := make([]byte, 6+len(candBytes)+len(midBytes)+len(ufragBytes))
 
 	offset := 0
-	binary.BigEndian.PutUint16(buf[offset:offset+2], uint16(len(candBytes)))
+	binary.BigEndian.PutUint16(buf[offset:offset+2], uint16(len(candBytes))) //nolint:gosec // candidate string length bounded by MaxSignalPayload (4096), fits uint16
 	offset += 2
 	copy(buf[offset:], candBytes)
 	offset += len(candBytes)

@@ -80,13 +80,13 @@ func setKDE(cfg ProxyConfig) error {
 
 	// Set HTTP proxy
 	if cfg.HTTPAddr != "" {
-		_ = exec.Command("kwriteconfig5", "--file", "kioslaverc", "--group", "Proxy Settings", "--key", "httpProxy", "http://"+cfg.HTTPAddr).Run()
-		_ = exec.Command("kwriteconfig5", "--file", "kioslaverc", "--group", "Proxy Settings", "--key", "httpsProxy", "http://"+cfg.HTTPAddr).Run()
+		_ = exec.Command("kwriteconfig5", "--file", "kioslaverc", "--group", "Proxy Settings", "--key", "httpProxy", "http://"+cfg.HTTPAddr).Run()  //nolint:gosec // G204: input is from validated ProxyConfig, not user-tainted
+		_ = exec.Command("kwriteconfig5", "--file", "kioslaverc", "--group", "Proxy Settings", "--key", "httpsProxy", "http://"+cfg.HTTPAddr).Run() //nolint:gosec // G204: input is from validated ProxyConfig, not user-tainted
 	}
 
 	// Set SOCKS proxy
 	if cfg.SOCKSAddr != "" {
-		_ = exec.Command("kwriteconfig5", "--file", "kioslaverc", "--group", "Proxy Settings", "--key", "socksProxy", "socks://"+cfg.SOCKSAddr).Run()
+		_ = exec.Command("kwriteconfig5", "--file", "kioslaverc", "--group", "Proxy Settings", "--key", "socksProxy", "socks://"+cfg.SOCKSAddr).Run() //nolint:gosec // G204: input is from validated ProxyConfig, not user-tainted
 	}
 
 	// Set bypass list

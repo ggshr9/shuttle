@@ -205,7 +205,7 @@ func TestLoadBudgets(t *testing.T) {
 `
 	dir := t.TempDir()
 	path := filepath.Join(dir, ".perf-budget.yaml")
-	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+	if err := os.WriteFile(path, []byte(content), 0600); err != nil {
 		t.Fatal(err)
 	}
 

@@ -137,7 +137,7 @@ func (s *Server) handleConn(ctx context.Context, qconn *quic.Conn) {
 	ctrlStream, err := qconn.AcceptStream(ctx)
 	if err != nil {
 		s.logger.Debug("failed to accept control stream", "err", err)
-		qconn.CloseWithError(1, "no control stream")
+		_ = qconn.CloseWithError(1, "no control stream")
 		return
 	}
 
@@ -171,7 +171,7 @@ func (s *Server) handleConn(ctx context.Context, qconn *quic.Conn) {
 	// Auth OK.
 	if _, err := ctrlStream.Write([]byte{0x01}); err != nil {
 		s.logger.Debug("failed to send auth OK", "err", err)
-		qconn.CloseWithError(1, "auth response failed")
+		_ = qconn.CloseWithError(1, "auth response failed")
 		return
 	}
 
@@ -195,7 +195,7 @@ func (s *Server) serveCover(ctrlStream *quic.Stream, qconn *quic.Conn) {
 	_, _ = ctrlStream.Write(coverPage)
 	ctrlStream.CancelRead(0)
 	ctrlStream.Close()
-	qconn.CloseWithError(0, "")
+	_ = qconn.CloseWithError(0, "")
 }
 
 func (s *Server) Accept(ctx context.Context) (transport.Connection, error) {

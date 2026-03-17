@@ -355,7 +355,7 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 	offerMsg, err := readWSMessage(ctx, wsConn)
 	if err != nil || offerMsg.Type != SignalTypeOffer {
 		s.logger.Debug("webrtc ws: expected offer", "remote", remoteAddr)
-		sendWSMessage(ctx, wsConn, &SignalMessage{Type: SignalTypeError, Error: "expected offer"})
+		_ = sendWSMessage(ctx, wsConn, &SignalMessage{Type: SignalTypeError, Error: "expected offer"})
 		wsConn.Close(websocket.StatusPolicyViolation, "expected offer")
 		return
 	}
@@ -364,7 +364,7 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 	pc, err := s.newPeerConnection()
 	if err != nil {
 		s.logger.Error("webrtc ws: new peer failed", "err", err)
-		sendWSMessage(ctx, wsConn, &SignalMessage{Type: SignalTypeError, Error: "internal error"})
+		_ = sendWSMessage(ctx, wsConn, &SignalMessage{Type: SignalTypeError, Error: "internal error"})
 		wsConn.Close(websocket.StatusInternalError, "internal error")
 		return
 	}
@@ -393,11 +393,11 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 	pc.OnICECandidate(func(c *webrtc.ICECandidate) {
 		if c == nil {
 			// Gathering complete
-			sendWSMessage(ctx, wsConn, &SignalMessage{Type: SignalTypeCandidateDone})
+			_ = sendWSMessage(ctx, wsConn, &SignalMessage{Type: SignalTypeCandidateDone})
 			return
 		}
 		init := c.ToJSON()
-		sendWSMessage(ctx, wsConn, &SignalMessage{
+		_ = sendWSMessage(ctx, wsConn, &SignalMessage{
 			Type: SignalTypeCandidate,
 			Candidate: &ICECandidateMsg{
 				Candidate:        init.Candidate,
@@ -416,7 +416,7 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 	if err := pc.SetRemoteDescription(offer); err != nil {
 		pc.Close()
 		s.logger.Error("webrtc ws: set remote desc failed", "err", err)
-		sendWSMessage(ctx, wsConn, &SignalMessage{Type: SignalTypeError, Error: "invalid offer"})
+		_ = sendWSMessage(ctx, wsConn, &SignalMessage{Type: SignalTypeError, Error: "invalid offer"})
 		wsConn.Close(websocket.StatusPolicyViolation, "invalid offer")
 		return
 	}
@@ -426,7 +426,7 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		pc.Close()
 		s.logger.Error("webrtc ws: create answer failed", "err", err)
-		sendWSMessage(ctx, wsConn, &SignalMessage{Type: SignalTypeError, Error: "internal error"})
+		_ = sendWSMessage(ctx, wsConn, &SignalMessage{Type: SignalTypeError, Error: "internal error"})
 		wsConn.Close(websocket.StatusInternalError, "internal error")
 		return
 	}
@@ -435,7 +435,7 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 	if err := pc.SetLocalDescription(answer); err != nil {
 		pc.Close()
 		s.logger.Error("webrtc ws: set local desc failed", "err", err)
-		sendWSMessage(ctx, wsConn, &SignalMessage{Type: SignalTypeError, Error: "internal error"})
+		_ = sendWSMessage(ctx, wsConn, &SignalMessage{Type: SignalTypeError, Error: "internal error"})
 		wsConn.Close(websocket.StatusInternalError, "internal error")
 		return
 	}
@@ -575,11 +575,11 @@ func (s *Server) handleWSReconnect(ctx context.Context, wsConn *websocket.Conn, 
 
 	pc.OnICECandidate(func(c *webrtc.ICECandidate) {
 		if c == nil {
-			sendWSMessage(ctx, wsConn, &SignalMessage{Type: SignalTypeCandidateDone})
+			_ = sendWSMessage(ctx, wsConn, &SignalMessage{Type: SignalTypeCandidateDone})
 			return
 		}
 		init := c.ToJSON()
-		sendWSMessage(ctx, wsConn, &SignalMessage{
+		_ = sendWSMessage(ctx, wsConn, &SignalMessage{
 			Type: SignalTypeCandidate,
 			Candidate: &ICECandidateMsg{
 				Candidate:        init.Candidate,
@@ -606,7 +606,7 @@ func (s *Server) handleWSReconnect(ctx context.Context, wsConn *websocket.Conn, 
 		return
 	}
 
-	sendWSMessage(ctx, wsConn, &SignalMessage{Type: SignalTypeAnswer, SDP: pc.LocalDescription().SDP})
+	_ = sendWSMessage(ctx, wsConn, &SignalMessage{Type: SignalTypeAnswer, SDP: pc.LocalDescription().SDP})
 
 	// Read client candidates
 	go func() {
