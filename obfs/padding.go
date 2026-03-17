@@ -65,7 +65,7 @@ func (p *Padder) Pad(data []byte) ([]byte, error) {
 	// Frame length = everything after the first 2 bytes
 	frameLen := totalSize - 2
 	binary.BigEndian.PutUint16(buf[0:2], uint16(frameLen)) //nolint:gosec // G115: frameLen bounded by max padding target (~1400) + data; well within uint16 range
-	binary.BigEndian.PutUint16(buf[2:4], uint16(origLen))
+	binary.BigEndian.PutUint16(buf[2:4], uint16(origLen)) //nolint:gosec // G115: origLen bounded by max padding target (~1400), fits uint16
 	copy(buf[headerSize:], data)
 
 	// Fill remaining with random bytes

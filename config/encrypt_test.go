@@ -137,7 +137,7 @@ routing:
   default: proxy
 `
 	cfgPath := filepath.Join(dir, "client.yaml")
-	if err := os.WriteFile(cfgPath, []byte(yamlContent), 0644); err != nil {
+	if err := os.WriteFile(cfgPath, []byte(yamlContent), 0600); err != nil {
 		t.Fatal(err)
 	}
 

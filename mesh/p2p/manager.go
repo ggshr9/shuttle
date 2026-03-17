@@ -393,7 +393,7 @@ func (m *Manager) candidatesToInfo(candidates []*Candidate) []*signal.CandidateI
 		infos[i] = &signal.CandidateInfo{
 			Type:     byte(c.Type),
 			IP:       c.Addr.IP,
-			Port:     uint16(c.Addr.Port),
+			Port:     uint16(c.Addr.Port), //nolint:gosec // G115: port range 0-65535, fits uint16
 			Priority: c.Priority,
 		}
 		if c.RelatedIP != nil {

@@ -97,7 +97,7 @@ func NewCandidate(typ CandidateType, addr *net.UDPAddr) *Candidate {
 // computePriority calculates the candidate priority per RFC 5245.
 func (c *Candidate) computePriority() {
 	// priority = (2^24)*(type preference) + (2^8)*(local preference) + (256 - component ID)
-	typePreference := uint32(c.Type.Priority())
+	typePreference := uint32(c.Type.Priority()) //nolint:gosec // G115: CandidateType priority is 0-126, fits uint32
 	localPreference := uint32(65535) // Single component for simplicity
 
 	// Prefer non-link-local addresses

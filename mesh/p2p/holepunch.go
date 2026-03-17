@@ -40,7 +40,7 @@ func (p *HolePunchPacket) Encode() []byte {
 	buf[4] = p.Type
 	copy(buf[5:9], p.SrcVIP.To4())
 	copy(buf[9:13], p.DstVIP.To4())
-	binary.BigEndian.PutUint64(buf[13:21], uint64(p.Timestamp))
+	binary.BigEndian.PutUint64(buf[13:21], uint64(p.Timestamp)) //nolint:gosec // G115: Unix timestamp, non-negative in practice
 	binary.BigEndian.PutUint32(buf[21:25], p.Seq)
 	return buf
 }
@@ -60,7 +60,7 @@ func DecodeHolePunchPacket(data []byte) (*HolePunchPacket, error) {
 		Type:      data[4],
 		SrcVIP:    net.IP(make([]byte, 4)),
 		DstVIP:    net.IP(make([]byte, 4)),
-		Timestamp: int64(binary.BigEndian.Uint64(data[13:21])),
+		Timestamp: int64(binary.BigEndian.Uint64(data[13:21])), //nolint:gosec // G115: timestamp round-trips through uint64 encoding
 		Seq:       binary.BigEndian.Uint32(data[21:25]),
 	}
 	copy(p.SrcVIP, data[5:9])

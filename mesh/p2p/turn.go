@@ -5,8 +5,8 @@ package p2p
 import (
 	"context"
 	"crypto/hmac"
-	"crypto/md5"
-	"crypto/sha1"
+	"crypto/md5"  //nolint:gosec // G501: MD5 required by TURN/STUN long-term credential mechanism (RFC 5389 Section 15.4)
+	"crypto/sha1" //nolint:gosec // G505: SHA1-HMAC required by STUN message integrity (RFC 5389 Section 15.4)
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -549,7 +549,7 @@ func (c *TURNClient) addMessageIntegrity(buf []byte, offset int) int {
 // calculateKey calculates the long-term credential key.
 func (c *TURNClient) calculateKey() []byte {
 	// key = MD5(username:realm:password)
-	h := md5.New()
+	h := md5.New() //nolint:gosec // G401: MD5 required by TURN long-term credential mechanism (RFC 5389)
 	h.Write([]byte(c.username + ":" + c.realm + ":" + c.password))
 	return h.Sum(nil)
 }
