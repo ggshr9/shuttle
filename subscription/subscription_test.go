@@ -233,9 +233,18 @@ func TestAutoRefreshDoubleStart(t *testing.T) {
 	// Second start should replace the first without panic or deadlock.
 	m.StartAutoRefresh(ctx, 1*time.Hour)
 
-	m.autoMu.Lock()
-	running := m.autoRunning
-	m.autoMu.Unlock()
+	// Give goroutine time to set autoRunning.
+	deadline := time.Now().Add(500 * time.Millisecond)
+	var running bool
+	for time.Now().Before(deadline) {
+		m.autoMu.Lock()
+		running = m.autoRunning
+		m.autoMu.Unlock()
+		if running {
+			break
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
 
 	if !running {
 		t.Error("second StartAutoRefresh() should keep autoRunning = true")

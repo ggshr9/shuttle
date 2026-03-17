@@ -76,7 +76,7 @@ func spliceOne(srcFD, dstFD int, pipe *splicePair) (int64, error) {
 				written, werr := unix.Splice(pipe.r, nil, dstFD, nil, int(remain), unix.SPLICE_F_MOVE|unix.SPLICE_F_NONBLOCK)
 				if written > 0 {
 					remain -= written
-					total += int64(written)
+					total += written
 				}
 				if werr != nil {
 					return total, werr

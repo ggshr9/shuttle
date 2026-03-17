@@ -96,3 +96,12 @@ issues:
     - linters:
         - gosec
       text: "G505:"  # blocklisted crypto/sha1: required by TURN RFC
+    - linters:
+        - gosec
+      text: "G204:"  # subprocess: TUN setup uses validated config input
+    - linters:
+        - gosec
+      text: "G402:"  # TLS InsecureSkipVerify: Reality transport and speedtest need it by design
+    - linters:
+        - gosec
+      text: "G112:"  # Slowloris: internal servers behind auth, not exposed to internet

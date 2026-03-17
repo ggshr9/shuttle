@@ -350,7 +350,7 @@ func TestIPAllocatorNetworkAndMask(t *testing.T) {
 		t.Errorf("Network = %q", alloc.Network().String())
 	}
 	mask := alloc.Mask()
-	if !net.IP(mask).Equal(net.IP(net.IPv4Mask(255, 255, 255, 0))) {
+	if !net.IP(mask).Equal(net.IP(net.IPv4Mask(255, 255, 255, 0))) { //nolint:unconvert // explicit conversion for type clarity
 		t.Errorf("Mask = %v", mask)
 	}
 }
