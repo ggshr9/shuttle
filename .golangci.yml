@@ -44,18 +44,6 @@ linters-settings:
       - (*github.com/shuttleX/shuttle/internal/relay.Relay).Relay
       - fmt.Sscanf
       - rand.Read  # crypto/rand.Read never fails on supported OS
-  gosec:
-    excludes:
-      - G115  # integer overflow: pervasive in networking code (port, TTL casts); all bounded
-      - G104  # unhandled errors: covered by errcheck with explicit exclude list
-      - G304  # file inclusion via variable: config paths are user-provided by design
-      - G301  # directory permissions: OS-specific dirs need broader perms
-      - G306  # WriteFile permissions: some files need wider perms by design
-      - G404  # weak random: math/rand fine for non-security uses
-      - G602  # slice bounds: false positives when bounds checked in prior statements
-      - G117  # secret in struct: config structs intentionally contain passwords
-      - G706  # log injection: log messages from trusted internal sources
-      - G703  # path traversal: file paths from user config, not untrusted input
   gocritic:
     enabled-tags:
       - diagnostic
@@ -68,3 +56,43 @@ issues:
     - path: _test\.go
       linters:
         - errcheck  # test code intentionally ignores errors for brevity
+        - gosec     # test code has intentional unsafe patterns
+    - linters:
+        - gosec
+      text: "G115:"  # integer overflow: bounded casts in networking code
+    - linters:
+        - gosec
+      text: "G104:"  # unhandled errors: covered by errcheck linter
+    - linters:
+        - gosec
+      text: "G304:"  # file inclusion: config paths are user-provided
+    - linters:
+        - gosec
+      text: "G301:"  # directory perms: OS-specific dirs need broader perms
+    - linters:
+        - gosec
+      text: "G306:"  # file perms: some files need wider perms by design
+    - linters:
+        - gosec
+      text: "G404:"  # weak random: fine for non-security uses
+    - linters:
+        - gosec
+      text: "G602:"  # slice bounds: false positives with prior checks
+    - linters:
+        - gosec
+      text: "G117:"  # secret in struct: config contains passwords by design
+    - linters:
+        - gosec
+      text: "G706:"  # log injection: trusted internal sources
+    - linters:
+        - gosec
+      text: "G703:"  # path traversal: user config paths
+    - linters:
+        - gosec
+      text: "G401:"  # weak crypto: TURN RFC requires md5/sha1
+    - linters:
+        - gosec
+      text: "G501:"  # blocklisted crypto/md5: required by TURN RFC
+    - linters:
+        - gosec
+      text: "G505:"  # blocklisted crypto/sha1: required by TURN RFC
