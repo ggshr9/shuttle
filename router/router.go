@@ -16,6 +16,17 @@ const (
 	ActionReject Action = "reject"
 )
 
+// Rule type constants for routing rules.
+const (
+	RuleTypeDomain       = "domain"
+	RuleTypeDomainSuffix = "domain-suffix"
+	RuleTypeGeoSite      = "geosite"
+	RuleTypeGeoIP        = "geoip"
+	RuleTypeIPCIDR       = "ip-cidr"
+	RuleTypeProcess      = "process"
+	RuleTypeProtocol     = "protocol"
+)
+
 // Rule defines a routing rule.
 type Rule struct {
 	Type        string   // "domain", "domain-suffix", "domain-keyword", "geoip", "geosite", "process", "protocol"
@@ -111,11 +122,11 @@ func (r *Router) addRule(rule Rule) {
 	}
 
 	switch rule.Type {
-	case "domain", "domain-suffix":
+	case RuleTypeDomain, RuleTypeDomainSuffix:
 		for _, v := range rule.Values {
 			r.domainTrie.Insert(v, string(rule.Action))
 		}
-	case "geosite":
+	case RuleTypeGeoSite:
 		if r.geoSite != nil {
 			for _, v := range rule.Values {
 				domains := r.geoSite.Lookup(v)
@@ -124,9 +135,9 @@ func (r *Router) addRule(rule Rule) {
 				}
 			}
 		}
-	case "geoip":
+	case RuleTypeGeoIP:
 		// geoip rules are evaluated at lookup time via GeoIPDB
-	case "ip-cidr":
+	case RuleTypeIPCIDR:
 		for _, v := range rule.Values {
 			_, cidr, err := net.ParseCIDR(v)
 			if err != nil {
@@ -135,11 +146,11 @@ func (r *Router) addRule(rule Rule) {
 			}
 			r.ipRules = append(r.ipRules, ipRule{cidr: cidr, action: rule.Action})
 		}
-	case "process":
+	case RuleTypeProcess:
 		for _, v := range rule.Values {
 			r.processMap[strings.ToLower(v)] = rule.Action
 		}
-	case "protocol":
+	case RuleTypeProtocol:
 		for _, v := range rule.Values {
 			r.protocolMap[strings.ToLower(v)] = rule.Action
 		}
@@ -158,7 +169,7 @@ func (r *Router) matchNetworkRules(domain string, ip net.IP, process string, pro
 			continue
 		}
 		switch nr.ruleType {
-		case "domain", "domain-suffix":
+		case RuleTypeDomain, RuleTypeDomainSuffix:
 			if domain != "" {
 				for _, v := range nr.values {
 					lowerDomain := strings.ToLower(domain)
@@ -174,7 +185,7 @@ func (r *Router) matchNetworkRules(domain string, ip net.IP, process string, pro
 					}
 				}
 			}
-		case "ip-cidr":
+		case RuleTypeIPCIDR:
 			if ip != nil {
 				for _, v := range nr.values {
 					_, cidr, err := net.ParseCIDR(v)
@@ -186,7 +197,7 @@ func (r *Router) matchNetworkRules(domain string, ip net.IP, process string, pro
 					}
 				}
 			}
-		case "process":
+		case RuleTypeProcess:
 			if process != "" {
 				for _, v := range nr.values {
 					if strings.EqualFold(v, process) {
@@ -194,7 +205,7 @@ func (r *Router) matchNetworkRules(domain string, ip net.IP, process string, pro
 					}
 				}
 			}
-		case "protocol":
+		case RuleTypeProtocol:
 			if protocol != "" {
 				for _, v := range nr.values {
 					if strings.EqualFold(v, protocol) {

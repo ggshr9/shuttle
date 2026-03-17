@@ -143,9 +143,6 @@ func LoadServerConfig(path string) (*ServerConfig, error) {
 // If the keystore is initialized, sensitive fields (password, private key,
 // admin token, cluster secret) are encrypted before writing. The in-memory
 // config is not modified.
-//
-// TODO: Add `shuttle encrypt-config` / `shuttled encrypt-config` CLI subcommand
-// to encrypt an existing plaintext config file in place.
 func SaveServerConfig(path string, cfg *ServerConfig) error {
 	// Deep copy to avoid mutating the caller's config.
 	cp := *cfg

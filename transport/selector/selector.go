@@ -114,11 +114,11 @@ func (s *Selector) Start(ctx context.Context) {
 func newScheduler(schedule string) StreamScheduler {
 	switch schedule {
 	case "min-latency":
-		return &MinLatencyScheduler{}
+		return NewMinLatencyScheduler()
 	case "load-balance":
-		return &LoadBalanceScheduler{}
+		return NewLoadBalanceScheduler()
 	default:
-		return &WeightedLatencyScheduler{}
+		return NewWeightedLatencyScheduler()
 	}
 }
 

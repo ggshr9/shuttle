@@ -14,9 +14,13 @@ import (
 
 // DiagnosticsBundle collects system state for debugging.
 type DiagnosticsBundle struct {
-	Timestamp   time.Time              `json:"timestamp"`
-	Version     string                 `json:"version"`
-	System      SystemInfo             `json:"system"`
+	Timestamp time.Time  `json:"timestamp"`
+	Version   string     `json:"version"`
+	System    SystemInfo `json:"system"`
+	// Config is a redacted copy of the current configuration. It uses
+	// map[string]interface{} because it is produced by JSON round-tripping
+	// (marshal → unmarshal → recursive redaction of sensitive keys), which
+	// yields a dynamic structure that does not map to a single typed struct.
 	Config      map[string]interface{} `json:"config"`
 	Status      *EngineStatus          `json:"status"`
 	Connections []ConnectionDiag       `json:"connections"`

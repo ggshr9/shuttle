@@ -118,12 +118,22 @@ func (r *DNSResolver) Resolve(ctx context.Context, domain string) ([]net.IP, err
 	remCh := make(chan result, 1)
 
 	go func() {
-		ips, err := r.queryDomestic(ctx, domain)
-		domCh <- result{ips, err}
+		select {
+		case <-ctx.Done():
+			domCh <- result{nil, ctx.Err()}
+		default:
+			ips, err := r.queryDomestic(ctx, domain)
+			domCh <- result{ips, err}
+		}
 	}()
 	go func() {
-		ips, err := r.queryRemote(ctx, domain)
-		remCh <- result{ips, err}
+		select {
+		case <-ctx.Done():
+			remCh <- result{nil, ctx.Err()}
+		default:
+			ips, err := r.queryRemote(ctx, domain)
+			remCh <- result{ips, err}
+		}
 	}()
 
 	var domResult, remResult result

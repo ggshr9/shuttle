@@ -46,7 +46,15 @@ func main() {
 			initCmd.PrintDefaults()
 		}
 		_ = initCmd.Parse(os.Args[2:])
-		initServer(*dir, *domain, *password, *transport, *listen, *force, *meshFlag)
+		initServer(initParams{
+			Dir:       *dir,
+			Domain:    *domain,
+			Password:  *password,
+			Transport: *transport,
+			Listen:    *listen,
+			Force:     *force,
+			Mesh:      *meshFlag,
+		})
 	case "share":
 		shareCmd := flag.NewFlagSet("share", flag.ExitOnError)
 		configPath := shareCmd.String("c", "", "path to server config file (required)")
@@ -216,9 +224,20 @@ complete -c shuttled -n '__fish_seen_subcommand_from completion' -a 'bash zsh fi
 	}
 }
 
-func initServer(dir, domain, password, transport, listen string, force, mesh bool) {
+// initParams groups the parameters for the init subcommand.
+type initParams struct {
+	Dir       string
+	Domain    string
+	Password  string
+	Transport string
+	Listen    string
+	Force     bool
+	Mesh      bool
+}
+
+func initServer(p initParams) {
 	var transports []string
-	switch transport {
+	switch p.Transport {
 	case "h3":
 		transports = []string{"h3"}
 	case "reality":
@@ -228,13 +247,13 @@ func initServer(dir, domain, password, transport, listen string, force, mesh boo
 	}
 
 	opts := &config.InitOptions{
-		ConfigDir:  dir,
-		Domain:     domain,
-		Password:   password,
+		ConfigDir:  p.Dir,
+		Domain:     p.Domain,
+		Password:   p.Password,
 		Transports: transports,
-		Listen:     listen,
-		Force:      force,
-		Mesh:       mesh,
+		Listen:     p.Listen,
+		Force:      p.Force,
+		Mesh:       p.Mesh,
 	}
 
 	result, err := config.Bootstrap(opts)
@@ -376,6 +395,24 @@ func run(configPath string) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
+	// Parse drain timeout from config (default 30s)
+	drainTimeout := 30 * time.Second
+	if cfg.DrainTimeout != "" {
+		if d, err := time.ParseDuration(cfg.DrainTimeout); err == nil {
+			drainTimeout = d
+		} else {
+			logger.Warn("invalid drain_timeout, using default 30s", "value", cfg.DrainTimeout, "err", err)
+		}
+	}
+
+	// Ensure graceful shutdown runs regardless of exit path.
+	defer func() {
+		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), drainTimeout)
+		defer shutdownCancel()
+		srv.Shutdown(shutdownCtx)
+		logger.Info("shuttled stopped gracefully")
+	}()
+
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
 
@@ -399,27 +436,10 @@ func run(configPath string) {
 	// Cancel context to stop accepting new connections
 	cancel()
 
-	// Parse drain timeout from config (default 30s)
-	drainTimeout := 30 * time.Second
-	if cfg.DrainTimeout != "" {
-		if d, err := time.ParseDuration(cfg.DrainTimeout); err == nil {
-			drainTimeout = d
-		} else {
-			logger.Warn("invalid drain_timeout, using default 30s", "value", cfg.DrainTimeout, "err", err)
-		}
-	}
-
 	// Start a goroutine that forces immediate shutdown on second signal
 	go func() {
 		sig := <-sigCh
 		logger.Warn("received second signal, forcing immediate exit", "signal", sig)
 		os.Exit(1)
 	}()
-
-	// Graceful shutdown with drain timeout
-	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), drainTimeout)
-	defer shutdownCancel()
-
-	srv.Shutdown(shutdownCtx)
-	logger.Info("shuttled stopped gracefully")
 }

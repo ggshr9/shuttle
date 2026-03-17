@@ -10,11 +10,29 @@ type StreamScheduler interface {
 	Pick(paths []*PathMetrics) *PathMetrics
 }
 
-// WeightedLatencyScheduler distributes streams proportional to inverse latency.
-// Lower latency paths receive more streams.
-type WeightedLatencyScheduler struct{}
+// NewWeightedLatencyScheduler returns a scheduler that distributes streams
+// proportional to inverse latency. Lower latency paths receive more streams.
+func NewWeightedLatencyScheduler() StreamScheduler {
+	return &weightedLatencyScheduler{}
+}
 
-func (s *WeightedLatencyScheduler) Pick(paths []*PathMetrics) *PathMetrics {
+// NewMinLatencyScheduler returns a scheduler that always picks the path
+// with the lowest latency.
+func NewMinLatencyScheduler() StreamScheduler {
+	return &minLatencyScheduler{}
+}
+
+// NewLoadBalanceScheduler returns a scheduler that picks the path with the
+// fewest active streams.
+func NewLoadBalanceScheduler() StreamScheduler {
+	return &loadBalanceScheduler{}
+}
+
+// weightedLatencyScheduler distributes streams proportional to inverse latency.
+// Lower latency paths receive more streams.
+type weightedLatencyScheduler struct{}
+
+func (s *weightedLatencyScheduler) Pick(paths []*PathMetrics) *PathMetrics {
 	eligible := filterEligible(paths)
 	if len(eligible) == 0 {
 		return nil
@@ -47,10 +65,10 @@ func (s *WeightedLatencyScheduler) Pick(paths []*PathMetrics) *PathMetrics {
 	return eligible[len(eligible)-1]
 }
 
-// MinLatencyScheduler always picks the path with the lowest latency.
-type MinLatencyScheduler struct{}
+// minLatencyScheduler always picks the path with the lowest latency.
+type minLatencyScheduler struct{}
 
-func (s *MinLatencyScheduler) Pick(paths []*PathMetrics) *PathMetrics {
+func (s *minLatencyScheduler) Pick(paths []*PathMetrics) *PathMetrics {
 	eligible := filterEligible(paths)
 	if len(eligible) == 0 {
 		return nil
@@ -64,10 +82,10 @@ func (s *MinLatencyScheduler) Pick(paths []*PathMetrics) *PathMetrics {
 	return best
 }
 
-// LoadBalanceScheduler picks the path with the fewest active streams.
-type LoadBalanceScheduler struct{}
+// loadBalanceScheduler picks the path with the fewest active streams.
+type loadBalanceScheduler struct{}
 
-func (s *LoadBalanceScheduler) Pick(paths []*PathMetrics) *PathMetrics {
+func (s *loadBalanceScheduler) Pick(paths []*PathMetrics) *PathMetrics {
 	eligible := filterEligible(paths)
 	if len(eligible) == 0 {
 		return nil

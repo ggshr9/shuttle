@@ -224,31 +224,33 @@ func (s *SOCKS5Server) handlePasswordAuth(conn net.Conn) error {
 	// RFC 1929: username/password auth
 	buf := make([]byte, 2)
 	if _, err := io.ReadFull(conn, buf); err != nil {
-		return err
+		return fmt.Errorf("socks5 auth read version: %w", err)
 	}
 	// buf[0] = version (0x01), buf[1] = username length
 	ulen := int(buf[1])
 	username := make([]byte, ulen)
 	if _, err := io.ReadFull(conn, username); err != nil {
-		return err
+		return fmt.Errorf("socks5 auth read username: %w", err)
 	}
 	plenBuf := make([]byte, 1)
 	if _, err := io.ReadFull(conn, plenBuf); err != nil {
-		return err
+		return fmt.Errorf("socks5 auth read password length: %w", err)
 	}
 	password := make([]byte, int(plenBuf[0]))
 	if _, err := io.ReadFull(conn, password); err != nil {
-		return err
+		return fmt.Errorf("socks5 auth read password: %w", err)
 	}
 
 	usernameOK := subtle.ConstantTimeCompare(username, []byte(s.config.Username))
 	passwordOK := subtle.ConstantTimeCompare(password, []byte(s.config.Password))
 	if usernameOK&passwordOK == 1 {
-		_, err := conn.Write([]byte{0x01, 0x00}) // success
-		return err
+		if _, err := conn.Write([]byte{0x01, 0x00}); err != nil {
+			return fmt.Errorf("socks5 auth write success: %w", err)
+		}
+		return nil
 	}
 	_, _ = conn.Write([]byte{0x01, 0x01}) // failure
-	return fmt.Errorf("auth failed")
+	return fmt.Errorf("socks5 auth failed")
 }
 
 func (s *SOCKS5Server) handleRequest(conn net.Conn) (string, error) {

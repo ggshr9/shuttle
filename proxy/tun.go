@@ -84,20 +84,18 @@ type natEntry struct {
 }
 
 type natTable struct {
-	mu  sync.RWMutex
+	mu  sync.Mutex
 	tcp map[natKey]*natEntry
 	udp map[natKey]*natEntry
 }
 
 func (n *natTable) getTCP(k natKey) *natEntry {
-	n.mu.RLock()
+	n.mu.Lock()
 	e := n.tcp[k]
-	n.mu.RUnlock()
 	if e != nil {
-		n.mu.Lock()
 		e.lastActive = time.Now()
-		n.mu.Unlock()
 	}
+	n.mu.Unlock()
 	return e
 }
 
@@ -115,14 +113,12 @@ func (n *natTable) deleteTCP(k natKey) {
 }
 
 func (n *natTable) getUDP(k natKey) *natEntry {
-	n.mu.RLock()
+	n.mu.Lock()
 	e := n.udp[k]
-	n.mu.RUnlock()
 	if e != nil {
-		n.mu.Lock()
 		e.lastActive = time.Now()
-		n.mu.Unlock()
 	}
+	n.mu.Unlock()
 	return e
 }
 

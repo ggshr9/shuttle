@@ -67,7 +67,7 @@ func TestMultipathPoolVirtualConnOpenStream(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	pool := NewMultipathPool(ctx, []transport.ClientTransport{ft}, "localhost:443", &MinLatencyScheduler{}, nil)
+	pool := NewMultipathPool(ctx, []transport.ClientTransport{ft}, "localhost:443", NewMinLatencyScheduler(), nil)
 	defer pool.Close()
 
 	vc := pool.VirtualConn()
@@ -97,7 +97,7 @@ func TestMultipathPoolStreamCloseDecrementsActive(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	pool := NewMultipathPool(ctx, []transport.ClientTransport{ft}, "localhost:443", &MinLatencyScheduler{}, nil)
+	pool := NewMultipathPool(ctx, []transport.ClientTransport{ft}, "localhost:443", NewMinLatencyScheduler(), nil)
 	defer pool.Close()
 
 	vc := pool.VirtualConn()
@@ -128,7 +128,7 @@ func TestMultipathPoolFallbackOnStreamError(t *testing.T) {
 	defer cancel()
 
 	// Use MinLatency scheduler; set latencies so broken is preferred first
-	pool := NewMultipathPool(ctx, []transport.ClientTransport{ft1, ft2}, "localhost:443", &MinLatencyScheduler{}, nil)
+	pool := NewMultipathPool(ctx, []transport.ClientTransport{ft1, ft2}, "localhost:443", NewMinLatencyScheduler(), nil)
 	defer pool.Close()
 
 	pool.mu.RLock()
@@ -157,7 +157,7 @@ func TestMultipathPoolAllPathsFail(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	pool := NewMultipathPool(ctx, []transport.ClientTransport{ft}, "localhost:443", &MinLatencyScheduler{}, nil)
+	pool := NewMultipathPool(ctx, []transport.ClientTransport{ft}, "localhost:443", NewMinLatencyScheduler(), nil)
 	defer pool.Close()
 
 	vc := pool.VirtualConn()
@@ -173,7 +173,7 @@ func TestMultipathPoolNoAvailablePaths(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	pool := NewMultipathPool(ctx, []transport.ClientTransport{ft}, "localhost:443", &MinLatencyScheduler{}, nil)
+	pool := NewMultipathPool(ctx, []transport.ClientTransport{ft}, "localhost:443", NewMinLatencyScheduler(), nil)
 	defer pool.Close()
 
 	vc := pool.VirtualConn()
@@ -190,7 +190,7 @@ func TestMultipathPoolClose(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	pool := NewMultipathPool(ctx, []transport.ClientTransport{ft}, "localhost:443", &MinLatencyScheduler{}, nil)
+	pool := NewMultipathPool(ctx, []transport.ClientTransport{ft}, "localhost:443", NewMinLatencyScheduler(), nil)
 	pool.Close()
 
 	if !conn.closeCalled.Load() {
@@ -212,7 +212,7 @@ func TestMultipathPoolUpdateMetrics(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	pool := NewMultipathPool(ctx, []transport.ClientTransport{ft}, "localhost:443", &MinLatencyScheduler{}, nil)
+	pool := NewMultipathPool(ctx, []transport.ClientTransport{ft}, "localhost:443", NewMinLatencyScheduler(), nil)
 	defer pool.Close()
 
 	pool.UpdateMetrics(map[string]*ProbeResult{
@@ -232,7 +232,7 @@ func TestMultipathPoolMultipleStreams(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	pool := NewMultipathPool(ctx, []transport.ClientTransport{ft}, "localhost:443", &MinLatencyScheduler{}, nil)
+	pool := NewMultipathPool(ctx, []transport.ClientTransport{ft}, "localhost:443", NewMinLatencyScheduler(), nil)
 	defer pool.Close()
 
 	vc := pool.VirtualConn()
@@ -283,7 +283,7 @@ func TestTrackedStreamDoubleClose(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	pool := NewMultipathPool(ctx, []transport.ClientTransport{ft}, "localhost:443", &MinLatencyScheduler{}, nil)
+	pool := NewMultipathPool(ctx, []transport.ClientTransport{ft}, "localhost:443", NewMinLatencyScheduler(), nil)
 	defer pool.Close()
 
 	vc := pool.VirtualConn()

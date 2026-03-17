@@ -90,7 +90,7 @@ func TestMultipathPoolCreation(t *testing.T) {
 		&mpMockTransport{name: "cdn", latency: time.Millisecond},
 	}
 
-	pool := selector.NewMultipathPool(ctx, transports, "127.0.0.1:0", &selector.WeightedLatencyScheduler{}, nil)
+	pool := selector.NewMultipathPool(ctx, transports, "127.0.0.1:0", selector.NewWeightedLatencyScheduler(), nil)
 	defer pool.Close()
 
 	paths := pool.PathInfos()
@@ -114,7 +114,7 @@ func TestMultipathOpenStream(t *testing.T) {
 		&mpMockTransport{name: "cdn", latency: time.Millisecond},
 	}
 
-	pool := selector.NewMultipathPool(ctx, transports, "127.0.0.1:0", &selector.LoadBalanceScheduler{}, nil)
+	pool := selector.NewMultipathPool(ctx, transports, "127.0.0.1:0", selector.NewLoadBalanceScheduler(), nil)
 	defer pool.Close()
 
 	vconn := pool.VirtualConn()
@@ -154,7 +154,7 @@ func TestWeightedScheduler(t *testing.T) {
 	slow := &mpMockTransport{name: "slow", latency: time.Microsecond}
 
 	transports := []transport.ClientTransport{fast, slow}
-	pool := selector.NewMultipathPool(ctx, transports, "127.0.0.1:0", &selector.WeightedLatencyScheduler{}, nil)
+	pool := selector.NewMultipathPool(ctx, transports, "127.0.0.1:0", selector.NewWeightedLatencyScheduler(), nil)
 	defer pool.Close()
 
 	// Manually update metrics: fast=1ms, slow=100ms
@@ -200,7 +200,7 @@ func TestMinLatencyScheduler(t *testing.T) {
 		&mpMockTransport{name: "slow", latency: time.Microsecond},
 	}
 
-	pool := selector.NewMultipathPool(ctx, transports, "127.0.0.1:0", &selector.MinLatencyScheduler{}, nil)
+	pool := selector.NewMultipathPool(ctx, transports, "127.0.0.1:0", selector.NewMinLatencyScheduler(), nil)
 	defer pool.Close()
 
 	pool.UpdateMetrics(map[string]*selector.ProbeResult{
@@ -243,7 +243,7 @@ func TestLoadBalanceScheduler(t *testing.T) {
 		&mpMockTransport{name: "c", latency: time.Microsecond},
 	}
 
-	pool := selector.NewMultipathPool(ctx, transports, "127.0.0.1:0", &selector.LoadBalanceScheduler{}, nil)
+	pool := selector.NewMultipathPool(ctx, transports, "127.0.0.1:0", selector.NewLoadBalanceScheduler(), nil)
 	defer pool.Close()
 
 	vconn := pool.VirtualConn()
@@ -281,7 +281,7 @@ func TestMultipathPathFailure(t *testing.T) {
 	failing := &mpMockTransport{name: "failing", latency: time.Microsecond}
 
 	transports := []transport.ClientTransport{failing, healthy}
-	pool := selector.NewMultipathPool(ctx, transports, "127.0.0.1:0", &selector.MinLatencyScheduler{}, nil)
+	pool := selector.NewMultipathPool(ctx, transports, "127.0.0.1:0", selector.NewMinLatencyScheduler(), nil)
 	defer pool.Close()
 
 	// Set latencies so failing is preferred
@@ -322,7 +322,7 @@ func TestMultipathReconnect(t *testing.T) {
 	mt := &mpMockTransport{name: "reconnectable", latency: time.Microsecond}
 	transports := []transport.ClientTransport{mt}
 
-	pool := selector.NewMultipathPool(ctx, transports, "127.0.0.1:0", &selector.MinLatencyScheduler{}, nil)
+	pool := selector.NewMultipathPool(ctx, transports, "127.0.0.1:0", selector.NewMinLatencyScheduler(), nil)
 	defer pool.Close()
 
 	paths := pool.PathInfos()
@@ -352,7 +352,7 @@ func TestMultipathAllFail(t *testing.T) {
 	t2 := &mpMockTransport{name: "b", failDial: true}
 
 	transports := []transport.ClientTransport{t1, t2}
-	pool := selector.NewMultipathPool(ctx, transports, "127.0.0.1:0", &selector.MinLatencyScheduler{}, nil)
+	pool := selector.NewMultipathPool(ctx, transports, "127.0.0.1:0", selector.NewMinLatencyScheduler(), nil)
 	defer pool.Close()
 
 	vconn := pool.VirtualConn()
@@ -370,7 +370,7 @@ func TestTrackedStreamClose(t *testing.T) {
 		&mpMockTransport{name: "test", latency: time.Microsecond},
 	}
 
-	pool := selector.NewMultipathPool(ctx, transports, "127.0.0.1:0", &selector.MinLatencyScheduler{}, nil)
+	pool := selector.NewMultipathPool(ctx, transports, "127.0.0.1:0", selector.NewMinLatencyScheduler(), nil)
 	defer pool.Close()
 
 	vconn := pool.VirtualConn()
@@ -503,7 +503,7 @@ func TestSingleTransport(t *testing.T) {
 		&mpMockTransport{name: "only", latency: time.Microsecond},
 	}
 
-	pool := selector.NewMultipathPool(ctx, transports, "127.0.0.1:0", &selector.WeightedLatencyScheduler{}, nil)
+	pool := selector.NewMultipathPool(ctx, transports, "127.0.0.1:0", selector.NewWeightedLatencyScheduler(), nil)
 	defer pool.Close()
 
 	vconn := pool.VirtualConn()

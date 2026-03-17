@@ -31,10 +31,10 @@ func DetectConflicts(rules []Rule, geoSite *GeoSiteDB) []Conflict {
 		var ruleDesc string
 
 		switch rule.Type {
-		case "domain", "domain-suffix":
+		case RuleTypeDomain, RuleTypeDomainSuffix:
 			domains = rule.Values
 			ruleDesc = fmt.Sprintf("%s: %s", rule.Type, strings.Join(rule.Values, ", "))
-		case "geosite":
+		case RuleTypeGeoSite:
 			ruleDesc = "geosite: " + strings.Join(rule.Values, ", ")
 			if geoSite != nil {
 				for _, cat := range rule.Values {

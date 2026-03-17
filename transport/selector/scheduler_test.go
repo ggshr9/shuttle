@@ -64,7 +64,7 @@ func TestMinLatencyScheduler(t *testing.T) {
 	paths[1].Latency = 5 * time.Millisecond
 	paths[2].Latency = 15 * time.Millisecond
 
-	s := &MinLatencyScheduler{}
+	s := NewMinLatencyScheduler()
 	picked := s.Pick(paths)
 	if picked != paths[1] {
 		t.Fatalf("expected path with 5ms latency, got %v", picked.Latency)
@@ -72,7 +72,7 @@ func TestMinLatencyScheduler(t *testing.T) {
 }
 
 func TestMinLatencySchedulerEmpty(t *testing.T) {
-	s := &MinLatencyScheduler{}
+	s := NewMinLatencyScheduler()
 	if s.Pick(nil) != nil {
 		t.Fatal("expected nil for empty paths")
 	}
@@ -84,7 +84,7 @@ func TestLoadBalanceScheduler(t *testing.T) {
 	atomic.StoreInt64(&paths[1].ActiveStreams, 2)
 	atomic.StoreInt64(&paths[2].ActiveStreams, 8)
 
-	s := &LoadBalanceScheduler{}
+	s := NewLoadBalanceScheduler()
 	picked := s.Pick(paths)
 	if picked != paths[1] {
 		t.Fatalf("expected path with fewest streams (2), got %d", atomic.LoadInt64(&picked.ActiveStreams))
@@ -92,7 +92,7 @@ func TestLoadBalanceScheduler(t *testing.T) {
 }
 
 func TestLoadBalanceSchedulerEmpty(t *testing.T) {
-	s := &LoadBalanceScheduler{}
+	s := NewLoadBalanceScheduler()
 	if s.Pick(nil) != nil {
 		t.Fatal("expected nil for empty paths")
 	}
@@ -103,7 +103,7 @@ func TestWeightedLatencyScheduler(t *testing.T) {
 	paths[0].Latency = 1 * time.Millisecond  // low latency → high weight
 	paths[1].Latency = 100 * time.Millisecond // high latency → low weight
 
-	s := &WeightedLatencyScheduler{}
+	s := NewWeightedLatencyScheduler()
 
 	// Run many picks — lower latency path should be picked more often
 	counts := map[int]int{0: 0, 1: 0}
@@ -124,7 +124,7 @@ func TestWeightedLatencyScheduler(t *testing.T) {
 
 func TestWeightedLatencySchedulerSingle(t *testing.T) {
 	paths := makePaths(1, true)
-	s := &WeightedLatencyScheduler{}
+	s := NewWeightedLatencyScheduler()
 	picked := s.Pick(paths)
 	if picked != paths[0] {
 		t.Fatal("expected the only path to be picked")

@@ -238,6 +238,107 @@ func (e *Engine) buildRetryConfig(cfg config.RetryConfig) RetryConfig {
 	return rc
 }
 
+// resolveTarget resolves a host string to an IP address, using the DNS resolver
+// with a fallback to the system resolver.
+func resolveTarget(ctx context.Context, host string, dnsResolver *router.DNSResolver) (net.IP, error) {
+	if parsedIP := net.ParseIP(host); parsedIP != nil {
+		return parsedIP, nil
+	}
+	ips, err := dnsResolver.Resolve(ctx, host)
+	if err != nil || len(ips) == 0 {
+		ips2, err2 := net.DefaultResolver.LookupIP(ctx, "ip4", host)
+		if err2 != nil {
+			return nil, fmt.Errorf("dns resolve %s: %w", host, err2)
+		}
+		ips = ips2
+	}
+	if len(ips) == 0 {
+		return nil, fmt.Errorf("no DNS results for %s", host)
+	}
+	return ips[0], nil
+}
+
+// dialProxyStream dials the proxy server, opens a stream, and returns the
+// connection and stream. It handles retry, circuit breaker recording, and
+// stream metric wrapping.
+func (e *Engine) dialProxyStream(
+	ctx context.Context,
+	serverAddr, addr, network string,
+	retryCfg RetryConfig,
+	shaperCfg obfs.ShaperConfig,
+	classifier *qos.Classifier,
+) (net.Conn, error) {
+	curSel := e.selector()
+	if curSel == nil {
+		return nil, fmt.Errorf("no active selector")
+	}
+	if cb := e.circuitBreaker; cb != nil && !cb.Allow() {
+		return nil, fmt.Errorf("circuit breaker open for %s, retry after cooldown", serverAddr)
+	}
+
+	var conn transport.Connection
+	var rawStream transport.Stream
+	err := retryWithBackoff(ctx, retryCfg, func() error {
+		var dialErr error
+		conn, dialErr = curSel.Dial(ctx, serverAddr)
+		if dialErr != nil {
+			return fmt.Errorf("proxy dial: %w", dialErr)
+		}
+		rawStream, dialErr = conn.OpenStream(ctx)
+		if dialErr != nil {
+			return fmt.Errorf("open stream: %w", dialErr)
+		}
+		return nil
+	})
+	if err != nil {
+		if cb := e.circuitBreaker; cb != nil {
+			cb.RecordFailure()
+		}
+		return nil, err
+	}
+	if cb := e.circuitBreaker; cb != nil {
+		cb.RecordSuccess()
+	}
+
+	// Wrap with measured stream for per-stream metrics.
+	seq := atomic.AddUint64(&e.connSeq, 1)
+	connID := strconv.FormatUint(seq, 16)
+	st := e.streamTracker
+	transportType := ""
+	if curSel != nil {
+		transportType = curSel.ActiveTransport()
+	}
+	metrics := st.Track(rawStream.StreamID(), addr, transportType)
+	metrics.ConnID = connID
+	measured := stream.NewMeasuredStream(rawStream, metrics)
+
+	// Classify traffic and set QoS priority on the stream.
+	if classifier != nil {
+		port := extractPort(addr)
+		priority := classifier.ClassifyPort(port)
+		measured.SetPriority(int(priority))
+	}
+
+	// For UDP streams, prepend the UDP marker so the server uses UDP relay.
+	var header []byte
+	if network == "udp" {
+		header = []byte(proxy.UDPStreamPrefix + addr + "\n")
+	} else {
+		header = []byte(addr + "\n")
+	}
+	if _, err := measured.Write(header); err != nil {
+		measured.Close()
+		return nil, fmt.Errorf("send target: %w", err)
+	}
+
+	sc := &streamConn{stream: measured, addr: addr}
+	if shaperCfg.Enabled {
+		shaper := obfs.NewShaper(measured, shaperCfg)
+		return &shapedConn{streamConn: sc, shaper: shaper}, nil
+	}
+	return sc, nil
+}
+
 // createDialer builds the proxy dialer function.
 func (e *Engine) createDialer(cfg *config.ClientConfig, rt *router.Router, dnsResolver *router.DNSResolver) func(context.Context, string, string) (net.Conn, error) {
 	serverAddr := cfg.Server.Addr
@@ -250,26 +351,13 @@ func (e *Engine) createDialer(cfg *config.ClientConfig, rt *router.Router, dnsRe
 	return func(dialCtx context.Context, network, addr string) (net.Conn, error) {
 		host, port, err := net.SplitHostPort(addr)
 		if err != nil {
-			host = addr // fallback: use addr directly (e.g. bare hostname)
+			host = addr
 			port = ""
 		}
 
-		var ip net.IP
-		if parsedIP := net.ParseIP(host); parsedIP != nil {
-			ip = parsedIP
-		} else {
-			ips, err := dnsResolver.Resolve(dialCtx, host)
-			if err != nil || len(ips) == 0 {
-				ips2, err2 := net.DefaultResolver.LookupIP(dialCtx, "ip4", host)
-				if err2 != nil {
-					return nil, fmt.Errorf("dns resolve %s: %w", host, err2)
-				}
-				ips = ips2
-			}
-			if len(ips) == 0 {
-				return nil, fmt.Errorf("no DNS results for %s", host)
-			}
-			ip = ips[0]
+		ip, err := resolveTarget(dialCtx, host, dnsResolver)
+		if err != nil {
+			return nil, err
 		}
 
 		procName := proxy.ProcessFromContext(dialCtx)
@@ -281,75 +369,61 @@ func (e *Engine) createDialer(cfg *config.ClientConfig, rt *router.Router, dnsRe
 		case router.ActionReject:
 			return nil, fmt.Errorf("rejected: %s", addr)
 		default:
-			curSel := e.selector()
-			if curSel == nil {
-				return nil, fmt.Errorf("no active selector")
-			}
-			// Check circuit breaker before attempting connection.
-			if cb := e.circuitBreaker; cb != nil && !cb.Allow() {
-				return nil, fmt.Errorf("circuit breaker open for %s, retry after cooldown", serverAddr)
-			}
-			var conn transport.Connection
-			var rawStream transport.Stream
-			err := retryWithBackoff(dialCtx, retryCfg, func() error {
-				var dialErr error
-				conn, dialErr = curSel.Dial(dialCtx, serverAddr)
-				if dialErr != nil {
-					return fmt.Errorf("proxy dial: %w", dialErr)
-				}
-				rawStream, dialErr = conn.OpenStream(dialCtx)
-				if dialErr != nil {
-					return fmt.Errorf("open stream: %w", dialErr)
-				}
-				return nil
-			})
-			if err != nil {
-				if cb := e.circuitBreaker; cb != nil {
-					cb.RecordFailure()
-				}
-				return nil, err
-			}
-			if cb := e.circuitBreaker; cb != nil {
-				cb.RecordSuccess()
-			}
-			// Wrap with measured stream for per-stream metrics.
-			seq := atomic.AddUint64(&e.connSeq, 1)
-			connID := strconv.FormatUint(seq, 16)
-			st := e.streamTracker
-			transportType := ""
-			if curSel != nil {
-				transportType = curSel.ActiveTransport()
-			}
-			metrics := st.Track(rawStream.StreamID(), addr, transportType)
-			metrics.ConnID = connID
-			measured := stream.NewMeasuredStream(rawStream, metrics)
-
-			// Classify traffic and set QoS priority on the stream.
-			if classifier != nil {
-				port := extractPort(addr)
-				priority := classifier.ClassifyPort(port)
-				measured.SetPriority(int(priority))
-			}
-
-			// For UDP streams, prepend the UDP marker so the server uses UDP relay.
-			var header []byte
-			if network == "udp" {
-				header = []byte(proxy.UDPStreamPrefix + addr + "\n")
-			} else {
-				header = []byte(addr + "\n")
-			}
-			if _, err := measured.Write(header); err != nil {
-				measured.Close()
-				return nil, fmt.Errorf("send target: %w", err)
-			}
-			sc := &streamConn{stream: measured, addr: addr}
-			if shaperCfg.Enabled {
-				shaper := obfs.NewShaper(measured, shaperCfg)
-				return &shapedConn{streamConn: sc, shaper: shaper}, nil
-			}
-			return sc, nil
+			return e.dialProxyStream(dialCtx, serverAddr, addr, network, retryCfg, shaperCfg, classifier)
 		}
 	}
+}
+
+// startSOCKS5 starts the SOCKS5 proxy server if configured.
+func (e *Engine) startSOCKS5(ctx context.Context, cfg *config.ClientConfig, dialer func(context.Context, string, string) (net.Conn, error), procResolver *procnet.Resolver) (func() error, error) {
+	socks := proxy.NewSOCKS5Server(&proxy.SOCKS5Config{
+		ListenAddr: cfg.Proxy.SOCKS5.Listen,
+	}, dialer, e.logger)
+	socks.ProcResolver = procResolver
+	socks.QoSClassifier = qos.NewClassifier(&cfg.QoS)
+	if err := socks.Start(ctx); err != nil {
+		return nil, fmt.Errorf("socks5: %w", err)
+	}
+	return socks.Close, nil
+}
+
+// startHTTPProxy starts the HTTP CONNECT proxy server if configured.
+func (e *Engine) startHTTPProxy(ctx context.Context, cfg *config.ClientConfig, dialer func(context.Context, string, string) (net.Conn, error), procResolver *procnet.Resolver) (func() error, error) {
+	httpProxy := proxy.NewHTTPServer(&proxy.HTTPConfig{
+		ListenAddr: cfg.Proxy.HTTP.Listen,
+	}, dialer, e.logger)
+	httpProxy.ProcResolver = procResolver
+	httpProxy.QoSClassifier = qos.NewClassifier(&cfg.QoS)
+	if err := httpProxy.Start(ctx); err != nil {
+		return nil, fmt.Errorf("http proxy: %w", err)
+	}
+	return httpProxy.Close, nil
+}
+
+// startTUN starts the TUN device proxy and optionally the mesh network.
+// Returns closers for all started components. If TUN fails, it logs a warning
+// and returns nil (non-fatal).
+func (e *Engine) startTUN(ctx context.Context, cfg *config.ClientConfig, dialer func(context.Context, string, string) (net.Conn, error), procResolver *procnet.Resolver) []func() error {
+	tunServer := proxy.NewTUNServer(&proxy.TUNConfig{
+		DeviceName: cfg.Proxy.TUN.DeviceName,
+		CIDR:       cfg.Proxy.TUN.CIDR,
+		MTU:        cfg.Proxy.TUN.MTU,
+		AutoRoute:  cfg.Proxy.TUN.AutoRoute,
+		TunFD:      cfg.Proxy.TUN.TunFD,
+	}, dialer, e.logger)
+	tunServer.ProcResolver = procResolver
+	tunServer.QoSClassifier = qos.NewClassifier(&cfg.QoS)
+	if err := tunServer.Start(ctx); err != nil {
+		e.logger.Warn("TUN device failed", "err", err)
+		return nil
+	}
+	closers := []func() error{tunServer.Close}
+	if cfg.Mesh.Enabled {
+		if mc := e.connectMesh(ctx, cfg, tunServer); mc != nil {
+			closers = append(closers, mc.Close)
+		}
+	}
+	return closers
 }
 
 // startProxies starts all configured local proxy servers.
@@ -372,51 +446,23 @@ func (e *Engine) startProxies(ctx context.Context, cfg *config.ClientConfig, dia
 	}
 
 	if cfg.Proxy.SOCKS5.Enabled {
-		socks := proxy.NewSOCKS5Server(&proxy.SOCKS5Config{
-			ListenAddr: cfg.Proxy.SOCKS5.Listen,
-		}, dialer, e.logger)
-		socks.ProcResolver = procResolver
-		socks.QoSClassifier = qos.NewClassifier(&cfg.QoS)
-		if err := socks.Start(ctx); err != nil {
-			return cleanup(fmt.Errorf("socks5: %w", err))
+		closer, err := e.startSOCKS5(ctx, cfg, dialer, procResolver)
+		if err != nil {
+			return cleanup(err)
 		}
-		closers = append(closers, socks.Close)
+		closers = append(closers, closer)
 	}
 
 	if cfg.Proxy.HTTP.Enabled {
-		httpProxy := proxy.NewHTTPServer(&proxy.HTTPConfig{
-			ListenAddr: cfg.Proxy.HTTP.Listen,
-		}, dialer, e.logger)
-		httpProxy.ProcResolver = procResolver
-		httpProxy.QoSClassifier = qos.NewClassifier(&cfg.QoS)
-		if err := httpProxy.Start(ctx); err != nil {
-			return cleanup(fmt.Errorf("http proxy: %w", err))
+		closer, err := e.startHTTPProxy(ctx, cfg, dialer, procResolver)
+		if err != nil {
+			return cleanup(err)
 		}
-		closers = append(closers, httpProxy.Close)
+		closers = append(closers, closer)
 	}
 
 	if cfg.Proxy.TUN.Enabled {
-		tunServer := proxy.NewTUNServer(&proxy.TUNConfig{
-			DeviceName: cfg.Proxy.TUN.DeviceName,
-			CIDR:       cfg.Proxy.TUN.CIDR,
-			MTU:        cfg.Proxy.TUN.MTU,
-			AutoRoute:  cfg.Proxy.TUN.AutoRoute,
-			TunFD:      cfg.Proxy.TUN.TunFD,
-		}, dialer, e.logger)
-		tunServer.ProcResolver = procResolver
-		tunServer.QoSClassifier = qos.NewClassifier(&cfg.QoS)
-		if err := tunServer.Start(ctx); err != nil {
-			e.logger.Warn("TUN device failed", "err", err)
-		} else {
-			closers = append(closers, tunServer.Close)
-
-			// Mesh setup: requires TUN to be running
-			if cfg.Mesh.Enabled {
-				if mc := e.connectMesh(ctx, cfg, tunServer); mc != nil {
-					closers = append(closers, mc.Close)
-				}
-			}
-		}
+		closers = append(closers, e.startTUN(ctx, cfg, dialer, procResolver)...)
 	} else if cfg.Mesh.Enabled {
 		e.logger.Warn("mesh requires TUN to be enabled, skipping mesh")
 	}
