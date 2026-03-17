@@ -3,6 +3,7 @@ package api
 import (
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"strings"
@@ -68,7 +69,9 @@ func registerMiscRoutes(mux *http.ServeMux, eng *engine.Engine, subMgr *subscrip
 		// Restore subscriptions
 		if subMgr != nil && len(backup.Subscriptions) > 0 {
 			for _, sub := range backup.Subscriptions {
-				_, _ = subMgr.Add(sub.Name, sub.URL)
+				if _, err := subMgr.Add(sub.Name, sub.URL); err != nil {
+					slog.Warn("restore: failed to add subscription", "name", sub.Name, "url", sub.URL, "err", err)
+				}
 			}
 		}
 

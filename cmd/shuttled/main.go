@@ -5,36 +5,21 @@ import (
 	"flag"
 	"fmt"
 	"log/slog"
-	"net/http"
-	"net/http/pprof"
 	"os"
 	"os/signal"
-	"sync"
 	"syscall"
 	"time"
 
 	"github.com/shuttleX/shuttle/config"
-	"github.com/shuttleX/shuttle/congestion"
 	"github.com/shuttleX/shuttle/crypto"
 	"github.com/shuttleX/shuttle/internal/logutil"
 	"github.com/shuttleX/shuttle/internal/qrterm"
 	"github.com/shuttleX/shuttle/internal/sysopt"
-	"github.com/shuttleX/shuttle/mesh"
-	meshsignal "github.com/shuttleX/shuttle/mesh/signal"
 	"github.com/shuttleX/shuttle/server"
-	"github.com/shuttleX/shuttle/server/admin"
-	"github.com/shuttleX/shuttle/server/audit"
-	"github.com/shuttleX/shuttle/server/metrics"
-	"github.com/shuttleX/shuttle/transport/cdn"
-	"github.com/shuttleX/shuttle/transport/h3"
-	"github.com/shuttleX/shuttle/transport/reality"
-	rtcTransport "github.com/shuttleX/shuttle/transport/webrtc"
 )
 
 // version is set via ldflags at build time: -X main.version=<tag>
 var version = "0.1.0"
-
-const maxConcurrentStreams = 1024
 
 func main() {
 	if len(os.Args) < 2 {
@@ -53,7 +38,7 @@ func main() {
 		domain := initCmd.String("domain", "", "server domain name (auto-detects IP if empty)")
 		password := initCmd.String("password", "", "set password (auto-generate if empty)")
 		transport := initCmd.String("transport", "both", "transport: h3, reality, both")
-		listen := initCmd.String("listen", ":443", "listen address")
+		listen := initCmd.String("listen", config.DefaultListenPort, "listen address")
 		force := initCmd.Bool("force", false, "overwrite existing config")
 		meshFlag := initCmd.Bool("mesh", false, "enable mesh VPN with P2P")
 		initCmd.Usage = func() {
@@ -375,26 +360,16 @@ func run(configPath string) {
 	// Apply system optimizations
 	sysopt.Apply(logger)
 
-	// Start pprof server if enabled
-	var pprofServer *http.Server
-	if cfg.Debug.PprofEnabled {
-		pprofListen := cfg.Debug.PprofListen
-		if pprofListen == "" {
-			pprofListen = "127.0.0.1:6060"
-		}
-		pprofMux := http.NewServeMux()
-		pprofMux.HandleFunc("/debug/pprof/", pprof.Index)
-		pprofMux.HandleFunc("/debug/pprof/cmdline", pprof.Cmdline)
-		pprofMux.HandleFunc("/debug/pprof/profile", pprof.Profile)
-		pprofMux.HandleFunc("/debug/pprof/symbol", pprof.Symbol)
-		pprofMux.HandleFunc("/debug/pprof/trace", pprof.Trace)
-		pprofServer = &http.Server{Addr: pprofListen, Handler: pprofMux}
-		go func() {
-			logger.Info("pprof enabled", "addr", pprofListen)
-			if err := pprofServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-				logger.Error("pprof server failed", "err", err)
-			}
-		}()
+	// Create the server with all subsystems
+	srv, err := server.New(server.Config{
+		ServerConfig: cfg,
+		ConfigPath:   configPath,
+		Version:      version,
+		Logger:       logger,
+	})
+	if err != nil {
+		logger.Error("failed to initialize server", "err", err)
+		os.Exit(1)
 	}
 
 	// Context for the main server lifecycle
@@ -404,272 +379,25 @@ func run(configPath string) {
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
 
-	// --- Build congestion control for server-side QUIC ---
-	adaptive := congestion.NewAdaptive(nil, logger)
-	ccAdapter := congestion.NewQUICAdapter(adaptive)
-
-	// Setup cover site
-	coverHandler := server.NewCoverHandler(&server.CoverConfig{
-		Mode:       cfg.Cover.Mode,
-		StaticDir:  cfg.Cover.StaticDir,
-		ReverseURL: cfg.Cover.ReverseURL,
-	}, logger)
-
-	// Create multi-listener
-	ml := server.NewMultiListener(&server.ListenerConfig{
-		ListenAddr: cfg.Listen,
-	}, logger)
-
-	// Register transports
-	if cfg.Transport.H3.Enabled {
-		h3Server := h3.NewServer(&h3.ServerConfig{
-			ListenAddr:        cfg.Listen,
-			CertFile:          cfg.TLS.CertFile,
-			KeyFile:           cfg.TLS.KeyFile,
-			Password:          cfg.Auth.Password,
-			PathPrefix:        cfg.Transport.H3.PathPrefix,
-			CoverSite:         coverHandler,
-			CongestionControl: ccAdapter,
-		}, logger)
-		ml.AddTransport(h3Server)
-	}
-
-	if cfg.Transport.Reality.Enabled {
-		realityServer, err := reality.NewServer(&reality.ServerConfig{
-			ListenAddr: cfg.Listen,
-			PrivateKey: cfg.Auth.PrivateKey,
-			ShortIDs:   cfg.Transport.Reality.ShortIDs,
-			TargetSNI:  cfg.Transport.Reality.TargetSNI,
-			TargetAddr: cfg.Transport.Reality.TargetAddr,
-			CertFile:   cfg.TLS.CertFile,
-			KeyFile:    cfg.TLS.KeyFile,
-			Yamux:      &cfg.Yamux,
-		}, logger)
-		if err != nil {
-			logger.Error("reality transport init failed", "err", err)
-			fmt.Fprintf(os.Stderr, "Reality transport: %v\n", err)
-			os.Exit(1)
-		}
-		ml.AddTransport(realityServer)
-	}
-
-	if cfg.Transport.CDN.Enabled {
-		cdnListen := cfg.Transport.CDN.Listen
-		if cdnListen == "" {
-			cdnListen = cfg.Listen
-		}
-		cdnServer := cdn.NewServer(&cdn.ServerConfig{
-			ListenAddr: cdnListen,
-			CertFile:   cfg.TLS.CertFile,
-			KeyFile:    cfg.TLS.KeyFile,
-			Password:   cfg.Auth.Password,
-			Path:       cfg.Transport.CDN.Path,
-		}, logger)
-		ml.AddTransport(cdnServer)
-	}
-
-	if cfg.Transport.WebRTC.Enabled {
-		webrtcServer := rtcTransport.NewServer(&rtcTransport.ServerConfig{
-			SignalListen: cfg.Transport.WebRTC.SignalListen,
-			CertFile:     cfg.TLS.CertFile,
-			KeyFile:      cfg.TLS.KeyFile,
-			Password:     cfg.Auth.Password,
-			STUNServers:  cfg.Transport.WebRTC.STUNServers,
-			TURNServers:  cfg.Transport.WebRTC.TURNServers,
-			TURNUser:     cfg.Transport.WebRTC.TURNUser,
-			TURNPass:     cfg.Transport.WebRTC.TURNPass,
-			ICEPolicy:    cfg.Transport.WebRTC.ICEPolicy,
-		}, logger)
-		ml.AddTransport(webrtcServer)
-	}
-
-	// Start listening
-	if err := ml.Start(ctx); err != nil {
-		logger.Error("failed to start server", "err", err)
-		os.Exit(1)
-	}
-
-	// Setup mesh if enabled
-	var peerTable *mesh.PeerTable
-	var ipAllocator *mesh.IPAllocator
-	var signalHub *meshsignal.Hub
-	if cfg.Mesh.Enabled {
-		var err error
-		ipAllocator, err = mesh.NewIPAllocator(cfg.Mesh.CIDR)
-		if err != nil {
-			logger.Error("failed to create mesh IP allocator", "err", err)
-			os.Exit(1)
-		}
-		peerTable = mesh.NewPeerTable(logger)
-		logger.Info("mesh enabled", "cidr", cfg.Mesh.CIDR)
-
-		// Create signal hub for P2P signaling if enabled
-		if cfg.Mesh.P2PEnabled {
-			signalHub = meshsignal.NewHub(logger)
-			logger.Info("mesh P2P signaling enabled")
-		}
-	}
-
-	// Create IP reputation tracker if enabled
-	var reputation *server.Reputation
-	if cfg.Reputation.Enabled {
-		maxFailures := cfg.Reputation.MaxFailures
-		if maxFailures <= 0 {
-			maxFailures = 5
-		}
-		reputation = server.NewReputation(server.ReputationConfig{
-			Enabled:     true,
-			MaxFailures: maxFailures,
-		})
-		// Periodic cleanup of expired records
-		go func() {
-			ticker := time.NewTicker(5 * time.Minute)
-			defer ticker.Stop()
-			for {
-				select {
-				case <-ctx.Done():
-					return
-				case <-ticker.C:
-					reputation.Cleanup()
-				}
-			}
-		}()
-		logger.Info("IP reputation tracking enabled", "max_failures", maxFailures)
-	}
-
-	// Create user store (shared between admin API and stream handler)
-	users := admin.NewUserStore(cfg.Admin.Users)
-
-	// Create audit logger if enabled
-	var auditLog *audit.Logger
-	if cfg.Audit.Enabled {
-		var err error
-		auditLog, err = audit.NewLogger(cfg.Audit.LogDir, cfg.Audit.MaxEntries)
-		if err != nil {
-			logger.Error("failed to create audit logger", "err", err)
-		} else {
-			logger.Info("audit logging enabled", "log_dir", cfg.Audit.LogDir)
-		}
-	}
-
-	// Create metrics collector
-	metricsCollector := metrics.NewCollector()
-
-	// Start admin API if enabled
-	var adminInfo *admin.ServerInfo
-	var adminServer *http.Server
-	if cfg.Admin.Enabled {
-		adminInfo = &admin.ServerInfo{
-			StartTime:  time.Now(),
-			Version:    version,
-			ConfigPath: configPath,
-		}
-		var err error
-		adminServer, err = admin.ListenAndServe(&cfg.Admin, adminInfo, cfg, configPath, users, auditLog, metricsCollector)
-		if err != nil {
-			logger.Error("failed to start admin API", "err", err)
-		} else {
-			logger.Info("admin API listening", "addr", cfg.Admin.Listen)
-		}
-	}
-
-	// Start cluster manager if enabled
-	var cluster *server.ClusterManager
-	if cfg.Cluster.Enabled {
-		clusterPeers := make([]server.PeerConfig, len(cfg.Cluster.Peers))
-		for i, p := range cfg.Cluster.Peers {
-			clusterPeers[i] = server.PeerConfig{Name: p.Name, Addr: p.Addr}
-		}
-		clusterInfo := &server.ClusterNodeInfo{Version: version}
-		if adminInfo != nil {
-			clusterInfo.ActiveConns = &adminInfo.ActiveConns
-			clusterInfo.TotalConns = &adminInfo.TotalConns
-			clusterInfo.BytesSent = &adminInfo.BytesSent
-			clusterInfo.BytesRecv = &adminInfo.BytesRecv
-		}
-		cluster = server.NewClusterManager(&server.ClusterConfig{
-			Enabled:  true,
-			NodeName: cfg.Cluster.NodeName,
-			Secret:   cfg.Cluster.Secret,
-			Peers:    clusterPeers,
-			Interval: cfg.Cluster.Interval,
-			MaxConns: cfg.Cluster.MaxConns,
-		}, clusterInfo, logger)
-		cluster.Start(ctx)
-		logger.Info("cluster enabled", "node", cfg.Cluster.NodeName, "peers", len(cfg.Cluster.Peers))
-	}
-
-	logger.Info("shuttled is running", "listen", cfg.Listen)
-
-	// Create the connection handler with all dependencies
-	h := &server.Handler{
-		Users:      users,
-		Reputation: reputation,
-		AuditLog:   auditLog,
-		PeerTable:  peerTable,
-		Allocator:  ipAllocator,
-		SignalHub:  signalHub,
-		Metrics:    metricsCollector,
-		AdminInfo:  adminInfo,
-		StreamSem:  make(chan struct{}, maxConcurrentStreams),
-		Logger:     logger,
-	}
-
-	var connWg sync.WaitGroup
-
-	// Handle connections
+	// Start the server in a goroutine (Start blocks on accept loop)
+	errCh := make(chan error, 1)
 	go func() {
-		for {
-			conn, err := ml.Accept(ctx)
-			if err != nil {
-				if ctx.Err() != nil {
-					return
-				}
-				logger.Error("accept error", "err", err)
-				continue
-			}
-
-			// Check IP reputation before processing connection
-			if reputation != nil {
-				remoteIP := server.ExtractIP(conn.RemoteAddr())
-				if reputation.IsBanned(remoteIP) {
-					logger.Debug("rejecting banned IP", "ip", remoteIP)
-					conn.Close()
-					continue
-				}
-			}
-
-			if adminInfo != nil {
-				adminInfo.TotalConns.Add(1)
-				adminInfo.ActiveConns.Add(1)
-			}
-
-			// Determine transport name from connection metadata
-			transportName := "unknown"
-			if tn, ok := conn.(interface{ TransportName() string }); ok {
-				transportName = tn.TransportName()
-			}
-			metricsCollector.ConnOpened(transportName)
-			connStart := time.Now()
-
-			connWg.Add(1)
-			go func() {
-				defer connWg.Done()
-				h.HandleConnection(ctx, conn)
-				if adminInfo != nil {
-					adminInfo.ActiveConns.Add(-1)
-				}
-				metricsCollector.ConnClosed(transportName, time.Since(connStart))
-			}()
-		}
+		errCh <- srv.Start(ctx)
 	}()
 
 	// Two-phase shutdown: first signal = graceful drain, second = immediate exit
-	sig := <-sigCh
-	logger.Info("received signal, starting graceful shutdown", "signal", sig)
+	select {
+	case sig := <-sigCh:
+		logger.Info("received signal, starting graceful shutdown", "signal", sig)
+	case err := <-errCh:
+		if err != nil {
+			logger.Error("server exited with error", "err", err)
+			os.Exit(1)
+		}
+	}
 
-	// Phase 1: Stop accepting new connections
-	ml.Close()
+	// Cancel context to stop accepting new connections
+	cancel()
 
 	// Parse drain timeout from config (default 30s)
 	drainTimeout := 30 * time.Second
@@ -681,64 +409,17 @@ func run(configPath string) {
 		}
 	}
 
-	// Start a goroutine that forces immediate exit on second signal
-	shutdownDone := make(chan struct{})
+	// Start a goroutine that forces immediate shutdown on second signal
 	go func() {
-		select {
-		case sig := <-sigCh:
-			logger.Warn("received second signal, forcing immediate exit", "signal", sig)
-			cancel()
-		case <-shutdownDone:
-		}
+		sig := <-sigCh
+		logger.Warn("received second signal, forcing immediate exit", "signal", sig)
+		os.Exit(1)
 	}()
 
-	// Wait for active connections to finish, with drain timeout
-	drainDone := make(chan struct{})
-	go func() {
-		connWg.Wait()
-		close(drainDone)
-	}()
+	// Graceful shutdown with drain timeout
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), drainTimeout)
+	defer shutdownCancel()
 
-	select {
-	case <-drainDone:
-		logger.Info("all connections drained")
-	case <-time.After(drainTimeout):
-		logger.Warn("drain timeout reached, closing remaining connections", "timeout", drainTimeout)
-	case <-ctx.Done():
-		logger.Warn("forced shutdown, closing remaining connections")
-	}
-
-	// Cancel context to stop any remaining connection handlers
-	cancel()
-
-	// Shut down pprof server gracefully
-	if pprofServer != nil {
-		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
-		if err := pprofServer.Shutdown(shutdownCtx); err != nil {
-			logger.Error("pprof server shutdown error", "err", err)
-		}
-		shutdownCancel()
-	}
-
-	// Shut down admin server gracefully
-	if adminServer != nil {
-		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
-		if err := adminServer.Shutdown(shutdownCtx); err != nil {
-			logger.Error("admin server shutdown error", "err", err)
-		}
-		shutdownCancel()
-	}
-
-	// Stop cluster manager
-	if cluster != nil {
-		cluster.Stop()
-	}
-
-	// Close audit logger
-	if auditLog != nil {
-		auditLog.Close()
-	}
-
-	close(shutdownDone)
+	srv.Shutdown(shutdownCtx)
 	logger.Info("shuttled stopped gracefully")
 }

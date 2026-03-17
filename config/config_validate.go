@@ -1,0 +1,304 @@
+package config
+
+import (
+	"fmt"
+	"net"
+	"net/url"
+	"strings"
+	"time"
+)
+
+// validateHostPort checks that s is a valid host:port pair.
+func validateHostPort(s, field string) error {
+	if _, _, err := net.SplitHostPort(s); err != nil {
+		return fmt.Errorf("invalid %s: %w", field, err)
+	}
+	return nil
+}
+
+// validateURL checks that s is a valid URL with an http or https scheme.
+func validateURL(s, field string) error {
+	u, err := url.Parse(s)
+	if err != nil {
+		return fmt.Errorf("invalid %s: %w", field, err)
+	}
+	if u.Scheme != "http" && u.Scheme != "https" {
+		return fmt.Errorf("invalid %s: scheme must be http or https, got %q", field, u.Scheme)
+	}
+	return nil
+}
+
+// validateDuration checks that s is a valid Go duration string.
+func validateDuration(s, field string) error {
+	if _, err := time.ParseDuration(s); err != nil {
+		return fmt.Errorf("invalid %s: %w", field, err)
+	}
+	return nil
+}
+
+// validateCIDR checks that s is a valid CIDR notation.
+func validateCIDR(s, field string) error {
+	if _, _, err := net.ParseCIDR(s); err != nil {
+		return fmt.Errorf("invalid %s: %w", field, err)
+	}
+	return nil
+}
+
+// Validate checks the client config for obviously wrong values.
+func (c *ClientConfig) Validate() error {
+	switch c.Transport.Preferred {
+	case "auto", "h3", "reality", "cdn", "webrtc", "multipath":
+	default:
+		return fmt.Errorf("invalid transport.preferred: %q", c.Transport.Preferred)
+	}
+	switch c.Routing.Default {
+	case "proxy", "direct":
+	default:
+		return fmt.Errorf("invalid routing.default: %q", c.Routing.Default)
+	}
+	if c.Proxy.SOCKS5.Listen != "" {
+		if _, _, err := net.SplitHostPort(c.Proxy.SOCKS5.Listen); err != nil {
+			return fmt.Errorf("invalid proxy.socks5.listen: %w", err)
+		}
+	}
+	if c.Proxy.HTTP.Listen != "" {
+		if _, _, err := net.SplitHostPort(c.Proxy.HTTP.Listen); err != nil {
+			return fmt.Errorf("invalid proxy.http.listen: %w", err)
+		}
+	}
+	switch c.Congestion.Mode {
+	case "adaptive", "bbr", "brutal", "":
+	default:
+		return fmt.Errorf("invalid congestion.mode: %q", c.Congestion.Mode)
+	}
+	if c.Obfs.MaxDelay != "" {
+		if _, err := time.ParseDuration(c.Obfs.MaxDelay); err != nil {
+			return fmt.Errorf("invalid obfs.max_delay: %w", err)
+		}
+	}
+	for _, sr := range c.Mesh.SplitRoutes {
+		if _, _, err := net.ParseCIDR(sr.CIDR); err != nil {
+			return fmt.Errorf("invalid mesh split_route CIDR %q: %w", sr.CIDR, err)
+		}
+		switch sr.Action {
+		case "mesh", "direct", "proxy":
+		default:
+			return fmt.Errorf("invalid mesh split_route action: %q (must be mesh, direct, or proxy)", sr.Action)
+		}
+	}
+
+	// Multipath mode validation
+	if c.Transport.H3.Multipath.Mode != "" {
+		switch c.Transport.H3.Multipath.Mode {
+		case "failover", "aggregate", "redundant":
+		default:
+			return fmt.Errorf("invalid transport.h3.multipath.mode: %q (must be failover, aggregate, or redundant)", c.Transport.H3.Multipath.Mode)
+		}
+	}
+
+	// Multipath probe interval validation
+	if c.Transport.H3.Multipath.ProbeInterval != "" {
+		if err := validateDuration(c.Transport.H3.Multipath.ProbeInterval, "transport.h3.multipath.probe_interval"); err != nil {
+			return err
+		}
+	}
+
+	// Retry validation
+	if c.Retry.MaxAttempts < 0 {
+		return fmt.Errorf("retry.max_attempts must be >= 0")
+	}
+	if c.Retry.InitialBackoff != "" {
+		if err := validateDuration(c.Retry.InitialBackoff, "retry.initial_backoff"); err != nil {
+			return err
+		}
+	}
+	if c.Retry.MaxBackoff != "" {
+		if err := validateDuration(c.Retry.MaxBackoff, "retry.max_backoff"); err != nil {
+			return err
+		}
+	}
+
+	// Server.Addr validation
+	if c.Server.Addr != "" {
+		if err := validateHostPort(c.Server.Addr, "server.addr"); err != nil {
+			return err
+		}
+	}
+
+	// Servers[] validation
+	for i, s := range c.Servers {
+		if s.Addr != "" {
+			if err := validateHostPort(s.Addr, fmt.Sprintf("servers[%d].addr", i)); err != nil {
+				return err
+			}
+		}
+	}
+
+	// Subscriptions[].URL validation
+	for i, sub := range c.Subscriptions {
+		if sub.URL != "" {
+			if err := validateURL(sub.URL, fmt.Sprintf("subscriptions[%d].url", i)); err != nil {
+				return err
+			}
+		}
+	}
+
+	// Routing.DNS.Domestic validation
+	if c.Routing.DNS.Domestic != "" {
+		if strings.Contains(c.Routing.DNS.Domestic, "://") {
+			if err := validateURL(c.Routing.DNS.Domestic, "routing.dns.domestic"); err != nil {
+				return err
+			}
+		} else if strings.Contains(c.Routing.DNS.Domestic, ":") {
+			// host:port form
+			if err := validateHostPort(c.Routing.DNS.Domestic, "routing.dns.domestic"); err != nil {
+				return err
+			}
+		} else {
+			// plain IP — validate it parses
+			if net.ParseIP(c.Routing.DNS.Domestic) == nil {
+				return fmt.Errorf("invalid routing.dns.domestic: %q is not a valid IP address", c.Routing.DNS.Domestic)
+			}
+		}
+	}
+
+	// Routing.DNS.Remote.Server — must be valid DoH URL with https scheme
+	if c.Routing.DNS.Remote.Server != "" {
+		u, err := url.Parse(c.Routing.DNS.Remote.Server)
+		if err != nil {
+			return fmt.Errorf("invalid routing.dns.remote.server: %w", err)
+		}
+		if u.Scheme != "https" {
+			return fmt.Errorf("invalid routing.dns.remote.server: scheme must be https, got %q", u.Scheme)
+		}
+	}
+
+	// Routing.DNS.Remote.Via
+	switch c.Routing.DNS.Remote.Via {
+	case "proxy", "direct", "":
+	default:
+		return fmt.Errorf("invalid routing.dns.remote.via: %q (must be \"proxy\", \"direct\", or empty)", c.Routing.DNS.Remote.Via)
+	}
+
+	// Transport.CDN validation
+	if c.Transport.CDN.Enabled {
+		if c.Transport.CDN.Domain == "" {
+			return fmt.Errorf("transport.cdn.domain is required when CDN is enabled")
+		}
+		switch c.Transport.CDN.Mode {
+		case "", "h2", "grpc":
+		default:
+			return fmt.Errorf("invalid transport.cdn.mode: %q (must be \"h2\", \"grpc\", or empty)", c.Transport.CDN.Mode)
+		}
+	}
+
+	// Transport.Reality validation
+	if c.Transport.Reality.Enabled {
+		if c.Transport.Reality.PublicKey == "" {
+			return fmt.Errorf("transport.reality.public_key is required when Reality is enabled")
+		}
+	}
+
+	// Transport.WebRTC validation
+	if c.Transport.WebRTC.Enabled {
+		if c.Transport.WebRTC.SignalURL == "" {
+			return fmt.Errorf("transport.webrtc.signal_url is required when WebRTC is enabled")
+		}
+		if err := validateURL(c.Transport.WebRTC.SignalURL, "transport.webrtc.signal_url"); err != nil {
+			return err
+		}
+	}
+
+	// Log.Level validation
+	switch c.Log.Level {
+	case "debug", "info", "warn", "error", "":
+	default:
+		return fmt.Errorf("invalid log.level: %q", c.Log.Level)
+	}
+
+	// Log.Format validation
+	switch c.Log.Format {
+	case "text", "json", "":
+	default:
+		return fmt.Errorf("invalid log.format: %q", c.Log.Format)
+	}
+
+	return nil
+}
+
+// Validate checks the server config for obviously wrong values.
+func (c *ServerConfig) Validate() error {
+	if c.Listen != "" {
+		if _, _, err := net.SplitHostPort(c.Listen); err != nil {
+			return fmt.Errorf("invalid listen address: %w", err)
+		}
+	}
+	switch c.Cover.Mode {
+	case "static", "reverse", "default", "":
+	default:
+		return fmt.Errorf("invalid cover.mode: %q", c.Cover.Mode)
+	}
+
+	// Cover.Mode == "reverse" requires valid ReverseURL
+	if c.Cover.Mode == "reverse" {
+		if c.Cover.ReverseURL == "" {
+			return fmt.Errorf("cover.reverse_url is required when cover.mode is \"reverse\"")
+		}
+		if err := validateURL(c.Cover.ReverseURL, "cover.reverse_url"); err != nil {
+			return err
+		}
+	}
+
+	// Cover.Mode == "static" requires StaticDir
+	if c.Cover.Mode == "static" {
+		if c.Cover.StaticDir == "" {
+			return fmt.Errorf("cover.static_dir is required when cover.mode is \"static\"")
+		}
+	}
+
+	// Mesh.CIDR validation when mesh is enabled
+	if c.Mesh.Enabled {
+		if err := validateCIDR(c.Mesh.CIDR, "mesh.cidr"); err != nil {
+			return err
+		}
+	}
+
+	// Admin.Listen validation when admin is enabled
+	if c.Admin.Enabled {
+		if c.Admin.Listen != "" {
+			if err := validateHostPort(c.Admin.Listen, "admin.listen"); err != nil {
+				return err
+			}
+		}
+	}
+
+	// Debug.PprofListen validation
+	if c.Debug.PprofListen != "" {
+		if err := validateHostPort(c.Debug.PprofListen, "debug.pprof_listen"); err != nil {
+			return err
+		}
+	}
+
+	if c.Cluster.Enabled {
+		if c.Cluster.NodeName == "" {
+			return fmt.Errorf("cluster.node_name is required when cluster is enabled")
+		}
+		if c.Cluster.Secret == "" {
+			return fmt.Errorf("cluster.secret is required when cluster is enabled")
+		}
+		for _, p := range c.Cluster.Peers {
+			if p.Name == "" {
+				return fmt.Errorf("cluster peer name is required")
+			}
+			if _, _, err := net.SplitHostPort(p.Addr); err != nil {
+				return fmt.Errorf("invalid cluster peer address %q: %w", p.Addr, err)
+			}
+		}
+		if c.Cluster.Interval != "" {
+			if _, err := time.ParseDuration(c.Cluster.Interval); err != nil {
+				return fmt.Errorf("invalid cluster.interval: %w", err)
+			}
+		}
+	}
+	return nil
+}

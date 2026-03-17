@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/quic-go/quic-go"
+	"github.com/shuttleX/shuttle/config"
 	"github.com/shuttleX/shuttle/crypto"
 	"github.com/shuttleX/shuttle/obfs"
 	"github.com/shuttleX/shuttle/transport"
@@ -84,7 +85,7 @@ func (s *Server) Listen(ctx context.Context) error {
 
 	addr := s.config.ListenAddr
 	if addr == "" {
-		addr = ":443"
+		addr = config.DefaultListenPort
 	}
 
 	chromeParams := DefaultChromeTransportParams()

@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/hashicorp/yamux"
+	"github.com/shuttleX/shuttle/config"
 	"github.com/shuttleX/shuttle/crypto"
 	"github.com/shuttleX/shuttle/transport"
 	"github.com/shuttleX/shuttle/transport/auth"
@@ -88,7 +89,7 @@ func (s *Server) Listen(ctx context.Context) error {
 
 	addr := s.config.ListenAddr
 	if addr == "" {
-		addr = ":443"
+		addr = config.DefaultListenPort
 	}
 
 	ln, err := net.Listen("tcp", addr)

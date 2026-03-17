@@ -1,6 +1,9 @@
 package server
 
-import "net"
+import (
+	"log"
+	"net"
+)
 
 // blockedCIDRs contains the CIDR ranges that should be blocked from proxying.
 var blockedCIDRs = func() []*net.IPNet {
@@ -20,7 +23,7 @@ var blockedCIDRs = func() []*net.IPNet {
 	for _, cidr := range cidrs {
 		_, n, err := net.ParseCIDR(cidr)
 		if err != nil {
-			panic("invalid blocked CIDR: " + cidr)
+			log.Fatalf("invalid blocked CIDR: %s", cidr)
 		}
 		nets = append(nets, n)
 	}

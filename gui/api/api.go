@@ -66,46 +66,6 @@ func NewHandler(cfg HandlerConfig) http.Handler {
 }
 
 // ---------------------------------------------------------------------------
-// Deprecated constructors — kept for backward compatibility.
-// Prefer NewHandler(HandlerConfig{...}) for new code.
-// ---------------------------------------------------------------------------
-
-// Handler creates the HTTP handler for the shuttle API (no auth).
-func Handler(eng *engine.Engine) http.Handler {
-	return NewHandler(HandlerConfig{Engine: eng})
-}
-
-// HandlerWithSubscriptions creates the HTTP handler with subscription support (no auth).
-func HandlerWithSubscriptions(eng *engine.Engine, subMgr *subscription.Manager) http.Handler {
-	return NewHandler(HandlerConfig{Engine: eng, SubMgr: subMgr})
-}
-
-// HandlerWithConnLog creates the HTTP handler with all options including connection log storage (no auth).
-func HandlerWithConnLog(eng *engine.Engine, subMgr *subscription.Manager, statsStore *stats.Storage, connStore *connlog.Storage) http.Handler {
-	return NewHandler(HandlerConfig{Engine: eng, SubMgr: subMgr, Stats: statsStore, ConnLog: connStore})
-}
-
-// HandlerWithAllStores creates the HTTP handler with all storage backends including speedtest history (no auth).
-func HandlerWithAllStores(eng *engine.Engine, subMgr *subscription.Manager, statsStore *stats.Storage, connStore *connlog.Storage, stHistory *speedtest.HistoryStorage) http.Handler {
-	return NewHandler(HandlerConfig{Engine: eng, SubMgr: subMgr, Stats: statsStore, ConnLog: connStore, SpeedHistory: stHistory})
-}
-
-// AuthenticatedHandler creates an authenticated HTTP handler for the shuttle API.
-func AuthenticatedHandler(eng *engine.Engine, authToken string) http.Handler {
-	return NewHandler(HandlerConfig{Engine: eng, AuthToken: authToken})
-}
-
-// AuthenticatedHandlerWithAllStores creates an authenticated HTTP handler with all storage backends.
-func AuthenticatedHandlerWithAllStores(eng *engine.Engine, subMgr *subscription.Manager, statsStore *stats.Storage, connStore *connlog.Storage, stHistory *speedtest.HistoryStorage, authToken string) http.Handler {
-	return NewHandler(HandlerConfig{Engine: eng, SubMgr: subMgr, Stats: statsStore, ConnLog: connStore, SpeedHistory: stHistory, AuthToken: authToken})
-}
-
-// HandlerWithOptions creates the HTTP handler with all options (no auth).
-func HandlerWithOptions(eng *engine.Engine, subMgr *subscription.Manager, statsStore *stats.Storage) http.Handler {
-	return NewHandler(HandlerConfig{Engine: eng, SubMgr: subMgr, Stats: statsStore})
-}
-
-// ---------------------------------------------------------------------------
 // GenerateAuthToken generates a cryptographically random auth token.
 // ---------------------------------------------------------------------------
 

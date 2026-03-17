@@ -83,7 +83,7 @@ func (s *Server) Type() string { return "reality" }
 func (s *Server) Listen(ctx context.Context) error {
 	addr := s.config.ListenAddr
 	if addr == "" {
-		addr = ":443"
+		addr = config.DefaultListenPort
 	}
 	tlsConf := &tls.Config{
 		MinVersion: tls.VersionTLS13,

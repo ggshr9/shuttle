@@ -220,7 +220,7 @@ func applyInitDefaults(opts *InitOptions) {
 		}
 	}
 	if opts.Listen == "" {
-		opts.Listen = ":443"
+		opts.Listen = DefaultListenPort
 	}
 	if len(opts.Transports) == 0 {
 		opts.Transports = []string{"h3", "reality"}
@@ -236,7 +236,7 @@ func applyInitDefaults(opts *InitOptions) {
 	if v := os.Getenv("SHUTTLE_PASSWORD"); v != "" && opts.Password == "" {
 		opts.Password = v
 	}
-	if v := os.Getenv("SHUTTLE_LISTEN"); v != "" && opts.Listen == ":443" {
+	if v := os.Getenv("SHUTTLE_LISTEN"); v != "" && opts.Listen == DefaultListenPort {
 		opts.Listen = v
 	}
 }

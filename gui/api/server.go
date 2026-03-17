@@ -19,7 +19,7 @@ type Server struct {
 // NewServer creates an API server. If webFS is non-nil, it serves the SPA from it
 // with fallback to index.html for client-side routing.
 func NewServer(eng *engine.Engine, webFS fs.FS) *Server {
-	return NewServerWithHandler(eng, webFS, Handler(eng))
+	return NewServerWithHandler(eng, webFS, NewHandler(HandlerConfig{Engine: eng}))
 }
 
 // NewServerWithHandler creates an API server using a pre-built API handler.

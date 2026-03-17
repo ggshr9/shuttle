@@ -8,6 +8,7 @@ import (
 	"sync"
 	"sync/atomic"
 
+	"github.com/shuttleX/shuttle/config"
 	"github.com/shuttleX/shuttle/transport"
 )
 
@@ -29,7 +30,7 @@ type MultiListener struct {
 
 func NewMultiListener(cfg *ListenerConfig, logger *slog.Logger) *MultiListener {
 	if cfg.ListenAddr == "" {
-		cfg.ListenAddr = ":443"
+		cfg.ListenAddr = config.DefaultListenPort
 	}
 	if logger == nil {
 		logger = slog.Default()
