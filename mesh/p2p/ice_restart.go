@@ -126,7 +126,7 @@ func (c *ICECredentials) Regenerate() {
 // generateICEString generates a random string for ICE credentials.
 func generateICEString(length int) string {
 	bytes := make([]byte, length/2+1)
-	rand.Read(bytes)
+	_, _ = rand.Read(bytes)
 	return hex.EncodeToString(bytes)[:length]
 }
 

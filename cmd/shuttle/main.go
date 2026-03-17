@@ -54,7 +54,7 @@ func main() {
 			fmt.Fprintf(os.Stderr, "Usage: shuttle run -c <config.yaml>\n\nFlags:\n")
 			runCmd.PrintDefaults()
 		}
-		runCmd.Parse(os.Args[2:])
+		_ = runCmd.Parse(os.Args[2:])
 		if *configPath == "" {
 			runCmd.Usage()
 			os.Exit(1)
@@ -69,7 +69,7 @@ func main() {
 			fmt.Fprintf(os.Stderr, "Usage: shuttle api -c <config.yaml> [--listen addr] [--auto-connect]\n\nHeadless API server (no GUI). For Docker/testing.\n\nFlags:\n")
 			apiCmd.PrintDefaults()
 		}
-		apiCmd.Parse(os.Args[2:])
+		_ = apiCmd.Parse(os.Args[2:])
 		if *configPath == "" {
 			apiCmd.Usage()
 			os.Exit(1)

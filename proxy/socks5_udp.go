@@ -34,13 +34,13 @@ func (s *SOCKS5Server) handleUDPAssociate(ctx context.Context, conn net.Conn) {
 	// Bind a local UDP socket on a random port.
 	udpAddr, err := net.ResolveUDPAddr("udp", "127.0.0.1:0")
 	if err != nil {
-		s.sendReply(conn, repGeneralFailure, nil)
+		_ = s.sendReply(conn, repGeneralFailure, nil)
 		s.logger.Debug("socks5 udp: resolve addr failed", "err", err)
 		return
 	}
 	udpConn, err := net.ListenUDP("udp", udpAddr)
 	if err != nil {
-		s.sendReply(conn, repGeneralFailure, nil)
+		_ = s.sendReply(conn, repGeneralFailure, nil)
 		s.logger.Debug("socks5 udp: listen failed", "err", err)
 		return
 	}

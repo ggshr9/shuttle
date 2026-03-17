@@ -102,14 +102,14 @@ func (c *Client) Dial(ctx context.Context, addr string) (transport.Connection, e
 	// HTTP/3-style session establishment on control stream.
 	ctrlStream, err := qconn.OpenStreamSync(ctx)
 	if err != nil {
-		qconn.CloseWithError(1, "control stream open failed")
+		_ = qconn.CloseWithError(1, "control stream open failed")
 		return nil, fmt.Errorf("h3 open control stream: %w", err)
 	}
 	defer func() { ctrlStream.CancelRead(0); ctrlStream.Close() }()
 
 	authPayload, err := computeSessionAuth(c.config.Password)
 	if err != nil {
-		qconn.CloseWithError(1, "auth generation failed")
+		_ = qconn.CloseWithError(1, "auth generation failed")
 		return nil, fmt.Errorf("h3 auth: %w", err)
 	}
 

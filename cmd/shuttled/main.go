@@ -60,7 +60,7 @@ func main() {
 			fmt.Fprintf(os.Stderr, "Usage: shuttled init [flags]\n\nZero-config server bootstrap. Generates keys, certificates, and config.\n\nFlags:\n")
 			initCmd.PrintDefaults()
 		}
-		initCmd.Parse(os.Args[2:])
+		_ = initCmd.Parse(os.Args[2:])
 		initServer(*dir, *domain, *password, *transport, *listen, *force, *meshFlag)
 	case "share":
 		shareCmd := flag.NewFlagSet("share", flag.ExitOnError)
@@ -71,7 +71,7 @@ func main() {
 			fmt.Fprintf(os.Stderr, "Usage: shuttled share -c <config.yaml> --addr <domain:port>\n\nFlags:\n")
 			shareCmd.PrintDefaults()
 		}
-		shareCmd.Parse(os.Args[2:])
+		_ = shareCmd.Parse(os.Args[2:])
 		if *configPath == "" {
 			shareCmd.Usage()
 			os.Exit(1)
@@ -84,7 +84,7 @@ func main() {
 			fmt.Fprintf(os.Stderr, "Usage: shuttled run [-c <config.yaml>]\n\nIf -c is not provided, looks for config in /etc/shuttle/ or ~/.shuttle/.\nIf no config found, auto-initializes with defaults.\n\nFlags:\n")
 			runCmd.PrintDefaults()
 		}
-		runCmd.Parse(os.Args[2:])
+		_ = runCmd.Parse(os.Args[2:])
 		run(*configPath)
 	case "completion":
 		if len(os.Args) < 3 {

@@ -143,7 +143,7 @@ func authMiddleware(token string, next http.Handler) http.Handler {
 			if subtle.ConstantTimeCompare([]byte(qToken), []byte(token)) != 1 {
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(http.StatusUnauthorized)
-				json.NewEncoder(w).Encode(map[string]string{"error": "unauthorized"})
+				_ = json.NewEncoder(w).Encode(map[string]string{"error": "unauthorized"})
 				return
 			}
 		}
@@ -195,7 +195,7 @@ func writeJSON(w http.ResponseWriter, v any) {
 func writeError(w http.ResponseWriter, code int, msg string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(code)
-	json.NewEncoder(w).Encode(map[string]string{"error": msg})
+	_ = json.NewEncoder(w).Encode(map[string]string{"error": msg})
 }
 
 // setSystemProxy configures the system proxy based on the current config.
@@ -213,7 +213,7 @@ func setSystemProxy(cfg *config.ClientConfig) {
 		proxyCfg.SOCKSAddr = normalizeListenAddr(cfg.Proxy.SOCKS5.Listen)
 	}
 
-	sysproxy.Set(proxyCfg)
+	_ = sysproxy.Set(proxyCfg)
 }
 
 // normalizeListenAddr converts listen addresses like ":1080" or "0.0.0.0:1080" to "127.0.0.1:1080"

@@ -68,7 +68,7 @@ func registerMiscRoutes(mux *http.ServeMux, eng *engine.Engine, subMgr *subscrip
 		// Restore subscriptions
 		if subMgr != nil && len(backup.Subscriptions) > 0 {
 			for _, sub := range backup.Subscriptions {
-				subMgr.Add(sub.Name, sub.URL)
+				_, _ = subMgr.Add(sub.Name, sub.URL)
 			}
 		}
 

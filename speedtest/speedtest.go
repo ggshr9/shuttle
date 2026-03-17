@@ -220,7 +220,7 @@ func (t *Tester) measureQUICLatency(ctx context.Context, addr string, srv Server
 		return 0, fmt.Errorf("quic: %w", err)
 	}
 	latency := time.Since(start)
-	qconn.CloseWithError(0, "speedtest")
+	_ = qconn.CloseWithError(0, "speedtest")
 	return latency, nil
 }
 

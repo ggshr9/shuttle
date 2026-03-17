@@ -361,7 +361,7 @@ func (g *TrickleICEGatherer) querySTUNServer(conn *net.UDPConn, server string) (
 
 	// Read response
 	buf := make([]byte, 1500)
-	conn.SetReadDeadline(time.Now().Add(2 * time.Second))
+	_ = conn.SetReadDeadline(time.Now().Add(2 * time.Second))
 	n, _, err := conn.ReadFromUDP(buf)
 	if err != nil {
 		return nil, err

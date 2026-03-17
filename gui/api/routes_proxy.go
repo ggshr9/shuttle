@@ -29,7 +29,7 @@ func registerProxyRoutes(mux *http.ServeMux, eng *engine.Engine) {
 		// Clear system proxy first
 		cfg := eng.Config()
 		if cfg.Proxy.SystemProxy.Enabled {
-			sysproxy.Clear()
+			_ = sysproxy.Clear()
 		}
 
 		if err := eng.Stop(); err != nil {

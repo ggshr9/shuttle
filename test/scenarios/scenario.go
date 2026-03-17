@@ -301,7 +301,7 @@ func echoServer(ctx context.Context, t testing.TB, srv transport.ServerTransport
 					}
 					go func(s transport.Stream) {
 						defer s.Close()
-						io.Copy(s, s)
+						_, _ = io.Copy(s, s)
 					}(stream)
 				}
 			}(conn)

@@ -286,11 +286,11 @@ func (s *Server) forwardToTarget(conn net.Conn) {
 	done := make(chan struct{}, 2)
 	cp := func(dst net.Conn, src net.Conn) {
 		buf := pool.GetMedLarge()
-		io.CopyBuffer(dst, src, buf)
+		_, _ = io.CopyBuffer(dst, src, buf)
 		pool.PutMedLargeNoZero(buf)
 		// Close write direction to signal EOF to peer.
 		if tc, ok := dst.(*net.TCPConn); ok {
-			tc.CloseWrite()
+			_ = tc.CloseWrite()
 		}
 		done <- struct{}{}
 	}

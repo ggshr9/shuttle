@@ -36,7 +36,7 @@ func registerSubscriptionRoutes(mux *http.ServeMux, eng *engine.Engine, subMgr *
 		}
 
 		// Auto-refresh after adding
-		subMgr.Refresh(r.Context(), sub.ID)
+		_, _ = subMgr.Refresh(r.Context(), sub.ID)
 		sub, _ = subMgr.Get(sub.ID)
 
 		// Save to config

@@ -75,7 +75,7 @@ func handleSpeedtestWS(w http.ResponseWriter, r *http.Request, eng *engine.Engin
 
 	if len(servers) == 0 {
 		data, _ := json.Marshal(map[string]string{"error": "no servers configured"})
-		c.Write(ctx, websocket.MessageText, data)
+		_ = c.Write(ctx, websocket.MessageText, data)
 		return
 	}
 
@@ -100,5 +100,5 @@ func handleSpeedtestWS(w http.ResponseWriter, r *http.Request, eng *engine.Engin
 
 	// Send completion message
 	data, _ = json.Marshal(map[string]bool{"done": true})
-	c.Write(ctx, websocket.MessageText, data)
+	_ = c.Write(ctx, websocket.MessageText, data)
 }

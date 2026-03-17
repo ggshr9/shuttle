@@ -147,7 +147,7 @@ func registerConfigRoutes(mux *http.ServeMux, eng *engine.Engine) {
 		case "json":
 			w.Header().Set("Content-Type", "application/json")
 			w.Header().Set("Content-Disposition", "attachment; filename=shuttle-config.json")
-			json.NewEncoder(w).Encode(&cfg)
+			_ = json.NewEncoder(w).Encode(&cfg)
 		case "yaml":
 			data, err := config.ExportConfig(&cfg, "yaml")
 			if err != nil {
@@ -156,7 +156,7 @@ func registerConfigRoutes(mux *http.ServeMux, eng *engine.Engine) {
 			}
 			w.Header().Set("Content-Type", "text/yaml")
 			w.Header().Set("Content-Disposition", "attachment; filename=shuttle-config.yaml")
-			w.Write(data)
+			_, _ = w.Write(data)
 		case "uri":
 			data, err := config.ExportConfig(&cfg, "uri")
 			if err != nil {
@@ -165,7 +165,7 @@ func registerConfigRoutes(mux *http.ServeMux, eng *engine.Engine) {
 			}
 			w.Header().Set("Content-Type", "text/plain")
 			w.Header().Set("Content-Disposition", "attachment; filename=shuttle-servers.txt")
-			w.Write(data)
+			_, _ = w.Write(data)
 		default:
 			writeError(w, http.StatusBadRequest, "unsupported format: "+format)
 		}

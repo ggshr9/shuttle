@@ -142,7 +142,7 @@ func (s *Server) handleConn(ctx context.Context, qconn *quic.Conn) {
 
 	// Read the 64-byte auth payload: [32-byte nonce][32-byte HMAC].
 	// Set a deadline so slow/malicious clients cannot hold resources indefinitely.
-	ctrlStream.SetReadDeadline(time.Now().Add(10 * time.Second))
+	_ = ctrlStream.SetReadDeadline(time.Now().Add(10 * time.Second))
 	authBuf := make([]byte, 64)
 	if _, err := io.ReadFull(ctrlStream, authBuf); err != nil {
 		s.logger.Debug("failed to read auth payload", "err", err)
@@ -190,8 +190,8 @@ func (s *Server) handleConn(ctx context.Context, qconn *quic.Conn) {
 // appear as a normal web server to probes and unauthenticated clients.
 func (s *Server) serveCover(ctrlStream *quic.Stream, qconn *quic.Conn) {
 	// Send FAIL byte followed by cover content.
-	ctrlStream.Write([]byte{0x00})
-	ctrlStream.Write(coverPage)
+	_, _ = ctrlStream.Write([]byte{0x00})
+	_, _ = ctrlStream.Write(coverPage)
 	ctrlStream.CancelRead(0)
 	ctrlStream.Close()
 	qconn.CloseWithError(0, "")

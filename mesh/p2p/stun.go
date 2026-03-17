@@ -343,8 +343,8 @@ func (c *STUNClient) queryServerWithContext(ctx context.Context, conn *net.UDPCo
 	if d, ok := ctx.Deadline(); ok && d.Before(deadline) {
 		deadline = d
 	}
-	conn.SetDeadline(deadline)
-	defer conn.SetDeadline(time.Time{})
+	_ = conn.SetDeadline(deadline)
+	defer func() { _ = conn.SetDeadline(time.Time{}) }()
 
 	// Send request
 	if _, err := conn.WriteToUDP(req, addr); err != nil {
@@ -399,8 +399,8 @@ func (c *STUNClient) queryServer(conn *net.UDPConn, server string) (*STUNResult,
 	req := buildBindingRequest(txID)
 
 	// Set deadline
-	conn.SetDeadline(time.Now().Add(c.timeout))
-	defer conn.SetDeadline(time.Time{})
+	_ = conn.SetDeadline(time.Now().Add(c.timeout))
+	defer func() { _ = conn.SetDeadline(time.Time{}) }()
 
 	// Send request
 	if _, err := conn.WriteToUDP(req, addr); err != nil {
@@ -649,8 +649,8 @@ func (c *STUNClient) queryServerIPv6(conn *net.UDPConn, server string) (*STUNRes
 	req := buildBindingRequest(txID)
 
 	// Set deadline
-	conn.SetDeadline(time.Now().Add(c.timeout))
-	defer conn.SetDeadline(time.Time{})
+	_ = conn.SetDeadline(time.Now().Add(c.timeout))
+	defer func() { _ = conn.SetDeadline(time.Time{}) }()
 
 	// Send request
 	if _, err := conn.WriteToUDP(req, addr); err != nil {
@@ -762,8 +762,8 @@ func (c *STUNClient) queryServerIPv6WithContext(ctx context.Context, conn *net.U
 	if d, ok := ctx.Deadline(); ok && d.Before(deadline) {
 		deadline = d
 	}
-	conn.SetDeadline(deadline)
-	defer conn.SetDeadline(time.Time{})
+	_ = conn.SetDeadline(deadline)
+	defer func() { _ = conn.SetDeadline(time.Time{}) }()
 
 	if _, err := conn.WriteToUDP(req, addr); err != nil {
 		return nil, fmt.Errorf("stun: send ipv6: %w", err)

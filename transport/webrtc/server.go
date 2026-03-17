@@ -219,7 +219,7 @@ func (s *Server) handleSignal(w http.ResponseWriter, r *http.Request) {
 	resp := SignalResponse{SDP: localDesc.SDP}
 	respBody, _ := json.Marshal(resp)
 	w.Header().Set("Content-Type", "application/json")
-	w.Write(respBody)
+	_, _ = w.Write(respBody)
 
 	// Async: wait for DataChannel to open, then establish yamux and push connection
 	go s.awaitDataChannel(pc, dcCh, dcErrCh, r.RemoteAddr)
@@ -616,7 +616,7 @@ func (s *Server) handleWSReconnect(ctx context.Context, wsConn *websocket.Conn, 
 				return
 			}
 			if msg.Type == SignalTypeCandidate && msg.Candidate != nil {
-				pc.AddICECandidate(webrtc.ICECandidateInit{
+				_ = pc.AddICECandidate(webrtc.ICECandidateInit{
 					Candidate:        msg.Candidate.Candidate,
 					SDPMid:           msg.Candidate.SDPMid,
 					SDPMLineIndex:    msg.Candidate.SDPMLineIndex,
@@ -702,7 +702,7 @@ func writeSignalError(w http.ResponseWriter, msg string) {
 	body, _ := json.Marshal(resp)
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusBadRequest)
-	w.Write(body)
+	_, _ = w.Write(body)
 }
 
 // Compile-time interface check.

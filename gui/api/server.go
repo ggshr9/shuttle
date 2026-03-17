@@ -70,7 +70,7 @@ func (s *Server) ListenAndServe(addr string) (string, error) {
 		return "", err
 	}
 	s.listener = ln
-	go s.srv.Serve(ln)
+	go func() { _ = s.srv.Serve(ln) }()
 	return ln.Addr().String(), nil
 }
 

@@ -52,7 +52,7 @@ func (a *App) startup(ctx context.Context) {
 }
 
 func (a *App) shutdown(ctx context.Context) {
-	a.eng.Stop()
+	_ = a.eng.Stop()
 	if a.srv != nil {
 		a.srv.Close()
 	}
@@ -174,10 +174,10 @@ func main() {
 				}
 			},
 			OnConnect: func() {
-				eng.Start(context.Background())
+				_ = eng.Start(context.Background())
 			},
 			OnDisconnect: func() {
-				eng.Stop()
+				_ = eng.Stop()
 			},
 			OnQuit: func() {
 				if app.ctx != nil {

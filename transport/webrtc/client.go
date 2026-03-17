@@ -181,11 +181,11 @@ func (c *Client) dialWS(ctx context.Context) (transport.Connection, error) {
 	// Trickle ICE: send candidates as they are discovered
 	pc.OnICECandidate(func(cand *webrtc.ICECandidate) {
 		if cand == nil {
-			sendWSMessage(ctx, wsConn, &SignalMessage{Type: SignalTypeCandidateDone})
+			_ = sendWSMessage(ctx, wsConn, &SignalMessage{Type: SignalTypeCandidateDone})
 			return
 		}
 		init := cand.ToJSON()
-		sendWSMessage(ctx, wsConn, &SignalMessage{
+		_ = sendWSMessage(ctx, wsConn, &SignalMessage{
 			Type: SignalTypeCandidate,
 			Candidate: &ICECandidateMsg{
 				Candidate:        init.Candidate,
@@ -254,7 +254,7 @@ func (c *Client) dialWS(ctx context.Context) (transport.Connection, error) {
 			switch msg.Type {
 			case SignalTypeCandidate:
 				if msg.Candidate != nil {
-					pc.AddICECandidate(webrtc.ICECandidateInit{
+					_ = pc.AddICECandidate(webrtc.ICECandidateInit{
 						Candidate:        msg.Candidate.Candidate,
 						SDPMid:           msg.Candidate.SDPMid,
 						SDPMLineIndex:    msg.Candidate.SDPMLineIndex,

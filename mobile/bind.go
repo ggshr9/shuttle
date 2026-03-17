@@ -143,7 +143,7 @@ func Start(configJSON string) (string, error) {
 	srv = api.NewServer(eng, nil)
 	addr, err := srv.ListenAndServe("127.0.0.1:0")
 	if err != nil {
-		eng.Stop()
+		_ = eng.Stop()
 		eng = nil
 		mobileLogger.Error("api server start failed", "err", err)
 		notifyStatus("stopped")
@@ -201,7 +201,7 @@ func StartWithTUN(configJSON string, tunFD int) (string, error) {
 	srv = api.NewServer(eng, nil)
 	addr, err := srv.ListenAndServe("127.0.0.1:0")
 	if err != nil {
-		eng.Stop()
+		_ = eng.Stop()
 		eng = nil
 		mobileLogger.Error("api server start failed", "err", err)
 		notifyStatus("stopped")
@@ -239,7 +239,7 @@ func Stop() error {
 		srv.Close()
 		srv = nil
 	}
-	eng.Stop()
+	_ = eng.Stop()
 	if cancel != nil {
 		cancel()
 		cancel = nil

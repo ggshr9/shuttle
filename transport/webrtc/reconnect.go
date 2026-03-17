@@ -90,11 +90,11 @@ func (r *reconnector) attemptReconnect() error {
 	// Trickle ICE
 	pc.OnICECandidate(func(cand *pionwebrtc.ICECandidate) {
 		if cand == nil {
-			sendWSMessage(ctx, r.wsConn, &SignalMessage{Type: SignalTypeCandidateDone})
+			_ = sendWSMessage(ctx, r.wsConn, &SignalMessage{Type: SignalTypeCandidateDone})
 			return
 		}
 		init := cand.ToJSON()
-		sendWSMessage(ctx, r.wsConn, &SignalMessage{
+		_ = sendWSMessage(ctx, r.wsConn, &SignalMessage{
 			Type: SignalTypeCandidate,
 			Candidate: &ICECandidateMsg{
 				Candidate:        init.Candidate,
@@ -142,7 +142,7 @@ func (r *reconnector) attemptReconnect() error {
 				return
 			}
 			if msg.Type == SignalTypeCandidate && msg.Candidate != nil {
-				pc.AddICECandidate(pionwebrtc.ICECandidateInit{
+				_ = pc.AddICECandidate(pionwebrtc.ICECandidateInit{
 					Candidate:        msg.Candidate.Candidate,
 					SDPMid:           msg.Candidate.SDPMid,
 					SDPMLineIndex:    msg.Candidate.SDPMLineIndex,

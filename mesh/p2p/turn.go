@@ -579,7 +579,7 @@ func (c *TURNClient) readResponse(ctx context.Context) ([]byte, error) {
 	}
 
 	buf := make([]byte, 2048)
-	conn.SetReadDeadline(time.Now().Add(5 * time.Second))
+	_ = conn.SetReadDeadline(time.Now().Add(5 * time.Second))
 	n, err := conn.Read(buf)
 	if err != nil {
 		return nil, err
@@ -717,7 +717,7 @@ func (c *TURNClient) receiveLoop() {
 		default:
 		}
 
-		conn.SetReadDeadline(time.Now().Add(time.Second))
+		_ = conn.SetReadDeadline(time.Now().Add(time.Second))
 		n, err := conn.Read(buf)
 		if err != nil {
 			if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
