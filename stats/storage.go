@@ -208,7 +208,7 @@ func (s *Storage) autoSave() {
 	for {
 		select {
 		case <-ticker.C:
-			s.save()
+			_ = s.save()
 		case <-s.done:
 			return
 		}

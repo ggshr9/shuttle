@@ -117,13 +117,13 @@ func TestConnTrackerByteCounting(t *testing.T) {
 
 	// Write some data
 	buf := make([]byte, 100)
-	wrapped.Write(buf)
-	wrapped.Write(buf) // 200 bytes out
+	_, _ = wrapped.Write(buf)
+	_, _ = wrapped.Write(buf) // 200 bytes out
 
 	// Read some data
-	wrapped.Read(buf)
-	wrapped.Read(buf)
-	wrapped.Read(buf) // 300 bytes in
+	_, _ = wrapped.Read(buf)
+	_, _ = wrapped.Read(buf)
+	_, _ = wrapped.Read(buf) // 300 bytes in
 
 	// Close connection
 	wrapped.Close()

@@ -112,7 +112,7 @@ func (h *Hub) Broadcast(msg *Message) {
 		}
 
 		peer.mu.Lock()
-		peer.Writer.Write(data)
+		_, _ = peer.Writer.Write(data)
 		peer.mu.Unlock()
 	}
 }
