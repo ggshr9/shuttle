@@ -389,7 +389,7 @@ func (t *TUNServer) handleTCP(ctx context.Context, srcIP, dstIP [4]byte, tcpData
 	if e := t.natTable.getTCP(key); e != nil && dataOff < len(tcpData) {
 		payload := tcpData[dataOff:]
 		if len(payload) > 0 {
-			e.conn.SetWriteDeadline(time.Now().Add(15 * time.Second))
+			_ = e.conn.SetWriteDeadline(time.Now().Add(15 * time.Second))
 			if _, err := e.conn.Write(payload); err != nil {
 				t.logger.Debug("tcp write to proxy error", "err", err)
 				e.cancel()
@@ -474,7 +474,7 @@ func (t *TUNServer) handleUDP(ctx context.Context, srcIP, dstIP [4]byte, udpData
 	key := natKey{srcIP: srcIP, dstIP: dstIP, srcPort: srcPort, dstPort: dstPort}
 
 	if e := t.natTable.getUDP(key); e != nil {
-		e.conn.SetWriteDeadline(time.Now().Add(15 * time.Second))
+		_ = e.conn.SetWriteDeadline(time.Now().Add(15 * time.Second))
 		if _, err := e.conn.Write(payload); err != nil {
 			t.logger.Debug("tun: udp write error", "err", err)
 		}
@@ -511,7 +511,7 @@ func (t *TUNServer) dialAndProxyUDP(ctx context.Context, key natKey, initialPayl
 	entry := &natEntry{conn: conn, cancel: cancel, tos: tos}
 	t.natTable.putUDP(key, entry)
 
-	conn.SetWriteDeadline(time.Now().Add(15 * time.Second))
+	_ = conn.SetWriteDeadline(time.Now().Add(15 * time.Second))
 	if _, err := conn.Write(initialPayload); err != nil {
 		t.logger.Debug("tun: udp initial write error", "addr", addr, "err", err)
 	}

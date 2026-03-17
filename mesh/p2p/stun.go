@@ -274,8 +274,8 @@ func (c *STUNClient) QueryParallelWithConn(ctx context.Context, conn *net.UDPCon
 	localAddr := conn.LocalAddr().(*net.UDPAddr)
 
 	deadline, _ := ctx.Deadline()
-	conn.SetReadDeadline(deadline)
-	defer conn.SetReadDeadline(time.Time{})
+	_ = conn.SetReadDeadline(deadline)
+	defer func() { _ = conn.SetReadDeadline(time.Time{}) }()
 
 	responded := make(map[string]bool)
 

@@ -123,7 +123,7 @@ func (c *PCPClient) Discover() error {
 	// Build ANNOUNCE request
 	req := c.buildAnnounceRequest(localAddr.IP)
 
-	conn.SetDeadline(time.Now().Add(3 * time.Second))
+	_ = conn.SetDeadline(time.Now().Add(3 * time.Second))
 
 	if _, err := conn.Write(req); err != nil {
 		return fmt.Errorf("pcp: send failed: %w", err)
@@ -225,7 +225,7 @@ func (c *PCPClient) AddPortMapping(protocol, internalPort, externalPort int, lif
 	// Build MAP request
 	req := c.buildMapRequest(localAddr.IP, protocol, internalPort, externalPort, int(lifetime.Seconds()), nonce)
 
-	conn.SetDeadline(time.Now().Add(5 * time.Second))
+	_ = conn.SetDeadline(time.Now().Add(5 * time.Second))
 
 	if _, err := conn.Write(req); err != nil {
 		return nil, fmt.Errorf("pcp: send failed: %w", err)
@@ -394,7 +394,7 @@ func (c *PCPClient) DeletePortMapping(internalPort int) error {
 	// Build MAP request with lifetime=0 to delete
 	req := c.buildMapRequest(localAddr.IP, mapping.Protocol, internalPort, 0, 0, mapping.Nonce)
 
-	conn.SetDeadline(time.Now().Add(3 * time.Second))
+	_ = conn.SetDeadline(time.Now().Add(3 * time.Second))
 
 	if _, err := conn.Write(req); err != nil {
 		return fmt.Errorf("pcp: send failed: %w", err)
@@ -402,7 +402,7 @@ func (c *PCPClient) DeletePortMapping(internalPort int) error {
 
 	// Read response (optional, deletion is best-effort)
 	resp := make([]byte, pcpHeaderSize+pcpMapSize)
-	conn.Read(resp)
+	_, _ = conn.Read(resp)
 
 	delete(c.mappings, internalPort)
 
@@ -469,7 +469,7 @@ func (c *PCPClient) Close() error {
 	c.mu.Unlock()
 
 	for _, port := range ports {
-		c.DeletePortMapping(port)
+		_ = c.DeletePortMapping(port)
 	}
 
 	return nil

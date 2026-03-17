@@ -28,9 +28,22 @@ linters:
 linters-settings:
   errcheck:
     exclude-functions:
-      - io.ReadFull  # HKDF reads always succeed on valid inputs
+      # I/O close/read — ubiquitous, errors rarely actionable
+      - io.ReadFull
       - (io.Closer).Close
       - (net.Conn).Close
+      - (*net.UDPConn).Close
+      - (io.Writer).Write
+      - (*net.UDPConn).WriteToUDP
+      # Deadlines — best-effort, failing is harmless
+      - (net.Conn).SetDeadline
+      - (net.Conn).SetReadDeadline
+      - (net.Conn).SetWriteDeadline
+      - (*net.UDPConn).SetReadDeadline
+      # Relay/proxy — fire-and-forget
+      - (*github.com/shuttleX/shuttle/internal/relay.Relay).Relay
+      - fmt.Sscanf
+      - rand.Read  # crypto/rand.Read never fails on supported OS
   gocritic:
     enabled-tags:
       - diagnostic

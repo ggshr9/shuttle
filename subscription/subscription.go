@@ -139,7 +139,7 @@ func (m *Manager) RefreshAll(ctx context.Context) {
 	m.mu.RUnlock()
 
 	for _, id := range ids {
-		m.Refresh(ctx, id)
+		_, _ = m.Refresh(ctx, id)
 	}
 }
 

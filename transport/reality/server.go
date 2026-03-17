@@ -136,7 +136,7 @@ func (s *Server) acceptLoop(ctx context.Context) {
 
 func (s *Server) handleConn(ctx context.Context, raw net.Conn) {
 	// Set a deadline for the Noise handshake phase
-	raw.SetReadDeadline(time.Now().Add(10 * time.Second))
+	_ = raw.SetReadDeadline(time.Now().Add(10 * time.Second))
 
 	hs, err := shuttlecrypto.NewResponder(s.privKey, s.pubKey)
 	if err != nil {
@@ -149,7 +149,7 @@ func (s *Server) handleConn(ctx context.Context, raw net.Conn) {
 	msg1, err := readFrame(raw)
 	if err != nil {
 		s.logger.Debug("noise read failed, forwarding to target", "err", err)
-		raw.SetReadDeadline(time.Time{})
+		_ = raw.SetReadDeadline(time.Time{})
 		s.forwardToTarget(raw)
 		return
 	}

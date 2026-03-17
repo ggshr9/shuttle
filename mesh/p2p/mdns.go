@@ -251,7 +251,7 @@ func (s *MDNSService) receiveLoop(conn *net.UDPConn) {
 		default:
 		}
 
-		conn.SetReadDeadline(time.Now().Add(time.Second))
+		_ = conn.SetReadDeadline(time.Now().Add(time.Second))
 		n, from, err := conn.ReadFromUDP(buf)
 		if err != nil {
 			if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
@@ -322,7 +322,7 @@ func (s *MDNSService) announce() {
 func (s *MDNSService) sendGoodbye() {
 	// Build response with TTL=0
 	packet := s.buildResponseWithTTL(0)
-	s.sendPacket(packet)
+	_ = s.sendPacket(packet)
 }
 
 // sendPacket sends a packet to the mDNS multicast address.
@@ -886,10 +886,10 @@ func LookupPeers(ctx context.Context, timeout time.Duration) ([]*MDNSPeer, error
 	if err := service.Start(net.ParseIP("10.7.0.1"), 0); err != nil {
 		return nil, err
 	}
-	defer service.Stop()
+	defer func() { _ = service.Stop() }()
 
 	// Send initial query
-	service.Query()
+	_ = service.Query()
 
 	// Wait for responses
 	select {

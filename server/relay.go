@@ -63,7 +63,7 @@ func HandleUDPRelay(ctx context.Context, stream io.ReadWriteCloser, target strin
 			if ctx.Err() != nil {
 				return
 			}
-			udpConn.SetReadDeadline(time.Now().Add(5 * time.Second))
+			_ = udpConn.SetReadDeadline(time.Now().Add(5 * time.Second))
 			n, err := udpConn.Read(buf)
 			if err != nil {
 				if netErr, ok := err.(net.Error); ok && netErr.Timeout() {

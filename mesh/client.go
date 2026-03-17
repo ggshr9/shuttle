@@ -272,7 +272,7 @@ func (mc *MeshClient) Receive() ([]byte, error) {
 // Close closes the underlying stream and P2P manager.
 func (mc *MeshClient) Close() error {
 	if mc.p2pManager != nil {
-		mc.p2pManager.Stop()
+		_ = mc.p2pManager.Stop()
 	}
 	return mc.stream.Close()
 }

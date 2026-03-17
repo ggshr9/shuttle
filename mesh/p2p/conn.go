@@ -179,7 +179,7 @@ func (pc *P2PConn) Close() error {
 	pc.mu.Unlock()
 
 	// Send close packet (best effort)
-	pc.sendPacket(P2PClose, nil)
+	_ = pc.sendPacket(P2PClose, nil)
 	return nil
 }
 

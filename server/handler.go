@@ -82,7 +82,7 @@ func (h *Handler) HandleStream(ctx context.Context, stream transport.Stream, rem
 	// losing bytes that come after the \n delimiter in the same read.
 	// Set a deadline so a slow/malicious client cannot hold a goroutine forever.
 	if dl, ok := stream.(interface{ SetReadDeadline(time.Time) error }); ok {
-		dl.SetReadDeadline(time.Now().Add(10 * time.Second))
+		_ = dl.SetReadDeadline(time.Now().Add(10 * time.Second))
 	}
 	buf := make([]byte, 512)
 	total := 0
@@ -154,7 +154,7 @@ func (h *Handler) HandleStream(ctx context.Context, stream transport.Stream, rem
 
 			// Clear the header-read deadline before relaying data.
 			if dl, ok := stream.(interface{ SetReadDeadline(time.Time) error }); ok {
-				dl.SetReadDeadline(time.Time{})
+				_ = dl.SetReadDeadline(time.Time{})
 			}
 
 			// Check for UDP prefix: "UDP:target" → UDP relay mode.
@@ -398,7 +398,7 @@ func ExtractIP(addr net.Addr) string {
 func ServerRelay(a io.ReadWriter, b io.ReadWriter) {
 	rwcA := asReadWriteCloser(a)
 	rwcB := asReadWriteCloser(b)
-	relay.Relay(rwcA, rwcB)
+	_, _, _ = relay.Relay(rwcA, rwcB)
 }
 
 // asReadWriteCloser returns the value unchanged if it already implements

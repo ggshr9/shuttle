@@ -258,7 +258,7 @@ func (c *UPnPClient) parseDeviceDescription(baseURL string, data []byte) (*Gatew
 	host := parsedURL.Hostname()
 	port := 80
 	if parsedURL.Port() != "" {
-		fmt.Sscanf(parsedURL.Port(), "%d", &port)
+		_, _ = fmt.Sscanf(parsedURL.Port(), "%d", &port)
 	}
 
 	// Build control URL - resolve relative to base
@@ -506,7 +506,7 @@ func (c *UPnPClient) Close() error {
 	c.mu.Unlock()
 
 	for _, port := range ports {
-		c.DeletePortMapping(port, "UDP")
+		_ = c.DeletePortMapping(port, "UDP")
 	}
 
 	return nil

@@ -321,7 +321,7 @@ func (c *NATPMPClient) sendRequest(req []byte) ([]byte, error) {
 			continue
 		}
 
-		conn.SetReadDeadline(time.Now().Add(timeout))
+		_ = conn.SetReadDeadline(time.Now().Add(timeout))
 
 		resp := make([]byte, 16)
 		n, err := conn.Read(resp)
@@ -405,7 +405,7 @@ func (c *NATPMPClient) Close() error {
 	c.mu.Unlock()
 
 	for _, m := range mappings {
-		c.DeletePortMapping(m.InternalPort, m.Protocol)
+		_ = c.DeletePortMapping(m.InternalPort, m.Protocol)
 	}
 
 	return nil

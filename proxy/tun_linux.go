@@ -83,7 +83,7 @@ func (t *TUNServer) setupRoutes() error {
 
 func (t *TUNServer) teardownRoutes() {
 	if ipNet, err := parseCIDRNet(t.config.CIDR); err == nil {
-		exec.Command("ip", "route", "del", ipNet.String(), "dev", t.config.DeviceName).Run()
+		_ = exec.Command("ip", "route", "del", ipNet.String(), "dev", t.config.DeviceName).Run()
 	}
 }
 

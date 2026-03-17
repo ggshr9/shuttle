@@ -421,7 +421,7 @@ func (m *Manager) checkConnectionQuality() {
 	for _, vip := range peersToRestart {
 		m.logger.Info("p2p: connection quality degraded, triggering ICE restart",
 			"peer", vip)
-		go m.TriggerICERestart(vip, signal.ICERestartReasonQualityDegraded)
+		go func(v net.IP) { _ = m.TriggerICERestart(v, signal.ICERestartReasonQualityDegraded) }(vip)
 	}
 }
 
@@ -574,7 +574,7 @@ func (m *Manager) OnNetworkChange() {
 
 	// Trigger ICE restart for all connected peers
 	for _, vip := range connectedPeers {
-		go m.TriggerICERestart(vip, signal.ICERestartReasonNetworkChange)
+		go func(v net.IP) { _ = m.TriggerICERestart(v, signal.ICERestartReasonNetworkChange) }(vip)
 	}
 }
 
@@ -1115,7 +1115,7 @@ func (m *Manager) receiveLoop() {
 		default:
 		}
 
-		m.udpConn.SetReadDeadline(time.Now().Add(time.Second))
+		_ = m.udpConn.SetReadDeadline(time.Now().Add(time.Second))
 		n, addr, err := m.udpConn.ReadFromUDP(buf)
 		if err != nil {
 			if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
@@ -1198,7 +1198,7 @@ func (m *Manager) keepAliveLoop() {
 			m.mu.RLock()
 			for _, peer := range m.peers {
 				if peer.State == StateConnected && peer.P2PConn != nil {
-					peer.P2PConn.SendKeepAlive()
+					_ = peer.P2PConn.SendKeepAlive()
 				}
 			}
 			m.mu.RUnlock()
@@ -1226,7 +1226,7 @@ func (m *Manager) retryLoop() {
 			m.mu.RUnlock()
 
 			for _, vip := range toRetry {
-				go m.Connect(m.ctx, vip)
+				go func(v net.IP) { _ = m.Connect(m.ctx, v) }(vip)
 			}
 		}
 	}

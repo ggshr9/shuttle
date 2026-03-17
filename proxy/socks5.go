@@ -178,14 +178,14 @@ func (s *SOCKS5Server) handleConn(ctx context.Context, conn net.Conn) {
 	s.logger.Debug("socks5 connect", "target", target)
 	remote, err := s.dialer(ctx, "tcp", target)
 	if err != nil {
-		s.sendReply(conn, repHostUnreach, nil)
+		_ = s.sendReply(conn, repHostUnreach, nil)
 		s.logger.Debug("socks5 dial failed", "target", target, "err", err)
 		return
 	}
 	defer remote.Close()
 
 	// 4. Send success reply
-	s.sendReply(conn, repSuccess, remote.LocalAddr())
+	_ = s.sendReply(conn, repSuccess, remote.LocalAddr())
 
 	// 5. Relay data
 	proxyRelay(conn, remote)
@@ -247,7 +247,7 @@ func (s *SOCKS5Server) handlePasswordAuth(conn net.Conn) error {
 		_, err := conn.Write([]byte{0x01, 0x00}) // success
 		return err
 	}
-	conn.Write([]byte{0x01, 0x01}) // failure
+	_, _ = conn.Write([]byte{0x01, 0x01}) // failure
 	return fmt.Errorf("auth failed")
 }
 
@@ -269,13 +269,13 @@ func (s *SOCKS5Server) handleRequest(conn net.Conn) (string, error) {
 		return "", errUDPAssociate
 	}
 	if buf[1] != cmdConnect {
-		s.sendReply(conn, repCmdNotSupported, nil)
+		_ = s.sendReply(conn, repCmdNotSupported, nil)
 		return "", fmt.Errorf("unsupported command: %d", buf[1])
 	}
 
 	target, err := s.readAddress(buf[3], conn)
 	if err != nil {
-		s.sendReply(conn, repAddrNotSupported, nil)
+		_ = s.sendReply(conn, repAddrNotSupported, nil)
 		return "", err
 	}
 	return target, nil
@@ -337,7 +337,7 @@ func (s *SOCKS5Server) sendReply(conn net.Conn, rep byte, addr net.Addr) error {
 // proxyRelay copies data bidirectionally between two connections using the
 // shared relay package, which supports zero-copy (splice) when available.
 func proxyRelay(a, b net.Conn) {
-	relay.Relay(a, b)
+	_, _, _ = relay.Relay(a, b)
 }
 
 // Close shuts down the SOCKS5 server.

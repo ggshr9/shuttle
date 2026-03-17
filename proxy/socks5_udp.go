@@ -48,7 +48,7 @@ func (s *SOCKS5Server) handleUDPAssociate(ctx context.Context, conn net.Conn) {
 
 	// Reply with the bound UDP address.
 	boundAddr := udpConn.LocalAddr().(*net.UDPAddr)
-	s.sendUDPReply(conn, repSuccess, boundAddr)
+	_ = s.sendUDPReply(conn, repSuccess, boundAddr)
 	s.logger.Debug("socks5 udp associate bound", "addr", boundAddr)
 
 	// Monitor the TCP control connection — when it closes, we clean up everything.
@@ -89,7 +89,7 @@ func (s *SOCKS5Server) handleUDPAssociate(ctx context.Context, conn net.Conn) {
 		}
 
 		// Set a read deadline so we can check for TCP close periodically.
-		udpConn.SetReadDeadline(time.Now().Add(2 * time.Second))
+		_ = udpConn.SetReadDeadline(time.Now().Add(2 * time.Second))
 		n, raddr, err := udpConn.ReadFromUDP(buf)
 		if err != nil {
 			if netErr, ok := err.(net.Error); ok && netErr.Timeout() {

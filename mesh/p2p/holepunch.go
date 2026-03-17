@@ -192,7 +192,7 @@ func (hp *HolePuncher) receiveLoop(ctx context.Context, remoteVIP net.IP, result
 		default:
 		}
 
-		hp.conn.SetReadDeadline(time.Now().Add(hp.interval * 2))
+		_ = hp.conn.SetReadDeadline(time.Now().Add(hp.interval * 2))
 		n, addr, err := hp.conn.ReadFromUDP(buf)
 		if err != nil {
 			if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
@@ -232,7 +232,7 @@ func (hp *HolePuncher) receiveLoop(ctx context.Context, remoteVIP net.IP, result
 				Timestamp: pkt.Timestamp,
 				Seq:       pkt.Seq,
 			}
-			hp.conn.WriteToUDP(resp.Encode(), addr)
+			_, _ = hp.conn.WriteToUDP(resp.Encode(), addr)
 
 		case HolePunchResponse:
 			// Calculate RTT
@@ -246,7 +246,7 @@ func (hp *HolePuncher) receiveLoop(ctx context.Context, remoteVIP net.IP, result
 				Timestamp: time.Now().UnixNano(),
 				Seq:       pkt.Seq,
 			}
-			hp.conn.WriteToUDP(ack.Encode(), addr)
+			_, _ = hp.conn.WriteToUDP(ack.Encode(), addr)
 
 			// Report success
 			result := &HolePunchResult{

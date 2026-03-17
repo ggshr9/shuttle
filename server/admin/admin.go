@@ -350,7 +350,7 @@ func ListenAndServe(cfg *config.AdminConfig, info *ServerInfo, serverCfg *config
 		WriteTimeout: 10 * time.Second,
 	}
 
-	go server.Serve(ln)
+	go func() { _ = server.Serve(ln) }()
 	return server, nil
 }
 
@@ -371,5 +371,5 @@ func writeJSON(w http.ResponseWriter, v any) {
 func writeError(w http.ResponseWriter, code int, msg string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(code)
-	json.NewEncoder(w).Encode(map[string]string{"error": msg})
+	_ = json.NewEncoder(w).Encode(map[string]string{"error": msg})
 }

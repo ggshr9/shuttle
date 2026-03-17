@@ -310,7 +310,7 @@ func (c *TURNClient) Close() error {
 	defer cancel()
 
 	req := c.buildRefreshRequest(0)
-	c.sendRequest(ctx, req)
+	_ = c.sendRequest(ctx, req)
 
 	if conn != nil {
 		conn.Close()

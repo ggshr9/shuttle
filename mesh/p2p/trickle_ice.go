@@ -353,7 +353,7 @@ func (g *TrickleICEGatherer) querySTUNServer(conn *net.UDPConn, server string) (
 	req := buildSTUNBindingRequest()
 
 	// Set deadline for this request
-	conn.SetWriteDeadline(time.Now().Add(2 * time.Second))
+	_ = conn.SetWriteDeadline(time.Now().Add(2 * time.Second))
 	_, err = conn.WriteToUDP(req, serverAddr)
 	if err != nil {
 		return nil, err
