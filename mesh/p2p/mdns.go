@@ -679,7 +679,7 @@ func (s *MDNSService) buildResponseWithTTL(ttl int) []byte {
 	buf[offset+2] = 0x00
 	buf[offset+3] = mdnsClassIN
 	offset += 4
-	offset += writeTTL(buf[offset:], uint32(ttl))
+	offset += writeTTL(buf[offset:], uint32(ttl)) //nolint:gosec // G115: TTL is a small positive duration in seconds
 	ptrData := []byte{}
 	ptrData = append(ptrData, writeDNSNameBytes(fullName)...)
 	buf[offset] = byte(len(ptrData) >> 8)
@@ -695,7 +695,7 @@ func (s *MDNSService) buildResponseWithTTL(ttl int) []byte {
 	buf[offset+2] = 0x80 // Cache flush + IN class
 	buf[offset+3] = 0x01
 	offset += 4
-	offset += writeTTL(buf[offset:], uint32(ttl))
+	offset += writeTTL(buf[offset:], uint32(ttl)) //nolint:gosec // G115: TTL is a small positive duration in seconds
 	// SRV RDATA: priority(2) + weight(2) + port(2) + target
 	hostName := instanceName + ".local."
 	srvRdataLen := 6 + len(writeDNSNameBytes(hostName))
@@ -718,7 +718,7 @@ func (s *MDNSService) buildResponseWithTTL(ttl int) []byte {
 	buf[offset+2] = 0x80 // Cache flush + IN class
 	buf[offset+3] = 0x01
 	offset += 4
-	offset += writeTTL(buf[offset:], uint32(ttl))
+	offset += writeTTL(buf[offset:], uint32(ttl)) //nolint:gosec // G115: TTL is a small positive duration in seconds
 
 	// Build TXT RDATA
 	txtData := []byte{}

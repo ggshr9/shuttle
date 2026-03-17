@@ -103,7 +103,7 @@ func TestDNSMultiplexer_DifferentDomains(t *testing.T) {
 	}
 
 	got := reqCount.Load()
-	if got != int32(len(domains)) {
+	if got != int32(len(domains)) { //nolint:gosec // G115: test domain count is small, fits int32
 		t.Fatalf("expected %d HTTP requests (one per domain), got %d", len(domains), got)
 	}
 }

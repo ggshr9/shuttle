@@ -175,5 +175,5 @@ func (d *Downloader) saveETags() {
 	data, _ := json.Marshal(d.etag)
 	d.mu.Unlock()
 	_ = os.MkdirAll(d.dataDir, 0o755)
-	_ = os.WriteFile(d.etagPath(), data, 0o644)
+	_ = os.WriteFile(d.etagPath(), data, 0o644) //nolint:gosec // G306: etag cache file needs to be readable by other processes
 }

@@ -94,6 +94,7 @@ run_tests() {
     local passed=0
     local failed=0
     local total=0
+    set +e  # arithmetic ((...)) returns 1 when result is 0; disable errexit for tests
 
     # Test 1: Server running
     ((total++))
@@ -222,6 +223,7 @@ run_tests() {
     fi
     echo ""
 
+    set -e  # re-enable errexit
     return $failed
 }
 

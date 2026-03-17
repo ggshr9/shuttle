@@ -398,7 +398,7 @@ func (m *Manager) candidatesToInfo(candidates []*Candidate) []*signal.CandidateI
 		}
 		if c.RelatedIP != nil {
 			infos[i].RelatedIP = c.RelatedIP
-			infos[i].RelatedPort = uint16(c.RelatedPort)
+			infos[i].RelatedPort = uint16(c.RelatedPort) //nolint:gosec // G115: port range 0-65535, fits uint16
 		}
 	}
 	return infos

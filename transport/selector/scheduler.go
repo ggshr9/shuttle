@@ -54,7 +54,7 @@ func (s *weightedLatencyScheduler) Pick(paths []*PathMetrics) *PathMetrics {
 		total += w
 	}
 
-	r := rand.Float64() * total
+	r := rand.Float64() * total //nolint:gosec // G404: used for load balancing, not security
 	var cumulative float64
 	for i, w := range weights {
 		cumulative += w

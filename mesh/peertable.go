@@ -29,7 +29,7 @@ func NewIPAllocator(cidr string) (*IPAllocator, error) {
 
 	base := binary.BigEndian.Uint32(ipNet.IP.To4())
 	ones, bits := ipNet.Mask.Size()
-	size := uint32(1) << uint(bits-ones)
+	size := uint32(1) << uint(bits-ones) //nolint:gosec // G115: bits-ones is 0-32 for IPv4, fits uint
 
 	gateway := make(net.IP, 4)
 	binary.BigEndian.PutUint32(gateway, base+1)

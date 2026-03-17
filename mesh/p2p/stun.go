@@ -507,7 +507,7 @@ func parseBindingResponse(data []byte, expectedTxID []byte) (*net.UDPAddr, error
 			// XOR key: magic cookie + transaction ID
 			xorKey := make([]byte, 16)
 			binary.BigEndian.PutUint32(xorKey[0:4], stunMagicCookie)
-			copy(xorKey[4:16], data[8:20])
+			copy(xorKey[4:16], data[8:20]) //nolint:gosec // G602: len(data) >= stunHeaderSize(20) checked at function entry
 			if addr := parseMappedAddress(attrData, xorKey); addr != nil {
 				xorMappedAddr = addr
 			}

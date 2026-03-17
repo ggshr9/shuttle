@@ -505,11 +505,11 @@ func parseSTUNBindingResponse(data []byte) (*net.UDPAddr, error) {
 			// XOR-MAPPED-ADDRESS
 			family := attrData[1]
 			if family == 0x01 { // IPv4
-				xorPort := uint16(attrData[2])<<8 | uint16(attrData[3])
+				xorPort := uint16(attrData[2])<<8 | uint16(attrData[3]) //nolint:gosec // G602: attrLen >= 8 checked above
 				port := xorPort ^ 0x2112 // XOR with magic cookie upper 16 bits
 
 				xorIP := make([]byte, 4)
-				copy(xorIP, attrData[4:8])
+				copy(xorIP, attrData[4:8]) //nolint:gosec // G602: attrLen >= 8 checked above
 				ip := make(net.IP, 4)
 				ip[0] = xorIP[0] ^ 0x21
 				ip[1] = xorIP[1] ^ 0x12
@@ -522,8 +522,8 @@ func parseSTUNBindingResponse(data []byte) (*net.UDPAddr, error) {
 			// MAPPED-ADDRESS (fallback for old servers)
 			family := attrData[1]
 			if family == 0x01 { // IPv4
-				port := uint16(attrData[2])<<8 | uint16(attrData[3])
-				ip := net.IP(attrData[4:8])
+				port := uint16(attrData[2])<<8 | uint16(attrData[3]) //nolint:gosec // G602: attrLen >= 8 checked above
+				ip := net.IP(attrData[4:8]) //nolint:gosec // G602: attrLen >= 8 checked above
 				return &net.UDPAddr{IP: ip, Port: int(port)}, nil
 			}
 		}

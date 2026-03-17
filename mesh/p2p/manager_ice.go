@@ -58,7 +58,7 @@ func (m *Manager) TriggerICERestart(peerVIP net.IP, reason byte) error {
 	if m.signalClient != nil {
 		restartInfo := &signal.ICERestartInfo{
 			Reason:           reason,
-			Generation:       uint16(generation),
+			Generation:       uint16(generation), //nolint:gosec // G115: generation is a small counter, fits uint16
 			UsernameFragment: creds.UsernameFragment,
 			Password:         creds.Password,
 		}
@@ -353,16 +353,16 @@ func (m *Manager) SendTrickleCandidate(dstVIP net.IP, candidate *Candidate) erro
 		Candidate: &signal.CandidateInfo{
 			Type:     byte(candidate.Type),
 			IP:       candidate.Addr.IP,
-			Port:     uint16(candidate.Addr.Port),
+			Port:     uint16(candidate.Addr.Port), //nolint:gosec // G115: port range 0-65535, fits uint16
 			Priority: candidate.Priority,
 		},
-		Generation: uint16(m.iceGeneration),
+		Generation: uint16(m.iceGeneration), //nolint:gosec // G115: generation is a small counter, fits uint16
 		MLineIndex: 0,
 	}
 
 	if candidate.RelatedIP != nil {
 		info.Candidate.RelatedIP = candidate.RelatedIP
-		info.Candidate.RelatedPort = uint16(candidate.RelatedPort)
+		info.Candidate.RelatedPort = uint16(candidate.RelatedPort) //nolint:gosec // G115: port range 0-65535, fits uint16
 	}
 
 	return m.signalClient.SendTrickleCandidate(dstVIP, info)
@@ -375,8 +375,8 @@ func (m *Manager) SendEndOfCandidates(dstVIP net.IP) error {
 	}
 
 	info := &signal.EndOfCandidatesInfo{
-		Generation:     uint16(m.iceGeneration),
-		TotalCandidates: uint8(len(m.candidates)),
+		Generation:      uint16(m.iceGeneration), //nolint:gosec // G115: generation is a small counter, fits uint16
+		TotalCandidates: uint8(len(m.candidates)), //nolint:gosec // G115: candidate count never exceeds 255
 	}
 
 	return m.signalClient.SendEndOfCandidates(dstVIP, info)

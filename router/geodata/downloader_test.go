@@ -300,7 +300,7 @@ func TestFileExists(t *testing.T) {
 		t.Fatal("expected FileExists=false for nonexistent file")
 	}
 
-	if err := os.WriteFile(filepath.Join(dir, "exists.txt"), []byte("data"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "exists.txt"), []byte("data"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 
@@ -408,7 +408,7 @@ func TestDownloadAtomicWrite(t *testing.T) {
 	destPath := filepath.Join(dir, "test.txt")
 
 	// Pre-create the file with old content
-	if err := os.WriteFile(destPath, []byte("old content"), 0o644); err != nil {
+	if err := os.WriteFile(destPath, []byte("old content"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 

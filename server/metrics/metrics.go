@@ -252,11 +252,11 @@ func (c *Collector) writeMetrics(w io.Writer) {
 
 	writeMetric(w, "shuttle_go_memory_alloc_bytes", "gauge",
 		"Allocated heap memory in bytes",
-		int64(mem.Alloc))
+		int64(mem.Alloc)) //nolint:gosec // G115: heap alloc bytes won't exceed int64 max
 
 	writeMetric(w, "shuttle_go_memory_sys_bytes", "gauge",
 		"Total system memory in bytes",
-		int64(mem.Sys))
+		int64(mem.Sys)) //nolint:gosec // G115: system memory bytes won't exceed int64 max
 
 	writeMetric(w, "shuttle_go_gc_completed_total", "counter",
 		"Total completed GC cycles",
