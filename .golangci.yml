@@ -44,6 +44,21 @@ linters-settings:
       - (*github.com/shuttleX/shuttle/internal/relay.Relay).Relay
       - fmt.Sscanf
       - rand.Read  # crypto/rand.Read never fails on supported OS
+  gosec:
+    excludes:
+      - G115  # integer overflow: pervasive in Go networking code (port, TTL, length casts); all bounded
+      - G104  # unhandled errors: covered by errcheck with explicit exclude list above
+      - G304  # file inclusion via variable: config paths are user-provided by design
+      - G301  # directory permissions: OS-specific dirs need broader perms
+      - G306  # WriteFile permissions: handled case-by-case, some files need wider perms
+      - G404  # weak random: math/rand is fine for non-security uses (load balancing, test jitter)
+      - G602  # slice bounds: false positives when bounds are checked in prior statements
+      - G117  # secret in struct: config structs intentionally contain password fields
+      - G706  # log injection: log messages from trusted internal sources
+      - G703  # path traversal: file paths from user config, not untrusted input
+    config:
+      G204:  # subprocess: only flag when args come from untrusted sources
+        audit: false
   gocritic:
     enabled-tags:
       - diagnostic
