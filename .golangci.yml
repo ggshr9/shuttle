@@ -39,3 +39,7 @@ linters-settings:
 issues:
   exclude-dirs:
     - quicfork  # forked code, don't lint
+  exclude-rules:
+    - path: _test\.go
+      linters:
+        - errcheck  # test code intentionally ignores errors for brevity

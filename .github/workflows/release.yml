@@ -35,30 +35,11 @@ jobs:
           ./scripts/test.sh --race
 
   # ──────────────────────────────────────────────
-  # Build Svelte frontend (shared by CLI + GUI)
-  # ──────────────────────────────────────────────
-  build-frontend:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: 'npm'
-          cache-dependency-path: gui/web/package-lock.json
-      - working-directory: gui/web
-        run: npm ci && npm run build
-      - uses: actions/upload-artifact@v4
-        with:
-          name: web-dist
-          path: gui/web/dist/
-          retention-days: 1
-
-  # ──────────────────────────────────────────────
   # CLI binaries — pure Go, no CGo, 9 platforms
+  # No frontend needed (CLI doesn't embed web UI)
   # ──────────────────────────────────────────────
   build-cli:
-    needs: [preflight, build-frontend]
+    needs: [preflight]
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -78,10 +59,6 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: ${{ env.GO_VERSION }}
-      - uses: actions/download-artifact@v4
-        with:
-          name: web-dist
-          path: gui/web/dist/
       - name: Build shuttle & shuttled
         env:
           GOOS: ${{ matrix.goos }}
@@ -113,9 +90,10 @@ jobs:
 
   # ──────────────────────────────────────────────
   # GUI desktop — requires CGo (Wails + systray)
+  # Builds frontend inline to avoid artifact deps
   # ──────────────────────────────────────────────
   build-gui:
-    needs: [preflight, build-frontend]
+    needs: [preflight]
     strategy:
       fail-fast: false
       matrix:
@@ -141,10 +119,12 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: ${{ env.GO_VERSION }}
-      - uses: actions/download-artifact@v4
+      - uses: actions/setup-node@v4
         with:
-          name: web-dist
-          path: gui/web/dist/
+          node-version: ${{ env.NODE_VERSION }}
+      - name: Build frontend
+        working-directory: gui/web
+        run: npm ci && npm run build
       - name: Install dependencies
         if: matrix.deps != ''
         run: ${{ matrix.deps }}
@@ -238,7 +218,7 @@ jobs:
   # Android: .aar via gomobile
   # ──────────────────────────────────────────────
   build-android:
-    needs: [preflight, build-frontend]
+    needs: [preflight]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -275,7 +255,7 @@ jobs:
   # iOS: .xcframework via gomobile
   # ──────────────────────────────────────────────
   build-ios:
-    needs: [preflight, build-frontend]
+    needs: [preflight]
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4

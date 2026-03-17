@@ -124,14 +124,14 @@ func spliceRelay(aFD, bFD int) (aToB, bToA int64, err error) {
 		defer wg.Done()
 		aToB, err1 = spliceOne(aFD, bFD, pipe1)
 		// Shut down the write side of b to signal EOF.
-		unix.Shutdown(bFD, unix.SHUT_WR)
+		_ = unix.Shutdown(bFD, unix.SHUT_WR)
 	}()
 
 	// b -> a
 	go func() {
 		defer wg.Done()
 		bToA, err2 = spliceOne(bFD, aFD, pipe2)
-		unix.Shutdown(aFD, unix.SHUT_WR)
+		_ = unix.Shutdown(aFD, unix.SHUT_WR)
 	}()
 
 	wg.Wait()
