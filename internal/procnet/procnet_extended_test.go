@@ -124,7 +124,7 @@ func TestResolverConcurrentResolve(t *testing.T) {
 		go func(port uint16) {
 			defer wg.Done()
 			_ = r.Resolve(port)
-		}(uint16(i + 1000))
+		}(uint16(i + 1000)) //nolint:gosec // G115: test loop index, always non-negative and small
 	}
 	wg.Wait()
 }
@@ -144,7 +144,7 @@ func TestResolverConcurrentResolveWithExpiry(t *testing.T) {
 				_ = r.Resolve(port)
 				time.Sleep(time.Millisecond)
 			}
-		}(uint16(i + 2000))
+		}(uint16(i + 2000)) //nolint:gosec // G115: test loop index, always non-negative and small
 	}
 	wg.Wait()
 }

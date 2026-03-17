@@ -203,7 +203,7 @@ func (e *Engine) stopInternal() error {
 	go func() {
 		defer close(done)
 		for _, c := range closers {
-			c()
+			_ = c()
 		}
 		if sel != nil {
 			sel.Close()

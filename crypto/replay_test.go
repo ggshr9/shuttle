@@ -336,9 +336,9 @@ func TestReplayFilter_ConcurrentCheckBytes(t *testing.T) {
 		go func(id int) {
 			defer wg.Done()
 			nonce := make([]byte, 32)
-			binary.LittleEndian.PutUint64(nonce[0:8], uint64(id))
-			binary.LittleEndian.PutUint64(nonce[8:16], uint64(id*17))
-			binary.LittleEndian.PutUint64(nonce[16:24], uint64(id*31))
+			binary.LittleEndian.PutUint64(nonce[0:8], uint64(id))   //nolint:gosec // G115: test goroutine id, always non-negative
+			binary.LittleEndian.PutUint64(nonce[8:16], uint64(id*17)) //nolint:gosec // G115: test goroutine id, always non-negative
+			binary.LittleEndian.PutUint64(nonce[16:24], uint64(id*31)) //nolint:gosec // G115: test goroutine id, always non-negative
 			binary.LittleEndian.PutUint64(nonce[24:32], uint64(id*53))
 
 			// First check should not be a replay.

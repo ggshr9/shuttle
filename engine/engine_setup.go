@@ -433,7 +433,7 @@ func (e *Engine) startProxies(ctx context.Context, cfg *config.ClientConfig, dia
 
 	cleanup := func(err error) ([]func() error, error) {
 		for _, c := range closers {
-			c()
+			_ = c()
 		}
 		sel.Close()
 		cancel()

@@ -91,7 +91,7 @@ func setKDE(cfg ProxyConfig) error {
 
 	// Set bypass list
 	if len(cfg.Bypass) > 0 {
-		_ = exec.Command("kwriteconfig5", "--file", "kioslaverc", "--group", "Proxy Settings", "--key", "NoProxyFor", strings.Join(cfg.Bypass, ",")).Run()
+		_ = exec.Command("kwriteconfig5", "--file", "kioslaverc", "--group", "Proxy Settings", "--key", "NoProxyFor", strings.Join(cfg.Bypass, ",")).Run() //nolint:gosec // G204: input is from validated ProxyConfig bypass list, not user-tainted
 	}
 
 	// Notify KDE to reload settings

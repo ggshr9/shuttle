@@ -161,7 +161,7 @@ mesh:
 `
 	dir := t.TempDir()
 	path := filepath.Join(dir, "client.yaml")
-	os.WriteFile(path, []byte(yaml), 0644)
+	os.WriteFile(path, []byte(yaml), 0600)
 
 	cfg, err := LoadClientConfig(path)
 	if err != nil {
@@ -190,7 +190,7 @@ mesh:
 `
 	dir := t.TempDir()
 	path := filepath.Join(dir, "server.yaml")
-	os.WriteFile(path, []byte(yaml), 0644)
+	os.WriteFile(path, []byte(yaml), 0600)
 
 	cfg, err := LoadServerConfig(path)
 	if err != nil {
@@ -217,7 +217,7 @@ func TestLoadConfigInvalidPath(t *testing.T) {
 func TestLoadConfigInvalidYAML(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "bad.yaml")
-	os.WriteFile(path, []byte("{{invalid yaml"), 0644)
+	os.WriteFile(path, []byte("{{invalid yaml"), 0600)
 
 	_, err := LoadClientConfig(path)
 	if err == nil {
