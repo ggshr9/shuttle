@@ -124,6 +124,85 @@ Cannot run outside Docker. All non-sandbox tests in mesh/p2p pass normally.
 - The CLAUDE.md warning about `go test` is primarily for **local development machines**
 - Cloud environment has no real system proxy or autostart to corrupt
 
+## Run 3: Deep Analysis (Race / Bench / Fuzz / Coverage / Vet)
+
+### Race Detector (`-race`)
+
+All packages pass with zero data races detected.
+
+```
+config        OK (1.1s)    engine    OK (2.0s)    router       OK (3.4s)
+congestion    OK (1.0s)    crypto    OK (3.6s)    transport/*  OK
+mesh/*        OK           proxy     OK           server/*     OK
+```
+
+### Benchmarks (`-bench=. -benchmem`)
+
+| Benchmark | ns/op | allocs/op |
+|-----------|------:|----------:|
+| AdaptiveOnAck | 129.7 | 0 |
+| AdaptiveOnPacketLoss | 103.0 | 0 |
+| BBROnAck | 95.6 | 0 |
+| BBROnPacketSent | 17.2 | 0 |
+| BrutalOnAck | 19.1 | 0 |
+| BrutalOnPacketLoss | 19.0 | 0 |
+| RouterMatchWithNetworkType | 37.6 | 0 |
+
+All zero-allocation — congestion and routing hot paths are allocation-free.
+
+### Fuzz Testing (`-fuzztime=10s`)
+
+Crypto package fuzz: **PASS** (10s, no crashes found)
+
+### Coverage Report
+
+| Package | Coverage | | Package | Coverage |
+|---------|----------|-|---------|----------|
+| transport/ | **100.0%** | | server/metrics | **90.2%** |
+| transport/auth | **90.9%** | | server/audit | **88.2%** |
+| transport/resilient | **86.9%** | | router/ | **86.8%** |
+| transport/conformance | **80.3%** | | congestion/ | **79.5%** |
+| transport/selector | **75.2%** | | router/geodata | **74.9%** |
+| config/ | **72.0%** | | mesh/signal | **65.6%** |
+| server/admin | **64.3%** | | crypto/ | **64.9%** |
+| mesh/ | **62.1%** | | transport/h3 | 56.6% |
+| transport/cdn | 53.3% | | mesh/p2p | 36.9% |
+| engine/ | 33.5% | | proxy/ | 31.1% |
+| server/ | 24.9% | | transport/reality | 17.1% |
+| transport/webrtc | 10.4% | | | |
+
+**Overall: 48.0%** (host-only; sandbox tests would raise this significantly)
+
+Low-coverage packages (reality 17%, webrtc 10%, server 25%, proxy 31%) are
+primarily integration-heavy — their real coverage comes from Tier 2 sandbox tests.
+
+### Static Analysis (`go vet`)
+
+**PASS** — zero warnings across entire codebase.
+
+### Binary Build Verification
+
+`CGO_ENABLED=0 go build ./cmd/shuttle ./cmd/shuttled` — **BUILD OK**
+
+## Cloud Testing Capability Summary
+
+| Test Type | Available | Result | Command |
+|-----------|-----------|--------|---------|
+| Unit tests | Yes | 1382 PASS | `./scripts/test.sh` |
+| Race detector | Yes | 0 races | `go test -race` |
+| Benchmarks | Yes | All pass, 0 allocs | `go test -bench=.` |
+| Fuzz testing | Yes | No crashes (10s) | `go test -fuzz=.` |
+| Coverage | Yes | 48% host-only | `go test -coverprofile` |
+| Static analysis | Yes | 0 warnings | `go vet ./...` |
+| Sandbox (sysproxy/autostart) | Yes | PASS | `-tags sandbox` |
+| Sandbox (test/ unit-style) | Partial | 55/56 PASS | `-tags sandbox` |
+| Docker sandbox (e2e/STUN/NAT) | **No** | Need Docker daemon | `--sandbox` |
+| Perf budget check | Partial | Benchmarks run, no .perf-budget.yaml checker | `--perf` |
+
+**Conclusion:** Cloud covers ~85% of the test matrix. The remaining 15% (Docker
+sandbox: e2e proxy chain, STUN/NAT traversal, mDNS, hole punching) requires a
+Docker-capable environment.
+
 ## Test Architecture Reference
 
 | Tier | Scope | Command | Docker? |
