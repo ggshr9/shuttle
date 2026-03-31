@@ -31,3 +31,6 @@ Thumbs.db
 
 # Test binaries
 *.test
+test/cloud/bin/
+test/cloud/logs/
+test/cloud/pids/

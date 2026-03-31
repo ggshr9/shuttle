@@ -1,0 +1,49 @@
+# Cloud E2E — Client A config (127.0.0.2)
+server:
+  addr: "127.0.0.1:10443"
+  name: "cloud-server"
+  password: "cloud-test-password"
+  sni: ""
+
+transport:
+  preferred: "h3"
+  h3:
+    enabled: true
+    path_prefix: "/shuttle"
+    insecure_skip_verify: true
+  reality:
+    enabled: true
+    server_name: "www.microsoft.com"
+    short_id: "abcd1234"
+    public_key: "d69e872aecb39b1a715bed386c26c6be0a0d5cb0a53c8da2543c3e8a9e761d73"
+  cdn:
+    enabled: false
+    domain: "127.0.0.1:10444"
+    path: "/cdn/stream"
+    insecure_skip_verify: true
+  webrtc:
+    enabled: false
+
+proxy:
+  allow_lan: true
+  socks5:
+    enabled: true
+    listen: "127.0.0.2:1080"
+  http:
+    enabled: true
+    listen: "127.0.0.2:8080"
+  tun:
+    enabled: false
+
+routing:
+  default: "proxy"
+
+congestion:
+  mode: "adaptive"
+
+mesh:
+  enabled: false
+
+log:
+  level: "debug"
+  format: "text"

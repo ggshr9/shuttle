@@ -1,0 +1,38 @@
+# Cloud E2E — Server config (localhost)
+listen: "127.0.0.1:10443"
+
+tls:
+  cert_file: ""
+  key_file: ""
+
+auth:
+  password: "cloud-test-password"
+  private_key: "8830e7a1bacb499321eae32784bca8c8122153ef7690dff8814f7e8a2e25ed63"
+  public_key: "d69e872aecb39b1a715bed386c26c6be0a0d5cb0a53c8da2543c3e8a9e761d73"
+
+cover:
+  mode: "default"
+
+transport:
+  h3:
+    enabled: true
+    path_prefix: "/shuttle"
+  reality:
+    enabled: true
+    target_sni: "www.microsoft.com"
+    target_addr: "127.0.0.1:10443"
+    short_ids:
+      - "abcd1234"
+  cdn:
+    enabled: true
+    listen: "127.0.0.1:10444"
+    path: "/cdn/stream"
+  webrtc:
+    enabled: false
+
+mesh:
+  enabled: false
+
+log:
+  level: "debug"
+  format: "text"
