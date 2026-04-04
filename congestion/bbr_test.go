@@ -213,6 +213,7 @@ func TestBBRPacingGainByState(t *testing.T) {
 	bbr.state = BBRDrain
 	drainGain := bbr.pacingGain()
 	bbr.state = BBRProbeBW
+	bbr.cycleIdx = 2 // cruise phase => 1.0
 	probeGain := bbr.pacingGain()
 	bbr.mu.Unlock()
 
@@ -301,5 +302,36 @@ func TestQUICAdapter_SendTimesMapBounded(t *testing.T) {
 
 	if size > 12000 {
 		t.Errorf("lastSendTimes grew to %d entries, expected bounded", size)
+	}
+}
+
+func TestBBR_ProbeBWCyclesGain(t *testing.T) {
+	bbr := NewBBR(0)
+
+	// Force into ProbeBW state
+	bbr.mu.Lock()
+	bbr.state = BBRProbeBW
+	bbr.cycleIdx = 0
+	bbr.mu.Unlock()
+
+	// Collect pacing gains over 8 positions
+	gains := make([]float64, 8)
+	bbr.mu.Lock()
+	for i := 0; i < 8; i++ {
+		bbr.cycleIdx = i
+		gains[i] = bbr.pacingGain()
+	}
+	bbr.mu.Unlock()
+
+	if gains[0] != bbrProbeBWGain {
+		t.Errorf("cycle[0] gain = %f, want %f", gains[0], bbrProbeBWGain)
+	}
+	if gains[1] != bbrProbeBWDrainGain {
+		t.Errorf("cycle[1] gain = %f, want %f", gains[1], bbrProbeBWDrainGain)
+	}
+	for i := 2; i < 8; i++ {
+		if gains[i] != 1.0 {
+			t.Errorf("cycle[%d] gain = %f, want 1.0", i, gains[i])
+		}
 	}
 }
