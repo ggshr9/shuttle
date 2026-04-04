@@ -1,40 +1,16 @@
 package transport
 
-import (
-	"context"
-	"io"
-	"net"
+import "github.com/shuttleX/shuttle/adapter"
+
+// Type aliases bridging transport types to adapter types.
+// All new code should import adapter directly.
+// These aliases exist for backward compatibility during migration.
+type (
+	Stream          = adapter.Stream
+	Connection      = adapter.Connection
+	ClientTransport = adapter.ClientTransport
+	ServerTransport = adapter.ServerTransport
 )
-
-// Stream represents a multiplexed stream within a connection.
-type Stream interface {
-	io.ReadWriteCloser
-	StreamID() uint64
-}
-
-// Connection represents a multiplexed connection that can open/accept streams.
-type Connection interface {
-	OpenStream(ctx context.Context) (Stream, error)
-	AcceptStream(ctx context.Context) (Stream, error)
-	Close() error
-	LocalAddr() net.Addr
-	RemoteAddr() net.Addr
-}
-
-// ClientTransport dials servers and returns multiplexed connections.
-type ClientTransport interface {
-	Dial(ctx context.Context, addr string) (Connection, error)
-	Type() string
-	Close() error
-}
-
-// ServerTransport listens for incoming multiplexed connections.
-type ServerTransport interface {
-	Listen(ctx context.Context) error
-	Accept(ctx context.Context) (Connection, error)
-	Type() string
-	Close() error
-}
 
 // TransportConfig holds common transport configuration.
 type TransportConfig struct {
