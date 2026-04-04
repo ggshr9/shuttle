@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/quic-go/quic-go"
+	"github.com/shuttleX/shuttle/adapter"
 	"github.com/shuttleX/shuttle/config"
 	"github.com/shuttleX/shuttle/congestion"
 	"github.com/shuttleX/shuttle/internal/procnet"
@@ -20,11 +21,7 @@ import (
 	"github.com/shuttleX/shuttle/router/geodata"
 	"github.com/shuttleX/shuttle/stream"
 	"github.com/shuttleX/shuttle/transport"
-	"github.com/shuttleX/shuttle/transport/cdn"
-	"github.com/shuttleX/shuttle/transport/h3"
-	"github.com/shuttleX/shuttle/transport/reality"
 	"github.com/shuttleX/shuttle/transport/selector"
-	rtcTransport "github.com/shuttleX/shuttle/transport/webrtc"
 )
 
 // buildCongestionControl creates the appropriate CC based on config.
@@ -51,78 +48,23 @@ func (e *Engine) buildCongestionControl(cfg *config.ClientConfig) quic.Congestio
 func (e *Engine) buildTransports(cfg *config.ClientConfig, ccAdapter quic.CongestionControl) []transport.ClientTransport {
 	var transports []transport.ClientTransport
 
-	e.logger.Debug("transport setup", "h3", cfg.Transport.H3.Enabled, "reality", cfg.Transport.Reality.Enabled, "cdn", cfg.Transport.CDN.Enabled, "webrtc", cfg.Transport.WebRTC.Enabled)
-	if cfg.Transport.H3.Enabled {
-		h3Cfg := &h3.ClientConfig{
-			ServerAddr:         cfg.Server.Addr,
-			ServerName:         cfg.Server.SNI,
-			Password:           cfg.Server.Password,
-			PathPrefix:         cfg.Transport.H3.PathPrefix,
-			InsecureSkipVerify: cfg.Transport.H3.InsecureSkipVerify,
-			CongestionControl:  ccAdapter,
-		}
-		if cfg.Transport.H3.Multipath.Enabled {
-			probeInterval := 5 * time.Second
-			if cfg.Transport.H3.Multipath.ProbeInterval != "" {
-				if d, err := time.ParseDuration(cfg.Transport.H3.Multipath.ProbeInterval); err == nil {
-					probeInterval = d
-				} else {
-					e.logger.Warn("invalid duration, using default", "field", "transport.h3.multipath.probe_interval", "value", cfg.Transport.H3.Multipath.ProbeInterval, "err", err)
-				}
-			}
-			h3Cfg.Multipath = &h3.MultipathConfig{
-				Enabled:       true,
-				Interfaces:    cfg.Transport.H3.Multipath.Interfaces,
-				Mode:          cfg.Transport.H3.Multipath.Mode,
-				ProbeInterval: probeInterval,
-			}
-		}
-		transports = append(transports, h3.NewClient(h3Cfg))
+	opts := adapter.FactoryOptions{
+		Logger:            e.logger,
+		CongestionControl: ccAdapter,
 	}
 
-	if cfg.Transport.Reality.Enabled {
-		transports = append(transports, reality.NewClient(&reality.ClientConfig{
-			ServerAddr: cfg.Server.Addr,
-			ServerName: cfg.Transport.Reality.ServerName,
-			ShortID:    cfg.Transport.Reality.ShortID,
-			PublicKey:  cfg.Transport.Reality.PublicKey,
-			Password:   cfg.Server.Password,
-			Yamux:      &cfg.Yamux,
-		}))
-	}
-
-	if cfg.Transport.CDN.Enabled {
-		switch cfg.Transport.CDN.Mode {
-		case "grpc":
-			transports = append(transports, cdn.NewGRPCClient(&cdn.GRPCConfig{
-				CDNDomain:   cfg.Transport.CDN.Domain,
-				Password:    cfg.Server.Password,
-				FrontDomain: cfg.Transport.CDN.FrontDomain,
-			}, cdn.WithGRPCLogger(e.logger)))
-		default:
-			transports = append(transports, cdn.NewH2Client(&cdn.H2Config{
-				ServerAddr:         cfg.Server.Addr,
-				CDNDomain:          cfg.Transport.CDN.Domain,
-				Path:               cfg.Transport.CDN.Path,
-				Password:           cfg.Server.Password,
-				FrontDomain:        cfg.Transport.CDN.FrontDomain,
-				InsecureSkipVerify: cfg.Transport.CDN.InsecureSkipVerify,
-			}, cdn.WithH2Logger(e.logger)))
+	for name, factory := range adapter.All() {
+		t, err := factory.NewClient(cfg, opts)
+		if err != nil {
+			e.logger.Warn("transport factory failed", "type", name, "err", err)
+			continue
+		}
+		if t != nil {
+			transports = append(transports, t)
 		}
 	}
 
-	if cfg.Transport.WebRTC.Enabled {
-		transports = append(transports, rtcTransport.NewClient(&rtcTransport.ClientConfig{
-			SignalURL:   cfg.Transport.WebRTC.SignalURL,
-			Password:    cfg.Server.Password,
-			STUNServers: cfg.Transport.WebRTC.STUNServers,
-			TURNServers: cfg.Transport.WebRTC.TURNServers,
-			TURNUser:    cfg.Transport.WebRTC.TURNUser,
-			TURNPass:    cfg.Transport.WebRTC.TURNPass,
-			ICEPolicy:   cfg.Transport.WebRTC.ICEPolicy,
-		}))
-	}
-
+	e.logger.Debug("transport setup", "count", len(transports))
 	return transports
 }
 
