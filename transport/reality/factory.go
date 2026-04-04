@@ -23,7 +23,7 @@ func (f *factory) NewClient(cfg *config.ClientConfig, opts adapter.FactoryOption
 		ServerAddr:  cfg.Server.Addr,
 		ServerName:  cfg.Transport.Reality.ServerName,
 		ShortID:     cfg.Transport.Reality.ShortID,
-		PublicKey:    cfg.Transport.Reality.PublicKey,
+		PublicKey:   cfg.Transport.Reality.PublicKey,
 		Password:    cfg.Server.Password,
 		PostQuantum: cfg.Transport.Reality.PostQuantum,
 		Yamux:       &cfg.Yamux,

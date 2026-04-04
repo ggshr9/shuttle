@@ -9,6 +9,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/shuttleX/shuttle/adapter"
 	"github.com/shuttleX/shuttle/transport"
 )
 
@@ -43,16 +44,8 @@ type networkPath struct {
 	lastProbe atomic.Int64 // unix nano
 }
 
-// PathStats holds per-path statistics returned by Stats().
-type PathStats struct {
-	Interface string  `json:"interface"`
-	LocalAddr string  `json:"local_addr"`
-	RTT       int64   `json:"rtt_ms"`
-	LossRate  float64 `json:"loss_rate"`
-	BytesSent int64   `json:"bytes_sent"`
-	BytesRecv int64   `json:"bytes_recv"`
-	Available bool    `json:"available"`
-}
+// PathStats is an alias for adapter.MultipathStats.
+type PathStats = adapter.MultipathStats
 
 // NewMultipathManager creates a new MultipathManager with the given config.
 func NewMultipathManager(cfg *MultipathConfig, logger *slog.Logger) *MultipathManager {
