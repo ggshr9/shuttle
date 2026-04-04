@@ -200,6 +200,33 @@ func TestBrutalStats(t *testing.T) {
 	}
 }
 
+func TestBrutal_LossRateDecays(t *testing.T) {
+	b := NewBrutal(10 * 1024 * 1024) // 10 MB/s
+
+	// Phase 1: 50% loss
+	for i := 0; i < 100; i++ {
+		b.OnPacketSent(1200)
+		b.OnAck(600, 50*time.Millisecond)
+		b.OnPacketLoss(600)
+	}
+	b.mu.Lock()
+	highLoss := b.lossRate
+	b.mu.Unlock()
+
+	// Phase 2: 0% loss for a long time
+	for i := 0; i < 1000; i++ {
+		b.OnPacketSent(1200)
+		b.OnAck(1200, 50*time.Millisecond)
+	}
+	b.mu.Lock()
+	lowLoss := b.lossRate
+	b.mu.Unlock()
+
+	if lowLoss > highLoss/2 {
+		t.Errorf("loss rate did not decay: high=%.4f, after recovery=%.4f", highLoss, lowLoss)
+	}
+}
+
 // Benchmarks
 func BenchmarkBrutalOnAck(b *testing.B) {
 	bc := NewBrutal(50 * 1024 * 1024)
