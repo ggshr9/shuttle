@@ -4,8 +4,7 @@ import (
 	"bufio"
 	"context"
 	"fmt"
-	"io"
-	"log/slog"
+"log/slog"
 	"net"
 	"net/http"
 	"sync"
@@ -158,10 +157,8 @@ func (s *HTTPServer) handleHTTP(ctx context.Context, conn net.Conn, req *http.Re
 		return
 	}
 
-	// Relay response back
-	if _, err := io.Copy(conn, remote); err != nil {
-		s.logger.Debug("http relay copy error", "target", target, "err", err)
-	}
+	// Relay response back using pooled buffers (same as CONNECT handler)
+	proxyRelay(conn, remote)
 }
 
 // Close shuts down the HTTP proxy server.
