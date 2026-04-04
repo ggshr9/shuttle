@@ -104,16 +104,15 @@ func (a *QUICAdapter) SetMaxDatagramSize(size int64) {
 }
 
 func (a *QUICAdapter) InSlowStart() bool {
-	// BBR has startup phase; approximate.
 	if bbr, ok := a.cc.(*BBRController); ok {
-		return bbr.state == BBRStartup
+		return bbr.InStartup()
 	}
 	if ac, ok := a.cc.(*AdaptiveCongestion); ok {
 		ac.mu.Lock()
 		active := ac.active
 		ac.mu.Unlock()
 		if bbr, ok := active.(*BBRController); ok {
-			return bbr.state == BBRStartup
+			return bbr.InStartup()
 		}
 	}
 	return false

@@ -261,3 +261,11 @@ func (b *BBRController) Stats() map[string]interface{} {
 		"totalLost":  b.totalLost,
 	}
 }
+
+// InStartup returns true if BBR is in the Startup phase.
+// Thread-safe — acquires the mutex.
+func (b *BBRController) InStartup() bool {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.state == BBRStartup
+}
