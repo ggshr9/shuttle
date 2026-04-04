@@ -1,0 +1,489 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Shuttle - Break Through Any Network Barrier</title>
+  <meta name="description" content="Multi-transport encrypted tunneling with adaptive congestion control, intelligent routing, and mesh VPN. Fast, secure, and unstoppable." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <!-- Announcement Bar -->
+  <div class="announcement-bar">
+    <div class="container">
+      <span>Shuttle v0.1.0 is here - multi-transport tunneling with adaptive congestion control</span>
+      <a href="https://github.com/ggshr9/shuttle/releases">Read more &rarr;</a>
+    </div>
+  </div>
+
+  <!-- Navigation -->
+  <nav class="nav">
+    <div class="container nav-inner">
+      <a href="/" class="nav-logo">
+        <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
+          <rect width="32" height="32" rx="8" fill="#4f6df5"/>
+          <path d="M9 16l5-7 5 7-5 7-5-7zm5-3l5 7h-10l5-7z" fill="white" opacity="0.9"/>
+          <path d="M16 11l5 5-5 5" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        <span>Shuttle</span>
+      </a>
+      <div class="nav-links">
+        <a href="#features">Features</a>
+        <a href="#transports">Transports</a>
+        <a href="#comparison">Compare</a>
+        <a href="https://github.com/ggshr9/shuttle" target="_blank">GitHub</a>
+      </div>
+      <div class="nav-actions">
+        <a href="https://github.com/ggshr9/shuttle" class="btn btn-primary btn-sm">Download</a>
+      </div>
+      <button class="mobile-menu-btn" aria-label="Toggle menu" onclick="document.querySelector('.nav-links').classList.toggle('open')">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+      </button>
+    </div>
+  </nav>
+
+  <!-- Hero -->
+  <section class="hero">
+    <div class="container">
+      <div class="hero-badge">Open Source Network Toolkit</div>
+      <h1>Break Through<br/>Any Network Barrier</h1>
+      <p class="hero-subtitle">
+        Multi-transport encrypted tunneling with adaptive congestion control,
+        intelligent routing, and mesh VPN. Fast, secure, and unstoppable.
+      </p>
+      <div class="hero-cta">
+        <a href="https://github.com/ggshr9/shuttle/releases" class="btn btn-primary btn-lg">Download Shuttle</a>
+        <a href="https://github.com/ggshr9/shuttle" class="btn btn-secondary btn-lg">View on GitHub</a>
+      </div>
+
+      <!-- Transport Tabs -->
+      <div class="hero-tabs">
+        <div class="tabs-header">
+          <button class="tab-btn active" data-tab="h3">H3 / QUIC</button>
+          <button class="tab-btn" data-tab="reality">Reality</button>
+          <button class="tab-btn" data-tab="cdn">CDN</button>
+          <button class="tab-btn" data-tab="mesh">Mesh VPN</button>
+        </div>
+        <div class="tabs-content">
+          <div class="tab-panel active" id="tab-h3">
+            <div class="tab-visual">
+              <div class="flow-diagram">
+                <div class="flow-node client">Client</div>
+                <div class="flow-arrow">
+                  <span class="flow-label">HTTP/3 QUIC</span>
+                  <div class="flow-line animated"></div>
+                </div>
+                <div class="flow-node server">Server</div>
+                <div class="flow-arrow">
+                  <div class="flow-line"></div>
+                </div>
+                <div class="flow-node target">Internet</div>
+              </div>
+            </div>
+            <div class="tab-info">
+              <h3>HTTP/3 over QUIC</h3>
+              <p>Chrome-fingerprinted QUIC connections with HMAC authentication. Indistinguishable from regular HTTPS/3 traffic while delivering superior multiplexing performance.</p>
+            </div>
+          </div>
+          <div class="tab-panel" id="tab-reality">
+            <div class="tab-visual">
+              <div class="flow-diagram">
+                <div class="flow-node client">Client</div>
+                <div class="flow-arrow">
+                  <span class="flow-label">TLS + Noise IK</span>
+                  <div class="flow-line animated purple"></div>
+                </div>
+                <div class="flow-node server accent-purple">Server</div>
+                <div class="flow-arrow">
+                  <div class="flow-line"></div>
+                </div>
+                <div class="flow-node target">Internet</div>
+              </div>
+            </div>
+            <div class="tab-info">
+              <h3>Reality / TLS + Noise</h3>
+              <p>SNI impersonation with Noise IK encryption and yamux multiplexing. Your traffic looks like legitimate visits to popular websites while being fully encrypted.</p>
+            </div>
+          </div>
+          <div class="tab-panel" id="tab-cdn">
+            <div class="tab-visual">
+              <div class="flow-diagram">
+                <div class="flow-node client">Client</div>
+                <div class="flow-arrow">
+                  <span class="flow-label">HTTP/2 gRPC</span>
+                  <div class="flow-line animated green"></div>
+                </div>
+                <div class="flow-node server accent-green">CDN</div>
+                <div class="flow-arrow">
+                  <div class="flow-line"></div>
+                </div>
+                <div class="flow-node target">Server</div>
+              </div>
+            </div>
+            <div class="tab-info">
+              <h3>CDN Passthrough</h3>
+              <p>Route traffic through major CDN providers using HTTP/2 and gRPC. Leverage CDN infrastructure for both reliability and stealth.</p>
+            </div>
+          </div>
+          <div class="tab-panel" id="tab-mesh">
+            <div class="tab-visual">
+              <div class="mesh-diagram">
+                <div class="mesh-node n1">Peer A</div>
+                <div class="mesh-node n2">Hub</div>
+                <div class="mesh-node n3">Peer B</div>
+                <div class="mesh-node n4">Peer C</div>
+                <svg class="mesh-lines" viewBox="0 0 400 200">
+                  <line x1="80" y1="60" x2="200" y2="100" stroke="#4f6df5" stroke-width="2" opacity="0.6"/>
+                  <line x1="320" y1="60" x2="200" y2="100" stroke="#4f6df5" stroke-width="2" opacity="0.6"/>
+                  <line x1="200" y1="100" x2="200" y2="180" stroke="#4f6df5" stroke-width="2" opacity="0.6"/>
+                  <line x1="80" y1="60" x2="320" y2="60" stroke="#34d399" stroke-width="2" stroke-dasharray="6 4" opacity="0.6"/>
+                </svg>
+              </div>
+            </div>
+            <div class="tab-info">
+              <h3>Mesh VPN</h3>
+              <p>Hub-and-spoke relay with P2P NAT traversal via STUN and hole-punching. Connect all your devices in a secure virtual network.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Stats -->
+  <section class="stats">
+    <div class="container">
+      <div class="stats-grid">
+        <div class="stat-card">
+          <span class="stat-number">4</span>
+          <span class="stat-label">Transport Protocols</span>
+          <span class="stat-desc">H3/QUIC, Reality, CDN, WebRTC</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-number">3</span>
+          <span class="stat-label">Congestion Algorithms</span>
+          <span class="stat-desc">BBR, Brutal, Adaptive auto-switch</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-number">0</span>
+          <span class="stat-label">Dependencies (CLI)</span>
+          <span class="stat-desc">Single binary, no CGo required</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Features -->
+  <section class="features" id="features">
+    <div class="container">
+      <div class="section-header">
+        <div class="section-badge">Core Capabilities</div>
+        <h2>Everything you need for<br/>unrestricted connectivity</h2>
+        <p>Shuttle combines multiple transport protocols, intelligent routing, and adaptive performance tuning into a single, powerful toolkit.</p>
+      </div>
+
+      <div class="features-grid">
+        <div class="feature-card">
+          <div class="feature-icon blue">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+          </div>
+          <h3>Adaptive Congestion Control</h3>
+          <p>Automatically switches between BBR and Brutal algorithms based on real-time packet loss and RTT measurements. Optimal throughput in any network condition.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon green">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+          </div>
+          <h3>Encrypted Tunneling</h3>
+          <p>End-to-end encryption across all transport protocols. Your data is protected with modern cryptographic primitives including Noise IK and HMAC authentication.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon purple">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/></svg>
+          </div>
+          <h3>Intelligent Routing</h3>
+          <p>Domain trie matching, GeoIP lookups, and DNS-over-HTTPS with caching and prefetch. Define precise rules for proxy vs direct connections.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon orange">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8m-4-4v4"/></svg>
+          </div>
+          <h3>Desktop GUI</h3>
+          <p>Beautiful cross-platform desktop app built with Wails + Svelte. System tray, real-time speed charts, per-app routing, and one-click connection.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon cyan">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+          </div>
+          <h3>Auto Transport Selection</h3>
+          <p>Shuttle automatically negotiates the best available transport based on network conditions. Seamless fallback ensures you stay connected.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon pink">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>
+          </div>
+          <h3>Mesh VPN</h3>
+          <p>Connect all your devices with hub-and-spoke relay and P2P NAT traversal. STUN-based hole punching for direct device-to-device connections.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Transports Deep Dive -->
+  <section class="transports" id="transports">
+    <div class="container">
+      <div class="section-header">
+        <div class="section-badge">Transport Protocols</div>
+        <h2>Multiple paths,<br/>one destination</h2>
+        <p>Choose the transport that fits your network environment, or let Shuttle decide automatically.</p>
+      </div>
+
+      <div class="transport-cards">
+        <div class="transport-card">
+          <div class="transport-header">
+            <div class="transport-icon blue">H3</div>
+            <h3>HTTP/3 over QUIC</h3>
+          </div>
+          <ul class="transport-features">
+            <li>Chrome browser fingerprinting</li>
+            <li>HMAC authentication</li>
+            <li>UDP-based multiplexing</li>
+            <li>0-RTT connection resumption</li>
+            <li>Best for: high-performance, low-latency</li>
+          </ul>
+        </div>
+        <div class="transport-card featured">
+          <div class="transport-badge">Recommended</div>
+          <div class="transport-header">
+            <div class="transport-icon purple">R</div>
+            <h3>Reality / TLS + Noise</h3>
+          </div>
+          <ul class="transport-features">
+            <li>SNI impersonation</li>
+            <li>Noise IK encryption</li>
+            <li>Yamux multiplexing</li>
+            <li>Undetectable by DPI</li>
+            <li>Best for: censorship circumvention</li>
+          </ul>
+        </div>
+        <div class="transport-card">
+          <div class="transport-header">
+            <div class="transport-icon green">C</div>
+            <h3>CDN Passthrough</h3>
+          </div>
+          <ul class="transport-features">
+            <li>HTTP/2 + gRPC encoding</li>
+            <li>Major CDN compatibility</li>
+            <li>Domain fronting capable</li>
+            <li>Highly resilient routing</li>
+            <li>Best for: restrictive networks</li>
+          </ul>
+        </div>
+        <div class="transport-card">
+          <div class="transport-header">
+            <div class="transport-icon orange">W</div>
+            <h3>WebRTC DataChannel</h3>
+          </div>
+          <ul class="transport-features">
+            <li>Browser-native protocol</li>
+            <li>ICE NAT traversal</li>
+            <li>Yamux multiplexing</li>
+            <li>Firewall-friendly</li>
+            <li>Best for: peer-to-peer scenarios</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Architecture -->
+  <section class="architecture">
+    <div class="container">
+      <div class="section-header">
+        <div class="section-badge">How It Works</div>
+        <h2>Elegantly simple architecture</h2>
+        <p>From your application to the destination, Shuttle handles everything seamlessly.</p>
+      </div>
+
+      <div class="arch-flow">
+        <div class="arch-step">
+          <div class="arch-icon">
+            <svg width="32" height="32" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="6" y="4" width="20" height="24" rx="3"/><path d="M12 20h8"/></svg>
+          </div>
+          <h4>Your App</h4>
+          <p>SOCKS5, HTTP CONNECT, or TUN device</p>
+        </div>
+        <div class="arch-arrow">&rarr;</div>
+        <div class="arch-step">
+          <div class="arch-icon">
+            <svg width="32" height="32" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="16" cy="16" r="10"/><path d="M16 6v20M6 16h20"/><path d="M8 10q8-2 16 0M8 22q8 2 16 0"/></svg>
+          </div>
+          <h4>Smart Router</h4>
+          <p>GeoIP, GeoSite, domain rules</p>
+        </div>
+        <div class="arch-arrow">&rarr;</div>
+        <div class="arch-step highlighted">
+          <div class="arch-icon">
+            <svg width="32" height="32" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 16l8-10v6h8v-6l8 10-8 10v-6h-8v6z"/></svg>
+          </div>
+          <h4>Transport</h4>
+          <p>H3 / Reality / CDN / WebRTC</p>
+        </div>
+        <div class="arch-arrow">&rarr;</div>
+        <div class="arch-step">
+          <div class="arch-icon">
+            <svg width="32" height="32" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="4" y="8" width="24" height="6" rx="2"/><rect x="4" y="18" width="24" height="6" rx="2"/><circle cx="9" cy="11" r="1.5" fill="currentColor"/><circle cx="9" cy="21" r="1.5" fill="currentColor"/></svg>
+          </div>
+          <h4>Server</h4>
+          <p>Decrypt and relay to destination</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Comparison -->
+  <section class="comparison" id="comparison">
+    <div class="container">
+      <div class="section-header">
+        <div class="section-badge">How We Compare</div>
+        <h2>Shuttle vs. the alternatives</h2>
+        <p>See how Shuttle stacks up against other popular tools.</p>
+      </div>
+
+      <div class="comparison-table-wrap">
+        <table class="comparison-table">
+          <thead>
+            <tr>
+              <th>Feature</th>
+              <th class="highlight">Shuttle</th>
+              <th>WireGuard</th>
+              <th>V2Ray / Xray</th>
+              <th>Tailscale</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Multiple Transports</td>
+              <td class="highlight"><span class="check">&check;</span> 4 protocols</td>
+              <td><span class="x">&times;</span> UDP only</td>
+              <td><span class="check">&check;</span> Multiple</td>
+              <td><span class="x">&times;</span> WireGuard</td>
+            </tr>
+            <tr>
+              <td>Adaptive Congestion</td>
+              <td class="highlight"><span class="check">&check;</span> BBR + Brutal</td>
+              <td><span class="x">&times;</span></td>
+              <td><span class="x">&times;</span></td>
+              <td><span class="x">&times;</span></td>
+            </tr>
+            <tr>
+              <td>Traffic Camouflage</td>
+              <td class="highlight"><span class="check">&check;</span> Reality/CDN</td>
+              <td><span class="x">&times;</span></td>
+              <td><span class="check">&check;</span></td>
+              <td><span class="x">&times;</span></td>
+            </tr>
+            <tr>
+              <td>Mesh VPN</td>
+              <td class="highlight"><span class="check">&check;</span> Hub + P2P</td>
+              <td><span class="partial">~</span> Manual</td>
+              <td><span class="x">&times;</span></td>
+              <td><span class="check">&check;</span></td>
+            </tr>
+            <tr>
+              <td>Desktop GUI</td>
+              <td class="highlight"><span class="check">&check;</span></td>
+              <td><span class="partial">~</span> Third-party</td>
+              <td><span class="partial">~</span> Third-party</td>
+              <td><span class="check">&check;</span></td>
+            </tr>
+            <tr>
+              <td>Smart Routing</td>
+              <td class="highlight"><span class="check">&check;</span> GeoIP/GeoSite</td>
+              <td><span class="x">&times;</span></td>
+              <td><span class="check">&check;</span></td>
+              <td><span class="partial">~</span> ACLs</td>
+            </tr>
+            <tr>
+              <td>Open Source</td>
+              <td class="highlight"><span class="check">&check;</span> MIT</td>
+              <td><span class="check">&check;</span> GPL</td>
+              <td><span class="check">&check;</span> MIT</td>
+              <td><span class="partial">~</span> Partial</td>
+            </tr>
+            <tr>
+              <td>Self-hosted</td>
+              <td class="highlight"><span class="check">&check;</span></td>
+              <td><span class="check">&check;</span></td>
+              <td><span class="check">&check;</span></td>
+              <td><span class="partial">~</span> Headscale</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- CTA -->
+  <section class="cta">
+    <div class="container">
+      <h2>Ready to break through?</h2>
+      <p>Get started with Shuttle in minutes. One binary, zero dependencies.</p>
+      <div class="cta-buttons">
+        <a href="https://github.com/ggshr9/shuttle/releases" class="btn btn-white btn-lg">Download Shuttle</a>
+        <a href="https://github.com/ggshr9/shuttle" class="btn btn-outline-white btn-lg">Star on GitHub</a>
+      </div>
+      <div class="cta-install">
+        <code>curl -fsSL https://get.shuttle.dev | bash</code>
+      </div>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer class="footer">
+    <div class="container">
+      <div class="footer-grid">
+        <div class="footer-brand">
+          <div class="footer-logo">
+            <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
+              <rect width="28" height="28" rx="7" fill="#4f6df5"/>
+              <path d="M8 14l4-6 4 6-4 6-4-6zm4-2l4 6h-8l4-6z" fill="white" opacity="0.9"/>
+              <path d="M14 10l4 4-4 4" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            <span>Shuttle</span>
+          </div>
+          <p>Open-source multi-transport network toolkit.<br/>Break the speed / stability / stealth impossible triangle.</p>
+        </div>
+        <div class="footer-col">
+          <h4>Product</h4>
+          <a href="#features">Features</a>
+          <a href="#transports">Transports</a>
+          <a href="#comparison">Compare</a>
+          <a href="https://github.com/ggshr9/shuttle/releases">Downloads</a>
+        </div>
+        <div class="footer-col">
+          <h4>Resources</h4>
+          <a href="https://github.com/ggshr9/shuttle">Documentation</a>
+          <a href="https://github.com/ggshr9/shuttle/blob/main/deploy/README.md">Deployment Guide</a>
+          <a href="https://github.com/ggshr9/shuttle/blob/main/CHANGELOG.md">Changelog</a>
+        </div>
+        <div class="footer-col">
+          <h4>Community</h4>
+          <a href="https://github.com/ggshr9/shuttle">GitHub</a>
+          <a href="https://github.com/ggshr9/shuttle/issues">Issues</a>
+          <a href="https://github.com/ggshr9/shuttle/blob/main/LICENSE">License (MIT)</a>
+        </div>
+      </div>
+      <div class="footer-bottom">
+        <span>&copy; 2026 Shuttle Project. Open source under MIT License.</span>
+      </div>
+    </div>
+  </footer>
+
+  <script src="main.js"></script>
+</body>
+</html>
