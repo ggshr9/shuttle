@@ -64,11 +64,11 @@ func TestAdaptiveOnAckRecordsRTT(t *testing.T) {
 	ac.OnAck(1200, 50*time.Millisecond)
 
 	ac.mu.Lock()
-	n := len(ac.rttHistory)
+	n := ac.rttCount
 	ac.mu.Unlock()
 
 	if n != 1 {
-		t.Fatalf("rttHistory len = %d, want 1", n)
+		t.Fatalf("rttCount = %d, want 1", n)
 	}
 }
 
@@ -79,12 +79,13 @@ func TestAdaptiveRTTHistoryCap(t *testing.T) {
 	}
 
 	ac.mu.Lock()
-	n := len(ac.rttHistory)
+	n := ac.rttCount
 	ac.mu.Unlock()
 
-	if n > 100 {
-		t.Fatalf("rttHistory should be capped at 100, got %d", n)
+	if n != 150 {
+		t.Fatalf("rttCount = %d, want 150", n)
 	}
+	// Ring buffer is fixed-size array, no unbounded growth possible
 }
 
 func TestAdaptiveSwitchToBrutalOnInterference(t *testing.T) {
@@ -242,6 +243,31 @@ func TestAdaptiveLossWindowReset(t *testing.T) {
 
 func TestAdaptiveImplementsCongestionController(t *testing.T) {
 	var _ CongestionController = (*AdaptiveCongestion)(nil)
+}
+
+func TestAdaptive_RTTHistoryMemoryBounded(t *testing.T) {
+	ac := NewAdaptive(&AdaptiveConfig{
+		LossThreshold:  0.05,
+		SwitchCooldown: 1 * time.Nanosecond,
+		BrutalRate:     100 * 1024 * 1024,
+	}, nil)
+
+	// Feed 10,000 RTT samples
+	for i := 0; i < 10000; i++ {
+		ac.OnAck(1200, time.Duration(50+i%20)*time.Millisecond)
+	}
+
+	ac.mu.Lock()
+	count := ac.rttCount
+	trend := ac.calculateRTTTrend()
+	ac.mu.Unlock()
+
+	// rttCount tracks total inserts but ring is bounded
+	if count != 10000 {
+		t.Errorf("rttCount=%d, want 10000", count)
+	}
+	// Trend should be computable without panic
+	_ = trend
 }
 
 func BenchmarkAdaptiveOnAck(b *testing.B) {
