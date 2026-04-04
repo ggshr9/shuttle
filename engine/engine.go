@@ -4,6 +4,7 @@ import (
 	"log/slog"
 	"sync"
 
+	"github.com/shuttleX/shuttle/adapter"
 	"github.com/shuttleX/shuttle/config"
 	"github.com/shuttleX/shuttle/internal/logutil"
 	"github.com/shuttleX/shuttle/internal/netmon"
@@ -12,7 +13,6 @@ import (
 	"github.com/shuttleX/shuttle/router"
 	"github.com/shuttleX/shuttle/router/geodata"
 	"github.com/shuttleX/shuttle/stream"
-	"github.com/shuttleX/shuttle/transport/h3"
 	"github.com/shuttleX/shuttle/transport/selector"
 
 	"context"
@@ -134,8 +134,8 @@ func (e *Engine) Status() EngineStatus {
 	if st != nil {
 		sum := st.Summary()
 		status.Streams = &StreamStats{
-			TotalStreams:    sum.TotalStreams,
-			ActiveStreams:   sum.ActiveStreams,
+			TotalStreams:   sum.TotalStreams,
+			ActiveStreams:  sum.ActiveStreams,
 			TotalBytesSent: sum.TotalBytesSent,
 			TotalBytesRecv: sum.TotalBytesRecv,
 			AvgDurationMs:  sum.AvgDuration.Milliseconds(),
@@ -157,8 +157,8 @@ func (e *Engine) Status() EngineStatus {
 				status.MultipathPaths = append(status.MultipathPaths, PathInfo{
 					Transport:     sp.Transport,
 					Latency:       sp.Latency,
-					ActiveStreams:  sp.ActiveStreams,
-					TotalStreams:   sp.TotalStreams,
+					ActiveStreams: sp.ActiveStreams,
+					TotalStreams:  sp.TotalStreams,
 					Available:     sp.Available,
 					Failures:      sp.Failures,
 					BytesSent:     sp.BytesSent,
@@ -208,8 +208,8 @@ func (e *Engine) StreamStats() stream.StreamSummary {
 	return st.Summary()
 }
 
-// MultipathStats returns per-path statistics from the H3 multipath manager, or nil if multipath is not active.
-func (e *Engine) MultipathStats() []h3.PathStats {
+// MultipathStats returns per-path statistics from any multipath-capable transport, or nil.
+func (e *Engine) MultipathStats() []adapter.MultipathStats {
 	e.mu.RLock()
 	sel := e.sel
 	e.mu.RUnlock()
@@ -217,8 +217,8 @@ func (e *Engine) MultipathStats() []h3.PathStats {
 		return nil
 	}
 	for _, t := range sel.Transports() {
-		if h3Client, ok := t.(*h3.Client); ok {
-			if stats := h3Client.MultipathStats(); stats != nil {
+		if mp, ok := t.(adapter.MultipathStatsProvider); ok {
+			if stats := mp.MultipathStats(); stats != nil {
 				return stats
 			}
 		}
