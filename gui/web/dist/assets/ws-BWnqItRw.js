@@ -1,1 +1,0 @@
-function a(c,n){const s=`${location.protocol==="https:"?"wss:":"ws:"}//${location.host}${c}`;let o=null,t=!1;function e(){t||(o=new WebSocket(s),o.onmessage=r=>{try{n(JSON.parse(r.data))}catch{}},o.onclose=()=>{t||setTimeout(e,2e3)},o.onerror=()=>o==null?void 0:o.close())}return e(),{close(){t=!0,o&&o.close()}}}export{a as c};
