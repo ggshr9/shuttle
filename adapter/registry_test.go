@@ -4,11 +4,18 @@ import (
 	"testing"
 
 	"github.com/shuttleX/shuttle/adapter"
+	"github.com/shuttleX/shuttle/config"
 )
 
 type mockFactory struct{ name string }
 
 func (f *mockFactory) Type() string { return f.name }
+func (f *mockFactory) NewClient(cfg *config.ClientConfig, opts adapter.FactoryOptions) (adapter.ClientTransport, error) {
+	return nil, nil
+}
+func (f *mockFactory) NewServer(cfg *config.ServerConfig, opts adapter.FactoryOptions) (adapter.ServerTransport, error) {
+	return nil, nil
+}
 
 func TestRegistryRoundTrip(t *testing.T) {
 	adapter.ResetRegistry()

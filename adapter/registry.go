@@ -1,11 +1,25 @@
 package adapter
 
-import "sync"
+import (
+	"log/slog"
+	"sync"
 
-// TransportFactory creates client and server transports.
+	"github.com/shuttleX/shuttle/config"
+)
+
+// TransportFactory creates client and server transports from config.
 // Each transport package registers its factory via init().
+// Factories return (nil, nil) when their transport is disabled in config.
 type TransportFactory interface {
 	Type() string
+	NewClient(cfg *config.ClientConfig, opts FactoryOptions) (ClientTransport, error)
+	NewServer(cfg *config.ServerConfig, opts FactoryOptions) (ServerTransport, error)
+}
+
+// FactoryOptions provides dependencies that factories may need.
+type FactoryOptions struct {
+	Logger            *slog.Logger
+	CongestionControl interface{} // quic.CongestionControl — typed as interface{} to avoid quic-go import in adapter
 }
 
 var (
