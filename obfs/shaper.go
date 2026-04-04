@@ -58,14 +58,12 @@ func (s *Shaper) Write(p []byte) (int, error) {
 		return s.inner.Write(p)
 	}
 
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
 	total := 0
 	remaining := p
 
 	for len(remaining) > 0 {
-		// Random chunk size
+		// Compute chunk parameters under lock (quick)
+		s.mu.Lock()
 		chunkSize := s.randomInt(s.cfg.ChunkMinSize, s.cfg.ChunkMaxSize)
 		if chunkSize > len(remaining) {
 			chunkSize = len(remaining)
@@ -73,17 +71,19 @@ func (s *Shaper) Write(p []byte) (int, error) {
 		if chunkSize <= 0 {
 			chunkSize = len(remaining)
 		}
+		var delay time.Duration
+		if total > 0 && s.cfg.MaxDelay > 0 {
+			delay = s.randomDuration(s.cfg.MinDelay, s.cfg.MaxDelay)
+		}
+		s.mu.Unlock()
+
+		// Sleep and write without holding the mutex
+		if delay > 0 {
+			time.Sleep(delay)
+		}
 
 		chunk := remaining[:chunkSize]
 		remaining = remaining[chunkSize:]
-
-		// Random delay between chunks
-		if total > 0 && s.cfg.MaxDelay > 0 {
-			delay := s.randomDuration(s.cfg.MinDelay, s.cfg.MaxDelay)
-			if delay > 0 {
-				time.Sleep(delay)
-			}
-		}
 
 		n, err := s.inner.Write(chunk)
 		total += n
