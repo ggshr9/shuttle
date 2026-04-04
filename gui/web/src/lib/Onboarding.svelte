@@ -157,21 +157,27 @@
     <!-- Step 1: Welcome -->
     {#if step === 1}
       <div class="content">
-        <div class="icon">🚀</div>
+        <div class="icon-wrap">
+          <svg width="48" height="48" viewBox="0 0 48 48" fill="none">
+            <rect width="48" height="48" rx="14" fill="var(--accent)"/>
+            <path d="M14 24l6-9 6 9-6 9-6-9zm6-3l6 9h-12l6-9z" fill="white" opacity="0.9"/>
+            <path d="M24 18l6 6-6 6" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
         <h2 id="onboarding-title">{t('onboarding.welcome')}</h2>
         <p class="subtitle">{t('onboarding.subtitle')}</p>
 
         <div class="features">
           <div class="feature">
-            <span class="emoji">⚡</span>
+            <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="var(--accent)" stroke-width="1.5"><path d="M13 2L7 18M3 7l4 3-4 3m10 0h4"/></svg>
             <span>{t('onboarding.feature1')}</span>
           </div>
           <div class="feature">
-            <span class="emoji">🔒</span>
+            <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="var(--accent-green)" stroke-width="1.5"><rect x="3" y="7" width="14" height="9" rx="2"/><path d="M7 7V5a3 3 0 016 0v2"/></svg>
             <span>{t('onboarding.feature2')}</span>
           </div>
           <div class="feature">
-            <span class="emoji">🌍</span>
+            <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="var(--accent-purple)" stroke-width="1.5"><circle cx="10" cy="10" r="7"/><path d="M3 10h14M10 3a11.95 11.95 0 013 7 11.95 11.95 0 01-3 7 11.95 11.95 0 01-3-7 11.95 11.95 0 013-7z"/></svg>
             <span>{t('onboarding.feature3')}</span>
           </div>
         </div>
@@ -270,7 +276,9 @@
     <!-- Step 3: Complete -->
     {#if step === 3}
       <div class="content">
-        <div class="icon success">✓</div>
+        <div class="icon-wrap success">
+          <svg width="32" height="32" viewBox="0 0 32 32" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8 16l6 6 10-12"/></svg>
+        </div>
         <h2>{t('onboarding.ready')}</h2>
         <p class="subtitle">
           {t('onboarding.serversAdded', { count: addedServers.length })}
@@ -328,21 +336,22 @@
     left: 0;
     right: 0;
     bottom: 0;
-    background: rgba(0, 0, 0, 0.85);
+    background: rgba(0, 0, 0, 0.8);
     display: flex;
     align-items: center;
     justify-content: center;
     z-index: 1000;
+    backdrop-filter: blur(8px);
   }
 
   .wizard {
     background: var(--bg-secondary);
     border: 1px solid var(--border);
-    border-radius: 16px;
+    border-radius: var(--radius-xl);
     width: 100%;
     max-width: 440px;
     padding: 32px;
-    box-shadow: 0 16px 48px rgba(0, 0, 0, 0.4);
+    box-shadow: var(--shadow-lg);
   }
 
   .progress {
@@ -356,23 +365,23 @@
     width: 32px;
     height: 32px;
     border-radius: 50%;
-    background: var(--border);
-    color: var(--text-secondary);
+    background: var(--bg-tertiary);
+    color: var(--text-muted);
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 14px;
+    font-size: 13px;
     font-weight: 600;
     transition: all 0.3s;
   }
 
   .progress .step.active {
-    background: var(--btn-bg);
+    background: var(--accent);
     color: white;
   }
 
   .progress .step.done {
-    background: var(--btn-bg);
+    background: var(--accent);
     color: white;
   }
 
@@ -385,40 +394,41 @@
   }
 
   .progress .line.done {
-    background: var(--btn-bg);
+    background: var(--accent);
   }
 
   .content {
     text-align: center;
   }
 
-  .icon {
-    font-size: 48px;
+  .icon-wrap {
     margin-bottom: 16px;
+    display: inline-block;
   }
 
-  .icon.success {
+  .icon-wrap.success {
     width: 64px;
     height: 64px;
-    background: var(--btn-bg);
+    background: var(--accent-green);
     border-radius: 50%;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    font-size: 32px;
-    color: white;
   }
 
   h2 {
-    font-size: 24px;
+    font-size: 22px;
+    font-weight: 700;
     margin: 0 0 8px;
     color: var(--text-primary);
+    letter-spacing: -0.02em;
   }
 
   .subtitle {
     color: var(--text-secondary);
     margin: 0 0 24px;
     font-size: 14px;
+    line-height: 1.5;
   }
 
   .features {
@@ -432,20 +442,18 @@
     gap: 12px;
     padding: 12px 16px;
     background: var(--bg-surface);
-    border-radius: 8px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
     margin-bottom: 8px;
     font-size: 14px;
-  }
-
-  .feature .emoji {
-    font-size: 20px;
+    color: var(--text-primary);
   }
 
   .method-tabs {
     display: flex;
     gap: 4px;
     background: var(--bg-surface);
-    border-radius: 8px;
+    border-radius: var(--radius-md);
     padding: 4px;
     margin-bottom: 20px;
   }
@@ -456,9 +464,11 @@
     border: none;
     background: transparent;
     color: var(--text-secondary);
-    border-radius: 6px;
+    border-radius: var(--radius-sm);
     cursor: pointer;
     font-size: 13px;
+    font-weight: 500;
+    font-family: inherit;
     transition: all 0.2s;
   }
 
@@ -467,7 +477,7 @@
   }
 
   .method-tabs button.active {
-    background: var(--btn-bg);
+    background: var(--accent);
     color: white;
   }
 
@@ -486,6 +496,7 @@
     font-size: 13px;
     color: var(--text-secondary);
     margin-bottom: 6px;
+    font-weight: 500;
   }
 
   .form input, .form textarea {
@@ -493,25 +504,28 @@
     padding: 10px 12px;
     background: var(--bg-surface);
     border: 1px solid var(--border);
-    border-radius: 8px;
+    border-radius: var(--radius-sm);
     color: var(--text-primary);
     font-size: 14px;
     box-sizing: border-box;
+    font-family: inherit;
+    transition: border-color 0.15s;
   }
 
   .form input:focus, .form textarea:focus {
     outline: none;
     border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-subtle);
   }
 
   .form textarea {
     resize: vertical;
-    font-family: monospace;
+    font-family: 'JetBrains Mono', monospace;
   }
 
   .hint {
     font-size: 12px;
-    color: var(--text-secondary);
+    color: var(--text-muted);
     margin: 4px 0 0;
     text-align: left;
   }
@@ -520,9 +534,9 @@
     color: var(--accent-red);
     font-size: 13px;
     margin: 12px 0;
-    padding: 8px 12px;
-    background: rgba(248, 81, 73, 0.1);
-    border-radius: 6px;
+    padding: 10px 14px;
+    background: var(--accent-red-subtle);
+    border-radius: var(--radius-sm);
   }
 
   .buttons {
@@ -534,18 +548,19 @@
   button.primary {
     flex: 1;
     padding: 12px 24px;
-    background: var(--btn-bg);
+    background: var(--accent);
     color: white;
     border: none;
-    border-radius: 8px;
+    border-radius: var(--radius-md);
     font-size: 15px;
-    font-weight: 500;
+    font-weight: 600;
+    font-family: inherit;
     cursor: pointer;
     transition: background 0.2s;
   }
 
   button.primary:hover:not(:disabled) {
-    background: var(--btn-bg-hover);
+    background: var(--accent-hover);
   }
 
   button.primary:disabled {
@@ -560,24 +575,26 @@
 
   button.secondary {
     padding: 12px 24px;
-    background: var(--border);
+    background: var(--bg-tertiary);
     color: var(--text-primary);
-    border: none;
-    border-radius: 8px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
     font-size: 15px;
+    font-family: inherit;
     cursor: pointer;
     transition: background 0.2s;
   }
 
   button.secondary:hover {
-    background: #3d444d;
+    background: var(--bg-hover);
   }
 
   button.text {
     background: none;
     border: none;
-    color: var(--text-secondary);
+    color: var(--text-muted);
     font-size: 13px;
+    font-family: inherit;
     cursor: pointer;
     padding: 8px;
   }
@@ -588,8 +605,9 @@
 
   .server-preview {
     background: var(--bg-surface);
-    border-radius: 8px;
-    padding: 12px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    padding: 12px 16px;
     margin-bottom: 20px;
     text-align: left;
   }
@@ -597,7 +615,7 @@
   .server-item {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 10px;
     padding: 8px 0;
     font-size: 13px;
     color: var(--text-primary);
@@ -606,13 +624,13 @@
   .server-item .dot {
     width: 8px;
     height: 8px;
-    background: var(--btn-bg);
+    background: var(--accent-green);
     border-radius: 50%;
   }
 
   .server-item.more {
-    color: var(--text-secondary);
-    padding-left: 16px;
+    color: var(--text-muted);
+    padding-left: 18px;
   }
 
   .checkbox-option {
@@ -620,23 +638,30 @@
     align-items: flex-start;
     gap: 12px;
     background: var(--bg-surface);
-    border-radius: 8px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
     padding: 16px;
-    margin-bottom: 24px;
+    margin-bottom: 12px;
     cursor: pointer;
     text-align: left;
+    transition: border-color 0.15s;
+  }
+
+  .checkbox-option:hover {
+    border-color: var(--accent);
   }
 
   .checkbox-option input {
     margin-top: 2px;
     width: 18px;
     height: 18px;
-    accent-color: var(--btn-bg);
+    accent-color: var(--accent);
   }
 
   .checkbox-option .option-title {
     display: block;
     font-size: 14px;
+    font-weight: 500;
     color: var(--text-primary);
     margin-bottom: 2px;
   }

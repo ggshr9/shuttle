@@ -92,10 +92,10 @@
 
     // Line style based on method
     if (method === 'p2p' || method === 'direct') {
-      ctx.strokeStyle = connected ? '#3fb950' : '#6e7681'
+      ctx.strokeStyle = connected ? '#34d399' : '#55566a'
       ctx.setLineDash([])
     } else {
-      ctx.strokeStyle = connected ? '#58a6ff' : '#6e7681'
+      ctx.strokeStyle = connected ? '#4f6df5' : '#55566a'
       ctx.setLineDash([5, 5])
     }
 
@@ -119,27 +119,27 @@
 
     // Fill based on type
     if (node.type === 'self') {
-      ctx.fillStyle = '#58a6ff'
-      ctx.strokeStyle = '#388bfd'
+      ctx.fillStyle = '#4f6df5'
+      ctx.strokeStyle = '#3b57e0'
     } else if (node.type === 'hub') {
-      ctx.fillStyle = '#8b949e'
-      ctx.strokeStyle = '#6e7681'
+      ctx.fillStyle = '#9394a5'
+      ctx.strokeStyle = '#55566a'
     } else {
       const peer = node.peer
       if (peer?.state === 'connected') {
         if (peer.method === 'p2p' || peer.method === 'direct') {
-          ctx.fillStyle = '#3fb950'
-          ctx.strokeStyle = '#238636'
+          ctx.fillStyle = '#34d399'
+          ctx.strokeStyle = '#10b981'
         } else {
-          ctx.fillStyle = '#58a6ff'
-          ctx.strokeStyle = '#388bfd'
+          ctx.fillStyle = '#4f6df5'
+          ctx.strokeStyle = '#3b57e0'
         }
       } else if (peer?.state === 'connecting') {
-        ctx.fillStyle = '#d29922'
-        ctx.strokeStyle = '#9e6a03'
+        ctx.fillStyle = '#fbbf24'
+        ctx.strokeStyle = '#f59e0b'
       } else {
-        ctx.fillStyle = '#484f58'
-        ctx.strokeStyle = '#373e47'
+        ctx.fillStyle = '#353549'
+        ctx.strokeStyle = '#2a2a3d'
       }
     }
 
@@ -168,7 +168,7 @@
     }
 
     // Label below node
-    ctx.fillStyle = '#8b949e'
+    ctx.fillStyle = '#9394a5'
     ctx.font = '10px monospace'
     let label = node.ip
     if (node.peer?.avg_rtt_ms) {
@@ -269,9 +269,9 @@
 <style>
   .topology-container {
     position: relative;
-    background: #161b22;
-    border: 1px solid #2d333b;
-    border-radius: 8px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
     padding: 8px;
   }
 
@@ -282,14 +282,14 @@
 
   .tooltip {
     position: absolute;
-    background: #21262d;
-    border: 1px solid #2d333b;
-    border-radius: 6px;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
     padding: 8px 12px;
     font-size: 11px;
     pointer-events: none;
     z-index: 10;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+    box-shadow: var(--shadow-lg);
   }
 
   .tooltip-row {
@@ -300,24 +300,24 @@
   }
 
   .tooltip .label {
-    color: #8b949e;
+    color: var(--text-secondary);
   }
 
   .tooltip .value {
-    color: #e1e4e8;
-    font-family: monospace;
+    color: var(--text-primary);
+    font-family: 'JetBrains Mono', monospace;
   }
 
   .tooltip .state-connected {
-    color: #3fb950;
+    color: var(--accent-green);
   }
 
   .tooltip .state-connecting {
-    color: #d29922;
+    color: var(--accent-yellow);
   }
 
   .tooltip .state-disconnected {
-    color: #f85149;
+    color: var(--accent-red);
   }
 
   .legend {
@@ -326,7 +326,7 @@
     gap: 16px;
     margin-top: 8px;
     padding-top: 8px;
-    border-top: 1px solid #21262d;
+    border-top: 1px solid var(--border);
   }
 
   .legend-item {
@@ -334,7 +334,7 @@
     align-items: center;
     gap: 6px;
     font-size: 11px;
-    color: #8b949e;
+    color: var(--text-secondary);
   }
 
   .legend-line {
@@ -344,15 +344,15 @@
   }
 
   .legend-line.p2p {
-    background: #3fb950;
+    background: var(--accent-green);
   }
 
   .legend-line.relay {
-    background: #58a6ff;
+    background: var(--accent);
     background: repeating-linear-gradient(
       90deg,
-      #58a6ff 0px,
-      #58a6ff 5px,
+      var(--accent) 0px,
+      var(--accent) 5px,
       transparent 5px,
       transparent 10px
     );

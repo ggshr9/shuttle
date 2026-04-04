@@ -19,13 +19,13 @@
   .export-section {
     background: var(--bg-secondary);
     border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 12px 16px;
+    border-radius: var(--radius-lg);
+    padding: 16px 20px;
     margin-bottom: 12px;
     margin-top: 24px;
   }
 
-  h3 { font-size: 14px; color: var(--text-secondary); margin: 20px 0 10px; }
+  h3 { font-size: 14px; font-weight: 600; color: var(--text-primary); margin: 20px 0 10px; }
 
   .export-buttons {
     display: flex;
@@ -36,7 +36,7 @@
     background: var(--bg-tertiary);
     color: var(--accent);
     border: 1px solid var(--border);
-    border-radius: 6px;
+    border-radius: var(--radius-sm);
     padding: 8px 16px;
     text-decoration: none;
     font-size: 13px;
@@ -44,6 +44,6 @@
   }
 
   .export-btn:hover {
-    background: #30363d;
+    background: var(--bg-hover);
   }
 </style>

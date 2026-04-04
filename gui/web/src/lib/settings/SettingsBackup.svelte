@@ -58,17 +58,17 @@
   .backup-section {
     background: var(--bg-secondary);
     border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 12px 16px;
+    border-radius: var(--radius-lg);
+    padding: 16px 20px;
     margin-bottom: 12px;
     margin-top: 24px;
   }
 
-  h3 { font-size: 14px; color: var(--text-secondary); margin: 20px 0 10px; }
+  h3 { font-size: 14px; font-weight: 600; color: var(--text-primary); margin: 20px 0 10px; }
 
   .section-hint {
     font-size: 12px;
-    color: #6e7681;
+    color: var(--text-muted);
     margin: 4px 0 12px;
   }
 
@@ -85,7 +85,7 @@
     background: var(--bg-tertiary);
     color: var(--text-primary);
     border: 1px solid var(--border);
-    border-radius: 6px;
+    border-radius: var(--radius-sm);
     padding: 10px 16px;
     text-decoration: none;
     font-size: 13px;
@@ -94,7 +94,7 @@
   }
 
   .backup-btn:hover {
-    background: #30363d;
+    background: var(--bg-hover);
     border-color: var(--accent-green);
   }
 

@@ -209,7 +209,7 @@
     padding: 16px;
     background: var(--bg-secondary);
     border: 1px solid var(--border);
-    border-radius: 8px;
+    border-radius: var(--radius-lg);
   }
 
   .section-title {
@@ -221,7 +221,7 @@
 
   .drop-zone {
     border: 2px dashed var(--border);
-    border-radius: 8px;
+    border-radius: var(--radius-lg);
     padding: 24px;
     text-align: center;
     cursor: default;
@@ -330,26 +330,26 @@
     background: var(--bg-tertiary);
     color: var(--accent);
     border: 1px solid var(--border);
-    border-radius: 6px;
+    border-radius: var(--radius-sm);
     padding: 8px 16px;
     cursor: pointer;
     font-size: 13px;
   }
 
-  .btn-import-action:hover { background: #30363d; }
+  .btn-import-action:hover { background: var(--bg-hover); }
   .btn-import-action:disabled { opacity: 0.5; cursor: default; }
 
   .btn-export-action {
     background: var(--bg-tertiary);
     color: var(--accent-green);
     border: 1px solid var(--border);
-    border-radius: 6px;
+    border-radius: var(--radius-sm);
     padding: 8px 16px;
     cursor: pointer;
     font-size: 13px;
   }
 
-  .btn-export-action:hover { background: #30363d; }
+  .btn-export-action:hover { background: var(--bg-hover); }
 
   /* Modal styles */
   .overlay {
@@ -365,7 +365,7 @@
   .modal {
     background: var(--bg-secondary);
     border: 1px solid var(--border);
-    border-radius: 12px;
+    border-radius: var(--radius-lg);
     padding: 20px;
     width: 450px;
     max-height: 500px;
@@ -380,7 +380,7 @@
     width: 100%;
     background: var(--bg-surface);
     border: 1px solid var(--border);
-    border-radius: 6px;
+    border-radius: var(--radius-sm);
     padding: 10px;
     color: var(--text-primary);
     font-size: 12px;
@@ -403,7 +403,7 @@
     background: var(--bg-tertiary);
     color: var(--text-primary);
     border: 1px solid var(--border);
-    border-radius: 6px;
+    border-radius: var(--radius-sm);
     padding: 8px;
     cursor: pointer;
     font-size: 13px;
@@ -413,7 +413,7 @@
     background: var(--btn-bg);
     color: #fff;
     border: none;
-    border-radius: 6px;
+    border-radius: var(--radius-sm);
     padding: 8px 16px;
     cursor: pointer;
     font-size: 13px;

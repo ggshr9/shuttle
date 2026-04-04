@@ -183,14 +183,14 @@
       {t('logs.activeConnections', { count: getActiveCount() })}
     </div>
     <div class="controls">
-      <label>
+      <label class="check-label">
         <input type="checkbox" bind:checked={showConnections} /> {t('logs.showConnections')}
       </label>
-      <label>
+      <label class="check-label">
         <input type="checkbox" bind:checked={autoScroll} /> {t('logs.autoScroll')}
       </label>
-      <button onclick={clear}>{t('logs.clear')}</button>
-      <button onclick={exportLogs} disabled={allLogs.length === 0}>{t('logs.export')}</button>
+      <button class="btn-sm" onclick={clear}>{t('logs.clear')}</button>
+      <button class="btn-sm" onclick={exportLogs} disabled={allLogs.length === 0}>{t('logs.export')}</button>
     </div>
   </div>
 
@@ -247,11 +247,11 @@
             {log.level}
           </span>
           {#if log.type === 'connection'}
-            <span class="conn-icon">{log.details?.state === 'open' ? '→' : '←'}</span>
+            <span class="conn-icon">{log.details?.state === 'open' ? '>' : '<'}</span>
           {/if}
           <span class="msg">{log.msg}</span>
           {#if log.details}
-            <span class="expand-icon">{expandedId === log.id ? '▼' : '▶'}</span>
+            <span class="expand-icon">{expandedId === log.id ? '-' : '+'}</span>
           {/if}
         </div>
 
@@ -285,8 +285,8 @@
               <div class="detail-row">
                 <span class="detail-label">{t('logs.trafficColon')}</span>
                 <span class="detail-value">
-                  <span class="traffic-in">↓ {formatBytes(log.details.bytesIn)}</span>
-                  <span class="traffic-out">↑ {formatBytes(log.details.bytesOut)}</span>
+                  <span class="traffic-in">in {formatBytes(log.details.bytesIn)}</span>
+                  <span class="traffic-out">out {formatBytes(log.details.bytesOut)}</span>
                 </span>
               </div>
             {/if}
@@ -303,62 +303,72 @@
 </div>
 
 <style>
-  .page { height: calc(100vh - 120px); display: flex; flex-direction: column; }
+  .page { height: calc(100vh - 80px); display: flex; flex-direction: column; }
 
   .header {
     display: flex;
-    justify-content: space-between;
     align-items: center;
-    margin-bottom: 12px;
+    margin-bottom: 14px;
     gap: 12px;
   }
 
-  h2 { font-size: 18px; margin: 0; white-space: nowrap; }
+  h2 { font-size: 18px; font-weight: 600; margin: 0; letter-spacing: -0.01em; white-space: nowrap; }
 
   .status-badge {
     background: var(--bg-tertiary);
     border: 1px solid var(--border);
     border-radius: 12px;
-    padding: 4px 10px;
+    padding: 4px 12px;
     font-size: 11px;
-    color: var(--text-secondary);
+    font-weight: 500;
+    color: var(--text-muted);
   }
 
   .status-badge.active {
-    background: rgba(63, 185, 80, 0.1);
+    background: var(--accent-green-subtle);
     border-color: var(--accent-green);
     color: var(--accent-green);
   }
 
   .controls {
     display: flex;
-    gap: 12px;
+    gap: 10px;
     align-items: center;
     font-size: 13px;
     color: var(--text-secondary);
     margin-left: auto;
   }
 
-  .controls button {
-    background: var(--bg-tertiary);
-    border: 1px solid var(--border);
-    color: var(--text-primary);
-    border-radius: 6px;
-    padding: 4px 12px;
+  .check-label {
+    display: flex;
+    align-items: center;
+    gap: 4px;
     cursor: pointer;
     font-size: 12px;
+    white-space: nowrap;
   }
 
-  .controls button:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
+  .btn-sm {
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border);
+    color: var(--text-secondary);
+    border-radius: var(--radius-sm);
+    padding: 5px 12px;
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 500;
+    font-family: inherit;
+    transition: all 0.15s;
   }
+
+  .btn-sm:hover { background: var(--bg-hover); color: var(--text-primary); }
+  .btn-sm:disabled { opacity: 0.5; cursor: not-allowed; }
 
   .filter-bar {
     display: flex;
     align-items: center;
-    gap: 12px;
-    margin-bottom: 8px;
+    gap: 10px;
+    margin-bottom: 10px;
     flex-wrap: wrap;
   }
 
@@ -372,35 +382,38 @@
     font-size: 11px;
     color: var(--text-muted);
     white-space: nowrap;
+    font-weight: 500;
   }
 
   .level-toggle {
     background: var(--bg-tertiary);
     border: 1px solid var(--border);
-    color: var(--text-secondary);
-    border-radius: 4px;
-    padding: 2px 8px;
+    color: var(--text-muted);
+    border-radius: var(--radius-sm);
+    padding: 3px 10px;
     cursor: pointer;
     font-size: 11px;
-    opacity: 0.5;
-    transition: opacity 0.15s, background 0.15s;
+    font-weight: 500;
+    font-family: inherit;
+    opacity: 0.6;
+    transition: all 0.15s;
   }
 
   .level-toggle.active {
     opacity: 1;
-    background: rgba(88, 166, 255, 0.15);
+    background: var(--accent-subtle);
     border-color: var(--accent);
     color: var(--accent);
   }
 
   .level-toggle.warn.active {
-    background: rgba(210, 153, 34, 0.15);
-    border-color: #d29922;
-    color: #d29922;
+    background: var(--accent-yellow-subtle);
+    border-color: var(--accent-yellow);
+    color: var(--accent-yellow);
   }
 
   .level-toggle.error.active {
-    background: rgba(248, 81, 73, 0.15);
+    background: var(--accent-red-subtle);
     border-color: var(--accent-red);
     color: var(--accent-red);
   }
@@ -409,35 +422,35 @@
     background: var(--bg-tertiary);
     border: 1px solid var(--border);
     color: var(--text-primary);
-    border-radius: 6px;
-    padding: 3px 8px;
+    border-radius: var(--radius-sm);
+    padding: 4px 10px;
     font-size: 12px;
     width: 180px;
     outline: none;
+    font-family: inherit;
+    transition: border-color 0.15s;
   }
 
   .search-input:focus {
     border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-subtle);
   }
 
-  .search-input::placeholder {
-    color: var(--text-muted);
-  }
+  .search-input::placeholder { color: var(--text-muted); }
 
   .filter-select {
     background: var(--bg-tertiary);
     border: 1px solid var(--border);
     color: var(--text-primary);
-    border-radius: 6px;
-    padding: 3px 6px;
+    border-radius: var(--radius-sm);
+    padding: 4px 8px;
     font-size: 11px;
     outline: none;
     cursor: pointer;
+    font-family: inherit;
   }
 
-  .filter-select:focus {
-    border-color: var(--accent);
-  }
+  .filter-select:focus { border-color: var(--accent); }
 
   .filter-count {
     font-size: 11px;
@@ -449,36 +462,28 @@
   .log-container {
     flex: 1;
     overflow-y: auto;
-    background: var(--bg-surface);
+    background: var(--bg-secondary);
     border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 8px;
-    font-family: 'Cascadia Code', 'Fira Code', monospace;
+    border-radius: var(--radius-md);
+    padding: 10px;
+    font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
     font-size: 12px;
   }
 
   .line {
-    padding: 2px 0;
-    line-height: 1.5;
-    border-radius: 4px;
+    padding: 3px 4px;
+    line-height: 1.6;
+    border-radius: var(--radius-sm);
   }
 
-  .line.clickable {
-    cursor: pointer;
-  }
-
-  .line.clickable:hover {
-    background: rgba(88, 166, 255, 0.05);
-  }
-
-  .line.expanded {
-    background: rgba(88, 166, 255, 0.08);
-  }
+  .line.clickable { cursor: pointer; }
+  .line.clickable:hover { background: var(--accent-subtle); }
+  .line.expanded { background: var(--accent-subtle); }
 
   .line.connection {
     border-left: 2px solid var(--accent-green);
-    padding-left: 8px;
-    margin-left: -8px;
+    padding-left: 10px;
+    margin-left: -2px;
   }
 
   .line-main {
@@ -488,64 +493,67 @@
   }
 
   .time { color: var(--text-muted); min-width: 70px; }
-  .level { color: var(--accent); min-width: 40px; text-transform: uppercase; }
-  .level.warn { color: #d29922; }
+  .level { color: var(--accent); min-width: 40px; text-transform: uppercase; font-weight: 500; }
+  .level.warn { color: var(--accent-yellow); }
   .level.error { color: var(--accent-red); }
-  .msg { color: #c9d1d9; flex: 1; }
+  .msg { color: var(--text-primary); flex: 1; opacity: 0.9; }
   .empty { color: var(--text-muted); text-align: center; margin-top: 40px; }
 
   .conn-icon {
     color: var(--accent-green);
     font-size: 10px;
+    font-weight: bold;
   }
 
   .expand-icon {
     color: var(--text-muted);
-    font-size: 10px;
+    font-size: 12px;
     margin-left: auto;
     padding-right: 8px;
+    font-weight: bold;
   }
 
   .details {
-    margin-top: 8px;
+    margin-top: 6px;
     margin-left: 78px;
-    padding: 8px 12px;
-    background: rgba(13, 17, 23, 0.8);
-    border: 1px solid var(--bg-tertiary);
-    border-radius: 6px;
+    padding: 10px 14px;
+    background: var(--bg-surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
     margin-bottom: 4px;
   }
 
   .detail-row {
     display: flex;
-    gap: 8px;
+    gap: 10px;
     padding: 2px 0;
   }
 
   .detail-label {
-    color: #6e7681;
+    color: var(--text-muted);
     min-width: 70px;
   }
 
   .detail-value {
-    color: #c9d1d9;
+    color: var(--text-primary);
   }
 
   .detail-value.protocol {
     color: var(--accent);
-    background: rgba(88, 166, 255, 0.1);
-    padding: 1px 6px;
-    border-radius: 3px;
+    background: var(--accent-subtle);
+    padding: 1px 8px;
+    border-radius: 4px;
     font-size: 10px;
+    font-weight: 600;
   }
 
   .detail-value.rule {
-    color: #d29922;
+    color: var(--accent-yellow);
   }
 
   .traffic-in {
     color: var(--accent-green);
-    margin-right: 12px;
+    margin-right: 14px;
   }
 
   .traffic-out {

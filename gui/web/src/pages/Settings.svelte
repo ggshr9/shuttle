@@ -228,7 +228,7 @@
     onUpdateGeoData={updateGeoData}
   />
 
-  <button class="save" onclick={save} disabled={saving}>
+  <button class="btn-save" onclick={save} disabled={saving}>
     {saving ? t('settings.saving') : t('settings.saveReload')}
   </button>
   {#if msg}<p class="msg" class:msg-success={msgType === 'success'} class:msg-error={msgType === 'error'}>{msg}</p>{/if}
@@ -249,7 +249,7 @@
   <SettingsDiagnostics onMessage={handleMessage} />
 </div>
 {:else}
-<p>{t('common.loading')}</p>
+<p class="loading-text">{t('common.loading')}</p>
 {/if}
 
 <SettingsPerAppPicker
@@ -259,22 +259,35 @@
 />
 
 <style>
-  .page { max-width: 500px; }
-  h2 { font-size: 18px; margin-bottom: 20px; }
+  .page { max-width: 600px; }
 
-  .save {
+  h2 {
+    font-size: 18px;
+    font-weight: 600;
+    margin: 0 0 20px;
+    letter-spacing: -0.01em;
+  }
+
+  .btn-save {
     background: var(--btn-bg);
     color: #fff;
     border: none;
-    border-radius: 6px;
-    padding: 10px 20px;
+    border-radius: var(--radius-sm);
+    padding: 10px 22px;
     cursor: pointer;
     font-size: 14px;
+    font-weight: 500;
+    font-family: inherit;
     margin-top: 16px;
+    transition: background 0.15s;
   }
 
-  .save:disabled { opacity: 0.5; }
+  .btn-save:hover { background: var(--btn-bg-hover); }
+  .btn-save:disabled { opacity: 0.5; }
+
   .msg { font-size: 13px; color: var(--text-secondary); margin-top: 8px; }
   .msg-success { color: var(--accent-green); }
   .msg-error { color: var(--accent-red); }
+
+  .loading-text { color: var(--text-secondary); font-size: 14px; }
 </style>

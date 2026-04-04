@@ -39,11 +39,11 @@
 
   // Color palette for different peers
   const colors = [
-    { line: '#3fb950', fill: 'rgba(63, 185, 80, 0.2)' },
-    { line: '#58a6ff', fill: 'rgba(88, 166, 255, 0.2)' },
-    { line: '#f0883e', fill: 'rgba(240, 136, 62, 0.2)' },
-    { line: '#a371f7', fill: 'rgba(163, 113, 247, 0.2)' },
-    { line: '#db61a2', fill: 'rgba(219, 97, 162, 0.2)' },
+    { line: '#34d399', fill: 'rgba(52, 211, 153, 0.15)' },
+    { line: '#4f6df5', fill: 'rgba(79, 109, 245, 0.15)' },
+    { line: '#f59e0b', fill: 'rgba(245, 158, 11, 0.15)' },
+    { line: '#a78bfa', fill: 'rgba(167, 139, 250, 0.15)' },
+    { line: '#ec4899', fill: 'rgba(236, 72, 153, 0.15)' },
   ]
 
   // Calculate max RTT for scaling
@@ -72,7 +72,7 @@
     ctx.clearRect(0, 0, width, height)
 
     // Draw background grid
-    ctx.strokeStyle = '#21262d'
+    ctx.strokeStyle = '#1e1e2e'
     ctx.lineWidth = 1
     const gridLines = 4
     for (let i = 1; i < gridLines; i++) {
@@ -127,9 +127,9 @@
   }
 
   function getScoreColor(score) {
-    if (score >= 80) return '#3fb950'
-    if (score >= 50) return '#f0883e'
-    return '#f85149'
+    if (score >= 80) return '#34d399'
+    if (score >= 50) return '#f59e0b'
+    return '#f87171'
   }
 
   function getStateIcon(state) {
@@ -160,7 +160,7 @@
         {#each peers as peer, i}
           <div class="peer-item">
             <div class="peer-header">
-              <span class="peer-state" style="color: {peer.state === 'connected' ? '#3fb950' : '#6e7681'}">
+              <span class="peer-state" style="color: {peer.state === 'connected' ? '#34d399' : '#55566a'}">
                 {getStateIcon(peer.state)}
               </span>
               <span class="peer-ip">{peer.virtual_ip}</span>
@@ -200,23 +200,23 @@
 
 <style>
   .quality-container {
-    background: #161b22;
-    border: 1px solid #2d333b;
-    border-radius: 8px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
     padding: 16px;
   }
 
   h4 {
     margin: 0 0 12px 0;
     font-size: 14px;
-    font-weight: 500;
-    color: #c9d1d9;
+    font-weight: 600;
+    color: var(--text-primary);
   }
 
   .chart-wrapper {
     position: relative;
-    background: #0d1117;
-    border-radius: 6px;
+    background: var(--bg-surface);
+    border-radius: var(--radius-sm);
     padding: 8px;
   }
 
@@ -237,10 +237,10 @@
 
   .max-label, .min-label {
     font-size: 10px;
-    color: #6e7681;
-    background: rgba(13, 17, 23, 0.8);
-    padding: 2px 4px;
-    border-radius: 2px;
+    color: var(--text-muted);
+    background: var(--bg-secondary);
+    padding: 2px 6px;
+    border-radius: 4px;
   }
 
   .peers-section {
@@ -258,8 +258,8 @@
     flex-direction: column;
     gap: 6px;
     padding: 10px;
-    background: #0d1117;
-    border-radius: 6px;
+    background: var(--bg-surface);
+    border-radius: var(--radius-sm);
     position: relative;
   }
 
@@ -269,7 +269,7 @@
     top: 0;
     bottom: 0;
     width: 3px;
-    border-radius: 6px 0 0 6px;
+    border-radius: var(--radius-sm) 0 0 var(--radius-sm);
   }
 
   .peer-header {
@@ -284,17 +284,18 @@
   }
 
   .peer-ip {
-    font-family: monospace;
+    font-family: 'JetBrains Mono', monospace;
     font-size: 13px;
-    color: #c9d1d9;
+    color: var(--text-primary);
   }
 
   .peer-method {
     font-size: 11px;
-    color: #6e7681;
-    background: #21262d;
-    padding: 2px 6px;
+    color: var(--text-muted);
+    background: var(--bg-tertiary);
+    padding: 2px 8px;
     border-radius: 4px;
+    font-weight: 500;
   }
 
   .peer-stats {
@@ -311,20 +312,22 @@
 
   .stat-label {
     font-size: 10px;
-    color: #6e7681;
+    color: var(--text-muted);
     text-transform: uppercase;
+    font-weight: 500;
   }
 
   .stat-value {
     font-size: 13px;
     font-weight: 500;
-    color: #c9d1d9;
+    color: var(--text-primary);
+    font-variant-numeric: tabular-nums;
   }
 
   .no-peers {
     text-align: center;
     padding: 24px;
-    color: #6e7681;
+    color: var(--text-muted);
     font-size: 13px;
   }
 </style>

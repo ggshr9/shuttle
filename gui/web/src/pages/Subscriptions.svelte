@@ -79,22 +79,26 @@
 </script>
 
 <div class="page">
-  <div class="header">
+  <div class="page-header">
     <h2>{t('subscriptions.title')}</h2>
-    <button class="btn-add" onclick={() => (showAdd = true)}>{t('subscriptions.add')}</button>
+    <button class="btn-primary" onclick={() => (showAdd = true)}>{t('subscriptions.add')}</button>
   </div>
 
   {#if loading}
-    <p class="loading">{t('common.loading')}</p>
+    <p class="loading-text">{t('common.loading')}</p>
   {:else if subscriptions.length === 0}
     <div class="empty">
+      <svg width="48" height="48" viewBox="0 0 48 48" fill="none" stroke="var(--text-muted)" stroke-width="1.5">
+        <path d="M10 14h28M10 24h28M10 34h20"/>
+        <circle cx="38" cy="34" r="5"/>
+      </svg>
       <p>{t('subscriptions.noSubscriptions')}</p>
       <p class="help">{t('subscriptions.noSubscriptionsHelp')}</p>
     </div>
   {:else}
     <div class="sub-list">
       {#each subscriptions as sub}
-        <div class="sub-item" class:has-error={sub.error}>
+        <div class="sub-card" class:has-error={sub.error}>
           <div class="sub-info">
             <div class="sub-header">
               <span class="sub-name">{sub.name || 'Unnamed'}</span>
@@ -117,7 +121,7 @@
               {refreshing[sub.id] ? t('subscriptions.refreshing') : t('subscriptions.refresh')}
             </button>
             <button
-              class="btn-sm btn-danger"
+              class="btn-sm danger"
               onclick={() => deleteSubscription(sub.id)}
             >
               {t('subscriptions.delete')}
@@ -185,85 +189,96 @@
 {/if}
 
 <style>
-  .page { max-width: 700px; }
+  .page { max-width: 740px; }
 
-  .header {
+  .page-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
     margin-bottom: 20px;
   }
 
-  h2 { font-size: 18px; margin: 0; }
+  h2 { font-size: 18px; font-weight: 600; margin: 0; letter-spacing: -0.01em; }
+  h3 { font-size: 14px; font-weight: 600; color: var(--text-primary); margin: 0; }
 
-  .btn-add {
+  .btn-primary {
     background: var(--btn-bg);
     color: #fff;
     border: none;
-    border-radius: 6px;
+    border-radius: var(--radius-sm);
     padding: 8px 16px;
     cursor: pointer;
     font-size: 13px;
+    font-weight: 500;
+    font-family: inherit;
+    transition: background 0.15s;
   }
-  .btn-add:hover { background: var(--btn-bg-hover); }
+  .btn-primary:hover { background: var(--btn-bg-hover); }
+  .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
 
-  .msg { font-size: 13px; color: var(--text-secondary); margin-bottom: 12px; }
-  .loading { color: var(--text-secondary); }
+  .loading-text { color: var(--text-secondary); font-size: 14px; }
 
   .empty {
     text-align: center;
-    padding: 40px;
+    padding: 48px;
     color: var(--text-secondary);
+    background: var(--bg-secondary);
+    border: 1px dashed var(--border);
+    border-radius: var(--radius-lg);
   }
-  .empty p { margin: 8px 0; }
-  .empty .help { font-size: 13px; color: #6e7681; }
+  .empty p { margin: 12px 0 0; }
+  .empty .help { font-size: 13px; color: var(--text-muted); }
 
-  .sub-list { display: flex; flex-direction: column; gap: 12px; }
+  .sub-list { display: flex; flex-direction: column; gap: 10px; }
 
-  .sub-item {
+  .sub-card {
     display: flex;
     justify-content: space-between;
     align-items: flex-start;
     background: var(--bg-secondary);
     border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 14px;
+    border-radius: var(--radius-lg);
+    padding: 16px 20px;
+    transition: border-color 0.15s;
   }
-  .sub-item.has-error { border-color: var(--accent-red); }
+  .sub-card:hover { border-color: var(--border-light); }
+  .sub-card.has-error { border-color: var(--accent-red); }
 
   .sub-info { flex: 1; min-width: 0; }
 
   .sub-header {
     display: flex;
     align-items: center;
-    gap: 8px;
-    margin-bottom: 4px;
+    gap: 10px;
+    margin-bottom: 6px;
   }
 
   .sub-name {
     font-size: 15px;
-    font-weight: 500;
+    font-weight: 600;
     color: var(--text-primary);
   }
 
   .sub-count {
-    font-size: 12px;
+    font-size: 11px;
     color: var(--accent-green);
-    background: rgba(63, 185, 80, 0.15);
-    padding: 2px 8px;
+    background: var(--accent-green-subtle);
+    padding: 2px 10px;
     border-radius: 10px;
+    font-weight: 500;
   }
 
   .sub-url {
     font-size: 12px;
-    color: var(--text-secondary);
+    color: var(--text-muted);
     word-break: break-all;
-    margin-bottom: 4px;
+    margin-bottom: 6px;
+    font-family: 'JetBrains Mono', monospace;
   }
 
   .sub-meta {
     font-size: 11px;
-    color: #6e7681;
+    color: var(--text-muted);
   }
 
   .sub-error {
@@ -275,94 +290,91 @@
   .sub-actions {
     display: flex;
     gap: 6px;
-    margin-left: 12px;
+    margin-left: 16px;
+    flex-shrink: 0;
   }
 
   .btn-sm {
     background: var(--bg-tertiary);
-    color: var(--text-primary);
+    color: var(--text-secondary);
     border: 1px solid var(--border);
-    border-radius: 6px;
-    padding: 5px 12px;
+    border-radius: var(--radius-sm);
+    padding: 6px 12px;
     cursor: pointer;
     font-size: 12px;
+    font-weight: 500;
+    font-family: inherit;
+    transition: all 0.15s;
   }
-  .btn-sm:hover { background: #30363d; }
+  .btn-sm:hover { background: var(--bg-hover); color: var(--text-primary); }
   .btn-sm:disabled { opacity: 0.5; cursor: default; }
-  .btn-danger { color: var(--accent-red); }
-  .btn-danger:hover { background: #3d1f1f; }
+  .btn-sm.danger { color: var(--accent-red); }
+  .btn-sm.danger:hover { background: var(--accent-red-subtle); }
 
   .servers-preview {
     background: var(--bg-surface);
-    border: 1px solid var(--bg-tertiary);
-    border-radius: 6px;
-    padding: 8px 12px;
-    margin-top: -8px;
-    margin-left: 16px;
-    margin-right: 16px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 8px 14px;
+    margin-top: -6px;
+    margin-left: 20px;
+    margin-right: 20px;
     margin-bottom: 4px;
   }
 
   .server-preview {
     display: flex;
     justify-content: space-between;
-    padding: 4px 0;
+    padding: 5px 0;
     font-size: 12px;
-    border-bottom: 1px solid var(--bg-tertiary);
+    border-bottom: 1px solid var(--border);
   }
   .server-preview:last-child { border-bottom: none; }
 
-  .srv-name { color: var(--text-primary); }
-  .srv-addr { color: #6e7681; }
+  .srv-name { color: var(--text-primary); font-weight: 500; }
+  .srv-addr { color: var(--text-muted); font-family: 'JetBrains Mono', monospace; }
 
   .more-servers {
     font-size: 11px;
-    color: #6e7681;
+    color: var(--text-muted);
     text-align: center;
     padding-top: 4px;
   }
 
-  /* Modal styles */
+  /* ===== Modal ===== */
   .modal-overlay {
     position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: rgba(0, 0, 0, 0.7);
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: var(--overlay-bg);
     display: flex;
     align-items: center;
     justify-content: center;
     z-index: 100;
+    backdrop-filter: blur(4px);
   }
 
   .modal {
     background: var(--bg-secondary);
     border: 1px solid var(--border);
-    border-radius: 12px;
+    border-radius: var(--radius-lg);
     width: 90%;
     max-width: 440px;
+    box-shadow: var(--shadow-lg);
   }
 
   .modal-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 16px;
+    padding: 18px 20px;
     border-bottom: 1px solid var(--border);
-  }
-
-  .modal-header h3 {
-    margin: 0;
-    font-size: 16px;
-    color: var(--text-primary);
   }
 
   .modal-close {
     background: none;
     border: none;
-    color: var(--text-secondary);
-    font-size: 24px;
+    color: var(--text-muted);
+    font-size: 22px;
     cursor: pointer;
     padding: 0;
     line-height: 1;
@@ -370,7 +382,7 @@
   .modal-close:hover { color: var(--text-primary); }
 
   .modal-body {
-    padding: 16px;
+    padding: 20px;
     display: flex;
     flex-direction: column;
     gap: 14px;
@@ -379,31 +391,34 @@
   .modal-body label {
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: 6px;
   }
 
   .modal-body label span {
     font-size: 12px;
     color: var(--text-secondary);
+    font-weight: 500;
   }
 
   .modal-body input {
     background: var(--bg-surface);
     border: 1px solid var(--border);
-    border-radius: 6px;
-    padding: 8px 12px;
+    border-radius: var(--radius-sm);
+    padding: 9px 12px;
     color: var(--text-primary);
     font-size: 14px;
+    font-family: inherit;
   }
 
   .modal-body input:focus {
     outline: none;
     border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-subtle);
   }
 
   .help-text {
     font-size: 12px;
-    color: #6e7681;
+    color: var(--text-muted);
     margin: 0;
   }
 
@@ -411,7 +426,7 @@
     display: flex;
     justify-content: flex-end;
     gap: 8px;
-    padding: 12px 16px;
+    padding: 14px 20px;
     border-top: 1px solid var(--border);
   }
 
@@ -419,22 +434,12 @@
     background: var(--bg-tertiary);
     color: var(--text-primary);
     border: 1px solid var(--border);
-    border-radius: 6px;
+    border-radius: var(--radius-sm);
     padding: 8px 16px;
     cursor: pointer;
     font-size: 13px;
+    font-weight: 500;
+    font-family: inherit;
   }
-  .btn-cancel:hover { background: #30363d; }
-
-  .btn-primary {
-    background: var(--btn-bg);
-    color: #fff;
-    border: none;
-    border-radius: 6px;
-    padding: 8px 16px;
-    cursor: pointer;
-    font-size: 13px;
-  }
-  .btn-primary:hover { background: var(--btn-bg-hover); }
-  .btn-primary:disabled { opacity: 0.5; }
+  .btn-cancel:hover { background: var(--bg-hover); }
 </style>

@@ -76,7 +76,7 @@
   select {
     background: var(--bg-secondary);
     border: 1px solid var(--border);
-    border-radius: 6px;
+    border-radius: var(--radius-sm);
     padding: 6px 10px;
     color: var(--text-primary);
     font-size: 13px;
@@ -86,7 +86,7 @@
     flex: 1;
     background: var(--bg-secondary);
     border: 1px solid var(--border);
-    border-radius: 6px;
+    border-radius: var(--radius-sm);
     padding: 8px 12px;
     color: var(--text-primary);
     font-size: 13px;
@@ -104,20 +104,20 @@
     background: var(--bg-tertiary);
     color: var(--accent);
     border: 1px solid var(--border);
-    border-radius: 6px;
+    border-radius: var(--radius-sm);
     padding: 6px 12px;
     cursor: pointer;
     font-size: 12px;
     white-space: nowrap;
   }
 
-  .pick-btn:hover { background: #30363d; }
+  .pick-btn:hover { background: var(--bg-hover); }
 
   .remove {
     background: none;
     border: 1px solid var(--border);
     color: var(--accent-red);
-    border-radius: 6px;
+    border-radius: var(--radius-sm);
     padding: 6px 10px;
     cursor: pointer;
   }
@@ -132,7 +132,7 @@
     background: var(--bg-tertiary);
     color: var(--text-primary);
     border: 1px solid var(--border);
-    border-radius: 6px;
+    border-radius: var(--radius-sm);
     padding: 8px 16px;
     cursor: pointer;
     font-size: 13px;

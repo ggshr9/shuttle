@@ -169,41 +169,44 @@
 </script>
 
 <div class="page">
-  <h2>{t('servers.activeServer')}</h2>
+  <div class="page-header">
+    <h2>{t('servers.activeServer')}</h2>
+  </div>
 
-  <div class="form">
-    <label>
-      <span>{t('servers.serverAddress')}</span>
-      <input bind:value={active.addr} placeholder="example.com:443" />
-    </label>
-    <label>
-      <span>{t('servers.name')}</span>
-      <input bind:value={active.name} placeholder="My Server" />
-    </label>
-    <label>
-      <span>{t('servers.password')}</span>
-      <input type="password" bind:value={active.password} />
-    </label>
-
-    <button onclick={save} disabled={saving}>
-      {saving ? t('servers.saving') : t('servers.saveReconnect')}
-    </button>
-      </div>
+  <div class="active-card">
+    <div class="form">
+      <label>
+        <span>{t('servers.serverAddress')}</span>
+        <input bind:value={active.addr} placeholder="example.com:443" />
+      </label>
+      <label>
+        <span>{t('servers.name')}</span>
+        <input bind:value={active.name} placeholder="My Server" />
+      </label>
+      <label>
+        <span>{t('servers.password')}</span>
+        <input type="password" bind:value={active.password} />
+      </label>
+      <button class="btn-primary" onclick={save} disabled={saving}>
+        {saving ? t('servers.saving') : t('servers.saveReconnect')}
+      </button>
+    </div>
+  </div>
 
   <div class="section-header">
-    <h2 class="section">{t('servers.savedServers')}</h2>
+    <h2>{t('servers.savedServers')}</h2>
     <div class="section-actions">
-      <button class="btn-auto" onclick={autoSelect} disabled={autoSelecting || testing || servers.length === 0}>
+      <button class="btn-action accent" onclick={autoSelect} disabled={autoSelecting || testing || servers.length === 0}>
         {autoSelecting ? t('servers.selecting') : t('servers.autoSelect')}
       </button>
-      <button class="btn-test" onclick={runSpeedtest} disabled={testing || autoSelecting}>
+      <button class="btn-action green" onclick={runSpeedtest} disabled={testing || autoSelecting}>
         {#if testing}
           {t('servers.testing', { done: testProgress.done, total: testProgress.total })}
         {:else}
           {t('servers.testAll')}
         {/if}
       </button>
-      <button class="btn-import" onclick={() => (showImport = true)}>{t('servers.import')}</button>
+      <button class="btn-action" onclick={() => (showImport = true)}>{t('servers.import')}</button>
     </div>
   </div>
 
@@ -221,18 +224,23 @@
           </div>
           <div class="server-actions">
             <button class="btn-sm" onclick={() => switchTo(srv)}>{t('servers.use')}</button>
-            <button class="btn-sm btn-danger" onclick={() => removeServer(srv.addr)}>{t('servers.remove')}</button>
+            <button class="btn-sm danger" onclick={() => removeServer(srv.addr)}>{t('servers.remove')}</button>
           </div>
         </div>
       {/each}
     </div>
   {:else}
     <div class="empty-state">
-      <div class="empty-icon">📡</div>
+      <svg width="48" height="48" viewBox="0 0 48 48" fill="none" stroke="var(--text-muted)" stroke-width="1.5">
+        <rect x="8" y="10" width="32" height="12" rx="3"/>
+        <rect x="8" y="26" width="32" height="12" rx="3"/>
+        <circle cx="14" cy="16" r="2" fill="var(--text-muted)"/>
+        <circle cx="14" cy="32" r="2" fill="var(--text-muted)"/>
+      </svg>
       <h3>{t('emptyState.noServers')}</h3>
       <p>{t('emptyState.addToStart')}</p>
       <div class="empty-actions">
-        <button class="action-btn primary" onclick={() => showImport = true}>
+        <button class="btn-primary" onclick={() => showImport = true}>
           {t('emptyState.importConfig')}
         </button>
         <span class="or">{t('emptyState.orAddManually')}</span>
@@ -240,12 +248,14 @@
     </div>
   {/if}
 
-  <h3>{t('servers.addServer')}</h3>
-  <div class="add-form">
-    <input bind:value={newServer.addr} placeholder="addr:port" />
-    <input bind:value={newServer.name} placeholder={t('servers.name')} />
-    <input type="password" bind:value={newServer.password} placeholder={t('servers.password')} />
-    <button onclick={addServer}>{t('servers.add')}</button>
+  <div class="section-card">
+    <h3>{t('servers.addServer')}</h3>
+    <div class="add-form">
+      <input bind:value={newServer.addr} placeholder="addr:port" />
+      <input bind:value={newServer.name} placeholder={t('servers.name')} />
+      <input type="password" bind:value={newServer.password} placeholder={t('servers.password')} />
+      <button class="btn-primary" onclick={addServer}>{t('servers.add')}</button>
+    </div>
   </div>
 </div>
 
@@ -324,84 +334,136 @@
       </div>
       <div class="modal-footer">
         <button class="btn-cancel" onclick={() => (confirmDelete = null)}>{t('common.cancel')}</button>
-        <button class="btn-primary btn-danger-confirm" onclick={confirmRemove}>{t('servers.remove')}</button>
+        <button class="btn-danger-confirm" onclick={confirmRemove}>{t('servers.remove')}</button>
       </div>
     </div>
   </div>
 {/if}
 
 <style>
-  .page { max-width: 560px; }
-  h2 { font-size: 18px; margin-bottom: 20px; }
-  h2.section { margin-top: 32px; }
-  h3 { font-size: 14px; color: var(--text-secondary); margin: 20px 0 10px; }
+  .page { max-width: 680px; }
+
+  .page-header { margin-bottom: 20px; }
+
+  h2 {
+    font-size: 18px;
+    font-weight: 600;
+    margin: 0;
+    letter-spacing: -0.01em;
+  }
+
+  h3 {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin: 0 0 14px;
+  }
+
+  .active-card {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 20px;
+    margin-bottom: 28px;
+  }
 
   .form { display: flex; flex-direction: column; gap: 14px; }
 
   label {
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: 6px;
   }
 
   label span {
     font-size: 12px;
     color: var(--text-secondary);
+    font-weight: 500;
   }
 
   input {
-    background: var(--bg-secondary);
+    background: var(--bg-surface);
     border: 1px solid var(--border);
-    border-radius: 6px;
-    padding: 8px 12px;
+    border-radius: var(--radius-sm);
+    padding: 9px 12px;
     color: var(--text-primary);
     font-size: 14px;
+    font-family: inherit;
+    transition: border-color 0.15s;
   }
 
   input:focus {
     outline: none;
     border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-subtle);
   }
 
-  button {
+  .btn-primary {
     background: var(--btn-bg);
     color: #fff;
     border: none;
-    border-radius: 6px;
-    padding: 10px;
+    border-radius: var(--radius-sm);
+    padding: 10px 16px;
     cursor: pointer;
     font-size: 14px;
+    font-weight: 500;
+    font-family: inherit;
+    transition: background 0.15s;
+  }
+
+  .btn-primary:hover { background: var(--btn-bg-hover); }
+  .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  .section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 14px;
     margin-top: 8px;
   }
 
-  button:hover { background: var(--btn-bg-hover); }
-  button:disabled { opacity: 0.5; }
+  .section-actions {
+    display: flex;
+    gap: 8px;
+  }
 
-  .msg { font-size: 13px; color: var(--text-secondary); margin-top: 4px; }
+  .btn-action {
+    background: var(--bg-tertiary);
+    color: var(--text-secondary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 7px 14px;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 500;
+    font-family: inherit;
+    transition: all 0.15s;
+  }
+
+  .btn-action:hover { background: var(--bg-hover); color: var(--text-primary); }
+  .btn-action:disabled { opacity: 0.5; cursor: default; }
+  .btn-action.accent { color: var(--accent); }
+  .btn-action.green { color: var(--accent-green); }
+
   .empty-state {
     text-align: center;
-    padding: 40px 20px;
+    padding: 48px 24px;
     background: var(--bg-secondary);
     border: 1px dashed var(--border);
-    border-radius: 12px;
+    border-radius: var(--radius-lg);
     margin: 20px 0;
   }
 
-  .empty-icon {
-    font-size: 48px;
-    margin-bottom: 16px;
-  }
-
   .empty-state h3 {
-    font-size: 18px;
+    font-size: 16px;
     color: var(--text-primary);
-    margin: 0 0 8px;
+    margin: 16px 0 8px;
   }
 
   .empty-state p {
     font-size: 14px;
     color: var(--text-secondary);
-    margin: 0 0 20px;
+    margin: 0 0 24px;
   }
 
   .empty-actions {
@@ -411,27 +473,12 @@
     gap: 12px;
   }
 
-  .action-btn.primary {
-    background: var(--btn-bg);
-    color: white;
-    border: none;
-    padding: 12px 24px;
-    border-radius: 8px;
-    font-size: 14px;
-    font-weight: 500;
-    cursor: pointer;
-  }
-
-  .action-btn.primary:hover {
-    background: var(--btn-bg-hover);
-  }
-
   .or {
     font-size: 12px;
-    color: var(--text-secondary);
+    color: var(--text-muted);
   }
 
-  .server-list { display: flex; flex-direction: column; gap: 8px; }
+  .server-list { display: flex; flex-direction: column; gap: 6px; }
 
   .server-item {
     display: flex;
@@ -439,138 +486,117 @@
     align-items: center;
     background: var(--bg-secondary);
     border: 1px solid var(--border);
-    border-radius: 6px;
-    padding: 10px 14px;
+    border-radius: var(--radius-md);
+    padding: 12px 16px;
+    transition: border-color 0.15s;
   }
 
-  .server-name { font-size: 14px; color: var(--text-primary); }
-  .server-addr { font-size: 12px; color: var(--text-muted); margin-left: 8px; }
+  .server-item:hover {
+    border-color: var(--border-light);
+  }
+
+  .server-info {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .server-name { font-size: 14px; font-weight: 500; color: var(--text-primary); }
+  .server-addr { font-size: 12px; color: var(--text-muted); font-family: 'JetBrains Mono', monospace; }
   .server-actions { display: flex; gap: 6px; }
 
   .btn-sm {
-    padding: 4px 10px;
+    padding: 5px 12px;
     font-size: 12px;
-    margin-top: 0;
+    font-weight: 500;
+    font-family: inherit;
     background: var(--bg-tertiary);
-  }
-  .btn-sm:hover { background: #30363d; }
-  .btn-danger { color: var(--accent-red); }
-  .btn-danger:hover { background: #3d1f1f; }
-
-  .add-form {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 8px;
-  }
-  .add-form button {
-    grid-column: span 2;
-    margin-top: 0;
-  }
-
-  .section-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-  }
-
-  .section-actions {
-    display: flex;
-    gap: 8px;
-  }
-
-  .btn-auto {
-    background: var(--btn-bg);
-    color: #fff;
-    border: 1px solid var(--btn-bg);
-    border-radius: 6px;
-    padding: 6px 14px;
-    cursor: pointer;
-    font-size: 13px;
-    margin-top: 0;
-  }
-  .btn-auto:hover { background: var(--btn-bg-hover); }
-  .btn-auto:disabled { opacity: 0.5; cursor: default; }
-
-  .btn-test {
-    background: var(--bg-tertiary);
-    color: var(--accent-green);
     border: 1px solid var(--border);
-    border-radius: 6px;
-    padding: 6px 14px;
+    border-radius: var(--radius-sm);
+    color: var(--text-secondary);
     cursor: pointer;
-    font-size: 13px;
-    margin-top: 0;
+    transition: all 0.15s;
   }
-  .btn-test:hover { background: #30363d; }
-  .btn-test:disabled { opacity: 0.7; cursor: default; }
+  .btn-sm:hover { background: var(--bg-hover); color: var(--text-primary); }
+  .btn-sm.danger { color: var(--accent-red); }
+  .btn-sm.danger:hover { background: var(--accent-red-subtle); }
 
   .latency {
     font-size: 12px;
-    padding: 2px 6px;
-    border-radius: 4px;
-    margin-left: 8px;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
   }
 
   .latency-good {
-    background: rgba(63, 185, 80, 0.2);
+    background: var(--accent-green-subtle);
     color: var(--accent-green);
   }
 
   .latency-ok {
-    background: rgba(210, 153, 34, 0.2);
-    color: #d29922;
+    background: var(--accent-yellow-subtle);
+    color: var(--accent-yellow);
   }
 
   .latency-slow {
-    background: rgba(248, 81, 73, 0.2);
+    background: var(--accent-red-subtle);
     color: var(--accent-red);
   }
 
   .latency-error {
-    background: rgba(248, 81, 73, 0.2);
+    background: var(--accent-red-subtle);
     color: var(--accent-red);
   }
 
-  .btn-import {
-    background: var(--bg-tertiary);
-    color: var(--accent);
+  .section-card {
+    background: var(--bg-secondary);
     border: 1px solid var(--border);
-    border-radius: 6px;
-    padding: 6px 14px;
-    cursor: pointer;
-    font-size: 13px;
-    margin-top: 0;
+    border-radius: var(--radius-lg);
+    padding: 20px;
+    margin-top: 20px;
   }
-  .btn-import:hover { background: #30363d; }
 
+  .add-form {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+  .add-form .btn-primary {
+    grid-column: span 2;
+  }
+
+  /* ===== Modals ===== */
   .modal-overlay {
     position: fixed;
     top: 0;
     left: 0;
     right: 0;
     bottom: 0;
-    background: rgba(0, 0, 0, 0.7);
+    background: var(--overlay-bg);
     display: flex;
     align-items: center;
     justify-content: center;
     z-index: 100;
+    backdrop-filter: blur(4px);
   }
 
   .modal {
     background: var(--bg-secondary);
     border: 1px solid var(--border);
-    border-radius: 12px;
+    border-radius: var(--radius-lg);
     width: 90%;
     max-width: 480px;
     max-height: 90vh;
     overflow: hidden;
+    box-shadow: var(--shadow-lg);
   }
 
   .modal-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 16px;
+    padding: 18px 20px;
     border-bottom: 1px solid var(--border);
   }
 
@@ -583,17 +609,17 @@
   .modal-close {
     background: none;
     border: none;
-    color: var(--text-secondary);
-    font-size: 24px;
+    color: var(--text-muted);
+    font-size: 22px;
     cursor: pointer;
     padding: 0;
     line-height: 1;
-    margin-top: 0;
+    transition: color 0.15s;
   }
   .modal-close:hover { color: var(--text-primary); }
 
   .modal-body {
-    padding: 16px;
+    padding: 20px;
   }
 
   .help-text {
@@ -604,8 +630,8 @@
 
   .help-list {
     font-size: 12px;
-    color: #6e7681;
-    margin: 0 0 12px;
+    color: var(--text-muted);
+    margin: 0 0 14px;
     padding-left: 20px;
   }
 
@@ -613,11 +639,11 @@
     width: 100%;
     background: var(--bg-surface);
     border: 1px solid var(--border);
-    border-radius: 6px;
-    padding: 10px;
+    border-radius: var(--radius-sm);
+    padding: 10px 12px;
     color: var(--text-primary);
     font-size: 13px;
-    font-family: 'Cascadia Code', 'Fira Code', monospace;
+    font-family: 'JetBrains Mono', 'Fira Code', monospace;
     resize: vertical;
     box-sizing: border-box;
   }
@@ -625,62 +651,54 @@
   .modal-body textarea:focus {
     outline: none;
     border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-subtle);
   }
 
-  .import-error {
-    color: var(--accent-red);
-    font-size: 13px;
-    margin: 8px 0 0;
-  }
-
-  .import-success {
-    color: var(--accent-green);
-    font-size: 13px;
-    margin: 8px 0 0;
-  }
-
-  .import-errors {
-    color: #d29922;
-    font-size: 12px;
-    margin: 4px 0 0;
-    padding-left: 20px;
-  }
+  .import-error { color: var(--accent-red); font-size: 13px; margin: 10px 0 0; }
+  .import-success { color: var(--accent-green); font-size: 13px; margin: 10px 0 0; }
+  .import-errors { color: var(--accent-yellow); font-size: 12px; margin: 4px 0 0; padding-left: 20px; }
 
   .modal-footer {
     display: flex;
     justify-content: flex-end;
     gap: 8px;
-    padding: 12px 16px;
+    padding: 14px 20px;
     border-top: 1px solid var(--border);
   }
 
   .btn-cancel {
     background: var(--bg-tertiary);
     color: var(--text-primary);
-    margin-top: 0;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 8px 16px;
+    cursor: pointer;
+    font-size: 13px;
+    font-family: inherit;
+    font-weight: 500;
   }
-  .btn-cancel:hover { background: #30363d; }
-
-  .btn-primary {
-    background: var(--btn-bg);
-    margin-top: 0;
-  }
-  .btn-primary:hover { background: var(--btn-bg-hover); }
-  .btn-primary:disabled { opacity: 0.5; }
+  .btn-cancel:hover { background: var(--bg-hover); }
 
   .btn-danger-confirm {
-    background: var(--accent-red) !important;
-    border-color: var(--accent-red) !important;
+    background: var(--accent-red);
+    color: #fff;
+    border: none;
+    border-radius: var(--radius-sm);
+    padding: 8px 16px;
+    cursor: pointer;
+    font-size: 13px;
+    font-family: inherit;
+    font-weight: 500;
   }
   .btn-danger-confirm:hover { opacity: 0.85; }
 
   .delete-addr {
-    font-family: 'Cascadia Code', 'Fira Code', monospace;
+    font-family: 'JetBrains Mono', 'Fira Code', monospace;
     font-size: 13px;
     color: var(--text-primary);
     background: var(--bg-surface);
-    padding: 8px 12px;
-    border-radius: 6px;
-    margin: 8px 0 0;
+    padding: 10px 14px;
+    border-radius: var(--radius-sm);
+    margin: 10px 0 0;
   }
 </style>
