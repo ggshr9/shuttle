@@ -60,12 +60,12 @@
   section {
     background: var(--bg-secondary);
     border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 12px 16px;
+    border-radius: var(--radius-lg);
+    padding: 16px 20px;
     margin-bottom: 12px;
   }
 
-  h3 { font-size: 14px; color: var(--text-secondary); margin: 20px 0 10px; }
+  h3 { font-size: 14px; font-weight: 600; color: var(--text-primary); margin: 20px 0 10px; }
 
   .system-proxy-row {
     margin-top: 12px;
@@ -96,7 +96,7 @@
     padding: 12px;
     background: var(--bg-secondary);
     border: 1px solid var(--border);
-    border-radius: 8px;
+    border-radius: var(--radius-lg);
   }
 
   .geo-info {
@@ -109,7 +109,7 @@
 
   .geo-label { color: var(--text-secondary); }
   .geo-value { color: var(--text-primary); }
-  .geo-warn { color: #d29922; }
+  .geo-warn { color: var(--accent-yellow); }
   .geo-error { color: var(--accent-red); font-size: 12px; }
 
   .geo-update-btn {
@@ -119,10 +119,10 @@
     background: var(--bg-tertiary);
     color: var(--accent);
     border: 1px solid var(--border);
-    border-radius: 6px;
+    border-radius: var(--radius-sm);
     cursor: pointer;
     font-size: 13px;
   }
-  .geo-update-btn:hover { background: #30363d; }
+  .geo-update-btn:hover { background: var(--bg-hover); }
   .geo-update-btn:disabled { opacity: 0.5; cursor: default; }
 </style>

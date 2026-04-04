@@ -139,12 +139,12 @@
 </script>
 
 <div class="page">
-  <div class="header">
+  <div class="page-header">
     <h2>{t('routing.title')}</h2>
     <div class="header-actions">
-      <button class="btn-template" onclick={() => (showTemplates = true)}>{t('routing.templates')}</button>
-      <button class="btn-import" onclick={() => {}}>{t('routing.import')}</button>
-      <button class="btn-export" onclick={exportRules}>{t('routing.export')}</button>
+      <button class="btn-action purple" onclick={() => (showTemplates = true)}>{t('routing.templates')}</button>
+      <button class="btn-action accent" onclick={() => {}}>{t('routing.import')}</button>
+      <button class="btn-action green" onclick={exportRules}>{t('routing.export')}</button>
     </div>
   </div>
 
@@ -165,7 +165,7 @@
   />
 
   <div class="actions">
-    <button class="save" onclick={save} disabled={saving}>
+    <button class="btn-primary" onclick={save} disabled={saving}>
       {saving ? t('routing.saving') : t('routing.saveApply')}
     </button>
   </div>
@@ -197,40 +197,44 @@
 />
 
 <style>
-  .page { max-width: 700px; }
+  .page { max-width: 740px; }
 
-  .header {
+  .page-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
     margin-bottom: 20px;
   }
 
-  .header h2 { margin: 0; font-size: 18px; }
+  .page-header h2 {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+  }
 
   .header-actions {
     display: flex;
     gap: 8px;
   }
 
-  .btn-template, .btn-import, .btn-export {
+  .btn-action {
     background: var(--bg-tertiary);
     color: var(--text-secondary);
     border: 1px solid var(--border);
-    border-radius: 6px;
-    padding: 6px 12px;
+    border-radius: var(--radius-sm);
+    padding: 7px 14px;
     cursor: pointer;
     font-size: 12px;
+    font-weight: 500;
+    font-family: inherit;
+    transition: all 0.15s;
   }
 
-  .btn-template:hover, .btn-import:hover, .btn-export:hover {
-    background: #30363d;
-    color: var(--text-primary);
-  }
-
-  .btn-template { color: var(--accent-purple); }
-  .btn-import { color: var(--accent); }
-  .btn-export { color: var(--accent-green); }
+  .btn-action:hover { background: var(--bg-hover); color: var(--text-primary); }
+  .btn-action.purple { color: var(--accent-purple); }
+  .btn-action.accent { color: var(--accent); }
+  .btn-action.green { color: var(--accent-green); }
 
   .default-row {
     display: flex;
@@ -239,15 +243,20 @@
     margin-bottom: 16px;
   }
 
-  .default-row span { font-size: 13px; color: var(--text-secondary); }
+  .default-row span {
+    font-size: 13px;
+    color: var(--text-secondary);
+    font-weight: 500;
+  }
 
   select {
     background: var(--bg-secondary);
     border: 1px solid var(--border);
-    border-radius: 6px;
-    padding: 6px 10px;
+    border-radius: var(--radius-sm);
+    padding: 7px 12px;
     color: var(--text-primary);
     font-size: 13px;
+    font-family: inherit;
   }
 
   .actions {
@@ -256,16 +265,25 @@
     margin-top: 16px;
   }
 
-  .save {
+  .btn-primary {
     background: var(--btn-bg);
     color: #fff;
     border: none;
-    border-radius: 6px;
-    padding: 8px 16px;
+    border-radius: var(--radius-sm);
+    padding: 9px 18px;
     cursor: pointer;
     font-size: 13px;
+    font-weight: 500;
+    font-family: inherit;
+    transition: background 0.15s;
   }
 
-  .save:disabled { opacity: 0.5; }
-  .msg { font-size: 13px; color: var(--text-secondary); margin-top: 8px; }
+  .btn-primary:hover { background: var(--btn-bg-hover); }
+  .btn-primary:disabled { opacity: 0.5; }
+
+  .msg {
+    font-size: 13px;
+    color: var(--text-secondary);
+    margin-top: 8px;
+  }
 </style>

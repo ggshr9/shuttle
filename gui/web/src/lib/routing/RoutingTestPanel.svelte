@@ -68,7 +68,7 @@
     padding: 12px;
     background: var(--bg-secondary);
     border: 1px solid var(--border);
-    border-radius: 8px;
+    border-radius: var(--radius-lg);
   }
 
   .test-label {
@@ -87,7 +87,7 @@
     flex: 1;
     background: var(--bg-surface);
     border: 1px solid var(--border);
-    border-radius: 6px;
+    border-radius: var(--radius-sm);
     padding: 8px 12px;
     color: var(--text-primary);
     font-size: 13px;
@@ -99,14 +99,14 @@
     background: var(--bg-tertiary);
     color: var(--accent);
     border: 1px solid var(--border);
-    border-radius: 6px;
+    border-radius: var(--radius-sm);
     padding: 8px 16px;
     cursor: pointer;
     font-size: 13px;
     white-space: nowrap;
   }
 
-  .test-btn:hover { background: #30363d; }
+  .test-btn:hover { background: var(--bg-hover); }
   .test-btn:disabled { opacity: 0.5; cursor: default; }
 
   .test-result {
@@ -117,7 +117,7 @@
     padding: 8px 12px;
     background: var(--bg-surface);
     border: 1px solid var(--border);
-    border-radius: 6px;
+    border-radius: var(--radius-sm);
     font-size: 13px;
   }
 

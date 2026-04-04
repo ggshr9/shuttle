@@ -41,7 +41,7 @@
   .modal {
     background: var(--bg-secondary);
     border: 1px solid var(--border);
-    border-radius: 12px;
+    border-radius: var(--radius-lg);
     padding: 20px;
     width: 450px;
     max-height: 500px;
@@ -66,7 +66,7 @@
     align-items: flex-start;
     background: var(--bg-surface);
     border: 1px solid var(--border);
-    border-radius: 6px;
+    border-radius: var(--radius-sm);
     padding: 12px;
     cursor: pointer;
     color: var(--text-primary);
@@ -85,7 +85,7 @@
     background: var(--bg-tertiary);
     color: var(--text-primary);
     border: 1px solid var(--border);
-    border-radius: 6px;
+    border-radius: var(--radius-sm);
     padding: 8px;
     cursor: pointer;
     font-size: 13px;

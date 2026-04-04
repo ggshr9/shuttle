@@ -43,7 +43,7 @@
     ctx.clearRect(0, 0, width, height)
 
     // Draw background grid
-    ctx.strokeStyle = '#21262d'
+    ctx.strokeStyle = '#1e1e2e'
     ctx.lineWidth = 1
     const gridLines = 4
     for (let i = 1; i < gridLines; i++) {
@@ -69,7 +69,7 @@
       }
       ctx.lineTo((downloadData.length - 1) * pointWidth, height)
       ctx.closePath()
-      ctx.fillStyle = 'rgba(63, 185, 80, 0.2)'
+      ctx.fillStyle = 'rgba(52, 211, 153, 0.15)'
       ctx.fill()
 
       // Draw download line
@@ -80,7 +80,7 @@
         const y = height - (downloadData[i] / max) * height
         ctx.lineTo(x, y)
       }
-      ctx.strokeStyle = '#3fb950'
+      ctx.strokeStyle = '#34d399'
       ctx.lineWidth = 2
       ctx.stroke()
     }
@@ -96,7 +96,7 @@
       }
       ctx.lineTo((uploadData.length - 1) * pointWidth, height)
       ctx.closePath()
-      ctx.fillStyle = 'rgba(88, 166, 255, 0.2)'
+      ctx.fillStyle = 'rgba(79, 109, 245, 0.15)'
       ctx.fill()
 
       // Draw upload line
@@ -107,7 +107,7 @@
         const y = height - (uploadData[i] / max) * height
         ctx.lineTo(x, y)
       }
-      ctx.strokeStyle = '#58a6ff'
+      ctx.strokeStyle = '#4f6df5'
       ctx.lineWidth = 2
       ctx.stroke()
     }
@@ -135,9 +135,9 @@
 <style>
   .chart-container {
     position: relative;
-    background: #161b22;
-    border: 1px solid #2d333b;
-    border-radius: 8px;
+    background: var(--bg-surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
     padding: 12px;
   }
 
@@ -158,10 +158,10 @@
 
   .max-label, .min-label {
     font-size: 10px;
-    color: #6e7681;
-    background: rgba(22, 27, 34, 0.8);
-    padding: 2px 4px;
-    border-radius: 2px;
+    color: var(--text-muted);
+    background: var(--bg-secondary);
+    padding: 2px 6px;
+    border-radius: 4px;
   }
 
   .time-labels {
@@ -169,6 +169,6 @@
     justify-content: space-between;
     margin-top: 4px;
     font-size: 10px;
-    color: #6e7681;
+    color: var(--text-muted);
   }
 </style>

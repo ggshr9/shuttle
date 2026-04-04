@@ -42,28 +42,46 @@
   section {
     background: var(--bg-secondary);
     border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 12px 16px;
+    border-radius: var(--radius-lg);
+    padding: 16px 20px;
     margin-bottom: 12px;
   }
 
-  h3 { font-size: 14px; color: var(--text-secondary); margin: 20px 0 10px; }
+  h3 {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin: 0 0 14px;
+  }
 
   .row {
     display: flex;
     align-items: center;
-    gap: 8px;
-    margin: 6px 0;
+    gap: 10px;
+    margin: 8px 0;
   }
 
-  .row span { font-size: 13px; color: var(--text-secondary); min-width: 100px; }
+  .row span {
+    font-size: 13px;
+    color: var(--text-secondary);
+    min-width: 100px;
+    font-weight: 500;
+  }
 
   select {
     background: var(--bg-surface);
     border: 1px solid var(--border);
-    border-radius: 6px;
-    padding: 6px 10px;
+    border-radius: var(--radius-sm);
+    padding: 7px 12px;
     color: var(--text-primary);
     font-size: 13px;
+    font-family: inherit;
+    transition: border-color 0.15s;
+  }
+
+  select:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-subtle);
   }
 </style>

@@ -28,12 +28,12 @@
   section {
     background: var(--bg-secondary);
     border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 12px 16px;
+    border-radius: var(--radius-lg);
+    padding: 16px 20px;
     margin-bottom: 12px;
   }
 
-  h3 { font-size: 14px; color: var(--text-secondary); margin: 20px 0 10px; }
+  h3 { font-size: 14px; font-weight: 600; color: var(--text-primary); margin: 20px 0 10px; }
 
   .system-proxy-row {
     margin-top: 12px;

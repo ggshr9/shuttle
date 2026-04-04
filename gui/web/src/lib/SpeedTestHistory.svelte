@@ -232,7 +232,7 @@
     padding: 4px 10px;
     font-size: 11px;
     border: 1px solid var(--border);
-    border-radius: 4px;
+    border-radius: var(--radius-sm);
     background: var(--bg-secondary);
     color: var(--text-secondary);
     cursor: pointer;
@@ -266,7 +266,7 @@
     flex: 1;
     background: var(--bg-secondary);
     border: 1px solid var(--border);
-    border-radius: 6px;
+    border-radius: var(--radius-sm);
     padding: 10px 12px;
     display: flex;
     flex-direction: column;
@@ -289,7 +289,7 @@
   }
 
   .stat-value.worst {
-    color: #e06c75;
+    color: var(--accent-red);
   }
 
   .stat-value.good {
@@ -297,18 +297,18 @@
   }
 
   .stat-value.warn {
-    color: #e5a00d;
+    color: var(--accent-yellow);
   }
 
   .stat-value.bad {
-    color: #e06c75;
+    color: var(--accent-red);
   }
 
   .chart-container {
     position: relative;
     background: var(--bg-secondary);
     border: 1px solid var(--border);
-    border-radius: 8px;
+    border-radius: var(--radius-md);
     padding: 12px;
     height: 180px;
   }

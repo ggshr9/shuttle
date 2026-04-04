@@ -162,8 +162,8 @@
     display: flex;
     gap: 4px;
     margin-bottom: 12px;
-    background: var(--bg-secondary);
-    border-radius: 6px;
+    background: var(--bg-surface);
+    border-radius: var(--radius-sm);
     padding: 3px;
     width: fit-content;
   }
@@ -176,6 +176,8 @@
     color: var(--text-secondary);
     cursor: pointer;
     border-radius: 4px;
+    font-family: inherit;
+    font-weight: 500;
     transition: all 0.2s;
   }
 
@@ -196,7 +198,7 @@
     height: 140px;
     background: var(--bg-secondary);
     border: 1px solid var(--border);
-    border-radius: 8px;
+    border-radius: var(--radius-md);
     padding: 16px;
   }
 
@@ -236,7 +238,7 @@
 
   .bar-value {
     font-size: 9px;
-    color: var(--text-muted, #6e7681);
+    color: var(--text-muted);
   }
 
   .traffic-legend {
@@ -276,6 +278,6 @@
     padding: 32px;
     background: var(--bg-secondary);
     border: 1px solid var(--border);
-    border-radius: 8px;
+    border-radius: var(--radius-md);
   }
 </style>

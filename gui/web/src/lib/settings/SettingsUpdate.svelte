@@ -74,13 +74,13 @@
   .update-section {
     background: var(--bg-secondary);
     border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 12px 16px;
+    border-radius: var(--radius-lg);
+    padding: 16px 20px;
     margin-bottom: 12px;
     margin-top: 24px;
   }
 
-  h3 { font-size: 14px; color: var(--text-secondary); margin: 20px 0 10px; }
+  h3 { font-size: 14px; font-weight: 600; color: var(--text-primary); margin: 20px 0 10px; }
 
   .version-info {
     display: flex;
@@ -102,7 +102,7 @@
   .update-available {
     background: rgba(63, 185, 80, 0.08);
     border: 1px solid var(--accent-green);
-    border-radius: 8px;
+    border-radius: var(--radius-lg);
     padding: 12px;
     margin-bottom: 12px;
   }
@@ -131,7 +131,7 @@
     background: transparent;
     border: 1px solid var(--accent-green);
     color: var(--accent-green);
-    border-radius: 6px;
+    border-radius: var(--radius-sm);
     padding: 6px 12px;
     cursor: pointer;
     font-size: 12px;
@@ -141,7 +141,7 @@
     background: var(--bg-tertiary);
     border: 1px solid var(--border);
     color: var(--accent);
-    border-radius: 6px;
+    border-radius: var(--radius-sm);
     padding: 6px 12px;
     text-decoration: none;
     font-size: 12px;
@@ -155,7 +155,7 @@
   }
 
   .download-btn:hover {
-    background: #30363d;
+    background: var(--bg-hover);
   }
 
   .download-btn.primary:hover {
@@ -166,7 +166,7 @@
     margin-top: 12px;
     background: var(--bg-surface);
     border: 1px solid var(--bg-tertiary);
-    border-radius: 6px;
+    border-radius: var(--radius-sm);
     padding: 12px;
     max-height: 200px;
     overflow-y: auto;
@@ -175,7 +175,7 @@
   .changelog pre {
     margin: 0;
     font-size: 12px;
-    color: #c9d1d9;
+    color: var(--text-primary);
     white-space: pre-wrap;
     word-break: break-word;
   }
@@ -190,7 +190,7 @@
     background: var(--bg-tertiary);
     border: 1px solid var(--border);
     color: var(--text-primary);
-    border-radius: 6px;
+    border-radius: var(--radius-sm);
     padding: 8px 16px;
     cursor: pointer;
     font-size: 13px;
@@ -202,6 +202,6 @@
   }
 
   .check-btn:hover:not(:disabled) {
-    background: #30363d;
+    background: var(--bg-hover);
   }
 </style>
