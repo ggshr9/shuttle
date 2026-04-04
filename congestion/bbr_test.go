@@ -1,6 +1,7 @@
 package congestion
 
 import (
+	"sync"
 	"testing"
 	"time"
 )
@@ -258,4 +259,27 @@ func BenchmarkBBROnPacketSent(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		bbr.OnPacketSent(1200)
 	}
+}
+
+func TestBBR_InStartup_Concurrent(t *testing.T) {
+	bbr := NewBBR(0)
+
+	var wg sync.WaitGroup
+	wg.Add(2)
+
+	go func() {
+		defer wg.Done()
+		for i := 0; i < 1000; i++ {
+			bbr.OnAck(1200, 50*time.Millisecond)
+		}
+	}()
+
+	go func() {
+		defer wg.Done()
+		for i := 0; i < 1000; i++ {
+			_ = bbr.InStartup()
+		}
+	}()
+
+	wg.Wait()
 }
