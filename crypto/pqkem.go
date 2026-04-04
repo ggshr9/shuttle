@@ -9,7 +9,8 @@ import (
 	"io"
 )
 
-// ML-KEM-768 key sizes (used for API shape even with placeholder implementation).
+// Key sizes reserved for ML-KEM-768 wire compatibility.
+// Current implementation uses X25519 padded to these sizes as a placeholder.
 const (
 	mlkemPublicKeySize  = 1184 // ML-KEM-768 encapsulation key
 	mlkemPrivateKeySize = 2400 // ML-KEM-768 decapsulation key
@@ -36,11 +37,17 @@ type HybridKEMKeyPair struct {
 	PQPublic         []byte // ML-KEM-768 encapsulation key (1184 bytes)
 }
 
-// HybridKEM provides hybrid X25519 + ML-KEM-768 key exchange.
+// HybridKEM provides hybrid X25519 + post-quantum key exchange.
 //
-// NOTE: This uses a second X25519 exchange as a PQ placeholder.
-// Replace with ML-KEM-768 (cloudflare/circl) for production PQ security.
-// The API and wire format are designed for the real ML-KEM-768 key sizes.
+// IMPORTANT: The current implementation uses a second X25519 exchange as a
+// placeholder for ML-KEM-768. This provides defense-in-depth (two independent
+// DH exchanges) but does NOT provide post-quantum security.
+//
+// The API shape, wire format, and key sizes are designed for ML-KEM-768 so
+// that upgrading to real PQ crypto (e.g. cloudflare/circl/kem/mlkem768) is a
+// drop-in replacement without protocol changes.
+//
+// TODO: Replace X25519 placeholder with real ML-KEM-768 implementation.
 type HybridKEM struct{}
 
 // NewHybridKEM creates a new HybridKEM instance.
