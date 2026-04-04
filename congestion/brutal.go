@@ -59,6 +59,8 @@ func (b *BrutalController) OnAck(ackedBytes uint64, rtt time.Duration) {
 			b.rtt = time.Duration(float64(b.rtt)*0.875 + float64(rtt)*0.125)
 		}
 	}
+	// Decay loss rate toward 0 on successful acks
+	b.lossRate *= 0.99
 	b.updateCwnd()
 }
 
@@ -68,11 +70,9 @@ func (b *BrutalController) OnPacketLoss(lostBytes uint64) {
 	defer b.mu.Unlock()
 
 	b.totalLost += lostBytes
-	total := b.totalAcked + b.totalLost
-	if total > 0 {
-		b.lossRate = float64(b.totalLost) / float64(total)
-	}
-	// Brutal does NOT reduce cwnd on loss — that's the point.
+	// Use EWMA loss rate instead of cumulative ratio.
+	// This allows the loss rate to decay when conditions improve.
+	b.lossRate = b.lossRate*0.9 + 0.1
 	b.updateCwnd()
 }
 
