@@ -49,12 +49,13 @@ func (a *QUICAdapter) OnPacketSent(sentTimeUnixNano int64, bytesInFlight int64, 
 	a.mu.Lock()
 	a.totalSent += uint64(bytes)
 	a.lastSendTimes[packetNumber] = sentTimeUnixNano
-	// Limit map size to prevent unbounded growth.
-	if len(a.lastSendTimes) > 10000 {
-		for k := range a.lastSendTimes {
-			delete(a.lastSendTimes, k)
-			if len(a.lastSendTimes) <= 5000 {
-				break
+	// Evict entries older than 30 seconds to bound map growth.
+	// Only check every 1000 packets to amortize cleanup cost.
+	if len(a.lastSendTimes) > 5000 && a.totalSent%1000 == 0 {
+		cutoff := sentTimeUnixNano - int64(30*time.Second)
+		for k, v := range a.lastSendTimes {
+			if v < cutoff {
+				delete(a.lastSendTimes, k)
 			}
 		}
 	}

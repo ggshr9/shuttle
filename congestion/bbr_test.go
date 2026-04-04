@@ -283,3 +283,23 @@ func TestBBR_InStartup_Concurrent(t *testing.T) {
 
 	wg.Wait()
 }
+
+func TestQUICAdapter_SendTimesMapBounded(t *testing.T) {
+	bbr := NewBBR(0)
+	adapter := NewQUICAdapter(bbr).(*QUICAdapter)
+
+	// Spread 20k packets over 60 seconds so old entries exceed the 30s cutoff.
+	now := time.Now().UnixNano()
+	spacing := int64(60*time.Second) / 20000 // 3ms per packet over 60s
+	for i := int64(0); i < 20000; i++ {
+		adapter.OnPacketSent(now+i*spacing, 0, i, 1200, true)
+	}
+
+	adapter.mu.Lock()
+	size := len(adapter.lastSendTimes)
+	adapter.mu.Unlock()
+
+	if size > 12000 {
+		t.Errorf("lastSendTimes grew to %d entries, expected bounded", size)
+	}
+}
