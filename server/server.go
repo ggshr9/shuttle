@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/shuttleX/shuttle/adapter"
 	"github.com/shuttleX/shuttle/config"
 	"github.com/shuttleX/shuttle/congestion"
 	"github.com/shuttleX/shuttle/mesh"
@@ -15,10 +16,6 @@ import (
 	"github.com/shuttleX/shuttle/server/admin"
 	"github.com/shuttleX/shuttle/server/audit"
 	"github.com/shuttleX/shuttle/server/metrics"
-	"github.com/shuttleX/shuttle/transport/cdn"
-	"github.com/shuttleX/shuttle/transport/h3"
-	"github.com/shuttleX/shuttle/transport/reality"
-	rtcTransport "github.com/shuttleX/shuttle/transport/webrtc"
 )
 
 const maxConcurrentStreams = 1024
@@ -95,76 +92,24 @@ func New(c Config) (*Server, error) {
 	adaptive := congestion.NewAdaptive(nil, logger)
 	ccAdapter := congestion.NewQUICAdapter(adaptive)
 
-	// --- Cover site ---
-	coverHandler := NewCoverHandler(&CoverConfig{
-		Mode:       cfg.Cover.Mode,
-		StaticDir:  cfg.Cover.StaticDir,
-		ReverseURL: cfg.Cover.ReverseURL,
-	}, logger)
-
 	// --- Multi-listener + transports ---
 	s.ml = NewMultiListener(&ListenerConfig{
 		ListenAddr: cfg.Listen,
 	}, logger)
 
-	if cfg.Transport.H3.Enabled {
-		h3Server := h3.NewServer(&h3.ServerConfig{
-			ListenAddr:        cfg.Listen,
-			CertFile:          cfg.TLS.CertFile,
-			KeyFile:           cfg.TLS.KeyFile,
-			Password:          cfg.Auth.Password,
-			PathPrefix:        cfg.Transport.H3.PathPrefix,
-			CoverSite:         coverHandler,
-			CongestionControl: ccAdapter,
-		}, logger)
-		s.ml.AddTransport(h3Server)
+	opts := adapter.FactoryOptions{
+		Logger:            logger,
+		CongestionControl: ccAdapter,
 	}
-
-	if cfg.Transport.Reality.Enabled {
-		realityServer, err := reality.NewServer(&reality.ServerConfig{
-			ListenAddr: cfg.Listen,
-			PrivateKey: cfg.Auth.PrivateKey,
-			ShortIDs:   cfg.Transport.Reality.ShortIDs,
-			TargetSNI:  cfg.Transport.Reality.TargetSNI,
-			TargetAddr: cfg.Transport.Reality.TargetAddr,
-			CertFile:   cfg.TLS.CertFile,
-			KeyFile:    cfg.TLS.KeyFile,
-			Yamux:      &cfg.Yamux,
-		}, logger)
+	for name, factory := range adapter.All() {
+		t, err := factory.NewServer(cfg, opts)
 		if err != nil {
-			return nil, err
+			s.logger.Warn("transport factory failed", "type", name, "err", err)
+			continue
 		}
-		s.ml.AddTransport(realityServer)
-	}
-
-	if cfg.Transport.CDN.Enabled {
-		cdnListen := cfg.Transport.CDN.Listen
-		if cdnListen == "" {
-			cdnListen = cfg.Listen
+		if t != nil {
+			s.ml.AddTransport(t)
 		}
-		cdnServer := cdn.NewServer(&cdn.ServerConfig{
-			ListenAddr: cdnListen,
-			CertFile:   cfg.TLS.CertFile,
-			KeyFile:    cfg.TLS.KeyFile,
-			Password:   cfg.Auth.Password,
-			Path:       cfg.Transport.CDN.Path,
-		}, logger)
-		s.ml.AddTransport(cdnServer)
-	}
-
-	if cfg.Transport.WebRTC.Enabled {
-		webrtcServer := rtcTransport.NewServer(&rtcTransport.ServerConfig{
-			SignalListen: cfg.Transport.WebRTC.SignalListen,
-			CertFile:     cfg.TLS.CertFile,
-			KeyFile:      cfg.TLS.KeyFile,
-			Password:     cfg.Auth.Password,
-			STUNServers:  cfg.Transport.WebRTC.STUNServers,
-			TURNServers:  cfg.Transport.WebRTC.TURNServers,
-			TURNUser:     cfg.Transport.WebRTC.TURNUser,
-			TURNPass:     cfg.Transport.WebRTC.TURNPass,
-			ICEPolicy:    cfg.Transport.WebRTC.ICEPolicy,
-		}, logger)
-		s.ml.AddTransport(webrtcServer)
 	}
 
 	// --- Mesh ---
