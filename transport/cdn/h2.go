@@ -26,6 +26,11 @@ type H2Config struct {
 }
 
 // H2Client implements transport.ClientTransport over HTTP/2 through CDN.
+//
+// Note: CDN H2 uses HTTP/2 POST duplex (io.ReadWriteCloser) as its underlying
+// transport, not net.Conn. This means it cannot use ByteStreamClient directly.
+// The HMAC auth and yamux setup are inline because the shared components
+// (transport/auth, transport/mux/yamux) require net.Conn.
 type H2Client struct {
 	config *H2Config
 	client *http.Client

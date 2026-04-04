@@ -34,6 +34,10 @@ type ServerConfig struct {
 // path. Each request is authenticated via HMAC, then the HTTP connection is used
 // as a bidirectional byte stream (request body = upload, response body = download)
 // with yamux multiplexing on top — matching the client side in h2.go.
+//
+// Note: Like H2Client, the server-side duplex is an io.ReadWriteCloser (not
+// net.Conn), so it cannot use ByteStreamServerProcess or the shared yamux.Mux
+// directly. The inline HMAC verification and yamux setup are intentional.
 type Server struct {
 	config     *ServerConfig
 	httpServer *http.Server
