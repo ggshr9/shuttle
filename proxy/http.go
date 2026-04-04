@@ -4,7 +4,7 @@ import (
 	"bufio"
 	"context"
 	"fmt"
-"log/slog"
+	"log/slog"
 	"net"
 	"net/http"
 	"sync"

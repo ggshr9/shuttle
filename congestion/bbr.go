@@ -67,16 +67,16 @@ type BBRController struct {
 }
 
 const (
-	bbrHighGain     = 2.885 // 2/ln(2)
-	bbrDrainGain    = 1.0 / bbrHighGain
-	bbrCwndGain     = 2.0
+	bbrHighGain         = 2.885 // 2/ln(2)
+	bbrDrainGain        = 1.0 / bbrHighGain
+	bbrCwndGain         = 2.0
 	bbrProbeBWGain      = 1.25
 	bbrProbeBWDrainGain = 1.0 / bbrProbeBWGain // 0.8
 	bbrProbeBWCycleLen  = 8
 	bbrBWFilterLen      = 10
-	bbrMinCwnd      = 4 * 1200 // 4 packets
-	bbrProbeRTTTime = 200 * time.Millisecond
-	bbrRTPropExpiry = 10 * time.Second
+	bbrMinCwnd          = 4 * 1200 // 4 packets
+	bbrProbeRTTTime     = 200 * time.Millisecond
+	bbrRTPropExpiry     = 10 * time.Second
 )
 
 // NewBBR creates a new BBR congestion controller.
