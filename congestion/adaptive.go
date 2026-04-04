@@ -29,15 +29,15 @@ type AdaptiveCongestion struct {
 	active CongestionController
 
 	// Detection state.
-	lossRate         float64
-	windowSentBytes  uint64
-	windowLostBytes  uint64
-	lastWindowReset  time.Time
-	rttRing  [rttRingSize]time.Duration
-	rttCount int // total samples inserted (index = rttCount % rttRingSize)
-	rttTrend       float64 // positive = rising, negative = falling
-	switchCount    int
-	lastSwitch     time.Time
+	lossRate        float64
+	windowSentBytes uint64
+	windowLostBytes uint64
+	lastWindowReset time.Time
+	rttRing         [rttRingSize]time.Duration
+	rttCount        int     // total samples inserted (index = rttCount % rttRingSize)
+	rttTrend        float64 // positive = rising, negative = falling
+	switchCount     int
+	lastSwitch      time.Time
 
 	// Thresholds.
 	lossThreshold  float64       // Switch to Brutal above this loss rate

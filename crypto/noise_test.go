@@ -207,3 +207,56 @@ func TestDeriveKeysFromPasswordDifferent(t *testing.T) {
 		t.Fatal("different passwords should produce different private keys")
 	}
 }
+
+// TestPQHandshakeRoundTrip verifies the PQ KEM handshake produces matching
+// shared secrets on both sides.
+func TestPQHandshakeRoundTrip(t *testing.T) {
+	// Client side: generate key pair
+	client, err := NewPQHandshake()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	pubBytes := client.PublicKeyBytes()
+	if len(pubBytes) == 0 {
+		t.Fatal("empty PQ public key")
+	}
+
+	// Server side: encapsulate using client's public key
+	server, err := NewPQHandshake()
+	if err != nil {
+		t.Fatal(err)
+	}
+	serverSecret, ciphertext, err := server.Encapsulate(pubBytes)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Client side: decapsulate
+	clientSecret, err := client.Decapsulate(ciphertext)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Shared secrets must match
+	if len(serverSecret) != len(clientSecret) {
+		t.Fatalf("secret length mismatch: server=%d, client=%d", len(serverSecret), len(clientSecret))
+	}
+	for i := range serverSecret {
+		if serverSecret[i] != clientSecret[i] {
+			t.Fatal("client and server PQ shared secrets do not match")
+		}
+	}
+
+	// Must not be all zeros
+	allZero := true
+	for _, b := range clientSecret {
+		if b != 0 {
+			allZero = false
+			break
+		}
+	}
+	if allZero {
+		t.Fatal("PQ shared secret is all zeros")
+	}
+}
