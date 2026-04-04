@@ -15,6 +15,8 @@ type CongestionController interface {
 	GetPacingRate() uint64
 }
 
+const rttRingSize = 100
+
 // AdaptiveCongestion switches between BBR and Brutal based on network conditions.
 // Key insight: high loss + stable RTT = active interference (use Brutal)
 //
@@ -31,7 +33,8 @@ type AdaptiveCongestion struct {
 	windowSentBytes  uint64
 	windowLostBytes  uint64
 	lastWindowReset  time.Time
-	rttHistory       []time.Duration
+	rttRing  [rttRingSize]time.Duration
+	rttCount int // total samples inserted (index = rttCount % rttRingSize)
 	rttTrend       float64 // positive = rising, negative = falling
 	switchCount    int
 	lastSwitch     time.Time
@@ -77,7 +80,6 @@ func NewAdaptive(cfg *AdaptiveConfig, logger *slog.Logger) *AdaptiveCongestion {
 		active:         bbr, // Start with BBR
 		lossThreshold:  cfg.LossThreshold,
 		switchCooldown: cfg.SwitchCooldown,
-		rttHistory:     make([]time.Duration, 0, 100),
 		logger:         logger,
 	}
 }
@@ -112,28 +114,20 @@ func (ac *AdaptiveCongestion) OnPacketLoss(lostBytes uint64) {
 }
 
 func (ac *AdaptiveCongestion) recordRTT(rtt time.Duration) {
-	ac.rttHistory = append(ac.rttHistory, rtt)
-	if len(ac.rttHistory) > 100 {
-		ac.rttHistory = ac.rttHistory[1:]
-	}
+	ac.rttRing[ac.rttCount%rttRingSize] = rtt
+	ac.rttCount++
 	ac.rttTrend = ac.calculateRTTTrend()
 }
 
 func (ac *AdaptiveCongestion) calculateRTTTrend() float64 {
-	n := len(ac.rttHistory)
-	if n < 20 {
+	if ac.rttCount < 20 {
 		return 0
 	}
-	// Compare recent RTTs (last 10) vs older RTTs (10 before that)
-	recent := ac.rttHistory[n-10:]
-	older := ac.rttHistory[n-20 : n-10]
 
 	var recentAvg, olderAvg float64
-	for _, r := range recent {
-		recentAvg += float64(r)
-	}
-	for _, r := range older {
-		olderAvg += float64(r)
+	for i := 0; i < 10; i++ {
+		recentAvg += float64(ac.rttRing[(ac.rttCount-1-i)%rttRingSize])
+		olderAvg += float64(ac.rttRing[(ac.rttCount-11-i)%rttRingSize])
 	}
 	recentAvg /= 10
 	olderAvg /= 10
