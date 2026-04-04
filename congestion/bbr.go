@@ -41,6 +41,10 @@ type BBRController struct {
 	probeRTTDone  bool
 	probeRTTRound uint64
 
+	// ProbeBW pacing gain cycle index (0-7).
+	cycleIdx   int
+	cycleStart time.Time
+
 	// Round counting.
 	roundCount   uint64
 	roundStart   bool
@@ -66,8 +70,10 @@ const (
 	bbrHighGain     = 2.885 // 2/ln(2)
 	bbrDrainGain    = 1.0 / bbrHighGain
 	bbrCwndGain     = 2.0
-	bbrProbeBWGain  = 1.25
-	bbrBWFilterLen  = 10
+	bbrProbeBWGain      = 1.25
+	bbrProbeBWDrainGain = 1.0 / bbrProbeBWGain // 0.8
+	bbrProbeBWCycleLen  = 8
+	bbrBWFilterLen      = 10
 	bbrMinCwnd      = 4 * 1200 // 4 packets
 	bbrProbeRTTTime = 200 * time.Millisecond
 	bbrRTPropExpiry = 10 * time.Second
@@ -156,8 +162,14 @@ func (b *BBRController) updateState() {
 		target := b.bdp()
 		if inflight <= target {
 			b.state = BBRProbeBW
+			b.cycleStart = time.Now()
 		}
 	case BBRProbeBW:
+		// Advance pacing gain cycle every RTT
+		if b.rtProp > 0 && time.Since(b.cycleStart) > b.rtProp {
+			b.cycleIdx = (b.cycleIdx + 1) % bbrProbeBWCycleLen
+			b.cycleStart = time.Now()
+		}
 		if time.Now().After(b.rtPropExpiry) {
 			b.state = BBRProbeRTT
 			b.probeRTTDone = false
@@ -227,6 +239,15 @@ func (b *BBRController) pacingGain() float64 {
 		return bbrHighGain
 	case BBRDrain:
 		return bbrDrainGain
+	case BBRProbeBW:
+		switch b.cycleIdx {
+		case 0:
+			return bbrProbeBWGain
+		case 1:
+			return bbrProbeBWDrainGain
+		default:
+			return 1.0
+		}
 	default:
 		return 1.0
 	}
