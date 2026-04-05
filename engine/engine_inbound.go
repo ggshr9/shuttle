@@ -21,27 +21,6 @@ func (e *Engine) startInbounds(ctx context.Context, cfg *config.ClientConfig) ([
 	// Build outbounds: always provide direct, reject, and proxy.
 	outbounds := e.traffic.BuildBuiltinOutbounds(cfg, e)
 
-	// Wrap proxy outbound with resilience (circuit breaker + retry) then
-	// plugin chain (metrics, conntrack, logger).
-	if proxyOb, ok := outbounds["proxy"]; ok {
-		resilient := NewResilientOutbound(proxyOb, ResilientOutboundConfig{
-			CircuitBreaker: e.circuitBreaker,
-			RetryConfig:    e.buildRetryConfig(cfg.Retry),
-			OnRetry: func(attempt int, err error) {
-				e.obs.Emit(Event{
-					Type:      EventRetry,
-					Timestamp: time.Now(),
-					Message:   fmt.Sprintf("retry attempt %d: %v", attempt, err),
-				})
-			},
-		})
-		if chain := e.obs.Chain(); chain != nil {
-			outbounds["proxy"] = NewChainOutbound(resilient, chain)
-		} else {
-			outbounds["proxy"] = resilient
-		}
-	}
-
 	// First pass: build individual outbounds (skip groups).
 	for _, outCfg := range cfg.Outbounds {
 		if outCfg.Type == "group" {
@@ -62,6 +41,31 @@ func (e *Engine) startInbounds(ctx context.Context, cfg *config.ClientConfig) ([
 				return nil, fmt.Errorf("create outbound %q: %w", outCfg.Tag, err)
 			}
 			outbounds[outCfg.Tag] = ob
+		}
+	}
+
+	// Wrap all proxy outbounds with resilience (circuit breaker + retry)
+	// then plugin chain (metrics, conntrack, logger).
+	chain := e.obs.Chain()
+	for tag, ob := range outbounds {
+		if ob.Type() == "proxy" {
+			tagName := tag // capture for closure
+			wrapped := NewResilientOutbound(ob, ResilientOutboundConfig{
+				CircuitBreaker: e.circuitBreaker,
+				RetryConfig:    e.buildRetryConfig(cfg.Retry),
+				OnRetry: func(attempt int, err error) {
+					e.obs.Emit(Event{
+						Type:      EventRetry,
+						Timestamp: time.Now(),
+						Message:   fmt.Sprintf("retry attempt %d for %s: %v", attempt, tagName, err),
+					})
+				},
+			})
+			if chain != nil {
+				outbounds[tag] = NewChainOutbound(wrapped, chain)
+			} else {
+				outbounds[tag] = wrapped
+			}
 		}
 	}
 

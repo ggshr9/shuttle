@@ -247,6 +247,9 @@ func (s *Server) sseEventsHandler() http.HandlerFunc {
 		ch := s.eventBus.Subscribe()
 		defer s.eventBus.Unsubscribe(ch)
 
+		keepalive := time.NewTicker(5 * time.Second)
+		defer keepalive.Stop()
+
 		for {
 			select {
 			case ev := <-ch:
@@ -255,6 +258,9 @@ func (s *Server) sseEventsHandler() http.HandlerFunc {
 					continue
 				}
 				fmt.Fprintf(w, "data: %s\n\n", data)
+				flusher.Flush()
+			case <-keepalive.C:
+				fmt.Fprintf(w, ": keepalive\n\n")
 				flusher.Flush()
 			case <-r.Context().Done():
 				return
