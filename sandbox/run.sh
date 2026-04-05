@@ -354,6 +354,35 @@ case "${1:-all}" in
         echo ""
         log "Press Ctrl+C to stop, then run: $0 down"
         ;;
+    dev)
+        # Full dev environment: sandbox + mesh + GUI-ready
+        build_binaries
+        build_images
+        start_env
+        echo ""
+        success "Dev environment ready (mesh enabled between clients):"
+        echo ""
+        echo "  Client A:  http://localhost:19091/api/status"
+        echo "  Client B:  http://localhost:19092/api/status"
+        echo "  Server:    http://localhost:19080/api/health"
+        echo ""
+        echo "  Mesh status:"
+        echo "    curl -s localhost:19091/api/mesh/status | jq ."
+        echo "    curl -s localhost:19092/api/mesh/status | jq ."
+        echo ""
+        echo "  Mesh peers:"
+        echo "    curl -s localhost:19091/api/mesh/peers | jq ."
+        echo ""
+        echo "  Proxy test:"
+        echo '    curl -s --socks5-hostname localhost:19091 http://10.100.0.20/ip'
+        echo ""
+        echo "  To start GUI dev server:"
+        echo "    cd gui/web && npm run dev"
+        echo "    Then open http://localhost:5173"
+        echo ""
+        log "Press Ctrl+C to stop, then run: $0 down"
+        docker compose logs -f client-a client-b server 2>&1 | head -50
+        ;;
     all|"")
         build_binaries
         build_images
@@ -364,7 +393,7 @@ case "${1:-all}" in
         exit $result
         ;;
     *)
-        echo "Usage: $0 {build|up|down|test|gotest|e2e|gui|logs|shell|clean|all}"
+        echo "Usage: $0 {build|up|down|test|gotest|e2e|gui|dev|logs|shell|clean|all}"
         exit 1
         ;;
 esac

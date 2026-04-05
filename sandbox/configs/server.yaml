@@ -51,9 +51,11 @@ transport:
   webrtc:
     enabled: false
 
-# Mesh VPN - disabled for sandbox simplicity
+# Mesh VPN - enabled for two-client mesh testing
 mesh:
-  enabled: false
+  enabled: true
+  cidr: "10.7.0.0/24"
+  p2p_enabled: true
 
 # Logging
 log:

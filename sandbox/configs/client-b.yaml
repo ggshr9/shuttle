@@ -39,7 +39,9 @@ proxy:
     enabled: true
     listen: "0.0.0.0:8080"
   tun:
-    enabled: false
+    enabled: true
+    cidr: "198.18.0.0/16"
+    auto_route: true
 
 # Routing
 routing:
@@ -49,9 +51,13 @@ routing:
 congestion:
   mode: "adaptive"
 
-# Mesh VPN - disabled for sandbox simplicity
+# Mesh VPN - enabled for two-client mesh testing
 mesh:
-  enabled: false
+  enabled: true
+  p2p_enabled: true
+  p2p:
+    stun_servers:
+      - "10.100.0.30:3478"
 
 # Logging
 log:
