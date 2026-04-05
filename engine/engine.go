@@ -18,6 +18,7 @@ import (
 
 	"context"
 	"fmt"
+	"net"
 )
 
 // Compile-time check: Engine still satisfies plugin.ConnEmitter so existing
@@ -330,4 +331,26 @@ func (e *Engine) SetTransportStrategy(ctx context.Context, strategy string) erro
 		return fmt.Errorf("unknown strategy: %q", strategy)
 	}
 	return sel.SetStrategy(ctx, s)
+}
+
+// ConnectMeshPeer initiates a P2P connection to the mesh peer identified by
+// its virtual IP address string (e.g. "10.7.0.2"). Returns an error if mesh
+// is not enabled, not connected, or the VIP is invalid.
+func (e *Engine) ConnectMeshPeer(ctx context.Context, vip string) error {
+	e.mu.RLock()
+	mm := e.meshManager
+	e.mu.RUnlock()
+
+	if mm == nil {
+		return fmt.Errorf("mesh is not enabled")
+	}
+	mc := mm.Client()
+	if mc == nil {
+		return fmt.Errorf("mesh is not connected")
+	}
+	ip := net.ParseIP(vip)
+	if ip == nil {
+		return fmt.Errorf("invalid virtual IP: %q", vip)
+	}
+	return mc.ConnectPeer(ctx, ip)
 }
