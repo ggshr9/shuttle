@@ -397,6 +397,13 @@ func (s *Selector) Transports() []transport.ClientTransport {
 	return out
 }
 
+// Migrate marks all current connections as draining and triggers a transport
+// re-evaluation. This is used by the ProactiveMigrator on network changes.
+func (s *Selector) Migrate() {
+	s.migrator.Migrate()
+	s.probeAll(context.Background())
+}
+
 func (s *Selector) Type() string { return "selector" }
 
 func (s *Selector) Close() error {

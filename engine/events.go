@@ -20,6 +20,7 @@ const (
 	EventNetworkChange                     // Network interface change detected
 	EventConnectionError                   // Transport connection failed (circuit breaker)
 	EventRetry                             // Retry attempt during dial
+	EventProactiveMigration                // Proactive migration triggered on network change
 )
 
 var eventTypeNames = [...]string{
@@ -31,8 +32,9 @@ var eventTypeNames = [...]string{
 	EventError:            "error",
 	EventConnection:       "connection",
 	EventNetworkChange:    "network_change",
-	EventConnectionError:  "connection_error",
-	EventRetry:            "retry",
+	EventConnectionError:     "connection_error",
+	EventRetry:               "retry",
+	EventProactiveMigration:  "proactive_migration",
 }
 
 func (t EventType) String() string {
