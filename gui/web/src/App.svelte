@@ -5,12 +5,24 @@
   import { api } from './lib/api'
   import Onboarding from './lib/Onboarding.svelte'
   import Toast from './lib/Toast.svelte'
+  import SimpleMode from './pages/SimpleMode.svelte'
 
   let tab = $state('dashboard')
   let locale = $state('en')
   let showOnboarding = $state(false)
   let initialized = $state(false)
   let sidebarCollapsed = $state(false)
+  let uiMode = $state(localStorage.getItem('shuttle_ui_mode') || 'simple')
+
+  function switchToAdvanced() {
+    uiMode = 'advanced'
+    localStorage.setItem('shuttle_ui_mode', 'advanced')
+  }
+
+  function switchToSimple() {
+    uiMode = 'simple'
+    localStorage.setItem('shuttle_ui_mode', 'simple')
+  }
 
   let apiError = $state(false)
 
@@ -92,6 +104,9 @@
 {/if}
 
 {#if initialized}
+{#if uiMode === 'simple'}
+  <SimpleMode onSwitchMode={switchToAdvanced} />
+{:else}
 {#if apiError}
   <div class="api-error">
     {t('app.backendError')}
@@ -204,11 +219,12 @@
       {/await}
     {:else if tab === 'settings'}
       {#await import('./pages/Settings.svelte') then { default: Settings }}
-        <Settings />
+        <Settings onSwitchToSimple={switchToSimple} />
       {/await}
     {/if}
   </main>
 </div>
+{/if}
 {/if}
 
 <style>

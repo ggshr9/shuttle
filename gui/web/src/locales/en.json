@@ -271,7 +271,8 @@
     "diagnostics": "Diagnostics",
     "downloadDiagnostics": "Download Diagnostics Bundle",
     "diagnosticsDesc": "Collect system info, redacted config, connection state, and runtime data into a ZIP file for debugging.",
-    "downloading": "Downloading..."
+    "downloading": "Downloading...",
+    "switchToSimple": "Switch to Simple Mode"
   },
   "app": {
     "connecting": "Connecting to Shuttle...",

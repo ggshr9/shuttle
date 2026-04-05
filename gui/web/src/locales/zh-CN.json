@@ -271,7 +271,8 @@
     "diagnostics": "诊断",
     "downloadDiagnostics": "下载诊断包",
     "diagnosticsDesc": "收集系统信息、脱敏配置、连接状态和运行时数据，打包为 ZIP 文件用于调试。",
-    "downloading": "下载中..."
+    "downloading": "下载中...",
+    "switchToSimple": "切换到简单模式"
   },
   "app": {
     "connecting": "正在连接 Shuttle...",
