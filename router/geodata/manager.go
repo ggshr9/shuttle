@@ -66,6 +66,10 @@ type Manager struct {
 	lastError  string
 	updating   bool
 	cancel     context.CancelFunc
+
+	// OnUpdate is called after a successful download completes.
+	// The callback should reload geodata into the in-memory databases.
+	OnUpdate func()
 }
 
 // persistedStatus is the on-disk representation of manager state.
@@ -158,6 +162,9 @@ func (m *Manager) Update(ctx context.Context) error {
 
 	if err == nil {
 		m.saveStatus()
+		if m.OnUpdate != nil {
+			m.OnUpdate()
+		}
 	}
 
 	return err
