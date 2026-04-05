@@ -41,7 +41,7 @@ proxy:
   tun:
     enabled: true
     cidr: "198.18.0.0/16"
-    auto_route: true
+    auto_route: false
 
 # Routing
 routing:
