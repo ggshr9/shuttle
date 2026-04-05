@@ -1,0 +1,29 @@
+name: Quicfork Upstream Check
+
+on:
+  schedule:
+    - cron: '0 9 * * 1' # Every Monday at 9:00 UTC
+  workflow_dispatch: # Manual trigger
+
+jobs:
+  check-divergence:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+
+      - name: Check quicfork divergence
+        run: ./scripts/quicfork-diff.sh
+
+      - name: Check for new upstream release
+        run: |
+          CURRENT=$(grep 'quic-go/quic-go' go.mod | grep -v '=>' | awk '{print $2}')
+          LATEST=$(go list -m -versions github.com/quic-go/quic-go 2>/dev/null | awk '{print $NF}')
+          echo "Current: $CURRENT"
+          echo "Latest:  $LATEST"
+          if [ "$CURRENT" != "$LATEST" ]; then
+            echo "::warning::New quic-go release available: $LATEST (current: $CURRENT)"
+          fi
