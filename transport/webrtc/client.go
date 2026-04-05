@@ -13,10 +13,10 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/hashicorp/yamux"
 	"github.com/pion/ice/v4"
 	"github.com/pion/webrtc/v4"
 	"github.com/shuttleX/shuttle/transport"
+	ymux "github.com/shuttleX/shuttle/transport/mux/yamux"
 	"nhooyr.io/websocket"
 )
 
@@ -285,9 +285,10 @@ func (c *Client) dialWS(ctx context.Context) (transport.Connection, error) {
 		return nil, fmt.Errorf("webrtc ws dc open timeout")
 	}
 
-	// Create yamux
+	// Create yamux via shared Mux
 	rwc := &dcReadWriteCloser{rwc: raw, pc: pc}
-	sess, err := yamux.Client(rwc, yamux.DefaultConfig())
+	mux := ymux.New(nil)
+	muxConn, err := mux.ClientRWC(rwc)
 	if err != nil {
 		pc.Close()
 		wsConn.Close(websocket.StatusInternalError, "")
@@ -295,13 +296,13 @@ func (c *Client) dialWS(ctx context.Context) (transport.Connection, error) {
 	}
 
 	go func() {
-		<-sess.CloseChan()
+		<-muxConn.CloseChan()
 		pc.Close()
 	}()
 
 	conn := &webrtcConnection{
 		pc:      pc,
-		session: sess,
+		muxConn: muxConn,
 		local:   &webrtcAddr{addr: "local"},
 		remote:  &webrtcAddr{addr: c.config.SignalURL},
 		sc:      newStatsCollector(pc),
@@ -440,11 +441,10 @@ func (c *Client) dialHTTP(ctx context.Context) (transport.Connection, error) {
 		return nil, fmt.Errorf("webrtc dc open timeout")
 	}
 
-	// Wrap in dcReadWriteCloser for yamux
+	// Wrap in dcReadWriteCloser and create yamux via shared Mux
 	rwc := &dcReadWriteCloser{rwc: raw, pc: pc}
-
-	// Create yamux client session
-	sess, err := yamux.Client(rwc, yamux.DefaultConfig())
+	mux := ymux.New(nil)
+	muxConn, err := mux.ClientRWC(rwc)
 	if err != nil {
 		pc.Close()
 		return nil, fmt.Errorf("yamux client: %w", err)
@@ -452,19 +452,19 @@ func (c *Client) dialHTTP(ctx context.Context) (transport.Connection, error) {
 
 	// Monitor PeerConnection state for cleanup
 	go func() {
-		<-sess.CloseChan()
+		<-muxConn.CloseChan()
 		pc.Close()
 	}()
 
 	pc.OnConnectionStateChange(func(state webrtc.PeerConnectionState) {
 		if state == webrtc.PeerConnectionStateFailed || state == webrtc.PeerConnectionStateDisconnected {
-			sess.Close()
+			muxConn.Close()
 		}
 	})
 
 	return &webrtcConnection{
 		pc:      pc,
-		session: sess,
+		muxConn: muxConn,
 		local:   &webrtcAddr{addr: "local"},
 		remote:  &webrtcAddr{addr: c.config.SignalURL},
 		sc:      newStatsCollector(pc),

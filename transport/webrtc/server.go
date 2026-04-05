@@ -11,11 +11,11 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/hashicorp/yamux"
 	"github.com/pion/ice/v4"
 	"github.com/pion/webrtc/v4"
 	"github.com/shuttleX/shuttle/crypto"
 	"github.com/shuttleX/shuttle/transport"
+	ymux "github.com/shuttleX/shuttle/transport/mux/yamux"
 	"nhooyr.io/websocket"
 )
 
@@ -243,9 +243,10 @@ func (s *Server) awaitDataChannel(pc *webrtc.PeerConnection, dcCh <-chan datacha
 		return
 	}
 
-	// Wrap and create yamux server session
+	// Wrap and create yamux server session via shared Mux
 	rwc := &dcReadWriteCloser{rwc: raw, pc: pc}
-	sess, err := yamux.Server(rwc, yamux.DefaultConfig())
+	mux := ymux.New(nil)
+	muxConn, err := mux.ServerRWC(rwc)
 	if err != nil {
 		s.logger.Error("webrtc yamux server error", "err", err)
 		pc.Close()
@@ -255,13 +256,13 @@ func (s *Server) awaitDataChannel(pc *webrtc.PeerConnection, dcCh <-chan datacha
 	// Monitor PeerConnection state for cleanup
 	pc.OnConnectionStateChange(func(state webrtc.PeerConnectionState) {
 		if state == webrtc.PeerConnectionStateFailed || state == webrtc.PeerConnectionStateDisconnected {
-			sess.Close()
+			muxConn.Close()
 		}
 	})
 
 	conn := &webrtcConnection{
 		pc:      pc,
-		session: sess,
+		muxConn: muxConn,
 		local:   &webrtcAddr{addr: "server"},
 		remote:  &webrtcAddr{addr: remoteAddr},
 		sc:      newStatsCollector(pc),
@@ -503,9 +504,10 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Create yamux session
+	// Create yamux session via shared Mux
 	rwc := &dcReadWriteCloser{rwc: raw, pc: pc}
-	sess, err := yamux.Server(rwc, yamux.DefaultConfig())
+	mux := ymux.New(nil)
+	muxConn, err := mux.ServerRWC(rwc)
 	if err != nil {
 		pc.Close()
 		s.logger.Error("webrtc ws yamux error", "err", err)
@@ -515,13 +517,13 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 
 	pc.OnConnectionStateChange(func(state webrtc.PeerConnectionState) {
 		if state == webrtc.PeerConnectionStateFailed || state == webrtc.PeerConnectionStateDisconnected {
-			sess.Close()
+			muxConn.Close()
 		}
 	})
 
 	conn := &webrtcConnection{
 		pc:      pc,
-		session: sess,
+		muxConn: muxConn,
 		local:   &webrtcAddr{addr: "server"},
 		remote:  &webrtcAddr{addr: remoteAddr},
 		sc:      newStatsCollector(pc),
@@ -645,7 +647,8 @@ func (s *Server) handleWSReconnect(ctx context.Context, wsConn *websocket.Conn, 
 	}
 
 	rwc := &dcReadWriteCloser{rwc: raw, pc: pc}
-	sess, err := yamux.Server(rwc, yamux.DefaultConfig())
+	mux := ymux.New(nil)
+	muxConn, err := mux.ServerRWC(rwc)
 	if err != nil {
 		pc.Close()
 		return
@@ -653,13 +656,13 @@ func (s *Server) handleWSReconnect(ctx context.Context, wsConn *websocket.Conn, 
 
 	pc.OnConnectionStateChange(func(state webrtc.PeerConnectionState) {
 		if state == webrtc.PeerConnectionStateFailed || state == webrtc.PeerConnectionStateDisconnected {
-			sess.Close()
+			muxConn.Close()
 		}
 	})
 
 	conn := &webrtcConnection{
 		pc:      pc,
-		session: sess,
+		muxConn: muxConn,
 		local:   &webrtcAddr{addr: "server"},
 		remote:  &webrtcAddr{addr: remoteAddr},
 		sc:      newStatsCollector(pc),
