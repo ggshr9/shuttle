@@ -13,6 +13,7 @@ import (
 	"github.com/shuttleX/shuttle/router"
 	"github.com/shuttleX/shuttle/router/geodata"
 	"github.com/shuttleX/shuttle/stream"
+	"github.com/shuttleX/shuttle/subscription"
 	"github.com/shuttleX/shuttle/transport/selector"
 
 	"context"
@@ -84,6 +85,9 @@ type Engine struct {
 	// Inbound/outbound abstraction layer
 	inbounds  []adapter.Inbound
 	outbounds map[string]adapter.Outbound
+
+	// Subscription manager for auto-refreshing server lists
+	subscriptionManager *subscription.Manager
 }
 
 // New creates a new Engine from the given config.
