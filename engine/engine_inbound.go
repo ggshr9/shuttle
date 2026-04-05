@@ -86,7 +86,10 @@ func (e *Engine) startInbounds(ctx context.Context, cfg *config.ClientConfig) ([
 			}
 			members = append(members, ob)
 		}
-		outbounds[outCfg.Tag] = NewOutboundGroup(outCfg.Tag, groupCfg.Strategy, members)
+		grp := NewOutboundGroup(outCfg.Tag, groupCfg.Strategy, members)
+		grp.qualityCfg = QualityConfigFromGroupConfig(groupCfg)
+		grp.probeGetter = e.ProbeSnapshots
+		outbounds[outCfg.Tag] = grp
 	}
 
 	// Reuse the router and DNS resolver built by startInternal.

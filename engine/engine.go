@@ -72,6 +72,9 @@ type Engine struct {
 	// Circuit breaker for transport connections
 	circuitBreaker *CircuitBreaker
 
+	// Proactive migrator for network change detection
+	proactiveMigrator *ProactiveMigrator
+
 	// Background goroutine tracking for clean shutdown
 	bgWg sync.WaitGroup
 
@@ -280,6 +283,26 @@ func (e *Engine) CurrentRouter() *router.Router {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
 	return e.currentRouter
+}
+
+// ProbeSnapshots returns the latest probe results from the active selector,
+// translated into ProbeSnapshot values for use by OutboundGroup quality strategy.
+// Returns nil if no selector is active.
+func (e *Engine) ProbeSnapshots() map[string]ProbeSnapshot {
+	sel := e.selector()
+	if sel == nil {
+		return nil
+	}
+	probes := sel.Probes()
+	result := make(map[string]ProbeSnapshot, len(probes))
+	for name, pr := range probes {
+		result[name] = ProbeSnapshot{
+			Latency:   pr.Latency,
+			Loss:      pr.Loss,
+			Available: pr.Available,
+		}
+	}
+	return result
 }
 
 // SetTransportStrategy changes the active selector's strategy at runtime.
