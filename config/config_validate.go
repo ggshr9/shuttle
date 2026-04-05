@@ -165,6 +165,13 @@ func (c *ClientConfig) Validate() error {
 		}
 	}
 
+	// Routing.RuleChain validation
+	for i, entry := range c.Routing.RuleChain {
+		if err := validateRuleChainEntry(i, entry); err != nil {
+			return err
+		}
+	}
+
 	// Routing.GeoData.UpdateInterval validation
 	if c.Routing.GeoData.UpdateInterval != "" {
 		if err := validateDuration(c.Routing.GeoData.UpdateInterval, "routing.geodata.update_interval"); err != nil {
@@ -329,5 +336,44 @@ func (c *ServerConfig) Validate() error {
 			}
 		}
 	}
+	return nil
+}
+
+// validateRuleChainEntry validates a single rule chain entry.
+func validateRuleChainEntry(idx int, entry RuleChainEntry) error {
+	prefix := fmt.Sprintf("routing.rule_chain[%d]", idx)
+
+	// Action is required.
+	switch entry.Action {
+	case "proxy", "direct", "reject":
+	case "":
+		return fmt.Errorf("%s: action is required", prefix)
+	default:
+		return fmt.Errorf("%s: invalid action %q", prefix, entry.Action)
+	}
+
+	// Logic must be "and", "or", or empty.
+	switch strings.ToLower(entry.Logic) {
+	case "", "and", "or":
+	default:
+		return fmt.Errorf("%s: invalid logic %q (must be \"and\" or \"or\")", prefix, entry.Logic)
+	}
+
+	// At least one match condition must be present.
+	m := entry.Match
+	hasCondition := len(m.Domain) > 0 || len(m.DomainSuffix) > 0 || len(m.DomainKeyword) > 0 ||
+		len(m.GeoSite) > 0 || len(m.IPCIDR) > 0 || len(m.GeoIP) > 0 ||
+		len(m.Process) > 0 || len(m.Protocol) > 0 || len(m.NetworkType) > 0
+	if !hasCondition {
+		return fmt.Errorf("%s: at least one match condition is required", prefix)
+	}
+
+	// Validate CIDRs parse correctly.
+	for _, cidr := range m.IPCIDR {
+		if _, _, err := net.ParseCIDR(cidr); err != nil {
+			return fmt.Errorf("%s: invalid ip_cidr %q: %w", prefix, cidr, err)
+		}
+	}
+
 	return nil
 }

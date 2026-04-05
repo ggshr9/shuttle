@@ -38,6 +38,7 @@ type Rule struct {
 // Router dispatches connections based on domain, IP, process, and protocol rules.
 type Router struct {
 	mu           sync.RWMutex
+	ruleChain    []compiledRule // ordered rules evaluated before legacy stack
 	domainTrie   *DomainTrie
 	ipRules      []ipRule
 	processMap   map[string]Action
@@ -65,6 +66,7 @@ type networkRule struct {
 
 // RouterConfig configures the router.
 type RouterConfig struct {
+	RuleChain     []RuleChainEntry // ordered rules evaluated before legacy stack
 	Rules         []Rule
 	DefaultAction Action
 }
@@ -85,6 +87,16 @@ func NewRouter(cfg *RouterConfig, geoIP *GeoIPDB, geoSite *GeoSiteDB, logger *sl
 		geoSite:     geoSite,
 		defaultAct:  cfg.DefaultAction,
 		logger:      logger,
+	}
+
+	// Compile the ordered rule chain (evaluated before legacy rules).
+	if len(cfg.RuleChain) > 0 {
+		compiled, err := CompileRuleChain(cfg.RuleChain, geoIP, geoSite)
+		if err != nil {
+			logger.Error("failed to compile rule chain", "err", err)
+		} else {
+			r.ruleChain = compiled
+		}
 	}
 
 	for _, rule := range cfg.Rules {
@@ -314,14 +326,33 @@ func (r *Router) GeoSiteDB() *GeoSiteDB {
 // Match performs full routing decision for a connection.
 func (r *Router) Match(domain string, ip net.IP, process string, protocol string) Action {
 	r.mu.RLock()
-	// Check network-type-constrained rules first (highest priority).
+
+	// Phase 1: Ordered rule chain (evaluated first, highest priority).
+	if len(r.ruleChain) > 0 {
+		ctx := &MatchContext{
+			Domain:      domain,
+			IP:          ip,
+			Process:     process,
+			Protocol:    protocol,
+			NetworkType: r.networkType,
+		}
+		for i := range r.ruleChain {
+			if r.ruleChain[i].Match(ctx) {
+				action := r.ruleChain[i].action
+				r.mu.RUnlock()
+				return action
+			}
+		}
+	}
+
+	// Phase 2: Network-type-constrained rules.
 	if action, ok := r.matchNetworkRules(domain, ip, process, protocol); ok {
 		r.mu.RUnlock()
 		return action
 	}
 	r.mu.RUnlock()
 
-	// Priority: protocol > process > domain > IP > default
+	// Phase 3: Legacy category-based matching (protocol > process > domain > IP > default).
 	if protocol != "" {
 		if action := r.MatchProtocol(protocol); action != r.defaultAct {
 			return action
