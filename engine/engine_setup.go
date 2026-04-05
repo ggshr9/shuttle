@@ -90,6 +90,24 @@ func (e *Engine) buildRouter(cfg *config.ClientConfig) (*router.Router, *router.
 			e.logger.Info("loaded geodata GeoSite", "categories", len(siteEntries))
 			loaded = true
 		}
+		// Wire hot-reload: after Manager downloads new files, reload into DBs.
+		mgr.OnUpdate = func() {
+			if ipEntries, err := mgr.LoadGeoIPEntries(); err == nil {
+				rEntries := make([]router.GeoIPEntry, len(ipEntries))
+				for i, entry := range ipEntries {
+					rEntries[i] = router.GeoIPEntry{CountryCode: entry.CountryCode, CIDRs: entry.CIDRs}
+				}
+				geoIPDB.Reload(rEntries)
+			}
+			if siteEntries, err := mgr.LoadGeoSiteEntries(); err == nil {
+				rEntries := make([]router.GeoSiteEntry, len(siteEntries))
+				for i, entry := range siteEntries {
+					rEntries[i] = router.GeoSiteEntry{Category: entry.Category, Domains: entry.Domains}
+				}
+				geoSiteDB.ReloadSites(rEntries)
+			}
+			e.logger.Info("geodata hot-reloaded")
+		}
 	}
 	if !loaded {
 		defaultIPEntries, defaultSiteEntries := geodata.LoadDefaults()
