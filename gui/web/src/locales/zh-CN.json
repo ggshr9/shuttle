@@ -5,6 +5,7 @@
     "servers": "服务器",
     "subscriptions": "订阅",
     "routing": "路由",
+    "mesh": "Mesh 组网",
     "logs": "日志",
     "settings": "设置"
   },
@@ -370,5 +371,31 @@
     "addToStart": "添加代理服务器以开始使用",
     "importConfig": "导入配置",
     "orAddManually": "或在下方手动添加"
+  },
+  "mesh": {
+    "title": "Mesh 组网",
+    "status": "状态",
+    "enabled": "已启用",
+    "disabled": "已禁用",
+    "notEnabled": "Mesh VPN 未启用，请在设置中开启。",
+    "virtualIP": "虚拟 IP",
+    "cidr": "网段",
+    "peers": "节点数",
+    "peersTitle": "节点列表",
+    "noPeers": "暂无连接的节点，加入 Mesh 网络后将在此显示。",
+    "topology": "网络拓扑",
+    "connect": "连接",
+    "connecting": "连接中...",
+    "connected": "已连接",
+    "connectSuccess": "正在连接 {vip}...",
+    "col": {
+      "vip": "虚拟 IP",
+      "state": "状态",
+      "method": "方式",
+      "rtt": "平均延迟",
+      "loss": "丢包率",
+      "score": "评分",
+      "action": "操作"
+    }
   }
 }

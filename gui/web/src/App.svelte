@@ -49,6 +49,7 @@
     { id: 'servers', label: t('nav.servers'), icon: 'servers' },
     { id: 'subscriptions', label: t('nav.subscriptions'), icon: 'subscriptions' },
     { id: 'routing', label: t('nav.routing'), icon: 'routing' },
+    { id: 'mesh', label: t('nav.mesh'), icon: 'mesh' },
     { id: 'logs', label: t('nav.logs'), icon: 'logs' },
     { id: 'settings', label: t('nav.settings'), icon: 'settings' },
   ])
@@ -161,6 +162,13 @@
                 <circle cx="15" cy="15" r="2"/>
                 <path d="M7 10h3l2-5h1M10 10l2 5h1"/>
               </svg>
+            {:else if item.icon === 'mesh'}
+              <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="10" cy="4" r="2"/>
+                <circle cx="3" cy="15" r="2"/>
+                <circle cx="17" cy="15" r="2"/>
+                <path d="M10 6v3M5 14l4-5M15 14l-4-5M5 15h10"/>
+              </svg>
             {:else if item.icon === 'logs'}
               <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M5 4h10a1 1 0 011 1v10a1 1 0 01-1 1H5a1 1 0 01-1-1V5a1 1 0 011-1z"/>
@@ -197,6 +205,10 @@
     {:else if tab === 'routing'}
       {#await import('./pages/Routing.svelte') then { default: Routing }}
         <Routing />
+      {/await}
+    {:else if tab === 'mesh'}
+      {#await import('./pages/Mesh.svelte') then { default: Mesh }}
+        <Mesh />
       {/await}
     {:else if tab === 'logs'}
       {#await import('./pages/Logs.svelte') then { default: Logs }}
