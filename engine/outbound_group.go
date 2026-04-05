@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net"
 	"sync/atomic"
+	"time"
 
 	"github.com/shuttleX/shuttle/adapter"
 )
@@ -18,20 +19,33 @@ const (
 	GroupFailover GroupStrategy = "failover"
 	// GroupLoadBalance distributes connections round-robin across outbounds.
 	GroupLoadBalance GroupStrategy = "loadbalance"
+	// GroupQuality ranks outbounds by probe-measured latency and loss.
+	GroupQuality GroupStrategy = "quality"
 )
+
+// ProbeSnapshot is a point-in-time quality reading for an outbound.
+type ProbeSnapshot struct {
+	Latency   time.Duration
+	Loss      float64
+	Available bool
+}
 
 // OutboundGroupConfig is the JSON options schema for a group outbound.
 type OutboundGroupConfig struct {
-	Strategy  GroupStrategy `json:"strategy"`
-	Outbounds []string      `json:"outbounds"`
+	Strategy    GroupStrategy `json:"strategy"`
+	Outbounds   []string      `json:"outbounds"`
+	MaxLatency  string        `json:"max_latency,omitempty"`   // duration string, e.g. "200ms"
+	MaxLossRate float64       `json:"max_loss_rate,omitempty"` // 0-1 range
 }
 
-// OutboundGroup wraps multiple outbounds with failover or load-balance strategy.
+// OutboundGroup wraps multiple outbounds with failover, load-balance, or quality strategy.
 type OutboundGroup struct {
-	tag       string
-	strategy  GroupStrategy
-	outbounds []adapter.Outbound
-	counter   atomic.Uint64 // for round-robin
+	tag         string
+	strategy    GroupStrategy
+	outbounds   []adapter.Outbound
+	counter     atomic.Uint64                    // for round-robin
+	qualityCfg  QualityConfig                    // thresholds for quality strategy
+	probeGetter func() map[string]ProbeSnapshot // returns latest probe data; nil when not quality
 }
 
 // NewOutboundGroup creates a new OutboundGroup.
@@ -58,6 +72,8 @@ func (g *OutboundGroup) DialContext(ctx context.Context, network, address string
 	switch g.strategy {
 	case GroupLoadBalance:
 		return g.dialLoadBalance(ctx, network, address)
+	case GroupQuality:
+		return g.dialQuality(ctx, network, address)
 	default: // failover is the default
 		return g.dialFailover(ctx, network, address)
 	}
@@ -93,6 +109,43 @@ func (g *OutboundGroup) dialLoadBalance(ctx context.Context, network, address st
 	return nil, fmt.Errorf("outbound group %q: all %d members failed, last error: %w", g.tag, len(g.outbounds), lastErr)
 }
 
+func (g *OutboundGroup) dialQuality(ctx context.Context, network, address string) (net.Conn, error) {
+	var probes map[string]ProbeSnapshot
+	if g.probeGetter != nil {
+		probes = g.probeGetter()
+	}
+
+	// Build quality entries from probe data.
+	entries := make([]qualityEntry, len(g.outbounds))
+	for i, ob := range g.outbounds {
+		entry := qualityEntry{tag: ob.Tag(), index: i, latency: time.Second, loss: 1.0}
+		if ps, ok := probes[ob.Tag()]; ok && ps.Available {
+			entry.latency = ps.Latency
+			entry.loss = ps.Loss
+		}
+		entries[i] = entry
+	}
+
+	// Filter and rank.
+	entries = filterByQuality(entries, g.qualityCfg)
+	entries = rankByQuality(entries)
+
+	// Try ranked outbounds in order (failover among qualified).
+	var lastErr error
+	for _, entry := range entries {
+		conn, err := g.outbounds[entry.index].DialContext(ctx, network, address)
+		if err == nil {
+			return conn, nil
+		}
+		lastErr = err
+	}
+	if lastErr != nil {
+		return nil, fmt.Errorf("outbound group %q: all %d quality-ranked members failed, last error: %w",
+			g.tag, len(entries), lastErr)
+	}
+	return nil, fmt.Errorf("outbound group %q: no outbounds available", g.tag)
+}
+
 // Close closes all member outbounds.
 func (g *OutboundGroup) Close() error {
 	var firstErr error
@@ -113,7 +166,31 @@ func parseOutboundGroupConfig(raw json.RawMessage) (OutboundGroupConfig, error) 
 	if len(cfg.Outbounds) == 0 {
 		return cfg, fmt.Errorf("group must have at least one outbound member")
 	}
+	switch cfg.Strategy {
+	case GroupFailover, GroupLoadBalance, GroupQuality, "":
+		// valid (empty defaults to failover)
+	default:
+		return cfg, fmt.Errorf("unknown group strategy: %q", cfg.Strategy)
+	}
+	if cfg.MaxLatency != "" {
+		if _, err := time.ParseDuration(cfg.MaxLatency); err != nil {
+			return cfg, fmt.Errorf("invalid max_latency %q: %w", cfg.MaxLatency, err)
+		}
+	}
+	if cfg.MaxLossRate < 0 || cfg.MaxLossRate > 1 {
+		return cfg, fmt.Errorf("max_loss_rate must be between 0 and 1, got %v", cfg.MaxLossRate)
+	}
 	return cfg, nil
+}
+
+// QualityConfigFromGroupConfig extracts a QualityConfig from the parsed group config.
+func QualityConfigFromGroupConfig(cfg OutboundGroupConfig) QualityConfig {
+	var qc QualityConfig
+	if cfg.MaxLatency != "" {
+		qc.MaxLatency, _ = time.ParseDuration(cfg.MaxLatency) // already validated
+	}
+	qc.MaxLossRate = cfg.MaxLossRate
+	return qc
 }
 
 // Compile-time interface check.

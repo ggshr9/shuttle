@@ -6,6 +6,7 @@ import (
 	"net"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/shuttleX/shuttle/adapter"
 )
@@ -166,6 +167,133 @@ func TestOutboundGroup_Close(t *testing.T) {
 	_ = closed
 }
 
+func TestOutboundGroup_Quality(t *testing.T) {
+	fast := &mockOutbound{tag: "fast", dialFunc: succeedDial}
+	slow := &mockOutbound{tag: "slow", dialFunc: succeedDial}
+
+	g := NewOutboundGroup("q", GroupQuality, []adapter.Outbound{slow, fast})
+	g.probeGetter = func() map[string]ProbeSnapshot {
+		return map[string]ProbeSnapshot{
+			"fast": {Latency: 30 * time.Millisecond, Loss: 0.0, Available: true},
+			"slow": {Latency: 300 * time.Millisecond, Loss: 0.0, Available: true},
+		}
+	}
+
+	conn, err := g.DialContext(context.Background(), "tcp", "example.com:80")
+	if err != nil {
+		t.Fatalf("expected success, got %v", err)
+	}
+	conn.Close()
+
+	// fast should be tried first (better quality score).
+	if fast.calls.Load() != 1 {
+		t.Errorf("fast outbound calls = %d, want 1", fast.calls.Load())
+	}
+	// slow should not be tried since fast succeeded.
+	if slow.calls.Load() != 0 {
+		t.Errorf("slow outbound calls = %d, want 0", slow.calls.Load())
+	}
+}
+
+func TestOutboundGroup_Quality_Failover(t *testing.T) {
+	best := &mockOutbound{tag: "best", dialFunc: failDial}
+	second := &mockOutbound{tag: "second", dialFunc: succeedDial}
+
+	g := NewOutboundGroup("qfo", GroupQuality, []adapter.Outbound{second, best})
+	g.probeGetter = func() map[string]ProbeSnapshot {
+		return map[string]ProbeSnapshot{
+			"best":   {Latency: 10 * time.Millisecond, Loss: 0.0, Available: true},
+			"second": {Latency: 100 * time.Millisecond, Loss: 0.0, Available: true},
+		}
+	}
+
+	conn, err := g.DialContext(context.Background(), "tcp", "example.com:80")
+	if err != nil {
+		t.Fatalf("expected success, got %v", err)
+	}
+	conn.Close()
+
+	// best is tried first but fails.
+	if best.calls.Load() != 1 {
+		t.Errorf("best outbound calls = %d, want 1", best.calls.Load())
+	}
+	// second is tried next and succeeds.
+	if second.calls.Load() != 1 {
+		t.Errorf("second outbound calls = %d, want 1", second.calls.Load())
+	}
+}
+
+func TestOutboundGroup_Quality_NoProbes(t *testing.T) {
+	a := &mockOutbound{tag: "a", dialFunc: succeedDial}
+	b := &mockOutbound{tag: "b", dialFunc: succeedDial}
+
+	g := NewOutboundGroup("q-nodata", GroupQuality, []adapter.Outbound{a, b})
+	g.probeGetter = func() map[string]ProbeSnapshot {
+		return map[string]ProbeSnapshot{} // empty — no probe data
+	}
+
+	conn, err := g.DialContext(context.Background(), "tcp", "example.com:80")
+	if err != nil {
+		t.Fatalf("expected success, got %v", err)
+	}
+	conn.Close()
+
+	// With no probes all entries have equal worst-case score; both get same score.
+	// SliceStable preserves order, so a (index 0) is tried first.
+	totalCalls := a.calls.Load() + b.calls.Load()
+	if totalCalls != 1 {
+		t.Errorf("expected exactly 1 dial call, got %d", totalCalls)
+	}
+}
+
+func TestOutboundGroup_Quality_NilProbeGetter(t *testing.T) {
+	a := &mockOutbound{tag: "a", dialFunc: succeedDial}
+
+	g := NewOutboundGroup("q-nil", GroupQuality, []adapter.Outbound{a})
+	// probeGetter is nil (default)
+
+	conn, err := g.DialContext(context.Background(), "tcp", "example.com:80")
+	if err != nil {
+		t.Fatalf("expected success, got %v", err)
+	}
+	conn.Close()
+
+	if a.calls.Load() != 1 {
+		t.Errorf("a outbound calls = %d, want 1", a.calls.Load())
+	}
+}
+
+func TestOutboundGroup_Quality_WithFilter(t *testing.T) {
+	good := &mockOutbound{tag: "good", dialFunc: succeedDial}
+	bad := &mockOutbound{tag: "bad", dialFunc: succeedDial}
+
+	g := NewOutboundGroup("q-filter", GroupQuality, []adapter.Outbound{bad, good})
+	g.qualityCfg = QualityConfig{
+		MaxLatency:  200 * time.Millisecond,
+		MaxLossRate: 0.1,
+	}
+	g.probeGetter = func() map[string]ProbeSnapshot {
+		return map[string]ProbeSnapshot{
+			"good": {Latency: 50 * time.Millisecond, Loss: 0.01, Available: true},
+			"bad":  {Latency: 500 * time.Millisecond, Loss: 0.5, Available: true},
+		}
+	}
+
+	conn, err := g.DialContext(context.Background(), "tcp", "example.com:80")
+	if err != nil {
+		t.Fatalf("expected success, got %v", err)
+	}
+	conn.Close()
+
+	if good.calls.Load() != 1 {
+		t.Errorf("good outbound calls = %d, want 1", good.calls.Load())
+	}
+	// bad exceeds thresholds and should be filtered out.
+	if bad.calls.Load() != 0 {
+		t.Errorf("bad outbound calls = %d, want 0", bad.calls.Load())
+	}
+}
+
 func TestParseOutboundGroupConfig(t *testing.T) {
 	t.Run("valid", func(t *testing.T) {
 		raw := []byte(`{"strategy":"failover","outbounds":["us","jp"]}`)
@@ -195,4 +323,60 @@ func TestParseOutboundGroupConfig(t *testing.T) {
 			t.Fatal("expected error for invalid JSON")
 		}
 	})
+
+	t.Run("unknown strategy", func(t *testing.T) {
+		raw := []byte(`{"strategy":"random","outbounds":["us"]}`)
+		_, err := parseOutboundGroupConfig(raw)
+		if err == nil {
+			t.Fatal("expected error for unknown strategy")
+		}
+	})
+
+	t.Run("quality strategy with thresholds", func(t *testing.T) {
+		raw := []byte(`{"strategy":"quality","outbounds":["us","jp"],"max_latency":"200ms","max_loss_rate":0.05}`)
+		cfg, err := parseOutboundGroupConfig(raw)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if cfg.Strategy != GroupQuality {
+			t.Errorf("strategy = %q, want %q", cfg.Strategy, GroupQuality)
+		}
+		if cfg.MaxLatency != "200ms" {
+			t.Errorf("max_latency = %q, want %q", cfg.MaxLatency, "200ms")
+		}
+		if cfg.MaxLossRate != 0.05 {
+			t.Errorf("max_loss_rate = %v, want %v", cfg.MaxLossRate, 0.05)
+		}
+	})
+
+	t.Run("invalid max_latency", func(t *testing.T) {
+		raw := []byte(`{"strategy":"quality","outbounds":["us"],"max_latency":"not-a-duration"}`)
+		_, err := parseOutboundGroupConfig(raw)
+		if err == nil {
+			t.Fatal("expected error for invalid max_latency")
+		}
+	})
+
+	t.Run("invalid max_loss_rate", func(t *testing.T) {
+		raw := []byte(`{"strategy":"quality","outbounds":["us"],"max_loss_rate":1.5}`)
+		_, err := parseOutboundGroupConfig(raw)
+		if err == nil {
+			t.Fatal("expected error for max_loss_rate > 1")
+		}
+	})
+}
+
+func TestQualityConfigFromGroupConfig(t *testing.T) {
+	cfg := OutboundGroupConfig{
+		Strategy:    GroupQuality,
+		MaxLatency:  "200ms",
+		MaxLossRate: 0.05,
+	}
+	qc := QualityConfigFromGroupConfig(cfg)
+	if qc.MaxLatency != 200*time.Millisecond {
+		t.Errorf("MaxLatency = %v, want %v", qc.MaxLatency, 200*time.Millisecond)
+	}
+	if qc.MaxLossRate != 0.05 {
+		t.Errorf("MaxLossRate = %v, want %v", qc.MaxLossRate, 0.05)
+	}
 }
