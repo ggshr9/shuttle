@@ -19,6 +19,7 @@ const (
 	EventConnection                        // Connection opened/closed
 	EventNetworkChange                     // Network interface change detected
 	EventConnectionError                   // Transport connection failed (circuit breaker)
+	EventRetry                             // Retry attempt during dial
 )
 
 var eventTypeNames = [...]string{
@@ -31,6 +32,7 @@ var eventTypeNames = [...]string{
 	EventConnection:       "connection",
 	EventNetworkChange:    "network_change",
 	EventConnectionError:  "connection_error",
+	EventRetry:            "retry",
 }
 
 func (t EventType) String() string {

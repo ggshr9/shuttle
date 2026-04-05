@@ -220,6 +220,52 @@ func TestMigratorClose(t *testing.T) {
 	}
 }
 
+func TestMigrator_DrainTimeout(t *testing.T) {
+	// Use a very short timeout and interval so the test runs fast.
+	m := NewMigrator(nil, MigratorConfig{
+		DrainInterval: 10 * time.Millisecond,
+		DrainTimeout:  50 * time.Millisecond,
+	})
+	defer m.Close()
+
+	conn := &migMockConn{}
+	tc := m.Track(conn, "h3")
+
+	// Open a stream but don't close it — this prevents idle-drain.
+	s, _ := conn.OpenStream(context.Background())
+	_, err := m.WrapStream(tc, s)
+	if err != nil {
+		t.Fatalf("WrapStream: %v", err)
+	}
+
+	// Migrate marks the connection as draining.
+	m.Migrate()
+
+	if !tc.draining.Load() {
+		t.Fatal("expected connection to be draining after Migrate")
+	}
+
+	// drainIdle should NOT close it immediately — stream is still open.
+	m.drainIdle()
+	if conn.closeCalled.Load() {
+		t.Fatal("connection should not be closed before drain timeout")
+	}
+
+	// Wait for the drain timeout to expire, then trigger drainIdle manually.
+	time.Sleep(60 * time.Millisecond)
+	m.drainIdle()
+
+	if !conn.closeCalled.Load() {
+		t.Fatal("expected connection to be force-closed after drain timeout")
+	}
+
+	// Verify it was removed from tracked list.
+	stats := m.Stats()
+	if len(stats) != 0 {
+		t.Fatalf("expected 0 tracked connections after force-close, got %d", len(stats))
+	}
+}
+
 func TestMigratorStats(t *testing.T) {
 	m := NewMigrator(nil)
 	defer m.Close()

@@ -15,6 +15,7 @@ import (
 	"github.com/shuttleX/shuttle/congestion"
 	"github.com/shuttleX/shuttle/mesh"
 	meshsignal "github.com/shuttleX/shuttle/mesh/signal"
+	"github.com/shuttleX/shuttle/plugin"
 	"github.com/shuttleX/shuttle/server/admin"
 	"github.com/shuttleX/shuttle/server/audit"
 	"github.com/shuttleX/shuttle/server/metrics"
@@ -52,6 +53,10 @@ type Server struct {
 	eventBus    *ServerEventBus
 
 	connWg sync.WaitGroup
+
+	// Plugin chain for connection lifecycle tracking (metrics + logger).
+	pluginMetrics *plugin.Metrics
+	pluginChain   *plugin.Chain
 
 	// reputationCancel stops the reputation cleanup goroutine.
 	reputationCancel context.CancelFunc
@@ -157,6 +162,13 @@ func New(c Config) (*Server, error) {
 		}
 	}
 
+	// --- Plugin chain (metrics + logger) ---
+	s.pluginMetrics = plugin.NewMetrics()
+	s.pluginChain = plugin.NewChain(
+		s.pluginMetrics,
+		plugin.NewLogger(logger),
+	)
+
 	// --- Admin API ---
 	if cfg.Admin.Enabled {
 		s.adminInfo = &admin.ServerInfo{
@@ -165,7 +177,7 @@ func New(c Config) (*Server, error) {
 			ConfigPath: c.ConfigPath,
 		}
 		var err error
-		s.adminServer, err = admin.ListenAndServe(&cfg.Admin, s.adminInfo, cfg, c.ConfigPath, s.users, s.auditLog, s.metrics, s.sseEventsHandler())
+		s.adminServer, err = admin.ListenAndServe(&cfg.Admin, s.adminInfo, cfg, c.ConfigPath, s.users, s.auditLog, s.metrics, s.pluginMetrics, s.sseEventsHandler())
 		if err != nil {
 			logger.Error("failed to start admin API", "err", err)
 		} else {
@@ -198,16 +210,17 @@ func New(c Config) (*Server, error) {
 
 	// --- Connection handler ---
 	s.handler = &Handler{
-		Users:      s.users,
-		Reputation: s.reputation,
-		AuditLog:   s.auditLog,
-		PeerTable:  s.peerTable,
-		Allocator:  s.ipAllocator,
-		SignalHub:  s.signalHub,
-		Metrics:    s.metrics,
-		AdminInfo:  s.adminInfo,
-		StreamSem:  make(chan struct{}, cfg.MaxStreams),
-		Logger:     logger,
+		Users:       s.users,
+		Reputation:  s.reputation,
+		AuditLog:    s.auditLog,
+		PeerTable:   s.peerTable,
+		Allocator:   s.ipAllocator,
+		SignalHub:   s.signalHub,
+		Metrics:     s.metrics,
+		AdminInfo:   s.adminInfo,
+		PluginChain: s.pluginChain,
+		StreamSem:   make(chan struct{}, cfg.MaxStreams),
+		Logger:      logger,
 	}
 
 	return s, nil
@@ -253,6 +266,11 @@ func (s *Server) sseEventsHandler() http.HandlerFunc {
 // Start begins listening and accepting connections. It blocks until
 // ctx is cancelled or an unrecoverable error occurs.
 func (s *Server) Start(ctx context.Context) error {
+	// Initialize plugin chain
+	if err := s.pluginChain.Init(ctx); err != nil {
+		return fmt.Errorf("plugin chain init: %w", err)
+	}
+
 	// Start pprof
 	if s.pprofServer != nil {
 		go func() {
@@ -402,6 +420,11 @@ func (s *Server) Shutdown(ctx context.Context) {
 	// Stop cluster manager
 	if s.cluster != nil {
 		s.cluster.Stop()
+	}
+
+	// Close plugin chain
+	if s.pluginChain != nil {
+		s.pluginChain.Close()
 	}
 
 	// Close audit logger

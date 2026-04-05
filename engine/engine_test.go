@@ -820,3 +820,30 @@ func TestSapedConnWriteGoesThruShaper(t *testing.T) {
 	}
 }
 
+// ---------------------------------------------------------------------------
+// TestSetTransportStrategy
+// ---------------------------------------------------------------------------
+
+func TestSetTransportStrategyUnknown(t *testing.T) {
+	cfg := config.DefaultClientConfig()
+	eng := New(cfg)
+
+	err := eng.SetTransportStrategy(nil, "bogus")
+	if err == nil {
+		t.Fatal("expected error for unknown strategy, got nil")
+	}
+}
+
+func TestSetTransportStrategyNoSelector(t *testing.T) {
+	cfg := config.DefaultClientConfig()
+	eng := New(cfg)
+
+	// Engine is stopped — selector is nil. All valid strategies should return an error.
+	for _, s := range []string{"auto", "priority", "latency", "multipath"} {
+		err := eng.SetTransportStrategy(nil, s)
+		if err == nil {
+			t.Errorf("strategy=%q: expected error (no active selector), got nil", s)
+		}
+	}
+}
+

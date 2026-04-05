@@ -210,6 +210,140 @@ func TestProbeAvailableTransport(t *testing.T) {
 	}
 }
 
+// --- SetStrategy tests ---
+
+func TestSelector_SetStrategySameNoop(t *testing.T) {
+	transports := []transport.ClientTransport{
+		&fakeTransport{typeName: "h3", conn: &fakeConn{}},
+	}
+	s := New(transports, &Config{Strategy: StrategyAuto}, nil)
+
+	err := s.SetStrategy(context.Background(), StrategyAuto)
+	if err != nil {
+		t.Fatalf("SetStrategy same: %v", err)
+	}
+	s.mu.RLock()
+	got := s.strategy
+	s.mu.RUnlock()
+	if got != StrategyAuto {
+		t.Fatalf("strategy = %s, want auto", got)
+	}
+}
+
+func TestSelector_SetStrategyNonMultipathSwitch(t *testing.T) {
+	transports := []transport.ClientTransport{
+		&fakeTransport{typeName: "h3", conn: &fakeConn{}},
+		&fakeTransport{typeName: "reality", conn: &fakeConn{}},
+	}
+	s := New(transports, &Config{Strategy: StrategyAuto}, nil)
+
+	// Set up probe data so latency strategy picks reality.
+	s.mu.Lock()
+	s.probes["h3"].Latency = 100 * time.Millisecond
+	s.probes["h3"].Available = true
+	s.probes["reality"].Latency = 20 * time.Millisecond
+	s.probes["reality"].Available = true
+	s.mu.Unlock()
+
+	err := s.SetStrategy(context.Background(), StrategyLatency)
+	if err != nil {
+		t.Fatalf("SetStrategy: %v", err)
+	}
+
+	s.mu.RLock()
+	got := s.strategy
+	s.mu.RUnlock()
+	if got != StrategyLatency {
+		t.Fatalf("strategy = %s, want latency", got)
+	}
+
+	// maybeSwitch should have selected reality (lowest latency).
+	if s.ActiveTransport() != "reality" {
+		t.Fatalf("ActiveTransport = %s, want reality", s.ActiveTransport())
+	}
+
+	// Switch again to priority — should pick h3 (first in list).
+	err = s.SetStrategy(context.Background(), StrategyPriority)
+	if err != nil {
+		t.Fatalf("SetStrategy to priority: %v", err)
+	}
+	if s.ActiveTransport() != "h3" {
+		t.Fatalf("ActiveTransport = %s, want h3", s.ActiveTransport())
+	}
+}
+
+func TestSelector_SetStrategyToMultipath(t *testing.T) {
+	transports := []transport.ClientTransport{
+		&fakeTransport{typeName: "h3", conn: &fakeConn{}},
+	}
+	s := New(transports, &Config{Strategy: StrategyAuto, ServerAddr: "127.0.0.1:443"}, nil)
+
+	err := s.SetStrategy(context.Background(), StrategyMultipath)
+	if err != nil {
+		t.Fatalf("SetStrategy to multipath: %v", err)
+	}
+
+	s.mu.RLock()
+	pool := s.multipathPool
+	strategy := s.strategy
+	s.mu.RUnlock()
+
+	if strategy != StrategyMultipath {
+		t.Fatalf("strategy = %s, want multipath", strategy)
+	}
+	if pool == nil {
+		t.Fatal("multipathPool should not be nil after switching to multipath")
+	}
+
+	// ActiveTransport should report "multipath".
+	if s.ActiveTransport() != "multipath" {
+		t.Fatalf("ActiveTransport = %s, want multipath", s.ActiveTransport())
+	}
+
+	// Clean up.
+	pool.Close()
+}
+
+func TestSelector_SetStrategyFromMultipath(t *testing.T) {
+	transports := []transport.ClientTransport{
+		&fakeTransport{typeName: "h3", conn: &fakeConn{}},
+		&fakeTransport{typeName: "reality", conn: &fakeConn{}},
+	}
+	s := New(transports, &Config{Strategy: StrategyAuto, ServerAddr: "127.0.0.1:443"}, nil)
+
+	// Switch to multipath first.
+	err := s.SetStrategy(context.Background(), StrategyMultipath)
+	if err != nil {
+		t.Fatalf("SetStrategy to multipath: %v", err)
+	}
+
+	// Now switch back to priority.
+	s.mu.Lock()
+	s.probes["h3"].Available = true
+	s.probes["reality"].Available = true
+	s.mu.Unlock()
+
+	err = s.SetStrategy(context.Background(), StrategyPriority)
+	if err != nil {
+		t.Fatalf("SetStrategy from multipath: %v", err)
+	}
+
+	s.mu.RLock()
+	pool := s.multipathPool
+	strategy := s.strategy
+	s.mu.RUnlock()
+
+	if strategy != StrategyPriority {
+		t.Fatalf("strategy = %s, want priority", strategy)
+	}
+	if pool != nil {
+		t.Fatal("multipathPool should be nil after switching away from multipath")
+	}
+
+	// Give background goroutine time to close the old pool.
+	time.Sleep(50 * time.Millisecond)
+}
+
 func TestProbeUnavailableTransport(t *testing.T) {
 	ft := &fakeTransport{typeName: "h3", dialErr: errors.New("fail")}
 	result := Probe(context.Background(), ft)

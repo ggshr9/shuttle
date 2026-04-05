@@ -240,9 +240,10 @@ func (s *Selector) Dial(ctx context.Context, addr string) (transport.Connection,
 	pool := s.multipathPool
 	cp := s.connPool
 	active := s.active
+	strategy := s.strategy
 	s.mu.RUnlock()
 
-	if s.strategy == StrategyMultipath && pool != nil {
+	if strategy == StrategyMultipath && pool != nil {
 		return pool.VirtualConn(), nil
 	}
 
@@ -335,6 +336,56 @@ func (s *Selector) ActivePaths() []PathInfo {
 		return nil
 	}
 	return pool.PathInfos()
+}
+
+// SetStrategy changes the transport selection strategy at runtime.
+// Switching to/from Multipath involves pool lifecycle management.
+func (s *Selector) SetStrategy(ctx context.Context, strategy Strategy) error {
+	s.mu.Lock()
+
+	if s.strategy == strategy {
+		s.mu.Unlock()
+		return nil
+	}
+
+	old := s.strategy
+	oldPool := s.multipathPool
+
+	switch {
+	case old != StrategyMultipath && strategy == StrategyMultipath:
+		// Non-multipath → Multipath: create a new MultipathPool.
+		sched := newScheduler(s.multipathSchedule)
+		pool := NewMultipathPool(ctx, s.transports, s.serverAddr, sched, s.logger)
+		s.multipathPool = pool
+		s.strategy = strategy
+		s.mu.Unlock()
+		s.logger.Info("strategy switched", "from", string(old), "to", string(strategy))
+		return nil
+
+	case old == StrategyMultipath && strategy != StrategyMultipath:
+		// Multipath → non-multipath: swap strategy, close pool in background.
+		s.multipathPool = nil
+		s.strategy = strategy
+		s.mu.Unlock()
+		if oldPool != nil {
+			go func() {
+				if err := oldPool.Close(); err != nil {
+					s.logger.Warn("error closing multipath pool during strategy switch", "err", err)
+				}
+			}()
+		}
+		s.maybeSwitch()
+		s.logger.Info("strategy switched", "from", string(old), "to", string(strategy))
+		return nil
+
+	default:
+		// Non-multipath → non-multipath: just swap and re-evaluate.
+		s.strategy = strategy
+		s.mu.Unlock()
+		s.maybeSwitch()
+		s.logger.Info("strategy switched", "from", string(old), "to", string(strategy))
+		return nil
+	}
 }
 
 // Transports returns a copy of the configured transport list.

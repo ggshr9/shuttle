@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/shuttleX/shuttle/config"
+	"github.com/shuttleX/shuttle/plugin"
 	"github.com/shuttleX/shuttle/server/audit"
 	"github.com/shuttleX/shuttle/server/metrics"
 )
@@ -47,7 +48,8 @@ type BackupPayload struct {
 
 // Handler creates the admin API HTTP handler. The optional eventsHandler,
 // when non-nil, is registered at GET /api/events for SSE streaming.
-func Handler(info *ServerInfo, cfg *config.ServerConfig, configPath string, users *UserStore, auditLog *audit.Logger, mc *metrics.Collector, eventsHandler EventHandler) http.Handler {
+// The optional pm provides plugin chain metrics at GET /api/metrics.
+func Handler(info *ServerInfo, cfg *config.ServerConfig, configPath string, users *UserStore, auditLog *audit.Logger, mc *metrics.Collector, pm *plugin.Metrics, eventsHandler EventHandler) http.Handler {
 	mux := http.NewServeMux()
 	var cfgMu sync.RWMutex // protects concurrent access to cfg
 	token := cfg.Admin.Token
@@ -159,7 +161,7 @@ func Handler(info *ServerInfo, cfg *config.ServerConfig, configPath string, user
 	mux.HandleFunc("GET /api/metrics", auth(func(w http.ResponseWriter, r *http.Request) {
 		var mem runtime.MemStats
 		runtime.ReadMemStats(&mem)
-		writeJSON(w, map[string]any{
+		result := map[string]any{
 			"active_conns": info.ActiveConns.Load(),
 			"total_conns":  info.TotalConns.Load(),
 			"bytes_sent":   info.BytesSent.Load(),
@@ -167,7 +169,11 @@ func Handler(info *ServerInfo, cfg *config.ServerConfig, configPath string, user
 			"mem_alloc":    mem.Alloc,
 			"mem_sys":      mem.Sys,
 			"goroutines":   runtime.NumGoroutine(),
-		})
+		}
+		if pm != nil {
+			result["plugin_chain"] = pm.Stats()
+		}
+		writeJSON(w, result)
 	}))
 
 	mux.HandleFunc("GET /metrics", auth(func(w http.ResponseWriter, r *http.Request) {
@@ -339,7 +345,7 @@ func Handler(info *ServerInfo, cfg *config.ServerConfig, configPath string, user
 // ListenAndServe starts the admin API server and returns the *http.Server
 // so the caller can call Shutdown() for graceful termination.
 // If the admin API is disabled, it returns (nil, nil).
-func ListenAndServe(cfg *config.AdminConfig, info *ServerInfo, serverCfg *config.ServerConfig, configPath string, users *UserStore, auditLog *audit.Logger, mc *metrics.Collector, eventsHandler EventHandler) (*http.Server, error) {
+func ListenAndServe(cfg *config.AdminConfig, info *ServerInfo, serverCfg *config.ServerConfig, configPath string, users *UserStore, auditLog *audit.Logger, mc *metrics.Collector, pm *plugin.Metrics, eventsHandler EventHandler) (*http.Server, error) {
 	if !cfg.Enabled {
 		return nil, nil
 	}
@@ -354,7 +360,7 @@ func ListenAndServe(cfg *config.AdminConfig, info *ServerInfo, serverCfg *config
 		return nil, fmt.Errorf("admin listen: %w", err)
 	}
 
-	handler := Handler(info, serverCfg, configPath, users, auditLog, mc, eventsHandler)
+	handler := Handler(info, serverCfg, configPath, users, auditLog, mc, pm, eventsHandler)
 	server := &http.Server{
 		Handler:      handler,
 		ReadTimeout:  10 * time.Second,

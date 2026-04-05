@@ -14,6 +14,17 @@ import (
 // connection that has been marked for draining during a transport migration.
 var ErrConnectionDraining = errors.New("connection is draining")
 
+// MigratorConfig holds tunable parameters for a Migrator.
+type MigratorConfig struct {
+	// DrainInterval is how often the drain loop checks for idle connections.
+	// Defaults to 5s when zero.
+	DrainInterval time.Duration
+	// DrainTimeout is the maximum time a draining connection is kept open
+	// before being force-closed regardless of active streams.
+	// Defaults to 30s when zero.
+	DrainTimeout time.Duration
+}
+
 // migrateConn wraps a transport.Connection with stream lifecycle tracking.
 type migrateConn struct {
 	conn          transport.Connection
@@ -21,6 +32,7 @@ type migrateConn struct {
 	activeStreams  atomic.Int32
 	draining      atomic.Bool
 	created       time.Time
+	drainStarted  time.Time
 }
 
 // migrateStream wraps a transport.Stream to auto-decrement the parent's
@@ -42,22 +54,44 @@ func (s *migrateStream) Close() error {
 // When a transport switch occurs, existing connections are marked as draining.
 // New streams are rejected on draining connections, while existing streams are
 // allowed to complete. A background drain loop closes draining connections once
-// all their active streams have finished.
+// all their active streams have finished, or once DrainTimeout is exceeded.
 type Migrator struct {
-	mu          sync.Mutex
-	connections []*migrateConn
-	logger      *slog.Logger
-	drainDone   chan struct{}
+	mu            sync.Mutex
+	connections   []*migrateConn
+	logger        *slog.Logger
+	drainDone     chan struct{}
+	drainInterval time.Duration
+	drainTimeout  time.Duration
 }
 
-// NewMigrator creates a new Migrator.
-func NewMigrator(logger *slog.Logger) *Migrator {
+// defaultDrainInterval is the default polling interval for the drain loop.
+const defaultDrainInterval = 5 * time.Second
+
+// defaultDrainTimeout is the default maximum drain period before force-close.
+const defaultDrainTimeout = 30 * time.Second
+
+// NewMigrator creates a new Migrator with the given optional config.
+// Pass a zero-value MigratorConfig (or nil equivalently via the variadic
+// parameter) to use all defaults.
+func NewMigrator(logger *slog.Logger, cfgs ...MigratorConfig) *Migrator {
 	if logger == nil {
 		logger = slog.Default()
 	}
+	var cfg MigratorConfig
+	if len(cfgs) > 0 {
+		cfg = cfgs[0]
+	}
+	if cfg.DrainInterval <= 0 {
+		cfg.DrainInterval = defaultDrainInterval
+	}
+	if cfg.DrainTimeout <= 0 {
+		cfg.DrainTimeout = defaultDrainTimeout
+	}
 	return &Migrator{
-		logger:    logger,
-		drainDone: make(chan struct{}),
+		logger:        logger,
+		drainDone:     make(chan struct{}),
+		drainInterval: cfg.DrainInterval,
+		drainTimeout:  cfg.DrainTimeout,
 	}
 }
 
@@ -91,13 +125,16 @@ func (m *Migrator) WrapStream(tc *migrateConn, stream transport.Stream) (*migrat
 }
 
 // Migrate marks all current connections as draining. Old connections will be
-// closed automatically by the drain loop when their activeStreams reach 0.
+// closed automatically by the drain loop when their activeStreams reach 0, or
+// when the DrainTimeout is exceeded.
 func (m *Migrator) Migrate() {
+	now := time.Now()
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	for _, tc := range m.connections {
 		if !tc.draining.Load() {
 			tc.draining.Store(true)
+			tc.drainStarted = now
 			m.logger.Info("draining connection",
 				"transport", tc.transportName,
 				"active_streams", tc.activeStreams.Load())
@@ -106,10 +143,11 @@ func (m *Migrator) Migrate() {
 }
 
 // StartDrainLoop starts a background goroutine that periodically checks
-// draining connections and closes those with 0 active streams.
+// draining connections and closes those with 0 active streams or those that
+// have exceeded the DrainTimeout.
 func (m *Migrator) StartDrainLoop() {
 	go func() {
-		ticker := time.NewTicker(5 * time.Second)
+		ticker := time.NewTicker(m.drainInterval)
 		defer ticker.Stop()
 		for {
 			select {
@@ -122,18 +160,30 @@ func (m *Migrator) StartDrainLoop() {
 	}()
 }
 
-// drainIdle closes draining connections that have no active streams and
-// removes them from the tracked list.
+// drainIdle closes draining connections that have no active streams, or that
+// have exceeded the DrainTimeout, and removes them from the tracked list.
 func (m *Migrator) drainIdle() {
+	now := time.Now()
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
 	remaining := m.connections[:0]
 	for _, tc := range m.connections {
-		if tc.draining.Load() && tc.activeStreams.Load() == 0 {
-			m.logger.Info("closing drained connection", "transport", tc.transportName)
-			tc.conn.Close()
-			continue
+		if tc.draining.Load() {
+			idle := tc.activeStreams.Load() == 0
+			timedOut := !tc.drainStarted.IsZero() && now.Sub(tc.drainStarted) > m.drainTimeout
+			if idle || timedOut {
+				if timedOut && !idle {
+					m.logger.Warn("force-closing timed-out draining connection",
+						"transport", tc.transportName,
+						"active_streams", tc.activeStreams.Load(),
+						"drain_age", now.Sub(tc.drainStarted).Round(time.Millisecond))
+				} else {
+					m.logger.Info("closing drained connection", "transport", tc.transportName)
+				}
+				tc.conn.Close()
+				continue
+			}
 		}
 		remaining = append(remaining, tc)
 	}
@@ -168,6 +218,7 @@ type ConnMigrationStats struct {
 	ActiveStreams int32     `json:"active_streams"`
 	Draining     bool      `json:"draining"`
 	Created      time.Time `json:"created"`
+	DrainStarted time.Time `json:"drain_started,omitempty"`
 }
 
 // Stats returns the current state of all tracked connections.
@@ -181,6 +232,7 @@ func (m *Migrator) Stats() []ConnMigrationStats {
 			ActiveStreams: tc.activeStreams.Load(),
 			Draining:     tc.draining.Load(),
 			Created:      tc.created,
+			DrainStarted: tc.drainStarted,
 		}
 	}
 	return stats

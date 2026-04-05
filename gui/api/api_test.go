@@ -982,3 +982,46 @@ func TestAuthMiddleware_StaticFiles(t *testing.T) {
 		t.Fatalf("static file path should be exempt from auth, but got 401")
 	}
 }
+
+// ---------------------------------------------------------------------------
+// TestTransportStrategy
+// ---------------------------------------------------------------------------
+
+func TestTransportStrategyInvalidStrategy(t *testing.T) {
+	h, _, _ := newTestHandler()
+
+	rr := doRequest(h, "POST", "/api/transport/strategy", `{"strategy":"bogus"}`)
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for invalid strategy, got %d: %s", rr.Code, rr.Body.String())
+	}
+
+	var resp map[string]string
+	if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("invalid JSON: %v", err)
+	}
+	if resp["error"] == "" {
+		t.Error("expected non-empty error field")
+	}
+}
+
+func TestTransportStrategyMissingBody(t *testing.T) {
+	h, _, _ := newTestHandler()
+
+	rr := doRequest(h, "POST", "/api/transport/strategy", `{}`)
+	// Empty strategy string is invalid
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for empty strategy, got %d: %s", rr.Code, rr.Body.String())
+	}
+}
+
+func TestTransportStrategyNoSelector(t *testing.T) {
+	h, _, _ := newTestHandler()
+
+	// Engine is stopped — no selector active. Valid strategy name but no selector.
+	for _, s := range []string{"auto", "priority", "latency", "multipath"} {
+		rr := doRequest(h, "POST", "/api/transport/strategy", `{"strategy":"`+s+`"}`)
+		if rr.Code != http.StatusConflict {
+			t.Fatalf("strategy=%q: expected 409 (no active selector), got %d: %s", s, rr.Code, rr.Body.String())
+		}
+	}
+}

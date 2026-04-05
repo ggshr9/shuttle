@@ -1,10 +1,10 @@
 package engine
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
-
-	"context"
+	"time"
 
 	"github.com/shuttleX/shuttle/adapter"
 	"github.com/shuttleX/shuttle/config"
@@ -27,6 +27,13 @@ func (e *Engine) startInbounds(ctx context.Context, cfg *config.ClientConfig) ([
 		resilient := NewResilientOutbound(proxyOb, ResilientOutboundConfig{
 			CircuitBreaker: e.circuitBreaker,
 			RetryConfig:    e.buildRetryConfig(cfg.Retry),
+			OnRetry: func(attempt int, err error) {
+				e.obs.Emit(Event{
+					Type:      EventRetry,
+					Timestamp: time.Now(),
+					Message:   fmt.Sprintf("retry attempt %d: %v", attempt, err),
+				})
+			},
 		})
 		if chain := e.obs.Chain(); chain != nil {
 			outbounds["proxy"] = NewChainOutbound(resilient, chain)
