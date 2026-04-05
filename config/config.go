@@ -1,6 +1,7 @@
 package config
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 
@@ -29,6 +30,8 @@ type ClientConfig struct {
 	Obfs          ObfsConfig           `yaml:"obfs" json:"obfs"`
 	Yamux         YamuxConfig          `yaml:"yamux" json:"yamux"`
 	Log           LogConfig            `yaml:"log" json:"log"`
+	Inbounds      []InboundConfig      `yaml:"inbounds,omitempty" json:"inbounds,omitempty"`
+	Outbounds     []OutboundConfig     `yaml:"outbounds,omitempty" json:"outbounds,omitempty"`
 }
 
 // SubscriptionConfig represents a subscription source.
@@ -227,6 +230,26 @@ func (c *ClientConfig) DeepCopy() *ClientConfig {
 			if r.Process != nil {
 				cp.QoS.Rules[i].Process = make([]string, len(r.Process))
 				copy(cp.QoS.Rules[i].Process, r.Process)
+			}
+		}
+	}
+	if c.Inbounds != nil {
+		cp.Inbounds = make([]InboundConfig, len(c.Inbounds))
+		for i, ib := range c.Inbounds {
+			cp.Inbounds[i] = ib
+			if ib.Options != nil {
+				cp.Inbounds[i].Options = make(json.RawMessage, len(ib.Options))
+				copy(cp.Inbounds[i].Options, ib.Options)
+			}
+		}
+	}
+	if c.Outbounds != nil {
+		cp.Outbounds = make([]OutboundConfig, len(c.Outbounds))
+		for i, ob := range c.Outbounds {
+			cp.Outbounds[i] = ob
+			if ob.Options != nil {
+				cp.Outbounds[i].Options = make(json.RawMessage, len(ob.Options))
+				copy(cp.Outbounds[i].Options, ob.Options)
 			}
 		}
 	}
