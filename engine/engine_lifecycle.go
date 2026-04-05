@@ -74,6 +74,10 @@ func (e *Engine) startInternal(ctx context.Context) error {
 	cfgSnap := e.cfg.DeepCopy()
 	e.mu.RUnlock()
 
+	if err := cfgSnap.Validate(); err != nil {
+		return fail(fmt.Errorf("config validation: %w", err))
+	}
+
 	e.logger.Debug("building congestion control", "mode", cfgSnap.Congestion.Mode)
 	ccAdapter := e.buildCongestionControl(cfgSnap)
 	e.logger.Debug("building transports")
