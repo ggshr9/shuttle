@@ -14,7 +14,6 @@ import (
 	"github.com/shuttleX/shuttle/congestion"
 	"github.com/shuttleX/shuttle/internal/procnet"
 	"github.com/shuttleX/shuttle/obfs"
-	"github.com/shuttleX/shuttle/plugin"
 	"github.com/shuttleX/shuttle/proxy"
 	"github.com/shuttleX/shuttle/qos"
 	"github.com/shuttleX/shuttle/router"
@@ -319,40 +318,6 @@ func (e *Engine) dialProxyStream(
 	return sc, nil
 }
 
-// createDialer builds the proxy dialer function.
-func (e *Engine) createDialer(cfg *config.ClientConfig, rt *router.Router, dnsResolver *router.DNSResolver) func(context.Context, string, string) (net.Conn, error) {
-	serverAddr := cfg.Server.Addr
-	retryCfg := e.buildRetryConfig(cfg.Retry)
-	shaperCfg := e.buildShaperConfig(cfg.Obfs)
-	var classifier *qos.Classifier
-	if cfg.QoS.Enabled {
-		classifier = qos.NewClassifier(&cfg.QoS)
-	}
-	return func(dialCtx context.Context, network, addr string) (net.Conn, error) {
-		host, port, err := net.SplitHostPort(addr)
-		if err != nil {
-			host = addr
-			port = ""
-		}
-
-		ip, err := resolveTarget(dialCtx, host, dnsResolver)
-		if err != nil {
-			return nil, err
-		}
-
-		procName := proxy.ProcessFromContext(dialCtx)
-		action := rt.Match(host, ip, procName, "")
-
-		switch action {
-		case router.ActionDirect:
-			return (&net.Dialer{}).DialContext(dialCtx, network, net.JoinHostPort(ip.String(), port))
-		case router.ActionReject:
-			return nil, fmt.Errorf("rejected: %s", addr)
-		default:
-			return e.dialProxyStream(dialCtx, serverAddr, addr, network, retryCfg, shaperCfg, classifier)
-		}
-	}
-}
 
 // startSOCKS5 starts the SOCKS5 proxy server if configured.
 func (e *Engine) startSOCKS5(ctx context.Context, cfg *config.ClientConfig, dialer func(context.Context, string, string) (net.Conn, error), procResolver *procnet.Resolver) (func() error, error) {
@@ -455,29 +420,6 @@ func (e *Engine) startProxies(ctx context.Context, cfg *config.ClientConfig, dia
 	return closers, nil
 }
 
-// wrapDialer wraps a dialer function so that every successfully dialled
-// connection is run through the plugin chain's OnConnect hooks. When the
-// returned connection is closed, OnDisconnect is called on the full chain
-// via the chainConn wrapper.
-func (e *Engine) wrapDialer(
-	dialer func(context.Context, string, string) (net.Conn, error),
-	chain *plugin.Chain,
-) func(context.Context, string, string) (net.Conn, error) {
-	return func(ctx context.Context, network, addr string) (net.Conn, error) {
-		conn, err := dialer(ctx, network, addr)
-		if err != nil {
-			return nil, err
-		}
-		// Run the connection through the plugin chain (metrics, conntrack, logger).
-		// The chain may wrap the conn (e.g. trackingConn for byte counting).
-		wrapped, err := chain.OnConnect(conn, addr)
-		if err != nil {
-			conn.Close()
-			return nil, err
-		}
-		return &chainConn{Conn: wrapped, chain: chain}, nil
-	}
-}
 
 // buildShaperConfig converts config.ObfsConfig into an obfs.ShaperConfig.
 // Returns a zero-value (Enabled=false) config if shaping is disabled or parsing fails.

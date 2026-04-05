@@ -4,14 +4,15 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"net"
 	"time"
 
 	"github.com/shuttleX/shuttle/config"
 	"github.com/shuttleX/shuttle/internal/netmon"
 	"github.com/shuttleX/shuttle/internal/sysopt"
 	"github.com/shuttleX/shuttle/mesh"
-	"github.com/shuttleX/shuttle/plugin"
 	"github.com/shuttleX/shuttle/proxy"
+	"github.com/shuttleX/shuttle/qos"
 	"github.com/shuttleX/shuttle/stream"
 	"github.com/shuttleX/shuttle/transport/selector"
 )
@@ -118,31 +119,30 @@ func (e *Engine) startInternal(ctx context.Context) error {
 			gm.Start(ctx)
 		}
 	}
-	dialer := e.createDialer(cfgSnap, rt, dnsResolver)
+	retryCfg := e.buildRetryConfig(cfgSnap.Retry)
+	shaperCfg := e.buildShaperConfig(cfgSnap.Obfs)
+	var classifier *qos.Classifier
+	if cfgSnap.QoS.Enabled {
+		classifier = qos.NewClassifier(&cfgSnap.QoS)
+	}
+	dialer := e.traffic.CreateDialer(cfgSnap, rt, dnsResolver, func(ctx context.Context, serverAddr, addr, network string) (net.Conn, error) {
+		return e.dialProxyStream(ctx, serverAddr, addr, network, retryCfg, shaperCfg, classifier)
+	})
 
 	// Build plugin chain: metrics (byte counting + stats), connection tracker
 	// (lifecycle events), and logger (debug logging).
-	connTracker := plugin.NewConnTracker(e)
-	chain := plugin.NewChain(
-		e.metrics,
-		connTracker,
-		plugin.NewLogger(e.logger),
-	)
-	if err := chain.Init(ctx); err != nil {
+	if err := e.obs.BuildChain(ctx, e); err != nil {
 		return fail(fmt.Errorf("plugin chain init: %w", err))
 	}
-	e.mu.Lock()
-	e.chain = chain
-	e.mu.Unlock()
 
 	// Wrap dialer so every proxied connection flows through the plugin chain.
-	dialer = e.wrapDialer(dialer, chain)
+	dialer = e.traffic.WrapDialerWithChain(dialer, e.obs.Chain())
 
 	e.logger.Debug("starting proxy listeners")
 	closers, err := e.startProxies(ctx, cfgSnap, dialer, sel, cancel)
 	if err != nil {
 		sel.Close()
-		chain.Close() // Clean up plugin chain on proxy start failure
+		e.obs.CloseChain() // Clean up plugin chain on proxy start failure
 		return fail(err)
 	}
 
@@ -155,11 +155,7 @@ func (e *Engine) startInternal(ctx context.Context) error {
 
 	e.logger.Debug("engine state transition", "from", "starting", "to", "running")
 	e.emit(Event{Type: EventConnected, Message: "engine started"})
-	e.bgWg.Add(1)
-	go func() {
-		defer e.bgWg.Done()
-		e.speedLoop(ctx)
-	}()
+	e.obs.StartSpeedLoop(ctx)
 
 	// Start network change monitor to detect WiFi/cellular switches.
 	nm := netmon.New(5 * time.Second)
@@ -219,7 +215,7 @@ func (e *Engine) stopInternal() error {
 		e.logger.Warn("engine stop timed out, forcing shutdown")
 	}
 
-	// Wait for background goroutines (speedLoop, MeshReceiveLoop) to exit.
+	// Wait for background goroutines (MeshReceiveLoop, etc.) to exit.
 	bgDone := make(chan struct{})
 	go func() {
 		e.bgWg.Wait()
@@ -231,6 +227,18 @@ func (e *Engine) stopInternal() error {
 		e.logger.Warn("background goroutines did not exit within timeout")
 	}
 
+	// Wait for observability background goroutines (speed loop).
+	obsDone := make(chan struct{})
+	go func() {
+		e.obs.WaitBackground()
+		close(obsDone)
+	}()
+	select {
+	case <-obsDone:
+	case <-time.After(5 * time.Second):
+		e.logger.Warn("observability goroutines did not exit within timeout")
+	}
+
 	e.mu.Lock()
 	if e.netMon != nil {
 		e.netMon.Stop()
@@ -240,10 +248,7 @@ func (e *Engine) stopInternal() error {
 		e.geoManager.Stop()
 		e.geoManager = nil
 	}
-	if e.chain != nil {
-		e.chain.Close()
-		e.chain = nil
-	}
+	e.obs.CloseChain()
 	// Close inbounds and outbounds from the pluggable abstraction layer.
 	for _, ib := range e.inbounds {
 		_ = ib.Close()
@@ -364,21 +369,3 @@ func (e *Engine) connectMesh(ctx context.Context, cfg *config.ClientConfig, tunS
 	return nil
 }
 
-// speedLoop periodically samples upload/download speed and emits events.
-func (e *Engine) speedLoop(ctx context.Context) {
-	ticker := time.NewTicker(1 * time.Second)
-	defer ticker.Stop()
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-ticker.C:
-			up, down := e.metrics.SampleSpeed()
-			e.emit(Event{
-				Type:     EventSpeedTick,
-				Upload:   up,
-				Download: down,
-			})
-		}
-	}
-}

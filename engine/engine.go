@@ -9,7 +9,6 @@ import (
 	"github.com/shuttleX/shuttle/internal/logutil"
 	"github.com/shuttleX/shuttle/internal/netmon"
 	"github.com/shuttleX/shuttle/mesh"
-	"github.com/shuttleX/shuttle/plugin"
 	"github.com/shuttleX/shuttle/router"
 	"github.com/shuttleX/shuttle/router/geodata"
 	"github.com/shuttleX/shuttle/stream"
@@ -19,13 +18,23 @@ import (
 	"fmt"
 )
 
+// Compile-time check: Engine still satisfies plugin.ConnEmitter so existing
+// code that passes *Engine to NewConnTracker continues to work.
+var _ interface {
+	EmitConnectionEvent(connID, state, target, rule, protocol, processName string, bytesIn, bytesOut, durationMs int64)
+} = (*Engine)(nil)
+
 // Engine is the core shuttle client, managing transports, routing, and local proxies.
+// It delegates observability (metrics, events, plugin chain) to ObservabilityManager
+// and data-plane wiring (dialers, inbound/outbound setup) to TrafficManager.
 type Engine struct {
-	mu      sync.RWMutex
-	state   EngineState
-	cfg     *config.ClientConfig
+	mu    sync.RWMutex
+	state EngineState
+	cfg   *config.ClientConfig
+
 	logger  *slog.Logger
-	metrics *plugin.Metrics
+	obs     *ObservabilityManager
+	traffic *TrafficManager
 
 	// lifecycleMu serialises Start/Stop/Reload so that concurrent callers
 	// cannot interleave their long-running init/shutdown sequences.
@@ -59,9 +68,6 @@ type Engine struct {
 	// Circuit breaker for transport connections
 	circuitBreaker *CircuitBreaker
 
-	// Plugin chain for connection tracking, filtering, and logging
-	chain *plugin.Chain
-
 	// Background goroutine tracking for clean shutdown
 	bgWg sync.WaitGroup
 
@@ -71,10 +77,6 @@ type Engine struct {
 	// Inbound/outbound abstraction layer
 	inbounds  []adapter.Inbound
 	outbounds map[string]adapter.Outbound
-
-	// Event subscribers — stores bidirectional channels, Subscribe returns receive-only view
-	subMu sync.RWMutex
-	subs  map[chan Event]struct{}
 }
 
 // New creates a new Engine from the given config.
@@ -85,8 +87,8 @@ func New(cfg *config.ClientConfig) *Engine {
 		state:   StateStopped,
 		cfg:     cfg,
 		logger:  logger,
-		metrics: plugin.NewMetrics(),
-		subs:    make(map[chan Event]struct{}),
+		obs:     NewObservabilityManager(logger),
+		traffic: NewTrafficManager(logger),
 	}
 }
 
@@ -120,8 +122,8 @@ func (e *Engine) Status() EngineStatus {
 	cb := e.circuitBreaker
 	e.mu.RUnlock()
 
-	stats := e.metrics.Stats()
-	up, down := e.metrics.Speed()
+	stats := e.obs.Metrics().Stats()
+	up, down := e.obs.Metrics().Speed()
 
 	status := EngineStatus{
 		State:         state.String(),

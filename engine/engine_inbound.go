@@ -18,11 +18,7 @@ import (
 // (stored on e.currentRouter and e.dnsResolver), avoiding duplicate work.
 func (e *Engine) startInbounds(ctx context.Context, cfg *config.ClientConfig) ([]func() error, error) {
 	// Build outbounds: always provide direct, reject, and proxy.
-	outbounds := map[string]adapter.Outbound{
-		"direct": &DirectOutbound{tag: "direct"},
-		"reject": &RejectOutbound{tag: "reject"},
-		"proxy": newProxyOutbound(e, cfg),
-	}
+	outbounds := e.traffic.BuildBuiltinOutbounds(cfg, e)
 
 	// Add any explicitly configured outbounds from the registry.
 	for _, outCfg := range cfg.Outbounds {
@@ -39,13 +35,7 @@ func (e *Engine) startInbounds(ctx context.Context, cfg *config.ClientConfig) ([
 	dnsResolver := e.dnsResolver
 	e.mu.RUnlock()
 
-	ibRouter := &inboundRouter{
-		routerEngine: rt,
-		dnsResolver:  dnsResolver,
-		outbounds:    outbounds,
-		defaultOut:   outbounds["proxy"],
-		logger:       e.logger,
-	}
+	ibRouter := e.traffic.BuildInboundRouter(rt, dnsResolver, outbounds, outbounds["proxy"])
 
 	var closers []func() error
 	var started []adapter.Inbound

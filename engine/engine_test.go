@@ -39,8 +39,11 @@ func TestNewEngine(t *testing.T) {
 	if eng.state != StateStopped {
 		t.Errorf("initial state = %v, want StateStopped", eng.state)
 	}
-	if eng.subs == nil {
-		t.Error("subs map is nil")
+	if eng.obs == nil {
+		t.Error("obs manager is nil")
+	}
+	if eng.traffic == nil {
+		t.Error("traffic manager is nil")
 	}
 	if eng.cfg == nil {
 		t.Error("cfg is nil")
@@ -238,7 +241,7 @@ func TestEngineEmit(t *testing.T) {
 	eng.emit(Event{Type: EventLog, Message: "hello"})
 
 	// Both subscribers should receive the event.
-	for i, ch := range []chan Event{ch1, ch2} {
+	for i, ch := range []<-chan Event{ch1, ch2} {
 		select {
 		case ev := <-ch:
 			if ev.Type != EventLog {
@@ -467,7 +470,7 @@ func TestConcurrentSubscribe(t *testing.T) {
 	var wg sync.WaitGroup
 	wg.Add(goroutines)
 
-	channels := make([]chan Event, goroutines)
+	channels := make([]<-chan Event, goroutines)
 	var mu sync.Mutex
 
 	for i := 0; i < goroutines; i++ {
