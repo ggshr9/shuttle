@@ -21,6 +21,11 @@ import (
 	"github.com/shuttleX/shuttle/server/metrics"
 )
 
+// EventHandler is an optional http.HandlerFunc for SSE event streaming.
+// When non-nil, it is registered at GET /api/events.
+type EventHandler = http.HandlerFunc
+
+
 // ServerInfo tracks runtime server metrics.
 type ServerInfo struct {
 	StartTime   time.Time
@@ -40,8 +45,9 @@ type BackupPayload struct {
 	Config    *config.ServerConfig `json:"config,omitempty"`
 }
 
-// Handler creates the admin API HTTP handler.
-func Handler(info *ServerInfo, cfg *config.ServerConfig, configPath string, users *UserStore, auditLog *audit.Logger, mc *metrics.Collector) http.Handler {
+// Handler creates the admin API HTTP handler. The optional eventsHandler,
+// when non-nil, is registered at GET /api/events for SSE streaming.
+func Handler(info *ServerInfo, cfg *config.ServerConfig, configPath string, users *UserStore, auditLog *audit.Logger, mc *metrics.Collector, eventsHandler EventHandler) http.Handler {
 	mux := http.NewServeMux()
 	var cfgMu sync.RWMutex // protects concurrent access to cfg
 	token := cfg.Admin.Token
@@ -322,13 +328,18 @@ func Handler(info *ServerInfo, cfg *config.ServerConfig, configPath string, user
 		writeJSON(w, auditLog.Recent(n))
 	}))
 
+	// SSE event stream
+	if eventsHandler != nil {
+		mux.HandleFunc("GET /api/events", auth(eventsHandler))
+	}
+
 	return mux
 }
 
 // ListenAndServe starts the admin API server and returns the *http.Server
 // so the caller can call Shutdown() for graceful termination.
 // If the admin API is disabled, it returns (nil, nil).
-func ListenAndServe(cfg *config.AdminConfig, info *ServerInfo, serverCfg *config.ServerConfig, configPath string, users *UserStore, auditLog *audit.Logger, mc *metrics.Collector) (*http.Server, error) {
+func ListenAndServe(cfg *config.AdminConfig, info *ServerInfo, serverCfg *config.ServerConfig, configPath string, users *UserStore, auditLog *audit.Logger, mc *metrics.Collector, eventsHandler EventHandler) (*http.Server, error) {
 	if !cfg.Enabled {
 		return nil, nil
 	}
@@ -343,7 +354,7 @@ func ListenAndServe(cfg *config.AdminConfig, info *ServerInfo, serverCfg *config
 		return nil, fmt.Errorf("admin listen: %w", err)
 	}
 
-	handler := Handler(info, serverCfg, configPath, users, auditLog, mc)
+	handler := Handler(info, serverCfg, configPath, users, auditLog, mc, eventsHandler)
 	server := &http.Server{
 		Handler:      handler,
 		ReadTimeout:  10 * time.Second,

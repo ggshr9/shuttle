@@ -2,6 +2,8 @@ package server
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"net/http/pprof"
@@ -47,6 +49,7 @@ type Server struct {
 	peerTable   *mesh.PeerTable
 	ipAllocator *mesh.IPAllocator
 	signalHub   *meshsignal.Hub
+	eventBus    *ServerEventBus
 
 	connWg sync.WaitGroup
 
@@ -69,6 +72,7 @@ func New(c Config) (*Server, error) {
 		version:    c.Version,
 		logger:     logger,
 		metrics:    metrics.NewCollector(),
+		eventBus:   NewServerEventBus(),
 	}
 
 	// --- Pprof ---
@@ -161,7 +165,7 @@ func New(c Config) (*Server, error) {
 			ConfigPath: c.ConfigPath,
 		}
 		var err error
-		s.adminServer, err = admin.ListenAndServe(&cfg.Admin, s.adminInfo, cfg, c.ConfigPath, s.users, s.auditLog, s.metrics)
+		s.adminServer, err = admin.ListenAndServe(&cfg.Admin, s.adminInfo, cfg, c.ConfigPath, s.users, s.auditLog, s.metrics, s.sseEventsHandler())
 		if err != nil {
 			logger.Error("failed to start admin API", "err", err)
 		} else {
@@ -209,6 +213,43 @@ func New(c Config) (*Server, error) {
 	return s, nil
 }
 
+// EventBus returns the server's event bus for external consumers.
+func (s *Server) EventBus() *ServerEventBus {
+	return s.eventBus
+}
+
+// sseEventsHandler returns an http.HandlerFunc that streams server events
+// using Server-Sent Events (SSE).
+func (s *Server) sseEventsHandler() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		flusher, ok := w.(http.Flusher)
+		if !ok {
+			http.Error(w, "streaming not supported", http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.Header().Set("Cache-Control", "no-cache")
+		w.Header().Set("Connection", "keep-alive")
+
+		ch := s.eventBus.Subscribe()
+		defer s.eventBus.Unsubscribe(ch)
+
+		for {
+			select {
+			case ev := <-ch:
+				data, err := json.Marshal(ev)
+				if err != nil {
+					continue
+				}
+				fmt.Fprintf(w, "data: %s\n\n", data)
+				flusher.Flush()
+			case <-r.Context().Done():
+				return
+			}
+		}
+	}
+}
+
 // Start begins listening and accepting connections. It blocks until
 // ctx is cancelled or an unrecoverable error occurs.
 func (s *Server) Start(ctx context.Context) error {
@@ -254,6 +295,7 @@ func (s *Server) Start(ctx context.Context) error {
 	}
 
 	s.logger.Info("shuttled is running", "listen", s.cfg.Listen)
+	s.eventBus.Emit(ServerEvent{Type: "started", Message: "shuttled is running on " + s.cfg.Listen})
 
 	// Accept loop
 	for {
@@ -288,6 +330,13 @@ func (s *Server) Start(ctx context.Context) error {
 		s.metrics.ConnOpened(transportName)
 		connStart := time.Now()
 
+		connID := fmt.Sprintf("%s-%d", ExtractIP(conn.RemoteAddr()), connStart.UnixNano())
+		s.eventBus.Emit(ServerEvent{
+			Type:   "connected",
+			ConnID: connID,
+			Target: transportName,
+		})
+
 		s.connWg.Add(1)
 		go func() {
 			defer s.connWg.Done()
@@ -296,6 +345,11 @@ func (s *Server) Start(ctx context.Context) error {
 				s.adminInfo.ActiveConns.Add(-1)
 			}
 			s.metrics.ConnClosed(transportName, time.Since(connStart))
+			s.eventBus.Emit(ServerEvent{
+				Type:   "disconnected",
+				ConnID: connID,
+				Target: transportName,
+			})
 		}()
 	}
 }
@@ -303,6 +357,8 @@ func (s *Server) Start(ctx context.Context) error {
 // Shutdown performs graceful shutdown: stops accepting, drains connections,
 // and closes all subsystems. The provided ctx controls the drain timeout.
 func (s *Server) Shutdown(ctx context.Context) {
+	s.eventBus.Emit(ServerEvent{Type: "stopped", Message: "server shutting down"})
+
 	// Phase 1: Stop accepting new connections
 	s.ml.Close()
 
