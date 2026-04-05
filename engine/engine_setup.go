@@ -407,7 +407,12 @@ func (e *Engine) startTUN(ctx context.Context, cfg *config.ClientConfig, dialer 
 }
 
 // startProxies starts all configured local proxy servers.
+// If inbounds are configured, the new pluggable abstraction is used instead.
 func (e *Engine) startProxies(ctx context.Context, cfg *config.ClientConfig, dialer func(context.Context, string, string) (net.Conn, error), sel *selector.Selector, cancel context.CancelFunc) ([]func() error, error) {
+	if len(cfg.Inbounds) > 0 {
+		return e.startInbounds(ctx, cfg, sel, cancel)
+	}
+
 	procResolver := procnet.NewResolver()
 	var closers []func() error
 

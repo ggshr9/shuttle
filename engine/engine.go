@@ -65,6 +65,10 @@ type Engine struct {
 	// Connection sequence counter for generating correlation IDs
 	connSeq uint64
 
+	// Inbound/outbound abstraction layer
+	inbounds  []adapter.Inbound
+	outbounds map[string]adapter.Outbound
+
 	// Event subscribers — stores bidirectional channels, Subscribe returns receive-only view
 	subMu sync.RWMutex
 	subs  map[chan Event]struct{}

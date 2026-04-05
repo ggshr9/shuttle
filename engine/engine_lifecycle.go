@@ -243,6 +243,15 @@ func (e *Engine) stopInternal() error {
 		e.chain.Close()
 		e.chain = nil
 	}
+	// Close inbounds and outbounds from the pluggable abstraction layer.
+	for _, ib := range e.inbounds {
+		_ = ib.Close()
+	}
+	e.inbounds = nil
+	for _, ob := range e.outbounds {
+		_ = ob.Close()
+	}
+	e.outbounds = nil
 	e.state = StateStopped
 	e.closers = nil
 	e.sel = nil
