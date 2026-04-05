@@ -108,7 +108,7 @@
         </div>
         <div class="status-item">
           <span class="status-label">{t('mesh.virtualIP')}</span>
-          <span class="status-value mono">{status.vip || '—'}</span>
+          <span class="status-value mono">{status.virtual_ip || '—'}</span>
         </div>
         <div class="status-item">
           <span class="status-label">{t('mesh.cidr')}</span>

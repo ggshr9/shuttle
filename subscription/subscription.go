@@ -53,6 +53,11 @@ func NewManager() *Manager {
 
 // Add adds a new subscription.
 func (m *Manager) Add(name, url string) (*Subscription, error) {
+	// Validate URL scheme to prevent SSRF via file://, gopher://, etc.
+	if !strings.HasPrefix(url, "http://") && !strings.HasPrefix(url, "https://") {
+		return nil, fmt.Errorf("invalid subscription URL: must use http or https scheme")
+	}
+
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -145,6 +150,11 @@ func (m *Manager) RefreshAll(ctx context.Context) {
 
 // fetch downloads and parses a subscription URL.
 func (m *Manager) fetch(ctx context.Context, url string) ([]config.ServerEndpoint, error) {
+	// Defense-in-depth: reject non-HTTP(S) schemes even if Add() already validated.
+	if !strings.HasPrefix(url, "http://") && !strings.HasPrefix(url, "https://") {
+		return nil, fmt.Errorf("invalid URL scheme: only http/https allowed")
+	}
+
 	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("create request: %w", err)
@@ -220,6 +230,9 @@ func (m *Manager) StartAutoRefresh(ctx context.Context, interval time.Duration) 
 	m.autoRunning = true
 
 	go func() {
+		// Initial refresh on startup so subscriptions are populated immediately.
+		m.RefreshAll(autoCtx)
+
 		ticker := time.NewTicker(interval)
 		defer ticker.Stop()
 

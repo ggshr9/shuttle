@@ -98,6 +98,12 @@ func (mm *MeshManager) Start(ctx context.Context, cfg *config.ClientConfig, sel 
 		mm.client = mc
 		mm.mu.Unlock()
 
+		// MeshHandler must be set before significant TUN traffic flows.
+		// This is safe because Start() runs during engine startup after TUN.Start()
+		// but before the engine enters StateRunning and accepts client connections.
+		// The TUN read loop checks `if mh := t.MeshHandler; mh != nil` so a nil
+		// value during the brief window is handled gracefully (packets pass through
+		// without mesh interception).
 		tunServer.MeshHandler = mc
 		if err := tunServer.AddMeshRoute(mc.MeshCIDR()); err != nil {
 			mm.logger.Warn("mesh: add route failed", "err", err)

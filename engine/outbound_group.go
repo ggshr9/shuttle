@@ -146,15 +146,10 @@ func (g *OutboundGroup) dialQuality(ctx context.Context, network, address string
 	return nil, fmt.Errorf("outbound group %q: no outbounds available", g.tag)
 }
 
-// Close closes all member outbounds.
+// Close is a no-op for OutboundGroup. Member outbounds are owned by the
+// engine's outbound map and closed there; the group does not own their lifecycle.
 func (g *OutboundGroup) Close() error {
-	var firstErr error
-	for _, ob := range g.outbounds {
-		if err := ob.Close(); err != nil && firstErr == nil {
-			firstErr = err
-		}
-	}
-	return firstErr
+	return nil
 }
 
 // parseOutboundGroupConfig unmarshals OutboundGroupConfig from raw JSON.

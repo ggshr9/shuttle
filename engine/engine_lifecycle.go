@@ -226,7 +226,7 @@ func (e *Engine) startInternal(ctx context.Context) error {
 	nm.OnChange(func() {
 		e.logger.Info("network change detected")
 		e.obs.Emit(Event{Type: EventNetworkChange, Message: "network change detected"})
-		pm.OnNetworkChange(ctx)
+		go pm.OnNetworkChange(ctx) // non-blocking: avoid stalling netmon callback
 	})
 	e.bgWg.Add(1)
 	go func() {

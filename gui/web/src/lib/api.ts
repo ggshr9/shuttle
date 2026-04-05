@@ -300,9 +300,9 @@ export interface GeodataSourcePreset {
 
 export interface MeshStatus {
   enabled: boolean
-  vip?: string
+  virtual_ip?: string
   cidr?: string
-  hub?: string
+  peer_count?: number
 }
 
 export interface MeshPeer {
