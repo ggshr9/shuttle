@@ -348,6 +348,25 @@ func TestClientConfigValidate(t *testing.T) {
 			c.Transport.WebRTC.SignalURL = "https://signal.example.com"
 		}, false},
 
+		// transport duration fields
+		{"valid pool_idle_ttl", func(c *ClientConfig) { c.Transport.PoolIdleTTL = "60s" }, false},
+		{"invalid pool_idle_ttl", func(c *ClientConfig) { c.Transport.PoolIdleTTL = "not-a-duration" }, true},
+		{"empty pool_idle_ttl", func(c *ClientConfig) { c.Transport.PoolIdleTTL = "" }, false},
+		{"valid keepalive_interval", func(c *ClientConfig) { c.Transport.KeepaliveInterval = "15s" }, false},
+		{"invalid keepalive_interval", func(c *ClientConfig) { c.Transport.KeepaliveInterval = "bad" }, true},
+		{"valid keepalive_timeout", func(c *ClientConfig) { c.Transport.KeepaliveTimeout = "5s" }, false},
+		{"invalid keepalive_timeout", func(c *ClientConfig) { c.Transport.KeepaliveTimeout = "bad" }, true},
+
+		// routing.geodata.update_interval
+		{"valid geodata update_interval", func(c *ClientConfig) { c.Routing.GeoData.UpdateInterval = "24h" }, false},
+		{"invalid geodata update_interval", func(c *ClientConfig) { c.Routing.GeoData.UpdateInterval = "not-a-duration" }, true},
+		{"empty geodata update_interval", func(c *ClientConfig) { c.Routing.GeoData.UpdateInterval = "" }, false},
+
+		// obfs.min_delay
+		{"valid obfs min_delay", func(c *ClientConfig) { c.Obfs.MinDelay = "10ms" }, false},
+		{"invalid obfs min_delay", func(c *ClientConfig) { c.Obfs.MinDelay = "not-a-duration" }, true},
+		{"empty obfs min_delay", func(c *ClientConfig) { c.Obfs.MinDelay = "" }, false},
+
 		// log.level
 		{"valid log level debug", func(c *ClientConfig) { c.Log.Level = "debug" }, false},
 		{"invalid log level", func(c *ClientConfig) { c.Log.Level = "trace" }, true},

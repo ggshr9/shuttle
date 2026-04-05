@@ -76,6 +76,11 @@ func (c *ClientConfig) Validate() error {
 			return fmt.Errorf("invalid obfs.max_delay: %w", err)
 		}
 	}
+	if c.Obfs.MinDelay != "" {
+		if err := validateDuration(c.Obfs.MinDelay, "obfs.min_delay"); err != nil {
+			return err
+		}
+	}
 	for _, sr := range c.Mesh.SplitRoutes {
 		if _, _, err := net.ParseCIDR(sr.CIDR); err != nil {
 			return fmt.Errorf("invalid mesh split_route CIDR %q: %w", sr.CIDR, err)
@@ -93,6 +98,23 @@ func (c *ClientConfig) Validate() error {
 		case "failover", "aggregate", "redundant":
 		default:
 			return fmt.Errorf("invalid transport.h3.multipath.mode: %q (must be failover, aggregate, or redundant)", c.Transport.H3.Multipath.Mode)
+		}
+	}
+
+	// Transport duration validations
+	if c.Transport.PoolIdleTTL != "" {
+		if err := validateDuration(c.Transport.PoolIdleTTL, "transport.pool_idle_ttl"); err != nil {
+			return err
+		}
+	}
+	if c.Transport.KeepaliveInterval != "" {
+		if err := validateDuration(c.Transport.KeepaliveInterval, "transport.keepalive_interval"); err != nil {
+			return err
+		}
+	}
+	if c.Transport.KeepaliveTimeout != "" {
+		if err := validateDuration(c.Transport.KeepaliveTimeout, "transport.keepalive_timeout"); err != nil {
+			return err
 		}
 	}
 
@@ -140,6 +162,13 @@ func (c *ClientConfig) Validate() error {
 			if err := validateURL(sub.URL, fmt.Sprintf("subscriptions[%d].url", i)); err != nil {
 				return err
 			}
+		}
+	}
+
+	// Routing.GeoData.UpdateInterval validation
+	if c.Routing.GeoData.UpdateInterval != "" {
+		if err := validateDuration(c.Routing.GeoData.UpdateInterval, "routing.geodata.update_interval"); err != nil {
+			return err
 		}
 	}
 
