@@ -66,7 +66,7 @@ type Engine struct {
 	connSeq uint64
 
 	// Event subscribers — stores bidirectional channels, Subscribe returns receive-only view
-	subMu sync.Mutex
+	subMu sync.RWMutex
 	subs  map[chan Event]struct{}
 }
 

@@ -30,13 +30,27 @@ func (e *Engine) Unsubscribe(ch chan Event) {
 func (e *Engine) emit(ev Event) {
 	ev.Timestamp = time.Now()
 	e.logger.Debug("emitting event", slog.String("type", ev.Type.String()))
-	e.subMu.Lock()
-	defer e.subMu.Unlock()
+
+	// Snapshot subscribers under read lock, then release before sending.
+	// This prevents deadlock when a subscriber callback triggers Unsubscribe.
+	e.subMu.RLock()
+	snapshot := make([]chan Event, 0, len(e.subs))
 	for ch := range e.subs {
-		select {
-		case ch <- ev:
-		default:
-		}
+		snapshot = append(snapshot, ch)
+	}
+	e.subMu.RUnlock()
+
+	for _, ch := range snapshot {
+		// The channel may have been closed by Unsubscribe after the
+		// snapshot was taken. Recover from the resulting panic rather
+		// than holding the lock during send (which risks deadlock).
+		func() {
+			defer func() { recover() }()
+			select {
+			case ch <- ev:
+			default:
+			}
+		}()
 	}
 }
 
