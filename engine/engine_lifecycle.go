@@ -364,7 +364,7 @@ func (e *Engine) connectMesh(ctx context.Context, cfg *config.ClientConfig, tunS
 			time.Sleep(time.Duration(attempt) * time.Second)
 			continue
 		}
-		tunServer.MeshClient = mc
+		tunServer.MeshHandler = mc
 		e.meshClient = mc // Store in engine for stats access
 		if err := tunServer.AddMeshRoute(mc.MeshCIDR()); err != nil {
 			e.logger.Warn("mesh: add route failed", "err", err)

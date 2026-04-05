@@ -9,6 +9,7 @@ import (
 	"github.com/shuttleX/shuttle/internal/logutil"
 	"github.com/shuttleX/shuttle/internal/netmon"
 	"github.com/shuttleX/shuttle/mesh"
+	"github.com/shuttleX/shuttle/proxy"
 	"github.com/shuttleX/shuttle/router"
 	"github.com/shuttleX/shuttle/router/geodata"
 	"github.com/shuttleX/shuttle/stream"
@@ -23,6 +24,9 @@ import (
 var _ interface {
 	EmitConnectionEvent(connID, state, target, rule, protocol, processName string, bytesIn, bytesOut, durationMs int64)
 } = (*Engine)(nil)
+
+// Compile-time check: MeshClient satisfies the MeshPacketHandler interface.
+var _ proxy.MeshPacketHandler = (*mesh.MeshClient)(nil)
 
 // Engine is the core shuttle client, managing transports, routing, and local proxies.
 // It delegates observability (metrics, events, plugin chain) to ObservabilityManager
