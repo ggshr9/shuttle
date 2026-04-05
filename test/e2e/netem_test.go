@@ -20,6 +20,8 @@ import (
 // TestSandboxNetemApplyReset verifies that applying latency impairment to the
 // router measurably increases round-trip time, and resetting restores it.
 func TestSandboxNetemApplyReset(t *testing.T) {
+	// tc netem may not work on Docker Desktop macOS (virtualized network stack).
+	// This test validates netem functionality and is expected to pass on Linux CI.
 	clientA := sandboxEnv(t, "SANDBOX_CLIENT_A_ADDR")
 	httpbinAddr := sandboxEnv(t, "SANDBOX_HTTPBIN_ADDR")
 

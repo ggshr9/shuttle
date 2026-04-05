@@ -38,7 +38,7 @@ jobs:
       - name: Start sandbox environment
         working-directory: sandbox
         run: |
-          docker compose up -d server router client-a client-b
+          docker compose up -d server router httpbin stun client-a client-b
           sleep 10
 
       - name: Check service health
