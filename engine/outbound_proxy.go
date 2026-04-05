@@ -30,14 +30,20 @@ func (o *ProxyOutbound) DialContext(ctx context.Context, network, address string
 
 func (o *ProxyOutbound) Close() error { return nil }
 
-// newProxyOutbound extracts needed config at construction time.
+// newProxyOutbound creates the default proxy outbound tagged "proxy".
 func newProxyOutbound(e *Engine, cfg *config.ClientConfig) *ProxyOutbound {
+	return newProxyOutboundWithTag("proxy", e, cfg)
+}
+
+// newProxyOutboundWithTag creates a proxy outbound with a custom tag.
+// This allows multiple proxy outbounds pointing to different servers.
+func newProxyOutboundWithTag(tag string, e *Engine, cfg *config.ClientConfig) *ProxyOutbound {
 	var classifier *qos.Classifier
 	if cfg.QoS.Enabled {
 		classifier = qos.NewClassifier(&cfg.QoS)
 	}
 	return &ProxyOutbound{
-		tag:        "proxy",
+		tag:        tag,
 		engine:     e,
 		serverAddr: cfg.Server.Addr,
 		shaperCfg:  e.buildShaperConfig(cfg.Obfs),

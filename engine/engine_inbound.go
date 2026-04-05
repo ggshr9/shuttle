@@ -37,11 +37,22 @@ func (e *Engine) startInbounds(ctx context.Context, cfg *config.ClientConfig) ([
 
 	// Add any explicitly configured outbounds from the registry.
 	for _, outCfg := range cfg.Outbounds {
-		ob, err := adapter.CreateOutbound(outCfg.Type, outCfg.Tag, outCfg.Options, adapter.OutboundDeps{Logger: e.logger})
-		if err != nil {
-			return nil, fmt.Errorf("create outbound %q: %w", outCfg.Tag, err)
+		if outCfg.Type == "proxy" {
+			// Custom proxy outbound — create a ProxyOutbound pointing to
+			// a different server address, reusing the engine's transport
+			// selector and stream metrics.
+			ob, err := e.createCustomProxyOutbound(outCfg.Tag, outCfg.Options, cfg)
+			if err != nil {
+				return nil, err
+			}
+			outbounds[outCfg.Tag] = ob
+		} else {
+			ob, err := adapter.CreateOutbound(outCfg.Type, outCfg.Tag, outCfg.Options, adapter.OutboundDeps{Logger: e.logger})
+			if err != nil {
+				return nil, fmt.Errorf("create outbound %q: %w", outCfg.Tag, err)
+			}
+			outbounds[outCfg.Tag] = ob
 		}
-		outbounds[outCfg.Tag] = ob
 	}
 
 	// Reuse the router and DNS resolver built by startInternal.
