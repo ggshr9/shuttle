@@ -14,6 +14,7 @@ import (
 	"github.com/shuttleX/shuttle/internal/relay"
 	"github.com/shuttleX/shuttle/mesh"
 	meshsignal "github.com/shuttleX/shuttle/mesh/signal"
+	"github.com/shuttleX/shuttle/plugin"
 	"github.com/shuttleX/shuttle/proxy"
 	"github.com/shuttleX/shuttle/server/admin"
 	"github.com/shuttleX/shuttle/server/audit"
@@ -30,10 +31,11 @@ type Handler struct {
 	PeerTable  *mesh.PeerTable
 	Allocator  *mesh.IPAllocator
 	SignalHub  *meshsignal.Hub
-	Metrics    *metrics.Collector
-	AdminInfo  *admin.ServerInfo
-	StreamSem  chan struct{}
-	Logger     *slog.Logger
+	Metrics     *metrics.Collector
+	AdminInfo   *admin.ServerInfo
+	PluginChain *plugin.Chain
+	StreamSem   chan struct{}
+	Logger      *slog.Logger
 }
 
 // HandleConnection accepts streams from a multiplexed connection and
@@ -185,9 +187,21 @@ func (h *Handler) HandleStream(ctx context.Context, stream transport.Stream, rem
 			}
 			defer remote.Close() //nolint:gocritic // not a real loop; reads until newline then returns
 
+			// Run remote connection through plugin chain (metrics + logger).
+			var trackedRemote net.Conn = remote
+			if h.PluginChain != nil {
+				wrapped, chainErr := h.PluginChain.OnConnect(remote, target)
+				if chainErr != nil {
+					h.Logger.Debug("plugin chain rejected connection", "target", target, "err", chainErr)
+					return
+				}
+				trackedRemote = wrapped
+				defer h.PluginChain.OnDisconnect(wrapped) //nolint:gocritic // not a real loop
+			}
+
 			// Forward any residual bytes that were read past the header.
 			if len(residual) > 0 {
-				if _, err := remote.Write(residual); err != nil {
+				if _, err := trackedRemote.Write(residual); err != nil {
 					return
 				}
 			}
@@ -208,7 +222,7 @@ func (h *Handler) HandleStream(ctx context.Context, stream transport.Stream, rem
 
 			// Relay bidirectionally.
 			startTime := time.Now()
-			ServerRelay(rw, remote)
+			ServerRelay(rw, trackedRemote)
 
 			// Record bytes in metrics collector
 			if counter != nil {
