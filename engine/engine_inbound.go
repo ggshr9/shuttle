@@ -21,6 +21,11 @@ func (e *Engine) startInbounds(ctx context.Context, cfg *config.ClientConfig) ([
 	// Build outbounds: always provide direct, reject, and proxy.
 	outbounds := e.traffic.BuildBuiltinOutbounds(cfg, e)
 
+	// Add mesh outbound if mesh is enabled.
+	if cfg.Mesh.Enabled {
+		outbounds["mesh"] = NewMeshOutbound("mesh", e.meshManager)
+	}
+
 	// First pass: build individual outbounds (skip groups).
 	for _, outCfg := range cfg.Outbounds {
 		if outCfg.Type == "group" {
