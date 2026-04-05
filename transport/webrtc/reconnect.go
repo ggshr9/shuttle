@@ -5,8 +5,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/hashicorp/yamux"
 	pionwebrtc "github.com/pion/webrtc/v4"
+	ymux "github.com/shuttleX/shuttle/transport/mux/yamux"
 	"nhooyr.io/websocket"
 )
 
@@ -169,26 +169,27 @@ func (r *reconnector) attemptReconnect() error {
 		return context.DeadlineExceeded
 	}
 
-	// Create new yamux session
+	// Create new yamux session via shared Mux
 	rwc := &dcReadWriteCloser{rwc: raw, pc: pc}
-	sess, err := yamux.Client(rwc, yamux.DefaultConfig())
+	mux := ymux.New(nil)
+	muxConn, err := mux.ClientRWC(rwc)
 	if err != nil {
 		pc.Close()
 		return err
 	}
 
 	go func() {
-		<-sess.CloseChan()
+		<-muxConn.CloseChan()
 		pc.Close()
 	}()
 
-	// Atomically swap session and PC in the connection
+	// Atomically swap muxConn and PC in the connection
 	r.conn.mu.Lock()
 	oldPC := r.conn.pc
-	oldSess := r.conn.session
+	oldMux := r.conn.muxConn
 	oldSC := r.conn.sc
 	r.conn.pc = pc
-	r.conn.session = sess
+	r.conn.muxConn = muxConn
 	r.conn.sc = newStatsCollector(pc)
 	r.conn.mu.Unlock()
 
@@ -196,7 +197,7 @@ func (r *reconnector) attemptReconnect() error {
 	if oldSC != nil {
 		oldSC.Close()
 	}
-	oldSess.Close()
+	oldMux.Close()
 	oldPC.Close()
 
 	// Re-register reconnection handler on the new PC

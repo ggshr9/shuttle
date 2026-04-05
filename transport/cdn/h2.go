@@ -10,8 +10,8 @@ import (
 	"net/http"
 	"sync/atomic"
 
-	"github.com/hashicorp/yamux"
 	"github.com/shuttleX/shuttle/transport"
+	ymux "github.com/shuttleX/shuttle/transport/mux/yamux"
 )
 
 // H2Config configures the CDN HTTP/2 transport.
@@ -29,8 +29,7 @@ type H2Config struct {
 //
 // Note: CDN H2 uses HTTP/2 POST duplex (io.ReadWriteCloser) as its underlying
 // transport, not net.Conn. This means it cannot use ByteStreamClient directly.
-// The HMAC auth and yamux setup are inline because the shared components
-// (transport/auth, transport/mux/yamux) require net.Conn.
+// The HMAC auth is inline; yamux multiplexing uses the shared Mux via ClientRWC.
 type H2Client struct {
 	config *H2Config
 	client *http.Client
@@ -124,7 +123,8 @@ func (c *H2Client) Dial(ctx context.Context, addr string) (transport.Connection,
 	}
 
 	// Establish yamux session over the duplex channel.
-	session, err := yamux.Client(duplex, yamux.DefaultConfig())
+	mux := ymux.New(nil)
+	muxConn, err := mux.ClientRWC(duplex)
 	if err != nil {
 		duplex.Close()
 		return nil, fmt.Errorf("yamux client: %w", err)
@@ -138,7 +138,7 @@ func (c *H2Client) Dial(ctx context.Context, addr string) (transport.Connection,
 
 	c.logger.Debug("cdn-h2: connected", "addr", addr)
 	return &cdnH2Connection{
-		session:    session,
+		Connection: muxConn,
 		remoteAddr: cdnAddr,
 	}, nil
 }
@@ -174,40 +174,13 @@ func (d *h2Duplex) Close() error {
 	return d.reader.Close()
 }
 
-// cdnH2Connection wraps a yamux.Session.
+// cdnH2Connection wraps a shared yamux Connection, overriding RemoteAddr
+// to return the CDN address instead of a zero-value TCPAddr.
 type cdnH2Connection struct {
-	session    *yamux.Session
+	transport.Connection
 	remoteAddr net.Addr
 }
 
-func (c *cdnH2Connection) OpenStream(ctx context.Context) (transport.Stream, error) {
-	s, err := c.session.OpenStream()
-	if err != nil {
-		return nil, err
-	}
-	return &cdnH2Stream{stream: s}, nil
-}
-
-func (c *cdnH2Connection) AcceptStream(ctx context.Context) (transport.Stream, error) {
-	s, err := c.session.AcceptStream()
-	if err != nil {
-		return nil, err
-	}
-	return &cdnH2Stream{stream: s}, nil
-}
-
-func (c *cdnH2Connection) Close() error           { return c.session.Close() }
-func (c *cdnH2Connection) LocalAddr() net.Addr     { return c.session.LocalAddr() }
-func (c *cdnH2Connection) RemoteAddr() net.Addr    { return c.remoteAddr }
-
-// cdnH2Stream wraps a yamux.Stream.
-type cdnH2Stream struct {
-	stream *yamux.Stream
-}
-
-func (s *cdnH2Stream) StreamID() uint64            { return uint64(s.stream.StreamID()) }
-func (s *cdnH2Stream) Read(p []byte) (int, error)  { return s.stream.Read(p) }
-func (s *cdnH2Stream) Write(p []byte) (int, error) { return s.stream.Write(p) }
-func (s *cdnH2Stream) Close() error                { return s.stream.Close() }
+func (c *cdnH2Connection) RemoteAddr() net.Addr { return c.remoteAddr }
 
 var _ transport.ClientTransport = (*H2Client)(nil)

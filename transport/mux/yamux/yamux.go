@@ -58,7 +58,7 @@ var _ adapter.Multiplexer = (*Mux)(nil)
 // Use this for transports where the underlying connection is not a net.Conn
 // (e.g., WebRTC DataChannel, HTTP/2 duplex).
 // LocalAddr/RemoteAddr will return zero-value TCPAddr.
-func (m *Mux) ClientRWC(rwc io.ReadWriteCloser) (adapter.Connection, error) {
+func (m *Mux) ClientRWC(rwc io.ReadWriteCloser) (*RWCConn, error) {
 	sess, err := yamux.Client(rwc, m.cfg)
 	if err != nil {
 		return nil, fmt.Errorf("yamux client: %w", err)
@@ -67,7 +67,7 @@ func (m *Mux) ClientRWC(rwc io.ReadWriteCloser) (adapter.Connection, error) {
 }
 
 // ServerRWC creates a server yamux session over an io.ReadWriteCloser.
-func (m *Mux) ServerRWC(rwc io.ReadWriteCloser) (adapter.Connection, error) {
+func (m *Mux) ServerRWC(rwc io.ReadWriteCloser) (*RWCConn, error) {
 	sess, err := yamux.Server(rwc, m.cfg)
 	if err != nil {
 		return nil, fmt.Errorf("yamux server: %w", err)
@@ -104,6 +104,9 @@ func (c *Conn) Close() error {
 
 func (c *Conn) LocalAddr() net.Addr  { return c.raw.LocalAddr() }
 func (c *Conn) RemoteAddr() net.Addr { return c.raw.RemoteAddr() }
+
+// CloseChan returns a channel that is closed when the yamux session shuts down.
+func (c *Conn) CloseChan() <-chan struct{} { return c.session.CloseChan() }
 
 var _ adapter.Connection = (*Conn)(nil)
 
@@ -149,5 +152,8 @@ func (c *RWCConn) Close() error {
 
 func (c *RWCConn) LocalAddr() net.Addr  { return &net.TCPAddr{} }
 func (c *RWCConn) RemoteAddr() net.Addr { return &net.TCPAddr{} }
+
+// CloseChan returns a channel that is closed when the yamux session shuts down.
+func (c *RWCConn) CloseChan() <-chan struct{} { return c.session.CloseChan() }
 
 var _ adapter.Connection = (*RWCConn)(nil)

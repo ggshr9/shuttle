@@ -2,14 +2,13 @@ package webrtc
 
 import (
 	"context"
-	"fmt"
 	"io"
 	"net"
 	"sync"
 	"sync/atomic"
 
-	"github.com/hashicorp/yamux"
 	"github.com/pion/webrtc/v4"
+	ymux "github.com/shuttleX/shuttle/transport/mux/yamux"
 	"github.com/shuttleX/shuttle/transport"
 )
 
@@ -25,11 +24,11 @@ type wsCloser struct {
 
 func (w *wsCloser) Close() error { return w.closeFn() }
 
-// webrtcConnection wraps a yamux session over a WebRTC DataChannel.
+// webrtcConnection wraps a shared yamux RWCConn over a WebRTC DataChannel.
 type webrtcConnection struct {
 	mu      sync.RWMutex
 	pc      *webrtc.PeerConnection
-	session *yamux.Session
+	muxConn *ymux.RWCConn
 	local   net.Addr
 	remote  net.Addr
 	sc      *statsCollector
@@ -38,29 +37,21 @@ type webrtcConnection struct {
 
 func (c *webrtcConnection) OpenStream(ctx context.Context) (transport.Stream, error) {
 	c.mu.RLock()
-	sess := c.session
+	mc := c.muxConn
 	c.mu.RUnlock()
-	s, err := sess.OpenStream()
-	if err != nil {
-		return nil, fmt.Errorf("yamux open: %w", err)
-	}
-	return &webrtcStream{ys: s}, nil
+	return mc.OpenStream(ctx)
 }
 
 func (c *webrtcConnection) AcceptStream(ctx context.Context) (transport.Stream, error) {
 	c.mu.RLock()
-	sess := c.session
+	mc := c.muxConn
 	c.mu.RUnlock()
-	s, err := sess.AcceptStream()
-	if err != nil {
-		return nil, fmt.Errorf("yamux accept: %w", err)
-	}
-	return &webrtcStream{ys: s}, nil
+	return mc.AcceptStream(ctx)
 }
 
 func (c *webrtcConnection) Close() error {
 	c.mu.Lock()
-	sess := c.session
+	mc := c.muxConn
 	pc := c.pc
 	sc := c.sc
 	ws := c.wsConn
@@ -72,7 +63,7 @@ func (c *webrtcConnection) Close() error {
 	if ws != nil {
 		ws.Close()
 	}
-	sess.Close()
+	mc.Close()
 	return pc.Close()
 }
 
@@ -90,16 +81,6 @@ func (c *webrtcConnection) Stats() ConnStats {
 
 func (c *webrtcConnection) LocalAddr() net.Addr  { return c.local }
 func (c *webrtcConnection) RemoteAddr() net.Addr { return c.remote }
-
-// webrtcStream wraps a yamux.Stream as a transport.Stream.
-type webrtcStream struct {
-	ys *yamux.Stream
-}
-
-func (s *webrtcStream) StreamID() uint64            { return uint64(s.ys.StreamID()) }
-func (s *webrtcStream) Read(p []byte) (int, error)  { return s.ys.Read(p) }
-func (s *webrtcStream) Write(p []byte) (int, error) { return s.ys.Write(p) }
-func (s *webrtcStream) Close() error                { return s.ys.Close() }
 
 // dcReadWriteCloser adapts a detached DataChannel (datachannel.ReadWriteCloser)
 // into a plain io.ReadWriteCloser that yamux can use. The detached channel
@@ -143,4 +124,3 @@ func (a *webrtcAddr) String() string  { return a.addr }
 
 // Compile-time interface checks.
 var _ transport.Connection = (*webrtcConnection)(nil)
-var _ transport.Stream = (*webrtcStream)(nil)

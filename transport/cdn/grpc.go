@@ -12,8 +12,8 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/hashicorp/yamux"
 	"github.com/shuttleX/shuttle/transport"
+	ymux "github.com/shuttleX/shuttle/transport/mux/yamux"
 )
 
 // GRPCConfig configures the gRPC CDN transport.
@@ -122,7 +122,8 @@ func (c *GRPCClient) Dial(ctx context.Context, addr string) (transport.Connectio
 		return nil, fmt.Errorf("grpc auth: %w", err)
 	}
 
-	session, err := yamux.Client(duplex, yamux.DefaultConfig())
+	mux := ymux.New(nil)
+	muxConn, err := mux.ClientRWC(duplex)
 	if err != nil {
 		duplex.Close()
 		return nil, fmt.Errorf("yamux client: %w", err)
@@ -136,7 +137,7 @@ func (c *GRPCClient) Dial(ctx context.Context, addr string) (transport.Connectio
 
 	c.logger.Debug("cdn-grpc: connected", "addr", addr)
 	return &cdnGRPCConnection{
-		session:    session,
+		Connection: muxConn,
 		remoteAddr: cdnAddr,
 	}, nil
 }
@@ -229,40 +230,13 @@ func (d *grpcDuplex) Close() error {
 	return d.reader.Close()
 }
 
-// cdnGRPCConnection wraps a yamux.Session.
+// cdnGRPCConnection wraps a shared yamux Connection, overriding RemoteAddr
+// to return the CDN address instead of a zero-value TCPAddr.
 type cdnGRPCConnection struct {
-	session    *yamux.Session
+	transport.Connection
 	remoteAddr net.Addr
 }
 
-func (c *cdnGRPCConnection) OpenStream(ctx context.Context) (transport.Stream, error) {
-	s, err := c.session.OpenStream()
-	if err != nil {
-		return nil, err
-	}
-	return &cdnGRPCStream{stream: s}, nil
-}
-
-func (c *cdnGRPCConnection) AcceptStream(ctx context.Context) (transport.Stream, error) {
-	s, err := c.session.AcceptStream()
-	if err != nil {
-		return nil, err
-	}
-	return &cdnGRPCStream{stream: s}, nil
-}
-
-func (c *cdnGRPCConnection) Close() error        { return c.session.Close() }
-func (c *cdnGRPCConnection) LocalAddr() net.Addr  { return c.session.LocalAddr() }
 func (c *cdnGRPCConnection) RemoteAddr() net.Addr { return c.remoteAddr }
-
-// cdnGRPCStream wraps a yamux.Stream.
-type cdnGRPCStream struct {
-	stream *yamux.Stream
-}
-
-func (s *cdnGRPCStream) StreamID() uint64            { return uint64(s.stream.StreamID()) }
-func (s *cdnGRPCStream) Read(p []byte) (int, error)  { return s.stream.Read(p) }
-func (s *cdnGRPCStream) Write(p []byte) (int, error) { return s.stream.Write(p) }
-func (s *cdnGRPCStream) Close() error                { return s.stream.Close() }
 
 var _ transport.ClientTransport = (*GRPCClient)(nil)
