@@ -3,6 +3,7 @@ package engine
 import (
 	"context"
 	"fmt"
+	"net"
 	"time"
 
 	"github.com/shuttleX/shuttle/config"
@@ -177,11 +178,46 @@ func (e *Engine) startInternal(ctx context.Context) error {
 	e.emit(Event{Type: EventConnected, Message: "engine started"})
 	e.obs.StartSpeedLoop(ctx)
 
+	// Parse migration probe timeout from config.
+	migrateTimeout := 3 * time.Second
+	if cfgSnap.Transport.MigrationProbeTimeout != "" {
+		if d, err := time.ParseDuration(cfgSnap.Transport.MigrationProbeTimeout); err == nil {
+			migrateTimeout = d
+		}
+	}
+
+	// Build a simple TCP probe function: try to dial the server address.
+	serverAddr := cfgSnap.Server.Addr
+	probeFn := func(ctx context.Context) error {
+		var dialer net.Dialer
+		c, err := dialer.DialContext(ctx, "tcp", serverAddr)
+		if err != nil {
+			return err
+		}
+		return c.Close()
+	}
+
+	pm := NewProactiveMigrator(
+		ProactiveMigratorConfig{
+			Enabled:    cfgSnap.Transport.ProactiveMigration,
+			ServerAddr: serverAddr,
+			Timeout:    migrateTimeout,
+		},
+		probeFn,
+		func() { sel.Migrate() },
+		e.logger,
+		e.obs.Emit,
+	)
+	e.mu.Lock()
+	e.proactiveMigrator = pm
+	e.mu.Unlock()
+
 	// Start network change monitor to detect WiFi/cellular switches.
 	nm := netmon.New(5 * time.Second)
 	nm.OnChange(func() {
 		e.logger.Info("network change detected")
-		e.emit(Event{Type: EventNetworkChange, Message: "network change detected"})
+		e.obs.Emit(Event{Type: EventNetworkChange, Message: "network change detected"})
+		pm.OnNetworkChange(ctx)
 	})
 	e.bgWg.Add(1)
 	go func() {
@@ -295,6 +331,7 @@ func (e *Engine) stopInternal() error {
 	e.currentRouter = nil
 	e.streamTracker = nil
 	e.circuitBreaker = nil
+	e.proactiveMigrator = nil
 	e.mu.Unlock()
 
 	e.logger.Debug("engine state transition", "from", "stopping", "to", "stopped")
