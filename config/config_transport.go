@@ -22,6 +22,8 @@ type TransportConfig struct {
 	PoolIdleTTL       string        `yaml:"pool_idle_ttl,omitempty" json:"pool_idle_ttl,omitempty"`     // idle connection TTL (default "60s")
 	KeepaliveInterval string        `yaml:"keepalive_interval,omitempty" json:"keepalive_interval,omitempty"` // transport keepalive interval (default "15s")
 	KeepaliveTimeout  string        `yaml:"keepalive_timeout,omitempty" json:"keepalive_timeout,omitempty"`   // keepalive response timeout (default "5s")
+	ProactiveMigration    bool   `yaml:"proactive_migration" json:"proactive_migration"`
+	MigrationProbeTimeout string `yaml:"migration_probe_timeout" json:"migration_probe_timeout"`
 	H3                H3Config      `yaml:"h3" json:"h3"`
 	Reality           RealityConfig `yaml:"reality" json:"reality"`
 	CDN               CDNConfig     `yaml:"cdn" json:"cdn"`

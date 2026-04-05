@@ -117,6 +117,11 @@ func (c *ClientConfig) Validate() error {
 			return err
 		}
 	}
+	if c.Transport.MigrationProbeTimeout != "" {
+		if err := validateDuration(c.Transport.MigrationProbeTimeout, "transport.migration_probe_timeout"); err != nil {
+			return err
+		}
+	}
 
 	// Multipath probe interval validation
 	if c.Transport.H3.Multipath.ProbeInterval != "" {
