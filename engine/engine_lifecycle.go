@@ -149,6 +149,7 @@ func (e *Engine) startInternal(ctx context.Context) error {
 	e.mu.Lock()
 	e.closers = closers
 	e.currentRouter = rt
+	e.dnsResolver = dnsResolver
 	e.state = StateRunning
 	e.mu.Unlock()
 

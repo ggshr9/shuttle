@@ -50,6 +50,9 @@ type Engine struct {
 	// Current router (for PAC generation and conflict detection)
 	currentRouter *router.Router
 
+	// DNS resolver built alongside the router
+	dnsResolver *router.DNSResolver
+
 	// Stream-level metrics tracker
 	streamTracker *stream.StreamTracker
 
