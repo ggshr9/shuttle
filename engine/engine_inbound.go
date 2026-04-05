@@ -20,6 +20,14 @@ func (e *Engine) startInbounds(ctx context.Context, cfg *config.ClientConfig) ([
 	// Build outbounds: always provide direct, reject, and proxy.
 	outbounds := e.traffic.BuildBuiltinOutbounds(cfg, e)
 
+	// Wrap proxy outbound with resilience middleware (circuit breaker + retry).
+	if proxyOb, ok := outbounds["proxy"]; ok {
+		outbounds["proxy"] = NewResilientOutbound(proxyOb, ResilientOutboundConfig{
+			CircuitBreaker: e.circuitBreaker,
+			RetryConfig:    e.buildRetryConfig(cfg.Retry),
+		})
+	}
+
 	// Add any explicitly configured outbounds from the registry.
 	for _, outCfg := range cfg.Outbounds {
 		ob, err := adapter.CreateOutbound(outCfg.Type, outCfg.Tag, outCfg.Options, adapter.OutboundDeps{Logger: e.logger})

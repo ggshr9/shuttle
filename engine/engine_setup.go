@@ -319,6 +319,68 @@ func (e *Engine) dialProxyStream(
 }
 
 
+// dialProxyStreamSimple dials the proxy server and opens a stream without any
+// retry or circuit breaker logic. Resilience is applied externally via
+// ResilientOutbound middleware wrapping ProxyOutbound.
+func (e *Engine) dialProxyStreamSimple(
+	ctx context.Context,
+	serverAddr, addr, network string,
+	shaperCfg obfs.ShaperConfig,
+	classifier *qos.Classifier,
+) (net.Conn, error) {
+	curSel := e.selector()
+	if curSel == nil {
+		return nil, fmt.Errorf("no active selector")
+	}
+
+	conn, err := curSel.Dial(ctx, serverAddr)
+	if err != nil {
+		return nil, fmt.Errorf("proxy dial: %w", err)
+	}
+	rawStream, err := conn.OpenStream(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("open stream: %w", err)
+	}
+
+	// Wrap with measured stream for per-stream metrics.
+	seq := atomic.AddUint64(&e.connSeq, 1)
+	connID := strconv.FormatUint(seq, 16)
+	st := e.streamTracker
+	transportType := ""
+	if curSel != nil {
+		transportType = curSel.ActiveTransport()
+	}
+	metrics := st.Track(rawStream.StreamID(), addr, transportType)
+	metrics.ConnID = connID
+	measured := stream.NewMeasuredStream(rawStream, metrics)
+
+	// Classify traffic and set QoS priority on the stream.
+	if classifier != nil {
+		port := extractPort(addr)
+		priority := classifier.ClassifyPort(port)
+		measured.SetPriority(int(priority))
+	}
+
+	// For UDP streams, prepend the UDP marker so the server uses UDP relay.
+	var header []byte
+	if network == "udp" {
+		header = []byte(proxy.UDPStreamPrefix + addr + "\n")
+	} else {
+		header = []byte(addr + "\n")
+	}
+	if _, err := measured.Write(header); err != nil {
+		measured.Close()
+		return nil, fmt.Errorf("send target: %w", err)
+	}
+
+	sc := &streamConn{stream: measured, addr: addr}
+	if shaperCfg.Enabled {
+		shaper := obfs.NewShaper(measured, shaperCfg)
+		return &shapedConn{streamConn: sc, shaper: shaper}, nil
+	}
+	return sc, nil
+}
+
 // startSOCKS5 starts the SOCKS5 proxy server if configured.
 func (e *Engine) startSOCKS5(ctx context.Context, cfg *config.ClientConfig, dialer func(context.Context, string, string) (net.Conn, error), procResolver *procnet.Resolver) (func() error, error) {
 	socks := proxy.NewSOCKS5Server(&proxy.SOCKS5Config{

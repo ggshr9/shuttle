@@ -11,13 +11,13 @@ import (
 )
 
 // ProxyOutbound routes connections through the proxy server via the engine's
-// transport selector, circuit breaker, retry logic, and stream metrics.
+// transport selector and stream metrics. It is a pure dialer with no embedded
+// resilience logic; wrap with ResilientOutbound to add retry and circuit breaker.
 type ProxyOutbound struct {
 	tag        string
 	engine     *Engine
 	serverAddr string
 	shaperCfg  obfs.ShaperConfig
-	retryCfg   RetryConfig
 	classifier *qos.Classifier // pre-built at construction, nil if QoS disabled
 }
 
@@ -25,7 +25,7 @@ func (o *ProxyOutbound) Tag() string  { return o.tag }
 func (o *ProxyOutbound) Type() string { return "proxy" }
 
 func (o *ProxyOutbound) DialContext(ctx context.Context, network, address string) (net.Conn, error) {
-	return o.engine.dialProxyStream(ctx, o.serverAddr, address, network, o.retryCfg, o.shaperCfg, o.classifier)
+	return o.engine.dialProxyStreamSimple(ctx, o.serverAddr, address, network, o.shaperCfg, o.classifier)
 }
 
 func (o *ProxyOutbound) Close() error { return nil }
@@ -41,7 +41,6 @@ func newProxyOutbound(e *Engine, cfg *config.ClientConfig) *ProxyOutbound {
 		engine:     e,
 		serverAddr: cfg.Server.Addr,
 		shaperCfg:  e.buildShaperConfig(cfg.Obfs),
-		retryCfg:   e.buildRetryConfig(cfg.Retry),
 		classifier: classifier,
 	}
 }
