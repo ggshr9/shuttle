@@ -259,6 +259,40 @@ func (c *ClientConfig) Validate() error {
 		return fmt.Errorf("invalid log.format: %q", c.Log.Format)
 	}
 
+	// Inbounds validation
+	seenInboundTags := make(map[string]bool)
+	for i, ib := range c.Inbounds {
+		if ib.Tag == "" {
+			return fmt.Errorf("inbounds[%d].tag must not be empty", i)
+		}
+		if ib.Type == "" {
+			return fmt.Errorf("inbounds[%d].type must not be empty", i)
+		}
+		if seenInboundTags[ib.Tag] {
+			return fmt.Errorf("inbounds[%d].tag %q is duplicate", i, ib.Tag)
+		}
+		seenInboundTags[ib.Tag] = true
+	}
+
+	// Outbounds validation
+	reservedOutboundTags := map[string]bool{"direct": true, "reject": true, "proxy": true}
+	seenOutboundTags := make(map[string]bool)
+	for i, ob := range c.Outbounds {
+		if ob.Tag == "" {
+			return fmt.Errorf("outbounds[%d].tag must not be empty", i)
+		}
+		if ob.Type == "" {
+			return fmt.Errorf("outbounds[%d].type must not be empty", i)
+		}
+		if reservedOutboundTags[ob.Tag] {
+			return fmt.Errorf("outbounds[%d].tag %q collides with built-in tag", i, ob.Tag)
+		}
+		if seenOutboundTags[ob.Tag] {
+			return fmt.Errorf("outbounds[%d].tag %q is duplicate", i, ob.Tag)
+		}
+		seenOutboundTags[ob.Tag] = true
+	}
+
 	return nil
 }
 
