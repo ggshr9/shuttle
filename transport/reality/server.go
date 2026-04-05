@@ -11,11 +11,11 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/hashicorp/yamux"
 	"github.com/shuttleX/shuttle/config"
 	shuttlecrypto "github.com/shuttleX/shuttle/crypto"
 	"github.com/shuttleX/shuttle/internal/pool"
 	"github.com/shuttleX/shuttle/transport"
+	ymux "github.com/shuttleX/shuttle/transport/mux/yamux"
 	"golang.org/x/crypto/curve25519"
 )
 
@@ -236,14 +236,13 @@ func (s *Server) handleConn(ctx context.Context, raw net.Conn) {
 	}
 
 	// Create yamux server session
-	sess, err := yamux.Server(raw, transport.YamuxSessionConfig(s.config.Yamux))
+	mux := ymux.New(s.config.Yamux)
+	conn, err := mux.Server(raw)
 	if err != nil {
 		s.logger.Error("yamux server error", "err", err)
 		raw.Close()
 		return
 	}
-
-	conn := &realityConnection{rawConn: raw, session: sess}
 	select {
 	case s.connCh <- conn:
 	case <-ctx.Done():
