@@ -47,8 +47,8 @@ type Engine struct {
 	// Closers for local proxy servers
 	closers []func() error
 
-	// Mesh client for P2P VPN
-	meshClient *mesh.MeshClient
+	// Mesh manager — owns mesh connection lifecycle independently
+	meshManager *MeshManager
 
 	// Network change monitor
 	netMon *netmon.Monitor
@@ -84,11 +84,12 @@ func New(cfg *config.ClientConfig) *Engine {
 	logger := logutil.NewLogger(cfg.Log.Level, cfg.Log.Format)
 
 	return &Engine{
-		state:   StateStopped,
-		cfg:     cfg,
-		logger:  logger,
-		obs:     NewObservabilityManager(logger),
-		traffic: NewTrafficManager(logger),
+		state:       StateStopped,
+		cfg:         cfg,
+		logger:      logger,
+		obs:         NewObservabilityManager(logger),
+		traffic:     NewTrafficManager(logger),
+		meshManager: NewMeshManager(logger),
 	}
 }
 
@@ -116,11 +117,16 @@ func (e *Engine) Status() EngineStatus {
 	e.mu.RLock()
 	state := e.state
 	sel := e.sel
-	mc := e.meshClient
 	cfg := e.cfg
 	st := e.streamTracker
 	cb := e.circuitBreaker
 	e.mu.RUnlock()
+
+	// Read mesh client outside the main lock — MeshManager has its own mutex.
+	var mc *mesh.MeshClient
+	if e.meshManager != nil {
+		mc = e.meshManager.Client()
+	}
 
 	stats := e.obs.Metrics().Stats()
 	up, down := e.obs.Metrics().Speed()

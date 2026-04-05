@@ -8,6 +8,7 @@ import (
 	"github.com/shuttleX/shuttle/config"
 	"github.com/shuttleX/shuttle/internal/netmon"
 	"github.com/shuttleX/shuttle/internal/sysopt"
+	"github.com/shuttleX/shuttle/proxy"
 	"github.com/shuttleX/shuttle/stream"
 	"github.com/shuttleX/shuttle/transport/selector"
 )
@@ -146,19 +147,20 @@ func (e *Engine) startInternal(ctx context.Context) error {
 		return fail(err)
 	}
 
-	// Mesh requires TUN; log a warning if mesh is enabled but no TUN inbound.
+	// Start mesh if configured.
 	if cfgSnap.Mesh.Enabled {
-		hasTUN := false
-		for _, ib := range cfgSnap.Inbounds {
-			if ib.Type == "tun" {
-				hasTUN = true
+		var tunIB *proxy.TUNInbound
+		e.mu.RLock()
+		for _, ib := range e.inbounds {
+			if tun, ok := ib.(*proxy.TUNInbound); ok {
+				tunIB = tun
 				break
 			}
 		}
-		if !hasTUN {
-			e.logger.Warn("mesh requires TUN to be enabled, skipping mesh")
-		} else {
-			e.logger.Warn("mesh integration via MeshManager not yet available, skipping mesh")
+		e.mu.RUnlock()
+		if err := e.meshManager.Start(ctx, cfgSnap, sel, tunIB); err != nil {
+			e.logger.Warn("mesh start failed", "err", err)
+			// Non-fatal: engine continues without mesh
 		}
 	}
 
@@ -215,6 +217,12 @@ func (e *Engine) stopInternal() error {
 	// then close listeners/selector (whose wg.Wait won't hang).
 	if cancel != nil {
 		cancel()
+	}
+
+	// Close mesh before waiting for background goroutines — this closes
+	// the MeshClient (unblocking MeshReceiveLoop) and waits for its goroutines.
+	if e.meshManager != nil {
+		_ = e.meshManager.Close()
 	}
 
 	done := make(chan struct{})
