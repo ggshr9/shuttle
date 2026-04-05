@@ -52,6 +52,44 @@ func TestValidate_OutboundDuplicateTag(t *testing.T) {
 	}
 }
 
+func TestValidate_RuleChainCustomAction(t *testing.T) {
+	// A rule with a custom outbound tag should pass validation.
+	cfg := validClientConfig()
+	cfg.Routing.RuleChain = []RuleChainEntry{
+		{
+			Match:  RuleMatch{GeoIP: []string{"JP"}},
+			Action: "jp-server",
+		},
+	}
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("expected no error for custom action tag, got: %v", err)
+	}
+
+	// An empty action must still be rejected.
+	cfg.Routing.RuleChain = []RuleChainEntry{
+		{
+			Match:  RuleMatch{GeoIP: []string{"JP"}},
+			Action: "",
+		},
+	}
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("expected error for empty action, got nil")
+	}
+
+	// Built-in actions must still be accepted.
+	for _, builtin := range []string{"proxy", "direct", "reject"} {
+		cfg.Routing.RuleChain = []RuleChainEntry{
+			{
+				Match:  RuleMatch{GeoIP: []string{"JP"}},
+				Action: builtin,
+			},
+		}
+		if err := cfg.Validate(); err != nil {
+			t.Fatalf("expected no error for built-in action %q, got: %v", builtin, err)
+		}
+	}
+}
+
 func TestValidate_InboundValid(t *testing.T) {
 	cfg := validClientConfig()
 	cfg.Inbounds = []InboundConfig{

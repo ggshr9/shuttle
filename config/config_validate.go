@@ -377,13 +377,11 @@ func (c *ServerConfig) Validate() error {
 func validateRuleChainEntry(idx int, entry RuleChainEntry) error {
 	prefix := fmt.Sprintf("routing.rule_chain[%d]", idx)
 
-	// Action is required.
-	switch entry.Action {
-	case "proxy", "direct", "reject":
-	case "":
+	// Action is required. Built-in actions are "proxy", "direct", "reject".
+	// Any other non-empty string is treated as a custom outbound tag and
+	// will be resolved at runtime; unknown tags fail at connection time.
+	if entry.Action == "" {
 		return fmt.Errorf("%s: action is required", prefix)
-	default:
-		return fmt.Errorf("%s: invalid action %q", prefix, entry.Action)
 	}
 
 	// Logic must be "and", "or", or empty.
