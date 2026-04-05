@@ -219,8 +219,9 @@ func New(c Config) (*Server, error) {
 		Metrics:     s.metrics,
 		AdminInfo:   s.adminInfo,
 		PluginChain: s.pluginChain,
-		StreamSem:   make(chan struct{}, cfg.MaxStreams),
-		Logger:      logger,
+		StreamSem:            make(chan struct{}, cfg.MaxStreams),
+		Logger:               logger,
+		AllowPrivateNetworks: cfg.AllowPrivateNetworks,
 	}
 
 	return s, nil

@@ -6,6 +6,9 @@
 # Listen address
 listen: "0.0.0.0:443"
 
+# Allow proxying to private networks (sandbox only — httpbin is on 10.100.0.20)
+allow_private_networks: true
+
 # TLS certificates (auto-generated if empty)
 tls:
   cert_file: ""

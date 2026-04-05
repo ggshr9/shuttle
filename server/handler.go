@@ -34,8 +34,9 @@ type Handler struct {
 	Metrics     *metrics.Collector
 	AdminInfo   *admin.ServerInfo
 	PluginChain *plugin.Chain
-	StreamSem   chan struct{}
-	Logger      *slog.Logger
+	StreamSem          chan struct{}
+	Logger             *slog.Logger
+	AllowPrivateNetworks bool // disable SSRF protection (for testing only)
 }
 
 // HandleConnection accepts streams from a multiplexed connection and
@@ -169,7 +170,7 @@ func (h *Handler) HandleStream(ctx context.Context, stream transport.Stream, rem
 			h.Logger.Debug("proxying", "target", target, "udp", isUDP)
 
 			// SSRF protection: block connections to internal/private networks
-			if IsBlockedTarget(target) {
+			if !h.AllowPrivateNetworks && IsBlockedTarget(target) {
 				h.Logger.Warn("blocked SSRF attempt to internal target", "target", target, "ip", remoteIP)
 				return
 			}
