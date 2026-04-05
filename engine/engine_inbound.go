@@ -21,13 +21,7 @@ func (e *Engine) startInbounds(ctx context.Context, cfg *config.ClientConfig) ([
 	outbounds := map[string]adapter.Outbound{
 		"direct": &DirectOutbound{tag: "direct"},
 		"reject": &RejectOutbound{tag: "reject"},
-		"proxy": &ProxyOutbound{
-			tag:       "proxy",
-			engine:    e,
-			cfg:       cfg,
-			retryCfg:  e.buildRetryConfig(cfg.Retry),
-			shaperCfg: e.buildShaperConfig(cfg.Obfs),
-		},
+		"proxy": newProxyOutbound(e, cfg),
 	}
 
 	// Add any explicitly configured outbounds from the registry.
