@@ -261,7 +261,7 @@ func (m *Manager) GetAllServers() []config.ServerEndpoint {
 }
 
 // ParseSubscription parses subscription content.
-// Supports: base64, JSON, SIP008, shuttle:// URIs
+// Supports: base64, Clash YAML, sing-box JSON, SIP008, shuttle:// URIs
 func ParseSubscription(content string) ([]config.ServerEndpoint, error) {
 	content = strings.TrimSpace(content)
 	if content == "" {
@@ -273,6 +273,18 @@ func ParseSubscription(content string) ([]config.ServerEndpoint, error) {
 		content = string(decoded)
 	} else if decoded, err := base64.RawStdEncoding.DecodeString(content); err == nil {
 		content = string(decoded)
+	}
+
+	raw := []byte(content)
+
+	// Try Clash YAML format
+	if isClashFormat(raw) {
+		return parseClash(raw)
+	}
+
+	// Try sing-box JSON format
+	if isSingboxFormat(raw) {
+		return parseSingbox(raw)
 	}
 
 	// Try SIP008 format (subscription-specific)

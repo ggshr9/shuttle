@@ -295,6 +295,58 @@ func TestAutoRefreshCallsRefreshAll(t *testing.T) {
 	}
 }
 
+func TestParseSubscription_ClashAutoDetect(t *testing.T) {
+	data := "proxies:\n  - name: test\n    type: ss\n    server: 1.2.3.4\n    port: 443\n    password: pass\n    cipher: aes-256-gcm\n"
+	servers, err := ParseSubscription(data)
+	if err != nil {
+		t.Fatalf("ParseSubscription() Clash error = %v", err)
+	}
+	if len(servers) != 1 {
+		t.Fatalf("ParseSubscription() Clash len = %d, want 1", len(servers))
+	}
+	if servers[0].Name != "test" {
+		t.Errorf("ParseSubscription() Clash name = %q, want %q", servers[0].Name, "test")
+	}
+	if servers[0].Addr != "1.2.3.4:443" {
+		t.Errorf("ParseSubscription() Clash addr = %q, want %q", servers[0].Addr, "1.2.3.4:443")
+	}
+}
+
+func TestParseSubscription_SingboxAutoDetect(t *testing.T) {
+	data := `{"outbounds":[{"type":"shadowsocks","tag":"test","server":"1.2.3.4","server_port":443,"password":"pass","method":"aes-256-gcm"}]}`
+	servers, err := ParseSubscription(data)
+	if err != nil {
+		t.Fatalf("ParseSubscription() sing-box error = %v", err)
+	}
+	if len(servers) != 1 {
+		t.Fatalf("ParseSubscription() sing-box len = %d, want 1", len(servers))
+	}
+	if servers[0].Name != "test" {
+		t.Errorf("ParseSubscription() sing-box name = %q, want %q", servers[0].Name, "test")
+	}
+	if servers[0].Addr != "1.2.3.4:443" {
+		t.Errorf("ParseSubscription() sing-box addr = %q, want %q", servers[0].Addr, "1.2.3.4:443")
+	}
+}
+
+func TestParseSubscription_Base64ClashAutoDetect(t *testing.T) {
+	clash := "proxies:\n  - name: base64server\n    type: ss\n    server: 5.6.7.8\n    port: 8443\n    password: secret\n    cipher: chacha20-ietf-poly1305\n"
+	encoded := base64.StdEncoding.EncodeToString([]byte(clash))
+	servers, err := ParseSubscription(encoded)
+	if err != nil {
+		t.Fatalf("ParseSubscription() base64 Clash error = %v", err)
+	}
+	if len(servers) != 1 {
+		t.Fatalf("ParseSubscription() base64 Clash len = %d, want 1", len(servers))
+	}
+	if servers[0].Name != "base64server" {
+		t.Errorf("ParseSubscription() base64 Clash name = %q, want %q", servers[0].Name, "base64server")
+	}
+	if servers[0].Addr != "5.6.7.8:8443" {
+		t.Errorf("ParseSubscription() base64 Clash addr = %q, want %q", servers[0].Addr, "5.6.7.8:8443")
+	}
+}
+
 func TestGetAllServers(t *testing.T) {
 	m := NewManager()
 
