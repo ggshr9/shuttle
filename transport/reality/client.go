@@ -7,14 +7,13 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
-	"net"
 	"sync"
 	"sync/atomic"
 
-	"github.com/hashicorp/yamux"
 	"github.com/shuttleX/shuttle/config"
 	"github.com/shuttleX/shuttle/crypto"
 	"github.com/shuttleX/shuttle/transport"
+	ymux "github.com/shuttleX/shuttle/transport/mux/yamux"
 )
 
 // ClientConfig holds configuration for a Reality client transport.
@@ -153,13 +152,14 @@ func (c *Client) Dial(ctx context.Context, addr string) (transport.Connection, e
 	}
 
 	// Step 3: yamux multiplexed session over the TLS connection
-	sess, err := yamux.Client(raw, transport.YamuxSessionConfig(c.config.Yamux))
+	mux := ymux.New(c.config.Yamux)
+	muxConn, err := mux.Client(raw)
 	if err != nil {
 		return nil, fmt.Errorf("yamux client: %w", err)
 	}
 
 	success = true
-	return &realityConnection{rawConn: raw, session: sess}, nil
+	return muxConn, nil
 }
 
 // Close shuts down the client transport.
@@ -197,47 +197,5 @@ func readFrame(r io.Reader) ([]byte, error) {
 	return data, nil
 }
 
-// realityConnection wraps a yamux session as a transport.Connection.
-type realityConnection struct {
-	rawConn net.Conn
-	session *yamux.Session
-}
-
-func (c *realityConnection) OpenStream(ctx context.Context) (transport.Stream, error) {
-	s, err := c.session.OpenStream()
-	if err != nil {
-		return nil, fmt.Errorf("yamux open: %w", err)
-	}
-	return &realityStream{ys: s}, nil
-}
-
-func (c *realityConnection) AcceptStream(ctx context.Context) (transport.Stream, error) {
-	s, err := c.session.AcceptStream()
-	if err != nil {
-		return nil, fmt.Errorf("yamux accept: %w", err)
-	}
-	return &realityStream{ys: s}, nil
-}
-
-func (c *realityConnection) Close() error {
-	c.session.Close()
-	return c.rawConn.Close()
-}
-
-func (c *realityConnection) LocalAddr() net.Addr  { return c.rawConn.LocalAddr() }
-func (c *realityConnection) RemoteAddr() net.Addr { return c.rawConn.RemoteAddr() }
-
-// realityStream wraps a yamux.Stream as a transport.Stream.
-type realityStream struct {
-	ys *yamux.Stream
-}
-
-func (s *realityStream) StreamID() uint64            { return uint64(s.ys.StreamID()) }
-func (s *realityStream) Read(p []byte) (int, error)  { return s.ys.Read(p) }
-func (s *realityStream) Write(p []byte) (int, error) { return s.ys.Write(p) }
-func (s *realityStream) Close() error                { return s.ys.Close() }
-
-// Compile-time interface checks.
+// Compile-time interface check.
 var _ transport.ClientTransport = (*Client)(nil)
-var _ transport.Connection = (*realityConnection)(nil)
-var _ transport.Stream = (*realityStream)(nil)
