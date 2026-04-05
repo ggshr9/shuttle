@@ -98,7 +98,7 @@ func (mm *MeshManager) Start(ctx context.Context, cfg *config.ClientConfig, sel 
 		mm.client = mc
 		mm.mu.Unlock()
 
-		tunServer.MeshClient = mc
+		tunServer.MeshHandler = mc
 		if err := tunServer.AddMeshRoute(mc.MeshCIDR()); err != nil {
 			mm.logger.Warn("mesh: add route failed", "err", err)
 		}

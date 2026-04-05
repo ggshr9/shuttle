@@ -277,6 +277,12 @@ func (mc *MeshClient) Close() error {
 	return mc.stream.Close()
 }
 
+// SendPacket implements proxy.MeshPacketHandler by delegating to Send.
+func (mc *MeshClient) SendPacket(pkt []byte) error { return mc.Send(pkt) }
+
+// ReceivePacket implements proxy.MeshPacketHandler by delegating to Receive.
+func (mc *MeshClient) ReceivePacket() ([]byte, error) { return mc.Receive() }
+
 // ConnectPeer initiates a P2P connection to a peer.
 func (mc *MeshClient) ConnectPeer(ctx context.Context, peerVIP net.IP) error {
 	if !mc.p2pEnabled || mc.p2pManager == nil {

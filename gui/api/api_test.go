@@ -15,8 +15,12 @@ import (
 
 // newTestEngine creates a stopped engine with default config for testing.
 // The engine is never started, so no network listeners or system state changes occur.
+// Config is made valid (server addr + H3 only, no Reality public key required)
+// so that tests which do call /api/connect pass config.Validate().
 func newTestEngine() *engine.Engine {
 	cfg := config.DefaultClientConfig()
+	cfg.Server.Addr = "127.0.0.1:443"
+	cfg.Transport.Reality.Enabled = false
 	return engine.New(cfg)
 }
 

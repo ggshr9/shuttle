@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"github.com/shuttleX/shuttle/internal/procnet"
-	"github.com/shuttleX/shuttle/mesh"
 	"github.com/shuttleX/shuttle/qos"
 )
 
@@ -31,8 +30,8 @@ type TUNServer struct {
 	dialer       Dialer
 	closed       atomic.Bool
 	logger       *slog.Logger
-	ProcResolver *procnet.Resolver
-	MeshClient   *mesh.MeshClient
+	ProcResolver  *procnet.Resolver
+	MeshHandler   MeshPacketHandler
 	QoSClassifier *qos.Classifier
 
 	tunFile  *os.File
@@ -310,10 +309,10 @@ func (t *TUNServer) handleIPv4(ctx context.Context, pkt []byte) {
 	}
 
 	// Mesh interception: if destination is in the mesh subnet, send via mesh
-	if mc := t.MeshClient; mc != nil {
+	if mh := t.MeshHandler; mh != nil {
 		dstIP := net.IP(pkt[16:20])
-		if mc.IsMeshDestination(dstIP) {
-			if err := mc.Send(pkt[:totalLen]); err != nil {
+		if mh.IsMeshDestination(dstIP) {
+			if err := mh.SendPacket(pkt[:totalLen]); err != nil {
 				t.logger.Debug("mesh send error", "err", err)
 			}
 			return
@@ -720,8 +719,8 @@ func checksumFold(sum uint32) uint16 {
 
 // MeshReceiveLoop reads packets from the mesh stream and injects them into the TUN device.
 func (t *TUNServer) MeshReceiveLoop(ctx context.Context) {
-	mc := t.MeshClient
-	if mc == nil {
+	mh := t.MeshHandler
+	if mh == nil {
 		return
 	}
 	for {
@@ -730,7 +729,7 @@ func (t *TUNServer) MeshReceiveLoop(ctx context.Context) {
 			return
 		default:
 		}
-		pkt, err := mc.Receive()
+		pkt, err := mh.ReceivePacket()
 		if err != nil {
 			if t.closed.Load() || ctx.Err() != nil {
 				return
