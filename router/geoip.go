@@ -77,9 +77,13 @@ func (db *GeoIPDB) LoadFromCIDRs(country string, cidrs []string) {
 			}
 		}
 
+		// Sort IPv4 entries before storing so lookups never need to re-sort.
+		sort.Slice(newIPv4, func(i, j int) bool {
+			return newIPv4[i].start < newIPv4[j].start
+		})
 		snap := &geoIPSnapshot{
 			ipv4Entries: newIPv4,
-			ipv4Sorted:  false,
+			ipv4Sorted:  true,
 			ipv6Entries: newIPv6,
 		}
 
@@ -143,25 +147,8 @@ func (db *GeoIPDB) LookupCountry(ip net.IP) string {
 }
 
 // lookupIPv4 uses binary search on sorted entries.
+// Snapshots are always pre-sorted (by LoadFromCIDRs and Reload).
 func lookupIPv4(snap *geoIPSnapshot, addr uint32) string {
-	if !snap.ipv4Sorted {
-		// Snapshot was not pre-sorted (came from LoadFromCIDRs).
-		// Sort a copy to avoid mutating the shared snapshot.
-		sorted := make([]geoEntry, len(snap.ipv4Entries))
-		copy(sorted, snap.ipv4Entries)
-		sort.Slice(sorted, func(i, j int) bool {
-			return sorted[i].start < sorted[j].start
-		})
-		// Create a new sorted snapshot and try to swap it in.
-		// Even if the CAS fails (another goroutine did the same), this lookup
-		// still works correctly with the local sorted copy.
-		snap = &geoIPSnapshot{
-			ipv4Entries: sorted,
-			ipv4Sorted:  true,
-			ipv6Entries: snap.ipv6Entries,
-		}
-	}
-
 	entries := snap.ipv4Entries
 	n := len(entries)
 	if n == 0 {

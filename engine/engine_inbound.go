@@ -1,19 +1,22 @@
 package engine
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 
+	"context"
+
 	"github.com/shuttleX/shuttle/adapter"
 	"github.com/shuttleX/shuttle/config"
-	"github.com/shuttleX/shuttle/transport/selector"
 )
 
 // startInbounds starts all configured inbound listeners using the pluggable
 // Inbound/Outbound abstraction layer. This is the new path activated when
 // cfg.Inbounds is non-empty; the legacy startProxies path remains unchanged.
-func (e *Engine) startInbounds(ctx context.Context, cfg *config.ClientConfig, sel *selector.Selector, cancel context.CancelFunc) ([]func() error, error) {
+//
+// It reuses the router and DNS resolver already built by startInternal
+// (stored on e.currentRouter and e.dnsResolver), avoiding duplicate work.
+func (e *Engine) startInbounds(ctx context.Context, cfg *config.ClientConfig) ([]func() error, error) {
 	// Build outbounds: always provide direct, reject, and proxy.
 	outbounds := map[string]adapter.Outbound{
 		"direct": &DirectOutbound{tag: "direct"},
@@ -36,15 +39,11 @@ func (e *Engine) startInbounds(ctx context.Context, cfg *config.ClientConfig, se
 		outbounds[outCfg.Tag] = ob
 	}
 
-	// Build the InboundRouter using the already-built router and DNS resolver.
-	// NOTE: buildRouter was already called in startInternal; reuse that router
-	// by reading it from the engine, but we still need the DNS resolver which
-	// isn't stored on the engine. So we build the router here; this is cheap
-	// compared to transport setup.
-	rt, dnsResolver, prefetcher := e.buildRouter(cfg)
-	if prefetcher != nil {
-		go prefetcher.Start(ctx)
-	}
+	// Reuse the router and DNS resolver built by startInternal.
+	e.mu.RLock()
+	rt := e.currentRouter
+	dnsResolver := e.dnsResolver
+	e.mu.RUnlock()
 
 	ibRouter := &inboundRouter{
 		routerEngine: rt,
@@ -54,14 +53,11 @@ func (e *Engine) startInbounds(ctx context.Context, cfg *config.ClientConfig, se
 		logger:       e.logger,
 	}
 
-	// Store the router for PAC generation and other engine consumers.
-	e.mu.Lock()
-	e.currentRouter = rt
-	e.mu.Unlock()
-
 	var closers []func() error
 	var started []adapter.Inbound
 
+	// On failure, only clean up what startInbounds created (inbounds + outbounds).
+	// The caller (startInternal via startProxies) handles sel, cancel, and state.
 	cleanup := func(err error) ([]func() error, error) {
 		for _, ib := range started {
 			_ = ib.Close()
@@ -69,13 +65,6 @@ func (e *Engine) startInbounds(ctx context.Context, cfg *config.ClientConfig, se
 		for _, ob := range outbounds {
 			_ = ob.Close()
 		}
-		sel.Close()
-		cancel()
-		e.mu.Lock()
-		e.state = StateStopped
-		e.sel = nil
-		e.cancel = nil
-		e.mu.Unlock()
 		return nil, err
 	}
 
