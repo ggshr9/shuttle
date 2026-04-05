@@ -365,6 +365,17 @@
     "aggregate": "聚合",
     "redundant": "冗余"
   },
+  "simple": {
+    "connected": "\u5df2\u8fde\u63a5",
+    "disconnected": "\u672a\u8fde\u63a5",
+    "connect": "\u8fde\u63a5",
+    "disconnect": "\u65ad\u5f00",
+    "upload": "\u2191",
+    "download": "\u2193",
+    "sent": "\u5df2\u53d1\u9001",
+    "received": "\u5df2\u63a5\u6536",
+    "advancedMode": "\u9ad8\u7ea7\u6a21\u5f0f \u2192"
+  },
   "emptyState": {
     "noServers": "暂无服务器",
     "addToStart": "添加代理服务器以开始使用",

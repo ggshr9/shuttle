@@ -365,6 +365,17 @@
     "aggregate": "Aggregate",
     "redundant": "Redundant"
   },
+  "simple": {
+    "connected": "Connected",
+    "disconnected": "Disconnected",
+    "connect": "Connect",
+    "disconnect": "Disconnect",
+    "upload": "\u2191",
+    "download": "\u2193",
+    "sent": "Sent",
+    "received": "Received",
+    "advancedMode": "Advanced Mode \u2192"
+  },
   "emptyState": {
     "noServers": "No Servers Yet",
     "addToStart": "Add a proxy server to get started",
