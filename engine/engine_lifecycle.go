@@ -112,11 +112,19 @@ func (e *Engine) startInternal(ctx context.Context) error {
 	e.logger.Debug("building router and DNS resolver")
 	rt, dnsResolver, prefetcher := e.buildRouter(cfgSnap)
 	if prefetcher != nil {
-		go prefetcher.Start(ctx)
+		e.bgWg.Add(1)
+		go func() {
+			defer e.bgWg.Done()
+			prefetcher.Start(ctx)
+		}()
 	}
 	if cfgSnap.Routing.GeoData.Enabled && cfgSnap.Routing.GeoData.AutoUpdate {
 		if gm := e.GeoManager(); gm != nil {
-			gm.Start(ctx)
+			e.bgWg.Add(1)
+			go func() {
+				defer e.bgWg.Done()
+				gm.Start(ctx)
+			}()
 		}
 	}
 	retryCfg := e.buildRetryConfig(cfgSnap.Retry)
@@ -163,7 +171,11 @@ func (e *Engine) startInternal(ctx context.Context) error {
 		e.logger.Info("network change detected")
 		e.emit(Event{Type: EventNetworkChange, Message: "network change detected"})
 	})
-	nm.Start(ctx)
+	e.bgWg.Add(1)
+	go func() {
+		defer e.bgWg.Done()
+		nm.Start(ctx)
+	}()
 	e.mu.Lock()
 	e.netMon = nm
 	e.mu.Unlock()
