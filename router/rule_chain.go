@@ -211,30 +211,40 @@ func (m *geoIPMatcher) Match(ctx *MatchContext) bool {
 	return ok
 }
 
-// geoSiteMatcher expands geosite categories into a DomainTrie at compile time.
+// geoSiteMatcher queries GeoSiteDB at match time so it picks up hot-reloaded data.
 type geoSiteMatcher struct {
-	trie *DomainTrie
+	categories []string // lower-cased category names
+	db         *GeoSiteDB
 }
 
 func newGeoSiteMatcher(categories []string, db *GeoSiteDB) *geoSiteMatcher {
-	trie := NewDomainTrie()
-	if db != nil {
-		for _, cat := range categories {
-			domains := db.Lookup(cat)
-			for _, d := range domains {
-				trie.Insert(d, "match")
-			}
-		}
+	lower := make([]string, len(categories))
+	for i, c := range categories {
+		lower[i] = strings.ToLower(c)
 	}
-	return &geoSiteMatcher{trie: trie}
+	return &geoSiteMatcher{categories: lower, db: db}
 }
 
 func (m *geoSiteMatcher) Match(ctx *MatchContext) bool {
-	if ctx.Domain == "" {
+	if ctx.Domain == "" || m.db == nil {
 		return false
 	}
-	_, found := m.trie.Lookup(ctx.Domain)
-	return found
+	domain := strings.ToLower(ctx.Domain)
+	for _, cat := range m.categories {
+		for _, d := range m.db.Lookup(cat) {
+			d = strings.ToLower(d)
+			// Handle "+.example.com" wildcard prefix (match subdomains + exact).
+			if strings.HasPrefix(d, "+.") {
+				base := d[2:]
+				if domain == base || strings.HasSuffix(domain, "."+base) {
+					return true
+				}
+			} else if domain == d || strings.HasSuffix(domain, "."+d) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // processMatcher matches process names (case-insensitive).

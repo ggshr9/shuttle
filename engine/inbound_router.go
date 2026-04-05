@@ -40,14 +40,23 @@ func (r *inboundRouter) RouteConnection(ctx context.Context, meta *adapter.ConnM
 
 	action := r.routerEngine.Match(host, ip, procName, meta.Protocol)
 
+	// Look up outbound: try well-known actions first, then treat the action
+	// string as a custom outbound tag, falling back to the default outbound.
 	var out adapter.Outbound
 	switch action {
 	case router.ActionDirect:
 		out = r.outbounds["direct"]
 	case router.ActionReject:
 		out = r.outbounds["reject"]
-	default:
+	case router.ActionProxy:
 		out = r.defaultOut
+	default:
+		// Custom outbound tag (e.g., action: "my-outbound")
+		if ob, ok := r.outbounds[string(action)]; ok {
+			out = ob
+		} else {
+			out = r.defaultOut
+		}
 	}
 	if out == nil {
 		return nil, fmt.Errorf("no outbound for action %v", action)
