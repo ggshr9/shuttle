@@ -8,7 +8,8 @@ RUN apk add --no-cache \
     bind-tools \
     curl \
     gcc \
-    musl-dev
+    musl-dev \
+    docker-cli
 
 WORKDIR /src
 

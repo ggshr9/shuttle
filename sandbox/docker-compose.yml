@@ -186,6 +186,8 @@ services:
       - SANDBOX_CLIENT_B_API=10.100.2.10:9090
     cap_add:
       - NET_ADMIN
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
     networks:
       net-server:
         ipv4_address: 10.100.0.100

@@ -91,6 +91,9 @@ func NewHolePuncher(conn *net.UDPConn, localVIP net.IP, timeout time.Duration, l
 	if timeout == 0 {
 		timeout = 10 * time.Second
 	}
+	if logger == nil {
+		logger = slog.Default()
+	}
 	return &HolePuncher{
 		conn:     conn,
 		localVIP: localVIP,

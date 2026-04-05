@@ -114,6 +114,63 @@ func apiPost(apiAddr, path string, body any) (map[string]any, error) {
 	return result, nil
 }
 
+// apiPut makes a PUT request to the client API.
+func apiPut(apiAddr, path string, body any) (map[string]any, error) {
+	var reqBody io.Reader
+	if body != nil {
+		data, err := json.Marshal(body)
+		if err != nil {
+			return nil, err
+		}
+		reqBody = strings.NewReader(string(data))
+	}
+	client := &http.Client{Timeout: 10 * time.Second}
+	req, err := http.NewRequest("PUT", "http://"+apiAddr+path, reqBody)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	var result map[string]any
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+// restoreH3Transport restores the client to H3 transport mode.
+// Used in t.Cleanup() to prevent CDN/WebRTC cascade failures across tests.
+func restoreH3Transport(apiAddr string) {
+	cfg, err := apiGet(apiAddr, "/api/config")
+	if err != nil {
+		return
+	}
+	if transport, ok := cfg["transport"].(map[string]any); ok {
+		transport["preferred"] = "h3"
+		if h3, ok := transport["h3"].(map[string]any); ok {
+			h3["enabled"] = true
+		}
+		if reality, ok := transport["reality"].(map[string]any); ok {
+			reality["enabled"] = true
+		}
+		if cdnCfg, ok := transport["cdn"].(map[string]any); ok {
+			cdnCfg["enabled"] = false
+		}
+		if webrtcCfg, ok := transport["webrtc"].(map[string]any); ok {
+			webrtcCfg["enabled"] = false
+		}
+	}
+	apiPut(apiAddr, "/api/config", cfg)
+	apiPost(apiAddr, "/api/disconnect", nil)
+	time.Sleep(1 * time.Second)
+	apiPost(apiAddr, "/api/connect", nil)
+	time.Sleep(2 * time.Second)
+}
+
 // =============================================================================
 // P0: End-to-end proxy tests (H3 transport)
 // =============================================================================
@@ -410,6 +467,9 @@ func TestSandboxE2ECDNTransport(t *testing.T) {
 	httpbinAddr := sandboxEnv(t, "SANDBOX_HTTPBIN_ADDR")
 
 	waitForService(t, clientAAPI, 30*time.Second)
+
+	// Ensure H3 is restored even if the test fails mid-way
+	t.Cleanup(func() { restoreH3Transport(clientAAPI) })
 
 	// Step 1: Disconnect if running
 	status, err := apiGet(clientAAPI, "/api/status")
@@ -955,6 +1015,9 @@ func TestSandboxE2EWebRTCTransport(t *testing.T) {
 
 	waitForService(t, clientAAPI, 30*time.Second)
 
+	// Ensure H3 is restored even if the test fails mid-way
+	t.Cleanup(func() { restoreH3Transport(clientAAPI) })
+
 	// Step 1: Disconnect if running
 	status, err := apiGet(clientAAPI, "/api/status")
 	if err != nil {
@@ -1092,6 +1155,9 @@ func TestSandboxE2EWebRTCMultiStream(t *testing.T) {
 	httpbinAddr := sandboxEnv(t, "SANDBOX_HTTPBIN_ADDR")
 
 	waitForService(t, clientAAPI, 30*time.Second)
+
+	// Ensure H3 is restored even if the test fails mid-way
+	t.Cleanup(func() { restoreH3Transport(clientAAPI) })
 
 	// Step 1: Disconnect if running
 	status, err := apiGet(clientAAPI, "/api/status")
@@ -1233,6 +1299,9 @@ func TestSandboxE2EWebRTCFallback(t *testing.T) {
 	httpbinAddr := sandboxEnv(t, "SANDBOX_HTTPBIN_ADDR")
 
 	waitForService(t, clientAAPI, 30*time.Second)
+
+	// Ensure H3 is restored even if the test fails mid-way
+	t.Cleanup(func() { restoreH3Transport(clientAAPI) })
 
 	// Step 1: Disconnect if running
 	status, err := apiGet(clientAAPI, "/api/status")
