@@ -35,8 +35,11 @@ func (e *Engine) startInbounds(ctx context.Context, cfg *config.ClientConfig) ([
 		}
 	}
 
-	// Add any explicitly configured outbounds from the registry.
+	// First pass: build individual outbounds (skip groups).
 	for _, outCfg := range cfg.Outbounds {
+		if outCfg.Type == "group" {
+			continue // handled in second pass
+		}
 		if outCfg.Type == "proxy" {
 			// Custom proxy outbound — create a ProxyOutbound pointing to
 			// a different server address, reusing the engine's transport
@@ -53,6 +56,26 @@ func (e *Engine) startInbounds(ctx context.Context, cfg *config.ClientConfig) ([
 			}
 			outbounds[outCfg.Tag] = ob
 		}
+	}
+
+	// Second pass: build groups that reference other outbounds by tag.
+	for _, outCfg := range cfg.Outbounds {
+		if outCfg.Type != "group" {
+			continue
+		}
+		groupCfg, err := parseOutboundGroupConfig(outCfg.Options)
+		if err != nil {
+			return nil, fmt.Errorf("outbound group %q: %w", outCfg.Tag, err)
+		}
+		members := make([]adapter.Outbound, 0, len(groupCfg.Outbounds))
+		for _, memberTag := range groupCfg.Outbounds {
+			ob, ok := outbounds[memberTag]
+			if !ok {
+				return nil, fmt.Errorf("outbound group %q: member %q not found", outCfg.Tag, memberTag)
+			}
+			members = append(members, ob)
+		}
+		outbounds[outCfg.Tag] = NewOutboundGroup(outCfg.Tag, groupCfg.Strategy, members)
 	}
 
 	// Reuse the router and DNS resolver built by startInternal.

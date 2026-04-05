@@ -11,6 +11,7 @@ import (
 var _ adapter.Outbound = (*DirectOutbound)(nil)
 var _ adapter.Outbound = (*RejectOutbound)(nil)
 var _ adapter.Outbound = (*ProxyOutbound)(nil)
+var _ adapter.Outbound = (*OutboundGroup)(nil)
 
 func TestDirectOutboundTagType(t *testing.T) {
 	d := &DirectOutbound{tag: "direct"}
