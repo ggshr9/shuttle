@@ -14,6 +14,7 @@ type ServerConfig struct {
 	Audit        AuditConfig          `yaml:"audit" json:"audit"`
 	Reputation   ReputationConfig     `yaml:"reputation" json:"reputation"`
 	Cluster      ClusterConfig        `yaml:"cluster" json:"cluster"`
+	MaxStreams   int                  `yaml:"max_streams,omitempty" json:"max_streams,omitempty"` // max concurrent streams per connection (default 1024)
 	Debug        DebugConfig          `yaml:"debug" json:"debug"`
 	Yamux        YamuxConfig          `yaml:"yamux" json:"yamux"`
 	Log          LogConfig            `yaml:"log" json:"log"`

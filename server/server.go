@@ -18,8 +18,6 @@ import (
 	"github.com/shuttleX/shuttle/server/metrics"
 )
 
-const maxConcurrentStreams = 1024
-
 // Config holds everything the Server needs to initialize.
 type Config struct {
 	ServerConfig *config.ServerConfig
@@ -204,7 +202,7 @@ func New(c Config) (*Server, error) {
 		SignalHub:  s.signalHub,
 		Metrics:    s.metrics,
 		AdminInfo:  s.adminInfo,
-		StreamSem:  make(chan struct{}, maxConcurrentStreams),
+		StreamSem:  make(chan struct{}, cfg.MaxStreams),
 		Logger:     logger,
 	}
 

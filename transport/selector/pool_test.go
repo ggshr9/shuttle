@@ -49,7 +49,7 @@ func (m *mockTransport) Close() error  { return nil }
 
 func TestConnPoolGetPut(t *testing.T) {
 	mt := &mockTransport{}
-	pool := NewConnPool(mt, "127.0.0.1:443", 4, nil)
+	pool := NewConnPool(mt, "127.0.0.1:443", 4, 0, nil)
 	defer pool.Close()
 
 	ctx := context.Background()
@@ -81,7 +81,7 @@ func TestConnPoolGetPut(t *testing.T) {
 
 func TestConnPoolWarmUp(t *testing.T) {
 	mt := &mockTransport{}
-	pool := NewConnPool(mt, "127.0.0.1:443", 8, nil)
+	pool := NewConnPool(mt, "127.0.0.1:443", 8, 0, nil)
 	defer pool.Close()
 
 	ctx := context.Background()
@@ -108,7 +108,7 @@ func TestConnPoolWarmUp(t *testing.T) {
 
 func TestConnPoolEviction(t *testing.T) {
 	mt := &mockTransport{}
-	pool := NewConnPool(mt, "127.0.0.1:443", 4, nil)
+	pool := NewConnPool(mt, "127.0.0.1:443", 4, 0, nil)
 	pool.idleTTL = 50 * time.Millisecond // short TTL for testing
 	defer pool.Close()
 
@@ -143,7 +143,7 @@ func TestConnPoolEviction(t *testing.T) {
 
 func TestConnPoolMaxIdle(t *testing.T) {
 	mt := &mockTransport{}
-	pool := NewConnPool(mt, "127.0.0.1:443", 2, nil)
+	pool := NewConnPool(mt, "127.0.0.1:443", 2, 0, nil)
 	defer pool.Close()
 
 	ctx := context.Background()
@@ -181,7 +181,7 @@ func TestConnPoolMaxIdle(t *testing.T) {
 
 func TestConnPoolClosed(t *testing.T) {
 	mt := &mockTransport{}
-	pool := NewConnPool(mt, "127.0.0.1:443", 4, nil)
+	pool := NewConnPool(mt, "127.0.0.1:443", 4, 0, nil)
 
 	ctx := context.Background()
 

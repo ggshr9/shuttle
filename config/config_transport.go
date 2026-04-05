@@ -18,6 +18,10 @@ type TransportConfig struct {
 	Preferred         string        `yaml:"preferred" json:"preferred"`                                     // "h3", "reality", "cdn", "webrtc", "auto", "multipath"
 	MultipathSchedule string        `yaml:"multipath_schedule" json:"multipath_schedule"`                   // "weighted" (default), "min-latency", "load-balance"
 	WarmUpConns       int           `yaml:"warm_up_conns,omitempty" json:"warm_up_conns,omitempty"`         // pre-dial N connections on startup to eliminate cold-start latency
+	PoolMaxIdle       int           `yaml:"pool_max_idle,omitempty" json:"pool_max_idle,omitempty"`     // max idle connections per transport (default 4)
+	PoolIdleTTL       string        `yaml:"pool_idle_ttl,omitempty" json:"pool_idle_ttl,omitempty"`     // idle connection TTL (default "60s")
+	KeepaliveInterval string        `yaml:"keepalive_interval,omitempty" json:"keepalive_interval,omitempty"` // transport keepalive interval (default "15s")
+	KeepaliveTimeout  string        `yaml:"keepalive_timeout,omitempty" json:"keepalive_timeout,omitempty"`   // keepalive response timeout (default "5s")
 	H3                H3Config      `yaml:"h3" json:"h3"`
 	Reality           RealityConfig `yaml:"reality" json:"reality"`
 	CDN               CDNConfig     `yaml:"cdn" json:"cdn"`

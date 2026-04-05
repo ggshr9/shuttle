@@ -38,6 +38,18 @@ func applyClientDefaults(cfg *ClientConfig) {
 	if cfg.Transport.Preferred == "" {
 		cfg.Transport.Preferred = "auto"
 	}
+	if cfg.Transport.PoolMaxIdle == 0 {
+		cfg.Transport.PoolMaxIdle = 4
+	}
+	if cfg.Transport.PoolIdleTTL == "" {
+		cfg.Transport.PoolIdleTTL = "60s"
+	}
+	if cfg.Transport.KeepaliveInterval == "" {
+		cfg.Transport.KeepaliveInterval = "15s"
+	}
+	if cfg.Transport.KeepaliveTimeout == "" {
+		cfg.Transport.KeepaliveTimeout = "5s"
+	}
 	// Determine bind address based on AllowLAN setting
 	bindHost := "127.0.0.1"
 	if cfg.Proxy.AllowLAN {
@@ -182,5 +194,8 @@ func applyServerDefaults(cfg *ServerConfig) {
 	}
 	if cfg.Admin.Listen == "" {
 		cfg.Admin.Listen = "127.0.0.1:9090"
+	}
+	if cfg.MaxStreams == 0 {
+		cfg.MaxStreams = 1024
 	}
 }

@@ -33,6 +33,8 @@ type Selector struct {
 	serverAddr        string
 	multipathSchedule string
 	warmUpConns       int
+	poolMaxIdle       int
+	poolIdleTTL       time.Duration
 	mu                sync.RWMutex
 	logger            *slog.Logger
 }
@@ -50,9 +52,11 @@ type ProbeResult struct {
 type Config struct {
 	Strategy          Strategy
 	ProbeInterval     time.Duration
-	MultipathSchedule string // "weighted" (default), "min-latency", "load-balance"
-	ServerAddr        string // needed by multipath pool to dial persistent connections
-	WarmUpConns       int    // pre-dial N connections on startup (0 = disabled)
+	MultipathSchedule string        // "weighted" (default), "min-latency", "load-balance"
+	ServerAddr        string        // needed by multipath pool to dial persistent connections
+	WarmUpConns       int           // pre-dial N connections on startup (0 = disabled)
+	PoolMaxIdle       int           // max idle connections per transport (0 = default 4)
+	PoolIdleTTL       time.Duration // idle connection TTL (0 = default 60s)
 }
 
 // New creates a new transport selector.
@@ -73,6 +77,8 @@ func New(transports []transport.ClientTransport, cfg *Config, logger *slog.Logge
 		serverAddr:        cfg.ServerAddr,
 		multipathSchedule: cfg.MultipathSchedule,
 		warmUpConns:       cfg.WarmUpConns,
+		poolMaxIdle:       cfg.PoolMaxIdle,
+		poolIdleTTL:       cfg.PoolIdleTTL,
 		logger:            logger,
 	}
 	s.migrator = NewMigrator(logger)
@@ -99,7 +105,11 @@ func (s *Selector) Start(ctx context.Context) {
 
 	if s.warmUpConns > 0 && len(s.transports) > 0 && s.serverAddr != "" {
 		// Use the first transport for the connection pool.
-		cp := NewConnPool(s.transports[0], s.serverAddr, s.warmUpConns, s.logger)
+		maxIdle := s.poolMaxIdle
+		if maxIdle <= 0 {
+			maxIdle = s.warmUpConns
+		}
+		cp := NewConnPool(s.transports[0], s.serverAddr, maxIdle, s.poolIdleTTL, s.logger)
 		s.mu.Lock()
 		s.connPool = cp
 		s.mu.Unlock()
