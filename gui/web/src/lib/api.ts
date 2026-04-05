@@ -298,6 +298,22 @@ export interface GeodataSourcePreset {
   private_cidr: string
 }
 
+export interface MeshStatus {
+  enabled: boolean
+  vip?: string
+  cidr?: string
+  hub?: string
+}
+
+export interface MeshPeer {
+  virtual_ip: string
+  state: string
+  method?: string
+  avg_rtt_ms?: number
+  packet_loss?: number
+  score?: number
+}
+
 export const api = {
   status: () => request<Status>('GET', '/api/status'),
   connect: () => request<void>('POST', '/api/connect'),
@@ -382,6 +398,10 @@ export const api = {
   getGeodataSources: () => request<GeodataSourcePreset[]>('GET', '/api/geodata/sources'),
   // Update geodata source preset
   updateGeodataSource: (id: string) => request<{ status: string; source: string }>('POST', `/api/geodata/sources/${id}`),
+  // Mesh VPN
+  meshStatus: () => request<MeshStatus>('GET', '/api/mesh/status'),
+  meshPeers: () => request<MeshPeer[]>('GET', '/api/mesh/peers'),
+  meshConnectPeer: (vip: string) => request<void>('POST', `/api/mesh/peers/${encodeURIComponent(vip)}/connect`),
   // Diagnostics
   downloadDiagnostics: async (): Promise<void> => {
     const headers: Record<string, string> = {}

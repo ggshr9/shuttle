@@ -5,6 +5,7 @@
     "servers": "Servers",
     "subscriptions": "Subscriptions",
     "routing": "Routing",
+    "mesh": "Mesh",
     "logs": "Logs",
     "settings": "Settings"
   },
@@ -383,5 +384,31 @@
     "addToStart": "Add a proxy server to get started",
     "importConfig": "Import Config",
     "orAddManually": "or add manually below"
+  },
+  "mesh": {
+    "title": "Mesh VPN",
+    "status": "Status",
+    "enabled": "Enabled",
+    "disabled": "Disabled",
+    "notEnabled": "Mesh VPN is not enabled. Enable it in Settings.",
+    "virtualIP": "Virtual IP",
+    "cidr": "CIDR",
+    "peers": "Peers",
+    "peersTitle": "Peers",
+    "noPeers": "No peers connected. Join a mesh network to see peers here.",
+    "topology": "Network Topology",
+    "connect": "Connect",
+    "connecting": "Connecting...",
+    "connected": "Connected",
+    "connectSuccess": "Connecting to {vip}...",
+    "col": {
+      "vip": "Virtual IP",
+      "state": "State",
+      "method": "Method",
+      "rtt": "Avg RTT",
+      "loss": "Packet Loss",
+      "score": "Score",
+      "action": "Action"
+    }
   }
 }
