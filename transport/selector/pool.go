@@ -31,16 +31,19 @@ type idleConn struct {
 }
 
 // NewConnPool creates a connection pool for the given transport and server address.
-func NewConnPool(t transport.ClientTransport, addr string, maxIdle int, logger *slog.Logger) *ConnPool {
+func NewConnPool(t transport.ClientTransport, addr string, maxIdle int, idleTTL time.Duration, logger *slog.Logger) *ConnPool {
 	if maxIdle <= 0 {
 		maxIdle = 4
+	}
+	if idleTTL <= 0 {
+		idleTTL = 60 * time.Second
 	}
 	if logger == nil {
 		logger = slog.Default()
 	}
 	return &ConnPool{
 		maxIdle:   maxIdle,
-		idleTTL:   60 * time.Second,
+		idleTTL:   idleTTL,
 		transport: t,
 		addr:      addr,
 		logger:    logger,

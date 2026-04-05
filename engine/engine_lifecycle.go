@@ -92,11 +92,14 @@ func (e *Engine) startInternal(ctx context.Context) error {
 	}
 
 	e.logger.Debug("initializing transport selector", "strategy", strategy, "count", len(transports))
+	poolIdleTTL, _ := time.ParseDuration(cfgSnap.Transport.PoolIdleTTL)
 	sel := selector.New(transports, &selector.Config{
 		Strategy:          strategy,
 		ServerAddr:        cfgSnap.Server.Addr,
 		MultipathSchedule: cfgSnap.Transport.MultipathSchedule,
 		WarmUpConns:       cfgSnap.Transport.WarmUpConns,
+		PoolMaxIdle:       cfgSnap.Transport.PoolMaxIdle,
+		PoolIdleTTL:       poolIdleTTL,
 	}, e.logger)
 	sel.Start(ctx)
 
