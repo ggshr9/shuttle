@@ -58,6 +58,7 @@ func NewHandler(cfg HandlerConfig) http.Handler {
 	registerSpeedtestRoutes(mux, cfg.Engine, cfg.SpeedHistory)
 	registerMiscRoutes(mux, cfg.Engine, cfg.SubMgr, updateChecker)
 	registerPrometheusRoutes(mux, cfg.Engine)
+	registerTransportRoutes(mux, cfg.Engine)
 
 	var handler http.Handler = corsMiddleware(mux)
 	if cfg.AuthToken != "" {

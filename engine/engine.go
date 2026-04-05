@@ -281,3 +281,26 @@ func (e *Engine) CurrentRouter() *router.Router {
 	defer e.mu.RUnlock()
 	return e.currentRouter
 }
+
+// SetTransportStrategy changes the active selector's strategy at runtime.
+// Returns an error if no selector is active or the strategy string is unknown.
+func (e *Engine) SetTransportStrategy(ctx context.Context, strategy string) error {
+	sel := e.selector()
+	if sel == nil {
+		return fmt.Errorf("no active selector")
+	}
+	var s selector.Strategy
+	switch strategy {
+	case "auto":
+		s = selector.StrategyAuto
+	case "priority":
+		s = selector.StrategyPriority
+	case "latency":
+		s = selector.StrategyLatency
+	case "multipath":
+		s = selector.StrategyMultipath
+	default:
+		return fmt.Errorf("unknown strategy: %q", strategy)
+	}
+	return sel.SetStrategy(ctx, s)
+}
