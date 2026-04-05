@@ -2,10 +2,31 @@ package config
 
 // RoutingConfig configures routing rules.
 type RoutingConfig struct {
-	Rules   []RouteRule   `yaml:"rules" json:"rules"`
-	Default string        `yaml:"default" json:"default"` // "proxy", "direct"
-	DNS     DNSConfig     `yaml:"dns" json:"dns"`
-	GeoData GeoDataConfig `yaml:"geodata" json:"geodata"`
+	RuleChain []RuleChainEntry `yaml:"rule_chain,omitempty" json:"rule_chain,omitempty"` // ordered rules evaluated before legacy
+	Rules     []RouteRule      `yaml:"rules" json:"rules"`
+	Default   string           `yaml:"default" json:"default"` // "proxy", "direct"
+	DNS       DNSConfig        `yaml:"dns" json:"dns"`
+	GeoData   GeoDataConfig    `yaml:"geodata" json:"geodata"`
+}
+
+// RuleChainEntry defines a single rule in the ordered rule chain.
+type RuleChainEntry struct {
+	Match  RuleMatch `yaml:"match" json:"match"`
+	Logic  string    `yaml:"logic,omitempty" json:"logic,omitempty"` // "and" (default) | "or"
+	Action string    `yaml:"action" json:"action"`
+}
+
+// RuleMatch defines match conditions for a rule chain entry.
+type RuleMatch struct {
+	Domain        []string `yaml:"domain,omitempty" json:"domain,omitempty"`
+	DomainSuffix  []string `yaml:"domain_suffix,omitempty" json:"domain_suffix,omitempty"`
+	DomainKeyword []string `yaml:"domain_keyword,omitempty" json:"domain_keyword,omitempty"`
+	GeoSite       []string `yaml:"geosite,omitempty" json:"geosite,omitempty"`
+	IPCIDR        []string `yaml:"ip_cidr,omitempty" json:"ip_cidr,omitempty"`
+	GeoIP         []string `yaml:"geoip,omitempty" json:"geoip,omitempty"`
+	Process       []string `yaml:"process,omitempty" json:"process,omitempty"`
+	Protocol      []string `yaml:"protocol,omitempty" json:"protocol,omitempty"`
+	NetworkType   []string `yaml:"network_type,omitempty" json:"network_type,omitempty"`
 }
 
 // GeoDataConfig configures automatic GeoIP/GeoSite data management.

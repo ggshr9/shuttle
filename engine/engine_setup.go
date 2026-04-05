@@ -146,6 +146,26 @@ func (e *Engine) buildRouter(cfg *config.ClientConfig) (*router.Router, *router.
 	routerCfg := &router.RouterConfig{
 		DefaultAction: router.Action(cfg.Routing.Default),
 	}
+
+	// Map config rule chain entries to router rule chain entries.
+	for _, entry := range cfg.Routing.RuleChain {
+		routerCfg.RuleChain = append(routerCfg.RuleChain, router.RuleChainEntry{
+			Match: router.RuleMatch{
+				Domain:        entry.Match.Domain,
+				DomainSuffix:  entry.Match.DomainSuffix,
+				DomainKeyword: entry.Match.DomainKeyword,
+				GeoSite:       entry.Match.GeoSite,
+				IPCIDR:        entry.Match.IPCIDR,
+				GeoIP:         entry.Match.GeoIP,
+				Process:       entry.Match.Process,
+				Protocol:      entry.Match.Protocol,
+				NetworkType:   entry.Match.NetworkType,
+			},
+			Logic:  entry.Logic,
+			Action: entry.Action,
+		})
+	}
+
 	for _, rule := range cfg.Routing.Rules {
 		r := router.Rule{Action: router.Action(rule.Action)}
 		switch {
