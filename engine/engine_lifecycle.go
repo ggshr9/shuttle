@@ -3,16 +3,11 @@ package engine
 import (
 	"context"
 	"fmt"
-	"io"
-	"net"
 	"time"
 
 	"github.com/shuttleX/shuttle/config"
 	"github.com/shuttleX/shuttle/internal/netmon"
 	"github.com/shuttleX/shuttle/internal/sysopt"
-	"github.com/shuttleX/shuttle/mesh"
-	"github.com/shuttleX/shuttle/proxy"
-	"github.com/shuttleX/shuttle/qos"
 	"github.com/shuttleX/shuttle/stream"
 	"github.com/shuttleX/shuttle/transport/selector"
 )
@@ -127,15 +122,11 @@ func (e *Engine) startInternal(ctx context.Context) error {
 			}()
 		}
 	}
-	retryCfg := e.buildRetryConfig(cfgSnap.Retry)
-	shaperCfg := e.buildShaperConfig(cfgSnap.Obfs)
-	var classifier *qos.Classifier
-	if cfgSnap.QoS.Enabled {
-		classifier = qos.NewClassifier(&cfgSnap.QoS)
-	}
-	dialer := e.traffic.CreateDialer(cfgSnap, rt, dnsResolver, func(ctx context.Context, serverAddr, addr, network string) (net.Conn, error) {
-		return e.dialProxyStream(ctx, serverAddr, addr, network, retryCfg, shaperCfg, classifier)
-	})
+	// Store router and DNS resolver on engine so startInbounds can access them.
+	e.mu.Lock()
+	e.currentRouter = rt
+	e.dnsResolver = dnsResolver
+	e.mu.Unlock()
 
 	// Build plugin chain: metrics (byte counting + stats), connection tracker
 	// (lifecycle events), and logger (debug logging).
@@ -143,21 +134,36 @@ func (e *Engine) startInternal(ctx context.Context) error {
 		return fail(fmt.Errorf("plugin chain init: %w", err))
 	}
 
-	// Wrap dialer so every proxied connection flows through the plugin chain.
-	dialer = e.traffic.WrapDialerWithChain(dialer, e.obs.Chain())
+	// Convert legacy proxy.* config to inbound entries so all listeners
+	// flow through the unified inbound path.
+	adaptLegacyConfig(cfgSnap)
 
-	e.logger.Debug("starting proxy listeners")
-	closers, err := e.startProxies(ctx, cfgSnap, dialer, sel, cancel)
+	e.logger.Debug("starting inbound listeners")
+	closers, err := e.startInbounds(ctx, cfgSnap)
 	if err != nil {
 		sel.Close()
-		e.obs.CloseChain() // Clean up plugin chain on proxy start failure
+		e.obs.CloseChain()
 		return fail(err)
+	}
+
+	// Mesh requires TUN; log a warning if mesh is enabled but no TUN inbound.
+	if cfgSnap.Mesh.Enabled {
+		hasTUN := false
+		for _, ib := range cfgSnap.Inbounds {
+			if ib.Type == "tun" {
+				hasTUN = true
+				break
+			}
+		}
+		if !hasTUN {
+			e.logger.Warn("mesh requires TUN to be enabled, skipping mesh")
+		} else {
+			e.logger.Warn("mesh integration via MeshManager not yet available, skipping mesh")
+		}
 	}
 
 	e.mu.Lock()
 	e.closers = closers
-	e.currentRouter = rt
-	e.dnsResolver = dnsResolver
 	e.state = StateRunning
 	e.mu.Unlock()
 
@@ -332,52 +338,4 @@ func (e *Engine) Reload(cfg *config.ClientConfig) error {
 	return nil
 }
 
-const meshMaxRetries = 3
-
-// connectMesh attempts to establish a mesh connection with retries.
-func (e *Engine) connectMesh(ctx context.Context, cfg *config.ClientConfig, tunServer *proxy.TUNServer) *mesh.MeshClient {
-	serverAddr := cfg.Server.Addr
-	var lastErr error
-	for attempt := 1; attempt <= meshMaxRetries; attempt++ {
-		if ctx.Err() != nil {
-			return nil
-		}
-		curSel := e.selector()
-		if curSel == nil {
-			e.logger.Warn("mesh: no active selector, skipping")
-			return nil
-		}
-		conn, err := curSel.Dial(ctx, serverAddr)
-		if err != nil {
-			lastErr = err
-			e.logger.Warn("mesh: dial failed, retrying", "attempt", attempt, "err", err)
-			time.Sleep(time.Duration(attempt) * time.Second)
-			continue
-		}
-		mc, err := mesh.NewMeshClient(ctx, func(ctx context.Context) (io.ReadWriteCloser, error) {
-			return conn.OpenStream(ctx)
-		})
-		if err != nil {
-			conn.Close()
-			lastErr = err
-			e.logger.Warn("mesh: handshake failed, retrying", "attempt", attempt, "err", err)
-			time.Sleep(time.Duration(attempt) * time.Second)
-			continue
-		}
-		tunServer.MeshClient = mc
-		e.meshClient = mc // Store in engine for stats access
-		if err := tunServer.AddMeshRoute(mc.MeshCIDR()); err != nil {
-			e.logger.Warn("mesh: add route failed", "err", err)
-		}
-		e.bgWg.Add(1)
-		go func() {
-			defer e.bgWg.Done()
-			tunServer.MeshReceiveLoop(ctx)
-		}()
-		e.logger.Info("mesh connected", "virtual_ip", mc.VirtualIP(), "cidr", mc.MeshCIDR())
-		return mc
-	}
-	e.logger.Error("mesh: all attempts failed", "err", lastErr)
-	return nil
-}
 

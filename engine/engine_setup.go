@@ -12,7 +12,6 @@ import (
 	"github.com/shuttleX/shuttle/adapter"
 	"github.com/shuttleX/shuttle/config"
 	"github.com/shuttleX/shuttle/congestion"
-	"github.com/shuttleX/shuttle/internal/procnet"
 	"github.com/shuttleX/shuttle/obfs"
 	"github.com/shuttleX/shuttle/proxy"
 	"github.com/shuttleX/shuttle/qos"
@@ -20,7 +19,6 @@ import (
 	"github.com/shuttleX/shuttle/router/geodata"
 	"github.com/shuttleX/shuttle/stream"
 	"github.com/shuttleX/shuttle/transport"
-	"github.com/shuttleX/shuttle/transport/selector"
 )
 
 // buildCongestionControl creates the appropriate CC based on config.
@@ -237,92 +235,10 @@ func resolveTarget(ctx context.Context, host string, dnsResolver *router.DNSReso
 	return ips[0], nil
 }
 
-// dialProxyStream dials the proxy server, opens a stream, and returns the
-// connection and stream. It handles retry, circuit breaker recording, and
-// stream metric wrapping.
+// dialProxyStream dials the proxy server and opens a stream. Resilience
+// (retry + circuit breaker) is applied externally via ResilientOutbound
+// middleware wrapping ProxyOutbound.
 func (e *Engine) dialProxyStream(
-	ctx context.Context,
-	serverAddr, addr, network string,
-	retryCfg RetryConfig,
-	shaperCfg obfs.ShaperConfig,
-	classifier *qos.Classifier,
-) (net.Conn, error) {
-	curSel := e.selector()
-	if curSel == nil {
-		return nil, fmt.Errorf("no active selector")
-	}
-	if cb := e.circuitBreaker; cb != nil && !cb.Allow() {
-		return nil, fmt.Errorf("circuit breaker open for %s, retry after cooldown", serverAddr)
-	}
-
-	var conn transport.Connection
-	var rawStream transport.Stream
-	err := retryWithBackoff(ctx, retryCfg, func() error {
-		var dialErr error
-		conn, dialErr = curSel.Dial(ctx, serverAddr)
-		if dialErr != nil {
-			return fmt.Errorf("proxy dial: %w", dialErr)
-		}
-		rawStream, dialErr = conn.OpenStream(ctx)
-		if dialErr != nil {
-			return fmt.Errorf("open stream: %w", dialErr)
-		}
-		return nil
-	})
-	if err != nil {
-		if cb := e.circuitBreaker; cb != nil {
-			cb.RecordFailure()
-		}
-		return nil, err
-	}
-	if cb := e.circuitBreaker; cb != nil {
-		cb.RecordSuccess()
-	}
-
-	// Wrap with measured stream for per-stream metrics.
-	seq := atomic.AddUint64(&e.connSeq, 1)
-	connID := strconv.FormatUint(seq, 16)
-	st := e.streamTracker
-	transportType := ""
-	if curSel != nil {
-		transportType = curSel.ActiveTransport()
-	}
-	metrics := st.Track(rawStream.StreamID(), addr, transportType)
-	metrics.ConnID = connID
-	measured := stream.NewMeasuredStream(rawStream, metrics)
-
-	// Classify traffic and set QoS priority on the stream.
-	if classifier != nil {
-		port := extractPort(addr)
-		priority := classifier.ClassifyPort(port)
-		measured.SetPriority(int(priority))
-	}
-
-	// For UDP streams, prepend the UDP marker so the server uses UDP relay.
-	var header []byte
-	if network == "udp" {
-		header = []byte(proxy.UDPStreamPrefix + addr + "\n")
-	} else {
-		header = []byte(addr + "\n")
-	}
-	if _, err := measured.Write(header); err != nil {
-		measured.Close()
-		return nil, fmt.Errorf("send target: %w", err)
-	}
-
-	sc := &streamConn{stream: measured, addr: addr}
-	if shaperCfg.Enabled {
-		shaper := obfs.NewShaper(measured, shaperCfg)
-		return &shapedConn{streamConn: sc, shaper: shaper}, nil
-	}
-	return sc, nil
-}
-
-
-// dialProxyStreamSimple dials the proxy server and opens a stream without any
-// retry or circuit breaker logic. Resilience is applied externally via
-// ResilientOutbound middleware wrapping ProxyOutbound.
-func (e *Engine) dialProxyStreamSimple(
 	ctx context.Context,
 	serverAddr, addr, network string,
 	shaperCfg obfs.ShaperConfig,
@@ -380,108 +296,6 @@ func (e *Engine) dialProxyStreamSimple(
 	}
 	return sc, nil
 }
-
-// startSOCKS5 starts the SOCKS5 proxy server if configured.
-func (e *Engine) startSOCKS5(ctx context.Context, cfg *config.ClientConfig, dialer func(context.Context, string, string) (net.Conn, error), procResolver *procnet.Resolver) (func() error, error) {
-	socks := proxy.NewSOCKS5Server(&proxy.SOCKS5Config{
-		ListenAddr: cfg.Proxy.SOCKS5.Listen,
-	}, dialer, e.logger)
-	socks.ProcResolver = procResolver
-	socks.QoSClassifier = qos.NewClassifier(&cfg.QoS)
-	if err := socks.Start(ctx); err != nil {
-		return nil, fmt.Errorf("socks5: %w", err)
-	}
-	return socks.Close, nil
-}
-
-// startHTTPProxy starts the HTTP CONNECT proxy server if configured.
-func (e *Engine) startHTTPProxy(ctx context.Context, cfg *config.ClientConfig, dialer func(context.Context, string, string) (net.Conn, error), procResolver *procnet.Resolver) (func() error, error) {
-	httpProxy := proxy.NewHTTPServer(&proxy.HTTPConfig{
-		ListenAddr: cfg.Proxy.HTTP.Listen,
-	}, dialer, e.logger)
-	httpProxy.ProcResolver = procResolver
-	httpProxy.QoSClassifier = qos.NewClassifier(&cfg.QoS)
-	if err := httpProxy.Start(ctx); err != nil {
-		return nil, fmt.Errorf("http proxy: %w", err)
-	}
-	return httpProxy.Close, nil
-}
-
-// startTUN starts the TUN device proxy and optionally the mesh network.
-// Returns closers for all started components. If TUN fails, it logs a warning
-// and returns nil (non-fatal).
-func (e *Engine) startTUN(ctx context.Context, cfg *config.ClientConfig, dialer func(context.Context, string, string) (net.Conn, error), procResolver *procnet.Resolver) []func() error {
-	tunServer := proxy.NewTUNServer(&proxy.TUNConfig{
-		DeviceName: cfg.Proxy.TUN.DeviceName,
-		CIDR:       cfg.Proxy.TUN.CIDR,
-		MTU:        cfg.Proxy.TUN.MTU,
-		AutoRoute:  cfg.Proxy.TUN.AutoRoute,
-		TunFD:      cfg.Proxy.TUN.TunFD,
-	}, dialer, e.logger)
-	tunServer.ProcResolver = procResolver
-	tunServer.QoSClassifier = qos.NewClassifier(&cfg.QoS)
-	if err := tunServer.Start(ctx); err != nil {
-		e.logger.Warn("TUN device failed", "err", err)
-		return nil
-	}
-	closers := []func() error{tunServer.Close}
-	if cfg.Mesh.Enabled {
-		if mc := e.connectMesh(ctx, cfg, tunServer); mc != nil {
-			closers = append(closers, mc.Close)
-		}
-	}
-	return closers
-}
-
-// startProxies starts all configured local proxy servers.
-// If inbounds are configured, the new pluggable abstraction is used instead.
-func (e *Engine) startProxies(ctx context.Context, cfg *config.ClientConfig, dialer func(context.Context, string, string) (net.Conn, error), sel *selector.Selector, cancel context.CancelFunc) ([]func() error, error) {
-	if len(cfg.Inbounds) > 0 {
-		return e.startInbounds(ctx, cfg)
-	}
-
-	procResolver := procnet.NewResolver()
-	var closers []func() error
-
-	cleanup := func(err error) ([]func() error, error) {
-		for _, c := range closers {
-			_ = c()
-		}
-		sel.Close()
-		cancel()
-		e.mu.Lock()
-		e.state = StateStopped
-		e.sel = nil
-		e.cancel = nil
-		e.mu.Unlock()
-		return nil, err
-	}
-
-	if cfg.Proxy.SOCKS5.Enabled {
-		closer, err := e.startSOCKS5(ctx, cfg, dialer, procResolver)
-		if err != nil {
-			return cleanup(err)
-		}
-		closers = append(closers, closer)
-	}
-
-	if cfg.Proxy.HTTP.Enabled {
-		closer, err := e.startHTTPProxy(ctx, cfg, dialer, procResolver)
-		if err != nil {
-			return cleanup(err)
-		}
-		closers = append(closers, closer)
-	}
-
-	if cfg.Proxy.TUN.Enabled {
-		closers = append(closers, e.startTUN(ctx, cfg, dialer, procResolver)...)
-	} else if cfg.Mesh.Enabled {
-		e.logger.Warn("mesh requires TUN to be enabled, skipping mesh")
-	}
-
-	return closers, nil
-}
-
 
 // buildShaperConfig converts config.ObfsConfig into an obfs.ShaperConfig.
 // Returns a zero-value (Enabled=false) config if shaping is disabled or parsing fails.

@@ -11,8 +11,9 @@ import (
 )
 
 // startInbounds starts all configured inbound listeners using the pluggable
-// Inbound/Outbound abstraction layer. This is the new path activated when
-// cfg.Inbounds is non-empty; the legacy startProxies path remains unchanged.
+// Inbound/Outbound abstraction layer. This is the unified path for all proxy
+// listeners; legacy proxy.* config is converted by adaptLegacyConfig before
+// this function is called.
 //
 // It reuses the router and DNS resolver already built by startInternal
 // (stored on e.currentRouter and e.dnsResolver), avoiding duplicate work.
@@ -20,12 +21,18 @@ func (e *Engine) startInbounds(ctx context.Context, cfg *config.ClientConfig) ([
 	// Build outbounds: always provide direct, reject, and proxy.
 	outbounds := e.traffic.BuildBuiltinOutbounds(cfg, e)
 
-	// Wrap proxy outbound with resilience middleware (circuit breaker + retry).
+	// Wrap proxy outbound with resilience (circuit breaker + retry) then
+	// plugin chain (metrics, conntrack, logger).
 	if proxyOb, ok := outbounds["proxy"]; ok {
-		outbounds["proxy"] = NewResilientOutbound(proxyOb, ResilientOutboundConfig{
+		resilient := NewResilientOutbound(proxyOb, ResilientOutboundConfig{
 			CircuitBreaker: e.circuitBreaker,
 			RetryConfig:    e.buildRetryConfig(cfg.Retry),
 		})
+		if chain := e.obs.Chain(); chain != nil {
+			outbounds["proxy"] = NewChainOutbound(resilient, chain)
+		} else {
+			outbounds["proxy"] = resilient
+		}
 	}
 
 	// Add any explicitly configured outbounds from the registry.
@@ -49,7 +56,7 @@ func (e *Engine) startInbounds(ctx context.Context, cfg *config.ClientConfig) ([
 	var started []adapter.Inbound
 
 	// On failure, only clean up what startInbounds created (inbounds + outbounds).
-	// The caller (startInternal via startProxies) handles sel, cancel, and state.
+	// The caller (startInternal) handles sel, cancel, and state.
 	cleanup := func(err error) ([]func() error, error) {
 		for _, ib := range started {
 			_ = ib.Close()

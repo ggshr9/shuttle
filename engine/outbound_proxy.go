@@ -25,7 +25,7 @@ func (o *ProxyOutbound) Tag() string  { return o.tag }
 func (o *ProxyOutbound) Type() string { return "proxy" }
 
 func (o *ProxyOutbound) DialContext(ctx context.Context, network, address string) (net.Conn, error) {
-	return o.engine.dialProxyStreamSimple(ctx, o.serverAddr, address, network, o.shaperCfg, o.classifier)
+	return o.engine.dialProxyStream(ctx, o.serverAddr, address, network, o.shaperCfg, o.classifier)
 }
 
 func (o *ProxyOutbound) Close() error { return nil }

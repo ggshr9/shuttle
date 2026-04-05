@@ -6,10 +6,40 @@ import (
 	"net"
 
 	"github.com/shuttleX/shuttle/adapter"
+	"github.com/shuttleX/shuttle/plugin"
 )
 
-// Compile-time check that ResilientOutbound implements adapter.Outbound.
+// Compile-time checks.
 var _ adapter.Outbound = (*ResilientOutbound)(nil)
+var _ adapter.Outbound = (*ChainOutbound)(nil)
+
+// ChainOutbound wraps an adapter.Outbound so connections flow through a plugin chain.
+type ChainOutbound struct {
+	inner adapter.Outbound
+	chain *plugin.Chain
+}
+
+// NewChainOutbound creates a ChainOutbound wrapper.
+func NewChainOutbound(inner adapter.Outbound, chain *plugin.Chain) *ChainOutbound {
+	return &ChainOutbound{inner: inner, chain: chain}
+}
+
+func (c *ChainOutbound) Tag() string  { return c.inner.Tag() }
+func (c *ChainOutbound) Type() string { return c.inner.Type() }
+func (c *ChainOutbound) Close() error { return c.inner.Close() }
+
+func (c *ChainOutbound) DialContext(ctx context.Context, network, address string) (net.Conn, error) {
+	conn, err := c.inner.DialContext(ctx, network, address)
+	if err != nil {
+		return nil, err
+	}
+	wrapped, err := c.chain.OnConnect(conn, address)
+	if err != nil {
+		conn.Close()
+		return nil, err
+	}
+	return &chainConn{Conn: wrapped, chain: c.chain}, nil
+}
 
 // ResilientOutboundConfig configures the resilience middleware.
 type ResilientOutboundConfig struct {
