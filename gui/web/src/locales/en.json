@@ -371,11 +371,12 @@
     "disconnected": "Disconnected",
     "connect": "Connect",
     "disconnect": "Disconnect",
-    "upload": "\u2191",
-    "download": "\u2193",
+    "upload": "↑",
+    "download": "↓",
     "sent": "Sent",
     "received": "Received",
-    "advancedMode": "Advanced Mode \u2192"
+    "advancedMode": "Advanced Mode →",
+    "findingBestServer": "Finding best server..."
   },
   "emptyState": {
     "noServers": "No Servers Yet",

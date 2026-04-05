@@ -367,15 +367,16 @@
     "redundant": "冗余"
   },
   "simple": {
-    "connected": "\u5df2\u8fde\u63a5",
-    "disconnected": "\u672a\u8fde\u63a5",
-    "connect": "\u8fde\u63a5",
-    "disconnect": "\u65ad\u5f00",
-    "upload": "\u2191",
-    "download": "\u2193",
-    "sent": "\u5df2\u53d1\u9001",
-    "received": "\u5df2\u63a5\u6536",
-    "advancedMode": "\u9ad8\u7ea7\u6a21\u5f0f \u2192"
+    "connected": "已连接",
+    "disconnected": "未连接",
+    "connect": "连接",
+    "disconnect": "断开",
+    "upload": "↑",
+    "download": "↓",
+    "sent": "已发送",
+    "received": "已接收",
+    "advancedMode": "高级模式 →",
+    "findingBestServer": "正在寻找最优服务器..."
   },
   "emptyState": {
     "noServers": "暂无服务器",

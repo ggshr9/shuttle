@@ -12,6 +12,7 @@
 
   let connected = $state(false)
   let loading = $state(false)
+  let loadingStatus = $state('')
   let serverName = $state('')
   let uploadSpeed = $state(0)
   let downloadSpeed = $state(0)
@@ -49,13 +50,27 @@
     loading = true
     try {
       if (connected) {
+        loadingStatus = ''
         await api.disconnect()
       } else {
+        // Auto-select the lowest-latency server when multiple servers exist
+        try {
+          const data = await api.getServers()
+          if (data.servers && data.servers.length > 1) {
+            loadingStatus = t('simple.findingBestServer')
+            const result = await api.autoSelectServer()
+            serverName = result.server.name || result.server.addr
+          }
+        } catch {
+          // If auto-select fails, proceed with current server
+        }
+        loadingStatus = ''
         await api.connect()
       }
       await refresh()
     } finally {
       loading = false
+      loadingStatus = ''
     }
   }
 
@@ -101,6 +116,10 @@
       {connected ? t('simple.disconnect') : t('simple.connect')}
     {/if}
   </button>
+
+  {#if loadingStatus}
+    <div class="loading-status">{loadingStatus}</div>
+  {/if}
 
   {#if connected}
     <div class="speed-display">
@@ -186,6 +205,17 @@
   .server-info {
     font-size: 0.9rem;
     color: var(--text-muted);
+  }
+
+  .loading-status {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    animation: pulse 1.5s ease-in-out infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
   }
 
   .connect-btn {
