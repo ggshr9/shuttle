@@ -11,6 +11,7 @@ import (
 	"github.com/shuttleX/shuttle/internal/sysopt"
 	"github.com/shuttleX/shuttle/proxy"
 	"github.com/shuttleX/shuttle/stream"
+	"github.com/shuttleX/shuttle/subscription"
 	"github.com/shuttleX/shuttle/transport/selector"
 )
 
@@ -49,6 +50,14 @@ func (e *Engine) startInternal(ctx context.Context) error {
 		OnStateChange: func(state CircuitState, cooldown time.Duration) {
 			if state == CircuitOpen {
 				e.emit(Event{Type: EventConnectionError, Error: "circuit breaker open", BackoffMs: cooldown.Milliseconds()})
+				// Trigger subscription refresh to discover new servers when all existing ones fail.
+				e.mu.RLock()
+				sm := e.subscriptionManager
+				e.mu.RUnlock()
+				if sm != nil {
+					go sm.RefreshAll(context.Background())
+					e.logger.Info("circuit breaker open: triggering subscription refresh")
+				}
 			}
 		},
 	})
@@ -228,6 +237,17 @@ func (e *Engine) startInternal(ctx context.Context) error {
 	e.netMon = nm
 	e.mu.Unlock()
 
+	// Start subscription manager if subscriptions are configured.
+	if len(cfgSnap.Subscriptions) > 0 {
+		sm := subscription.NewManager()
+		sm.LoadFromConfig(cfgSnap.Subscriptions)
+		sm.StartAutoRefresh(ctx, 24*time.Hour)
+		e.mu.Lock()
+		e.subscriptionManager = sm
+		e.mu.Unlock()
+		e.logger.Info("subscription manager started", "count", len(cfgSnap.Subscriptions))
+	}
+
 	return nil
 }
 
@@ -305,6 +325,14 @@ func (e *Engine) stopInternal() error {
 		e.logger.Warn("observability goroutines did not exit within timeout")
 	}
 
+	// Stop subscription manager before taking the final lock.
+	e.mu.RLock()
+	sm := e.subscriptionManager
+	e.mu.RUnlock()
+	if sm != nil {
+		sm.StopAutoRefresh()
+	}
+
 	e.mu.Lock()
 	if e.netMon != nil {
 		e.netMon.Stop()
@@ -332,6 +360,7 @@ func (e *Engine) stopInternal() error {
 	e.streamTracker = nil
 	e.circuitBreaker = nil
 	e.proactiveMigrator = nil
+	e.subscriptionManager = nil
 	e.mu.Unlock()
 
 	e.logger.Debug("engine state transition", "from", "stopping", "to", "stopped")
