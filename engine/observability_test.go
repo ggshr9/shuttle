@@ -195,6 +195,42 @@ func TestObservabilityManager_PluginChain(t *testing.T) {
 	}
 }
 
+func TestObservabilityManager_DroppedEventsCounter(t *testing.T) {
+	om := NewObservabilityManager(nil)
+	ch := om.Subscribe()
+
+	// Verify counter starts at zero.
+	if got := om.DroppedEvents(); got != 0 {
+		t.Fatalf("expected 0 dropped events initially, got %d", got)
+	}
+
+	// Fill the channel buffer completely — these should all be delivered.
+	for i := 0; i < observabilityChannelBuffer; i++ {
+		om.Emit(Event{Type: EventLog, Message: "fill"})
+	}
+
+	if got := om.DroppedEvents(); got != 0 {
+		t.Fatalf("expected 0 drops after filling buffer, got %d", got)
+	}
+
+	// Emit one more event while the buffer is full — this must be dropped.
+	om.Emit(Event{Type: EventLog, Message: "overflow"})
+
+	if got := om.DroppedEvents(); got != 1 {
+		t.Fatalf("expected 1 dropped event, got %d", got)
+	}
+
+	// Emit two more overflows and confirm the counter accumulates.
+	om.Emit(Event{Type: EventLog, Message: "overflow2"})
+	om.Emit(Event{Type: EventLog, Message: "overflow3"})
+
+	if got := om.DroppedEvents(); got != 3 {
+		t.Fatalf("expected 3 dropped events, got %d", got)
+	}
+
+	om.Unsubscribe(ch)
+}
+
 func TestObservabilityManager_SpeedLoop(t *testing.T) {
 	om := NewObservabilityManager(nil)
 	ch := om.Subscribe()
