@@ -133,9 +133,6 @@ func TestMobileErrorCodes(t *testing.T) {
 func TestMobileErrorImplementsError(t *testing.T) {
 	t.Parallel()
 	var err error = NewMobileError(ErrStartFailed, "test")
-	if err == nil {
-		t.Fatal("expected non-nil error")
-	}
 	if err.Error() == "" {
 		t.Fatal("expected non-empty error string")
 	}

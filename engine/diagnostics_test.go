@@ -65,10 +65,8 @@ func TestCollectDiagnostics(t *testing.T) {
 		t.Error("expected non-nil Config")
 	}
 
-	// Check DNS section
-	if bundle.DNS.Servers == nil {
-		// Servers may be empty if no DNS configured, but should not panic
-	}
+	// DNS.Servers may be nil if no DNS configured — just ensure no panic on access.
+	_ = bundle.DNS.Servers
 
 	// Check Router section
 	if bundle.Router.Stats == nil {

@@ -39,7 +39,7 @@ proxy:
     enabled: true
     listen: "0.0.0.0:8080"
   tun:
-    enabled: true
+    enabled: false  # TUN doesn't work in Docker CI (/dev/net/tun: not pollable)
     cidr: "198.18.0.0/16"
     auto_route: false
 
