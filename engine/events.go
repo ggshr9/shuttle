@@ -21,6 +21,7 @@ const (
 	EventConnectionError                   // Transport connection failed (circuit breaker)
 	EventRetry                             // Retry attempt during dial
 	EventProactiveMigration                // Proactive migration triggered on network change
+	EventConfigReloaded                    // Config reloaded (router-only or full restart)
 )
 
 var eventTypeNames = [...]string{
@@ -35,6 +36,7 @@ var eventTypeNames = [...]string{
 	EventConnectionError:     "connection_error",
 	EventRetry:               "retry",
 	EventProactiveMigration:  "proactive_migration",
+	EventConfigReloaded:      "config_reloaded",
 }
 
 func (t EventType) String() string {
