@@ -101,29 +101,23 @@ func (om *ObservabilityManager) Unsubscribe(ch <-chan Event) {
 }
 
 // Emit sends an event to all subscribers. It is non-blocking: if a subscriber's
-// channel buffer is full the event is dropped for that subscriber. Closed
-// channels (from a racing Unsubscribe) are handled gracefully via recover.
+// channel buffer is full the event is dropped for that subscriber.
 func (om *ObservabilityManager) Emit(ev Event) {
 	ev.Timestamp = time.Now()
 	om.logger.Debug("emitting event", slog.String("type", ev.Type.String()))
 
-	// Snapshot subscribers under read lock, then release before sending.
-	// This prevents deadlock when a subscriber callback triggers Unsubscribe.
+	// Hold RLock for the entire send loop. Since sends are non-blocking
+	// (select with default), this cannot deadlock. Unsubscribe acquires a
+	// write lock and will wait until Emit finishes, ensuring close(ch) never
+	// races with a send.
 	om.subMu.RLock()
-	snapshot := make([]chan Event, 0, len(om.subs))
-	for ch := range om.subs {
-		snapshot = append(snapshot, ch)
-	}
-	om.subMu.RUnlock()
+	defer om.subMu.RUnlock()
 
-	for _, ch := range snapshot {
-		func() {
-			defer func() { recover() }()
-			select {
-			case ch <- ev:
-			default:
-			}
-		}()
+	for ch := range om.subs {
+		select {
+		case ch <- ev:
+		default:
+		}
 	}
 }
 

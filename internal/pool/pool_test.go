@@ -143,17 +143,22 @@ func TestPoolStatsReset(t *testing.T) {
 }
 
 func TestPutMedLargeNoZero(t *testing.T) {
-	buf := GetMedLarge()
-	// Write known data pattern.
+	// Verify that PutMedLargeNoZero does NOT clear the buffer by checking
+	// the implementation directly, rather than relying on sync.Pool returning
+	// the same object (which is not guaranteed and is flaky under -race / GC).
+	buf := make([]byte, 32*1024)
 	for i := range buf {
 		buf[i] = 0xAB
 	}
+
+	// Call PutMedLargeNoZero — this should NOT zero the buffer.
 	PutMedLargeNoZero(buf)
 
-	// Get again — should get the same buffer from pool (no GC in between).
-	buf2 := GetMedLarge()
+	// The buffer slice we still hold should retain its data, because
+	// PutMedLargeNoZero does not call clear(). (In contrast, PutMedLarge
+	// does call clear() and would zero the underlying array.)
 	found := false
-	for _, b := range buf2 {
+	for _, b := range buf {
 		if b == 0xAB {
 			found = true
 			break
@@ -162,7 +167,24 @@ func TestPutMedLargeNoZero(t *testing.T) {
 	if !found {
 		t.Error("PutMedLargeNoZero should not zero the buffer, but data was cleared")
 	}
-	PutMedLarge(buf2)
+}
+
+func TestPutMedLarge_DoesZero(t *testing.T) {
+	// Verify that PutMedLarge DOES zero the buffer.
+	buf := make([]byte, 32*1024)
+	for i := range buf {
+		buf[i] = 0xCD
+	}
+
+	PutMedLarge(buf)
+
+	// The buffer should now be zeroed because PutMedLarge calls clear().
+	for _, b := range buf {
+		if b != 0 {
+			t.Error("PutMedLarge should zero the buffer, but found non-zero data")
+			break
+		}
+	}
 }
 
 func TestPoolAutoSize(t *testing.T) {
