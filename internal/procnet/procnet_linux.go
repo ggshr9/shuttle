@@ -97,7 +97,7 @@ func listLinux() ([]ProcInfo, error) {
 			}
 		}
 		if pidConns[uint32(pid)] > 0 {
-			comm, _ := os.ReadFile(filepath.Join("/proc", entry.Name(), "comm"))
+			comm, _ := os.ReadFile(filepath.Join("/proc", entry.Name(), "comm")) //nolint:gocritic // /proc is a real filesystem path
 			pidNames[uint32(pid)] = strings.TrimSpace(string(comm))
 		}
 	}
@@ -124,10 +124,10 @@ func inodeToPID(targetInode uint64) uint32 {
 		if err != nil {
 			continue
 		}
-		fdPath := filepath.Join("/proc", entry.Name(), "fd")
+		fdPath := filepath.Join("/proc", entry.Name(), "fd") //nolint:gocritic // /proc is a real filesystem path
 		fds, _ := os.ReadDir(fdPath)
 		for _, fd := range fds {
-			link, _ := os.Readlink(filepath.Join(fdPath, fd.Name()))
+			link, _ := os.Readlink(filepath.Join(fdPath, fd.Name())) //nolint:gocritic // /proc is a real filesystem path
 			if !strings.HasPrefix(link, "socket:[") {
 				continue
 			}

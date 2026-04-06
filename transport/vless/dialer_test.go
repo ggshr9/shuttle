@@ -81,7 +81,7 @@ func TestVLESS_EchoThroughServer(t *testing.T) {
 	vlessAddr := vlessLn.Addr().String()
 
 	// ---------- 3. Dial through VLESS to echo ----------
-	dialer, err := vless.NewDialer(vless.DialerConfig{
+	dialer, err := vless.NewDialer(&vless.DialerConfig{
 		Server: vlessAddr,
 		UUID:   testUUID,
 		// TLS disabled (plain TCP for unit test)
@@ -146,7 +146,7 @@ func TestVLESS_BadUUID(t *testing.T) {
 	go srv.Serve(ctx, vlessLn, handler)
 
 	// Dial with bad UUID.
-	dialer, err := vless.NewDialer(vless.DialerConfig{
+	dialer, err := vless.NewDialer(&vless.DialerConfig{
 		Server: vlessLn.Addr().String(),
 		UUID:   badUUID,
 	})

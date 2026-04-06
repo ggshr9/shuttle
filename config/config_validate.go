@@ -171,8 +171,8 @@ func (c *ClientConfig) Validate() error {
 	}
 
 	// Routing.RuleChain validation
-	for i, entry := range c.Routing.RuleChain {
-		if err := validateRuleChainEntry(i, entry); err != nil {
+	for i := range c.Routing.RuleChain {
+		if err := validateRuleChainEntry(i, &c.Routing.RuleChain[i]); err != nil {
 			return err
 		}
 	}
@@ -186,16 +186,17 @@ func (c *ClientConfig) Validate() error {
 
 	// Routing.DNS.Domestic validation
 	if c.Routing.DNS.Domestic != "" {
-		if strings.Contains(c.Routing.DNS.Domestic, "://") {
+		switch {
+		case strings.Contains(c.Routing.DNS.Domestic, "://"):
 			if err := validateURL(c.Routing.DNS.Domestic, "routing.dns.domestic"); err != nil {
 				return err
 			}
-		} else if strings.Contains(c.Routing.DNS.Domestic, ":") {
+		case strings.Contains(c.Routing.DNS.Domestic, ":"):
 			// host:port form
 			if err := validateHostPort(c.Routing.DNS.Domestic, "routing.dns.domestic"); err != nil {
 				return err
 			}
-		} else {
+		default:
 			// plain IP — validate it parses
 			if net.ParseIP(c.Routing.DNS.Domestic) == nil {
 				return fmt.Errorf("invalid routing.dns.domestic: %q is not a valid IP address", c.Routing.DNS.Domestic)
@@ -379,7 +380,7 @@ func (c *ServerConfig) Validate() error {
 }
 
 // validateRuleChainEntry validates a single rule chain entry.
-func validateRuleChainEntry(idx int, entry RuleChainEntry) error {
+func validateRuleChainEntry(idx int, entry *RuleChainEntry) error {
 	prefix := fmt.Sprintf("routing.rule_chain[%d]", idx)
 
 	// Action is required. Built-in actions are "proxy", "direct", "reject".

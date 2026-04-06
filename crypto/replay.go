@@ -99,9 +99,7 @@ func (cf *cuckooFilter) Insert(x uint64) bool {
 	}
 	for k := 0; k < maxKicks; k++ {
 		slot := rand.IntN(bucketSize) //nolint:gosec // non-security: random slot selection for cuckoo eviction
-		old := cf.buckets[idx][slot]
-		cf.buckets[idx][slot] = fp
-		fp = old
+		cf.buckets[idx][slot], fp = fp, cf.buckets[idx][slot]
 		idx = cf.index2(idx, fp)
 		if cf.bucketInsert(idx, fp) {
 			cf.count++

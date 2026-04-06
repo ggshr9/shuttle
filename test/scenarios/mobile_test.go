@@ -241,7 +241,7 @@ func TestMobileSignalDegradation(t *testing.T) {
 		{"3G", vnet.ThreeG()},
 	}
 
-	var rtts []time.Duration
+	rtts := make([]time.Duration, 0, len(stages))
 	for _, s := range stages {
 		env.Net.UpdateLink(phone, server, s.cfg)
 		env.Net.UpdateLink(server, phone, s.cfg)

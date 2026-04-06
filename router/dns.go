@@ -223,12 +223,12 @@ func (r *DNSResolver) selectResult(domain string, domIPs []net.IP, domErr error,
 	if domErr != nil {
 		r.cache.put(domain, remIPs, r.config.CacheTTL, false)
 		r.recordPrefetch(domain)
-		return remIPs, nil
+		return remIPs, nil //nolint:nilerr // intentional: domestic failed, fall back to remote result
 	}
 	if remErr != nil {
 		r.cache.put(domain, domIPs, r.config.CacheTTL, true)
 		r.recordPrefetch(domain)
-		return domIPs, nil
+		return domIPs, nil //nolint:nilerr // intentional: remote failed, fall back to domestic result
 	}
 
 	// Both succeeded — check for pollution

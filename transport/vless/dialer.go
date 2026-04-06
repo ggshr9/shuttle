@@ -24,7 +24,7 @@ type Dialer struct {
 }
 
 // NewDialer creates a Dialer from the given config.
-func NewDialer(cfg DialerConfig) (*Dialer, error) {
+func NewDialer(cfg *DialerConfig) (*Dialer, error) {
 	tlsCfg, err := shared.BuildClientTLS(cfg.TLS)
 	if err != nil {
 		return nil, fmt.Errorf("vless/dialer: build TLS: %w", err)

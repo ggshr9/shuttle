@@ -72,8 +72,8 @@ func NewClassifier(cfg *config.QoSConfig) *Classifier {
 		return c
 	}
 
-	for _, r := range cfg.Rules {
-		c.addRule(r)
+	for i := range cfg.Rules {
+		c.addRule(&cfg.Rules[i])
 	}
 
 	return c
@@ -124,7 +124,7 @@ func parsePriority(s string) Priority {
 	}
 }
 
-func (c *Classifier) addRule(cfg config.QoSRule) {
+func (c *Classifier) addRule(cfg *config.QoSRule) {
 	r := rule{
 		protocol: strings.ToLower(cfg.Protocol),
 		domains:  cfg.Domains,
@@ -271,7 +271,7 @@ func (c *Classifier) Update(cfg *config.QoSConfig) {
 		return
 	}
 
-	for _, r := range cfg.Rules {
-		c.addRule(r)
+	for i := range cfg.Rules {
+		c.addRule(&cfg.Rules[i])
 	}
 }

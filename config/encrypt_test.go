@@ -1,6 +1,7 @@
 package config
 
 import (
+	"bytes"
 	"crypto/rand"
 	"os"
 	"path/filepath"
@@ -208,7 +209,7 @@ func TestKeyStoreInitAndGet(t *testing.T) {
 		t.Fatalf("second GetKey: %v", err)
 	}
 
-	if string(key1) != string(key2) {
+	if !bytes.Equal(key1, key2) {
 		t.Error("key changed after re-init from same file")
 	}
 }

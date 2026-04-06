@@ -42,7 +42,7 @@ func (f *factory) NewDialer(cfg map[string]any, _ adapter.FactoryOptions) (adapt
 
 	tlsOpts := extractTLSOptions(cfg)
 
-	d, err := NewDialer(DialerConfig{
+	d, err := NewDialer(&DialerConfig{
 		Server:   server,
 		Password: password,
 		TLS:      tlsOpts,

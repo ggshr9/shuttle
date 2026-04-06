@@ -165,7 +165,7 @@ func TestReconnectWithBackoff(t *testing.T) {
 			continue
 		}
 		// Success!
-		defer conn.Close()
+		defer conn.Close() //nolint:gocritic // deferInLoop: only reached once on success then break
 		break
 	}
 
@@ -230,7 +230,7 @@ func TestReconnectPreservesData(t *testing.T) {
 	}
 
 	messages := []string{"msg-1", "msg-2", "msg-3"}
-	var received []string
+	received := make([]string, 0, len(messages))
 
 	for _, msg := range messages[:2] {
 		stream, err := conn1.OpenStream(ctx)

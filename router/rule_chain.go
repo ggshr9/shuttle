@@ -338,7 +338,8 @@ func (m *ruleProviderMatcher) Match(ctx *MatchContext) bool {
 // ruleProviders may be nil if no rule providers are configured.
 func CompileRuleChain(entries []RuleChainEntry, geoIP *GeoIPDB, geoSite *GeoSiteDB, ruleProviders map[string]*provider.RuleProvider) ([]compiledRule, error) {
 	rules := make([]compiledRule, 0, len(entries))
-	for i, entry := range entries {
+	for i := range entries {
+		entry := &entries[i]
 		var logic logicOp
 		switch strings.ToLower(entry.Logic) {
 		case "", "and":
