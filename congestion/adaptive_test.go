@@ -487,6 +487,105 @@ func TestDetectionWindowCustom(t *testing.T) {
 	}
 }
 
+// TestBBRResetOnSwitchBackFromBrutal verifies that when AdaptiveCongestion switches
+// back to BBR from Brutal, the BBR controller is in ProbeBW (not Drain or Startup)
+// and its flight counters are zeroed so stale totalSent/totalAcked don't cause
+// BBRDrain to exit immediately and trigger a Startup-level probe burst.
+func TestBBRResetOnSwitchBackFromBrutal(t *testing.T) {
+	ac := NewAdaptive(&AdaptiveConfig{
+		LossThreshold:    0.05,
+		SwitchCooldown:   1 * time.Nanosecond,
+		RecoveryCooldown: 1 * time.Nanosecond,
+		BrutalRate:       10 * 1024 * 1024,
+	}, nil)
+
+	// Advance BBR through Startup by ACKing enough bytes to fill the pipe
+	for i := 0; i < 30; i++ {
+		ac.bbr.OnPacketSent(1200)
+		ac.bbr.OnAck(1200, 50*time.Millisecond)
+	}
+	// Inject large totalSent to make the BBR inflight counter non-zero and stale
+	ac.bbr.mu.Lock()
+	ac.bbr.totalSent = 1_000_000
+	ac.bbr.totalAcked = 500_000
+	ac.bbr.mu.Unlock()
+
+	// Force switch to Brutal then back to BBR
+	ac.mu.Lock()
+	ac.switchTo(ac.brutal, "test: simulate interference")
+	ac.mu.Unlock()
+
+	if ac.ActiveName() != "brutal" {
+		t.Fatalf("expected brutal after first switch, got %s", ac.ActiveName())
+	}
+
+	ac.mu.Lock()
+	ac.lastSwitch = time.Time{} // bypass recoveryCooldown
+	ac.switchTo(ac.bbr, "test: simulate recovery")
+	ac.mu.Unlock()
+
+	if ac.ActiveName() != "bbr" {
+		t.Fatalf("expected bbr after switching back, got %s", ac.ActiveName())
+	}
+
+	// BBR must be in ProbeBW — NOT Drain or Startup — after Reset()
+	ac.bbr.mu.Lock()
+	state := ac.bbr.state
+	sent := ac.bbr.totalSent
+	acked := ac.bbr.totalAcked
+	ac.bbr.mu.Unlock()
+
+	if state != BBRProbeBW {
+		t.Errorf("BBR state after reset = %v, want BBRProbeBW (%v)", state, BBRProbeBW)
+	}
+	if sent != 0 {
+		t.Errorf("BBR totalSent after reset = %d, want 0", sent)
+	}
+	if acked != 0 {
+		t.Errorf("BBR totalAcked after reset = %d, want 0", acked)
+	}
+}
+
+// TestBBRReset verifies that BBRController.Reset() puts BBR into ProbeBW and
+// zeros out flight counters and the bandwidth filter.
+func TestBBRReset(t *testing.T) {
+	bbr := NewBBR(0)
+
+	// Drive it out of Startup by filling the pipe
+	for i := 0; i < 30; i++ {
+		bbr.OnPacketSent(1200)
+		bbr.OnAck(1200, 50*time.Millisecond)
+	}
+
+	bbr.mu.Lock()
+	bbr.totalSent = 999_999
+	bbr.totalAcked = 777_777
+	bbr.mu.Unlock()
+
+	bbr.Reset()
+
+	bbr.mu.Lock()
+	defer bbr.mu.Unlock()
+
+	if bbr.state != BBRProbeBW {
+		t.Errorf("state after Reset = %v, want BBRProbeBW", bbr.state)
+	}
+	if bbr.totalSent != 0 {
+		t.Errorf("totalSent after Reset = %d, want 0", bbr.totalSent)
+	}
+	if bbr.totalAcked != 0 {
+		t.Errorf("totalAcked after Reset = %d, want 0", bbr.totalAcked)
+	}
+	if bbr.bwFilterIdx != 0 {
+		t.Errorf("bwFilterIdx after Reset = %d, want 0", bbr.bwFilterIdx)
+	}
+	for i, bw := range bbr.bwFilter {
+		if bw != 0 {
+			t.Errorf("bwFilter[%d] after Reset = %d, want 0", i, bw)
+		}
+	}
+}
+
 func BenchmarkAdaptiveOnAck(b *testing.B) {
 	ac := NewAdaptive(nil, nil)
 	rtt := 50 * time.Millisecond

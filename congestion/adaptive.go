@@ -241,6 +241,9 @@ func (ac *AdaptiveCongestion) switchTo(cc CongestionController, reason string) {
 	if ac.active == cc {
 		return
 	}
+	if cc == ac.bbr {
+		ac.bbr.Reset()
+	}
 	name := "bbr"
 	if cc == ac.brutal {
 		name = "brutal"
