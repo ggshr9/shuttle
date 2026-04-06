@@ -87,6 +87,9 @@ type Manager struct {
 	// Connection optimization
 	pathCache *PathCache // Remember successful paths
 
+	// Fallback controller tracks relay vs direct state per peer
+	fallback *FallbackController
+
 	// ICE restart configuration
 	iceRestartCooldown    time.Duration
 	iceQualityThreshold   float64 // Restart if quality drops below this (0-100)
@@ -218,6 +221,7 @@ func NewManager(cfg *Config, signalClient *signal.Client, logger *slog.Logger) (
 		spoofConfig:         cfg.SpoofConfig,
 		spoofInfo:           spoofInfo,
 		pathCache:           NewPathCache(24 * time.Hour),
+		fallback:            NewFallbackController(nil, logger),
 		iceRestartEnabled:   cfg.EnableICERestart,
 		iceRestartCooldown:  cfg.ICERestartCooldown,
 		iceQualityThreshold: cfg.ICEQualityThreshold,

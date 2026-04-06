@@ -134,6 +134,10 @@ func (m *Manager) Connect(ctx context.Context, dstVIP net.IP) error {
 	peer.UseRelay = false
 	m.mu.Unlock()
 
+	// Reset FallbackController so the peer is no longer treated as relay-only
+	// (important after an ICE restart or reconnect clears past failures).
+	m.fallback.ResetPeer(dstVIP)
+
 	// Record successful path for faster reconnection
 	method := m.detectConnectionMethod(punchResult)
 	m.pathCache.RecordSuccess(dstVIP, punchResult.RemoteAddr, method, punchResult.RTT)
@@ -284,6 +288,9 @@ func (m *Manager) handleConnect(msg *signal.Message) {
 		peer.FailCount = 0
 		peer.UseRelay = false
 		m.mu.Unlock()
+
+		// Reset FallbackController so accumulated relay state is cleared.
+		m.fallback.ResetPeer(msg.SrcVIP)
 
 		m.logger.Info("p2p: connection established (responder)", "peer", msg.SrcVIP)
 	}()

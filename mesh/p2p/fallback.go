@@ -288,6 +288,20 @@ func (fc *FallbackController) Reset(vip net.IP) {
 	fc.mu.Unlock()
 }
 
+// ResetPeer clears all accumulated fallback state for a peer, including
+// UsingRelay and failure counters. Call this after a successful ICE restart
+// or reconnection so the peer is no longer penalised for past failures.
+func (fc *FallbackController) ResetPeer(vip net.IP) {
+	var key [4]byte
+	copy(key[:], vip.To4())
+
+	fc.mu.Lock()
+	delete(fc.peers, key)
+	fc.mu.Unlock()
+
+	fc.logger.Info("fallback: peer state reset after successful reconnect", "peer", vip)
+}
+
 // ResetAll resets all peer states.
 func (fc *FallbackController) ResetAll() {
 	fc.mu.Lock()
