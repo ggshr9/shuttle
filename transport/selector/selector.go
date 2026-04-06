@@ -35,6 +35,7 @@ type Selector struct {
 	warmUpConns       int
 	poolMaxIdle       int
 	poolIdleTTL       time.Duration
+	probeIntervalDur  time.Duration
 	mu                sync.RWMutex
 	logger            *slog.Logger
 }
@@ -57,6 +58,7 @@ type Config struct {
 	WarmUpConns       int           // pre-dial N connections on startup (0 = disabled)
 	PoolMaxIdle       int           // max idle connections per transport (0 = default 4)
 	PoolIdleTTL       time.Duration // idle connection TTL (0 = default 60s)
+	DrainTimeout      time.Duration // max time to wait for streams to finish before force-closing (0 = default 30s)
 }
 
 // New creates a new transport selector.
@@ -79,9 +81,10 @@ func New(transports []transport.ClientTransport, cfg *Config, logger *slog.Logge
 		warmUpConns:       cfg.WarmUpConns,
 		poolMaxIdle:       cfg.PoolMaxIdle,
 		poolIdleTTL:       cfg.PoolIdleTTL,
+		probeIntervalDur:  cfg.ProbeInterval,
 		logger:            logger,
 	}
-	s.migrator = NewMigrator(logger)
+	s.migrator = NewMigrator(logger, MigratorConfig{DrainTimeout: cfg.DrainTimeout})
 	for _, t := range transports {
 		s.probes[t.Type()] = &ProbeResult{
 			Transport: t,
@@ -133,23 +136,44 @@ func newScheduler(schedule string) StreamScheduler {
 }
 
 func (s *Selector) probeLoop(ctx context.Context) {
-	ticker := time.NewTicker(30 * time.Second)
+	interval := s.probeIntervalDur
+	if interval <= 0 {
+		interval = 30 * time.Second
+	}
+	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			s.probeAll(ctx)
+			s.probeAllParallel(ctx)
 		}
 	}
 }
 
-func (s *Selector) probeAll(ctx context.Context) {
-	for _, t := range s.transports {
-		result := Probe(ctx, t)
+func (s *Selector) probeAllParallel(ctx context.Context) {
+	s.mu.RLock()
+	transports := make([]transport.ClientTransport, len(s.transports))
+	copy(transports, s.transports)
+	s.mu.RUnlock()
+
+	type keyedResult struct {
+		typ   string
+		probe *ProbeResult
+	}
+	results := make(chan keyedResult, len(transports))
+
+	for _, t := range transports {
+		go func(t transport.ClientTransport) {
+			results <- keyedResult{typ: t.Type(), probe: Probe(ctx, t)}
+		}(t)
+	}
+
+	for range transports {
+		r := <-results
 		s.mu.Lock()
-		s.probes[t.Type()] = result
+		s.probes[r.typ] = r.probe
 		s.mu.Unlock()
 	}
 
@@ -401,7 +425,7 @@ func (s *Selector) Transports() []transport.ClientTransport {
 // re-evaluation. This is used by the ProactiveMigrator on network changes.
 func (s *Selector) Migrate() {
 	s.migrator.Migrate()
-	s.probeAll(context.Background())
+	s.probeAllParallel(context.Background())
 }
 
 func (s *Selector) Type() string { return "selector" }

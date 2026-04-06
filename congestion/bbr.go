@@ -283,3 +283,20 @@ func (b *BBRController) InStartup() bool {
 	defer b.mu.Unlock()
 	return b.state == BBRStartup
 }
+
+// Reset clears stale per-flow state so BBR starts fresh after being displaced
+// by another controller (e.g. Brutal). The bandwidth filter and RTT probe timer
+// are preserved to avoid a full cold-start; only the state machine and flight
+// counters are reset.
+func (b *BBRController) Reset() {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.state = BBRProbeBW
+	b.totalSent = 0
+	b.totalAcked = 0
+	b.bwFilter = make([]uint64, bbrBWFilterLen)
+	b.bwFilterIdx = 0
+	b.rtProp = time.Duration(math.MaxInt64)
+	b.rtPropExpiry = time.Now().Add(bbrRTPropExpiry)
+	b.cycleIdx = 0
+}

@@ -16,8 +16,14 @@ func TestNewAdaptiveDefaults(t *testing.T) {
 	if ac.lossThreshold != 0.05 {
 		t.Fatalf("lossThreshold = %f, want 0.05", ac.lossThreshold)
 	}
-	if ac.switchCooldown != 10*time.Second {
-		t.Fatalf("switchCooldown = %v, want 10s", ac.switchCooldown)
+	if ac.switchCooldown != 3*time.Second {
+		t.Fatalf("switchCooldown = %v, want 3s", ac.switchCooldown)
+	}
+	if ac.recoveryCooldown != 15*time.Second {
+		t.Fatalf("recoveryCooldown = %v, want 15s", ac.recoveryCooldown)
+	}
+	if ac.detectionWindow != 3*time.Second {
+		t.Fatalf("detectionWindow = %v, want 3s", ac.detectionWindow)
 	}
 }
 
@@ -137,9 +143,10 @@ func TestAdaptiveStaysBBROnCongestion(t *testing.T) {
 
 func TestAdaptiveSwitchCooldown(t *testing.T) {
 	ac := NewAdaptive(&AdaptiveConfig{
-		LossThreshold:  0.05,
-		SwitchCooldown: 1 * time.Hour,
-		BrutalRate:     10 * 1024 * 1024,
+		LossThreshold:    0.05,
+		SwitchCooldown:   1 * time.Hour,
+		RecoveryCooldown: 1 * time.Hour,
+		BrutalRate:       10 * 1024 * 1024,
 	}, nil)
 
 	ac.mu.Lock()
@@ -156,7 +163,7 @@ func TestAdaptiveSwitchCooldown(t *testing.T) {
 	ac.mu.Unlock()
 
 	if ac.ActiveName() != "brutal" {
-		t.Fatal("cooldown should prevent switch back to bbr")
+		t.Fatal("recoveryCooldown should prevent switch back to bbr")
 	}
 }
 
@@ -292,6 +299,290 @@ func TestCalculateRTTTrend_SparseRing_NoInflation(t *testing.T) {
 	trend := ac.calculateRTTTrend()
 	if trend < -0.05 || trend > 0.05 {
 		t.Errorf("trend should be ~0 for uniform RTT, got %f", trend)
+	}
+}
+
+// TestAsymmetricCooldown verifies that detection (BBR→Brutal) uses switchCooldown
+// while recovery (Brutal→BBR) uses the longer recoveryCooldown.
+func TestAsymmetricCooldown(t *testing.T) {
+	ac := NewAdaptive(&AdaptiveConfig{
+		LossThreshold:    0.05,
+		SwitchCooldown:   1 * time.Nanosecond,  // instant detection
+		RecoveryCooldown: 1 * time.Hour,         // very slow recovery
+		DetectionWindow:  3 * time.Second,
+		BrutalRate:       10 * 1024 * 1024,
+	}, nil)
+
+	// Seed stable RTT so rttTrend <= 0
+	for i := 0; i < 30; i++ {
+		ac.OnAck(1000, 50*time.Millisecond)
+	}
+
+	// Drive high loss → should switch to Brutal quickly (switchCooldown=1ns)
+	ac.OnPacketSent(100000)
+	for i := 0; i < 20; i++ {
+		ac.OnPacketLoss(2000)
+	}
+	if ac.ActiveName() != "brutal" {
+		t.Fatalf("expected brutal on interference, got %s", ac.ActiveName())
+	}
+
+	// Now simulate loss recovery — recoveryCooldown is 1h, so no switch back
+	ac.mu.Lock()
+	ac.lossRate = 0.01 // below threshold/2
+	ac.evaluateSwitch()
+	ac.mu.Unlock()
+
+	if ac.ActiveName() != "brutal" {
+		t.Fatalf("recoveryCooldown should block Brutal→BBR, got %s", ac.ActiveName())
+	}
+
+	// Force recoveryCooldown to expire and verify recovery is now allowed
+	ac.mu.Lock()
+	ac.recoveryCooldown = 1 * time.Nanosecond
+	ac.lastSwitch = time.Now().Add(-time.Second) // past the nanosecond cooldown
+	ac.lossRate = 0.01
+	ac.evaluateSwitch()
+	ac.mu.Unlock()
+
+	if ac.ActiveName() != "bbr" {
+		t.Fatalf("expected recovery to bbr after cooldown expired, got %s", ac.ActiveName())
+	}
+}
+
+// TestAsymmetricCooldown_DetectionFasterThanRecovery verifies the full asymmetry:
+// switchCooldown < recoveryCooldown means detection is faster than recovery.
+func TestAsymmetricCooldown_DetectionFasterThanRecovery(t *testing.T) {
+	switchCooldown := 1 * time.Nanosecond
+	recoveryCooldown := 100 * time.Millisecond
+
+	ac := NewAdaptive(&AdaptiveConfig{
+		LossThreshold:    0.05,
+		SwitchCooldown:   switchCooldown,
+		RecoveryCooldown: recoveryCooldown,
+		DetectionWindow:  3 * time.Second,
+		BrutalRate:       10 * 1024 * 1024,
+	}, nil)
+
+	if ac.switchCooldown != switchCooldown {
+		t.Fatalf("switchCooldown = %v, want %v", ac.switchCooldown, switchCooldown)
+	}
+	if ac.recoveryCooldown != recoveryCooldown {
+		t.Fatalf("recoveryCooldown = %v, want %v", ac.recoveryCooldown, recoveryCooldown)
+	}
+
+	// The detection cooldown must be strictly less than recovery cooldown
+	if ac.switchCooldown >= ac.recoveryCooldown {
+		t.Fatalf("switchCooldown (%v) should be < recoveryCooldown (%v)", ac.switchCooldown, ac.recoveryCooldown)
+	}
+}
+
+// TestAmbiguousZoneTimeout verifies that when loss is high but RTT trend is in
+// the ambiguous range (0 < trend <= 0.1), the controller waits 5s then defaults
+// to Brutal.
+func TestAmbiguousZoneTimeout(t *testing.T) {
+	ac := NewAdaptive(&AdaptiveConfig{
+		LossThreshold:    0.05,
+		SwitchCooldown:   1 * time.Nanosecond,
+		RecoveryCooldown: 1 * time.Nanosecond,
+		DetectionWindow:  3 * time.Second,
+		BrutalRate:       10 * 1024 * 1024,
+	}, nil)
+
+	// Manually set state: high loss, ambiguous RTT trend (0 < trend <= 0.1)
+	ac.mu.Lock()
+	ac.lossRate = 0.10      // above threshold
+	ac.rttTrend = 0.05      // ambiguous zone
+	ac.lastSwitch = time.Time{} // no prior switch
+	ac.evaluateSwitch()
+	// Should have set ambiguousStart but NOT switched yet
+	ambStart := ac.ambiguousStart
+	active := ac.active
+	ac.mu.Unlock()
+
+	if ambStart.IsZero() {
+		t.Fatal("ambiguousStart should be set on first ambiguous evaluation")
+	}
+	if active != ac.bbr {
+		t.Fatalf("should still be on bbr during ambiguous zone, got %s", ac.ActiveName())
+	}
+
+	// Simulate time passage past 5s by backdating ambiguousStart
+	ac.mu.Lock()
+	ac.ambiguousStart = time.Now().Add(-6 * time.Second)
+	ac.evaluateSwitch()
+	ac.mu.Unlock()
+
+	if ac.ActiveName() != "brutal" {
+		t.Fatalf("expected brutal after ambiguous zone timeout, got %s", ac.ActiveName())
+	}
+}
+
+// TestAmbiguousZoneClearedOnRecovery verifies ambiguousStart is cleared when
+// loss drops below threshold.
+func TestAmbiguousZoneClearedOnRecovery(t *testing.T) {
+	ac := NewAdaptive(&AdaptiveConfig{
+		LossThreshold:    0.05,
+		SwitchCooldown:   1 * time.Nanosecond,
+		RecoveryCooldown: 1 * time.Nanosecond,
+		DetectionWindow:  3 * time.Second,
+		BrutalRate:       10 * 1024 * 1024,
+	}, nil)
+
+	// Enter ambiguous zone
+	ac.mu.Lock()
+	ac.lossRate = 0.10
+	ac.rttTrend = 0.05
+	ac.evaluateSwitch()
+	ambStart := ac.ambiguousStart
+	ac.mu.Unlock()
+
+	if ambStart.IsZero() {
+		t.Fatal("ambiguousStart should be set in ambiguous zone")
+	}
+
+	// Recovery: drop loss below threshold/2
+	ac.mu.Lock()
+	ac.lossRate = 0.01
+	ac.lastSwitch = time.Time{} // allow recovery
+	ac.evaluateSwitch()
+	cleared := ac.ambiguousStart.IsZero()
+	ac.mu.Unlock()
+
+	if !cleared {
+		t.Fatal("ambiguousStart should be cleared on loss recovery")
+	}
+}
+
+// TestDetectionWindowDefault verifies the detectionWindow default is 3s.
+func TestDetectionWindowDefault(t *testing.T) {
+	ac := NewAdaptive(nil, nil)
+	if ac.detectionWindow != 3*time.Second {
+		t.Fatalf("detectionWindow = %v, want 3s", ac.detectionWindow)
+	}
+}
+
+// TestDetectionWindowCustom verifies the loss window uses detectionWindow field.
+func TestDetectionWindowCustom(t *testing.T) {
+	ac := NewAdaptive(&AdaptiveConfig{
+		DetectionWindow: 500 * time.Millisecond,
+		BrutalRate:      10 * 1024 * 1024,
+	}, nil)
+	if ac.detectionWindow != 500*time.Millisecond {
+		t.Fatalf("detectionWindow = %v, want 500ms", ac.detectionWindow)
+	}
+
+	// Send some bytes, then backdate window to trigger reset
+	ac.mu.Lock()
+	ac.windowSentBytes = 9999
+	ac.windowLostBytes = 9999
+	ac.lastWindowReset = time.Now().Add(-time.Second) // past the 500ms window
+	ac.resetWindowIfNeeded()
+	sent := ac.windowSentBytes
+	lost := ac.windowLostBytes
+	ac.mu.Unlock()
+
+	if sent != 0 || lost != 0 {
+		t.Fatalf("window should have been reset after detectionWindow expired: sent=%d lost=%d", sent, lost)
+	}
+}
+
+// TestBBRResetOnSwitchBackFromBrutal verifies that when AdaptiveCongestion switches
+// back to BBR from Brutal, the BBR controller is in ProbeBW (not Drain or Startup)
+// and its flight counters are zeroed so stale totalSent/totalAcked don't cause
+// BBRDrain to exit immediately and trigger a Startup-level probe burst.
+func TestBBRResetOnSwitchBackFromBrutal(t *testing.T) {
+	ac := NewAdaptive(&AdaptiveConfig{
+		LossThreshold:    0.05,
+		SwitchCooldown:   1 * time.Nanosecond,
+		RecoveryCooldown: 1 * time.Nanosecond,
+		BrutalRate:       10 * 1024 * 1024,
+	}, nil)
+
+	// Advance BBR through Startup by ACKing enough bytes to fill the pipe
+	for i := 0; i < 30; i++ {
+		ac.bbr.OnPacketSent(1200)
+		ac.bbr.OnAck(1200, 50*time.Millisecond)
+	}
+	// Inject large totalSent to make the BBR inflight counter non-zero and stale
+	ac.bbr.mu.Lock()
+	ac.bbr.totalSent = 1_000_000
+	ac.bbr.totalAcked = 500_000
+	ac.bbr.mu.Unlock()
+
+	// Force switch to Brutal then back to BBR
+	ac.mu.Lock()
+	ac.switchTo(ac.brutal, "test: simulate interference")
+	ac.mu.Unlock()
+
+	if ac.ActiveName() != "brutal" {
+		t.Fatalf("expected brutal after first switch, got %s", ac.ActiveName())
+	}
+
+	ac.mu.Lock()
+	ac.lastSwitch = time.Time{} // bypass recoveryCooldown
+	ac.switchTo(ac.bbr, "test: simulate recovery")
+	ac.mu.Unlock()
+
+	if ac.ActiveName() != "bbr" {
+		t.Fatalf("expected bbr after switching back, got %s", ac.ActiveName())
+	}
+
+	// BBR must be in ProbeBW — NOT Drain or Startup — after Reset()
+	ac.bbr.mu.Lock()
+	state := ac.bbr.state
+	sent := ac.bbr.totalSent
+	acked := ac.bbr.totalAcked
+	ac.bbr.mu.Unlock()
+
+	if state != BBRProbeBW {
+		t.Errorf("BBR state after reset = %v, want BBRProbeBW (%v)", state, BBRProbeBW)
+	}
+	if sent != 0 {
+		t.Errorf("BBR totalSent after reset = %d, want 0", sent)
+	}
+	if acked != 0 {
+		t.Errorf("BBR totalAcked after reset = %d, want 0", acked)
+	}
+}
+
+// TestBBRReset verifies that BBRController.Reset() puts BBR into ProbeBW and
+// zeros out flight counters and the bandwidth filter.
+func TestBBRReset(t *testing.T) {
+	bbr := NewBBR(0)
+
+	// Drive it out of Startup by filling the pipe
+	for i := 0; i < 30; i++ {
+		bbr.OnPacketSent(1200)
+		bbr.OnAck(1200, 50*time.Millisecond)
+	}
+
+	bbr.mu.Lock()
+	bbr.totalSent = 999_999
+	bbr.totalAcked = 777_777
+	bbr.mu.Unlock()
+
+	bbr.Reset()
+
+	bbr.mu.Lock()
+	defer bbr.mu.Unlock()
+
+	if bbr.state != BBRProbeBW {
+		t.Errorf("state after Reset = %v, want BBRProbeBW", bbr.state)
+	}
+	if bbr.totalSent != 0 {
+		t.Errorf("totalSent after Reset = %d, want 0", bbr.totalSent)
+	}
+	if bbr.totalAcked != 0 {
+		t.Errorf("totalAcked after Reset = %d, want 0", bbr.totalAcked)
+	}
+	if bbr.bwFilterIdx != 0 {
+		t.Errorf("bwFilterIdx after Reset = %d, want 0", bbr.bwFilterIdx)
+	}
+	for i, bw := range bbr.bwFilter {
+		if bw != 0 {
+			t.Errorf("bwFilter[%d] after Reset = %d, want 0", i, bw)
+		}
 	}
 }
 

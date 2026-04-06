@@ -13,6 +13,7 @@ import (
 	"net/url"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/shuttleX/shuttle/router/dns/fakeip"
@@ -62,7 +63,7 @@ type dnsCacheEntry struct {
 	ips       []net.IP
 	expiresAt time.Time
 	domestic  bool // resolved via domestic DNS
-	lastUsed  time.Time
+	lastUsed  atomic.Int64 // Unix nanoseconds
 }
 
 // NewDNSResolver creates a new DNS resolver with anti-pollution.
@@ -450,17 +451,17 @@ type dohAnswer struct {
 
 // Cache methods
 func (c *dnsCache) get(domain string) ([]net.IP, bool) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
+	c.mu.RLock()
 	entry, ok := c.entries[domain]
+	c.mu.RUnlock()
+
 	if !ok {
 		return nil, false
 	}
-	if time.Now().After(entry.expiresAt) {
-		delete(c.entries, domain)
+	if time.Since(entry.expiresAt) > 0 {
 		return nil, false
 	}
-	entry.lastUsed = time.Now()
+	entry.lastUsed.Store(time.Now().UnixNano())
 	return entry.ips, true
 }
 
@@ -484,12 +485,13 @@ func (c *dnsCache) put(domain string, ips []net.IP, ttl time.Duration, domestic 
 		// Evict least recently used entries if not enough expired entries were removed
 		for evicted < target {
 			var oldestKey string
-			var oldestTime time.Time
+			var oldestNano int64
 			first := true
 			for k, v := range c.entries {
-				if first || v.lastUsed.Before(oldestTime) {
+				nano := v.lastUsed.Load()
+				if first || nano < oldestNano {
 					oldestKey = k
-					oldestTime = v.lastUsed
+					oldestNano = nano
 					first = false
 				}
 			}
@@ -501,10 +503,11 @@ func (c *dnsCache) put(domain string, ips []net.IP, ttl time.Duration, domestic 
 		}
 	}
 	now := time.Now()
-	c.entries[domain] = &dnsCacheEntry{
-		ips:       ips,
+	entry := &dnsCacheEntry{
+		ips:      ips,
 		expiresAt: now.Add(ttl),
 		domestic:  domestic,
-		lastUsed:  now,
 	}
+	entry.lastUsed.Store(now.UnixNano())
+	c.entries[domain] = entry
 }

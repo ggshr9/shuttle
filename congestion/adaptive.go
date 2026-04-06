@@ -38,19 +38,24 @@ type AdaptiveCongestion struct {
 	rttTrend        float64 // positive = rising, negative = falling
 	switchCount     int
 	lastSwitch      time.Time
+	ambiguousStart  time.Time // set when in ambiguous loss/RTT zone
 
 	// Thresholds.
-	lossThreshold  float64       // Switch to Brutal above this loss rate
-	switchCooldown time.Duration // Minimum time between switches
+	lossThreshold    float64       // Switch to Brutal above this loss rate
+	switchCooldown   time.Duration // Cooldown for BBR→Brutal (fast interference detection)
+	recoveryCooldown time.Duration // Cooldown for Brutal→BBR (slow recovery)
+	detectionWindow  time.Duration // Loss measurement window
 
 	logger *slog.Logger
 }
 
 // AdaptiveConfig configures the adaptive congestion controller.
 type AdaptiveConfig struct {
-	BrutalRate     uint64        // Target rate for Brutal mode
-	LossThreshold  float64       // Loss rate threshold (default 0.05 = 5%)
-	SwitchCooldown time.Duration // Cooldown between switches (default 10s)
+	BrutalRate       uint64        // Target rate for Brutal mode
+	LossThreshold    float64       // Loss rate threshold (default 0.05 = 5%)
+	SwitchCooldown   time.Duration // Cooldown for BBR→Brutal detection (default 3s)
+	RecoveryCooldown time.Duration // Cooldown for Brutal→BBR recovery (default 15s)
+	DetectionWindow  time.Duration // Loss measurement window (default 3s)
 }
 
 // NewAdaptive creates a new adaptive congestion controller.
@@ -62,7 +67,13 @@ func NewAdaptive(cfg *AdaptiveConfig, logger *slog.Logger) *AdaptiveCongestion {
 		cfg.LossThreshold = 0.05
 	}
 	if cfg.SwitchCooldown == 0 {
-		cfg.SwitchCooldown = 10 * time.Second
+		cfg.SwitchCooldown = 3 * time.Second
+	}
+	if cfg.RecoveryCooldown == 0 {
+		cfg.RecoveryCooldown = 15 * time.Second
+	}
+	if cfg.DetectionWindow == 0 {
+		cfg.DetectionWindow = 3 * time.Second
 	}
 	if cfg.BrutalRate == 0 {
 		cfg.BrutalRate = 100 * 1024 * 1024
@@ -75,12 +86,14 @@ func NewAdaptive(cfg *AdaptiveConfig, logger *slog.Logger) *AdaptiveCongestion {
 	brutal := NewBrutal(cfg.BrutalRate)
 
 	return &AdaptiveCongestion{
-		bbr:            bbr,
-		brutal:         brutal,
-		active:         bbr, // Start with BBR
-		lossThreshold:  cfg.LossThreshold,
-		switchCooldown: cfg.SwitchCooldown,
-		logger:         logger,
+		bbr:              bbr,
+		brutal:           brutal,
+		active:           bbr, // Start with BBR
+		lossThreshold:    cfg.LossThreshold,
+		switchCooldown:   cfg.SwitchCooldown,
+		recoveryCooldown: cfg.RecoveryCooldown,
+		detectionWindow:  cfg.DetectionWindow,
+		logger:           logger,
 	}
 }
 
@@ -163,10 +176,12 @@ func (ac *AdaptiveCongestion) calculateRTTTrend() float64 {
 	return float64(recentAvg-olderAvg) / float64(olderAvg)
 }
 
-const lossWindowDuration = 10 * time.Second
-
 func (ac *AdaptiveCongestion) resetWindowIfNeeded() {
-	if time.Since(ac.lastWindowReset) >= lossWindowDuration {
+	window := ac.detectionWindow
+	if window == 0 {
+		window = 3 * time.Second
+	}
+	if time.Since(ac.lastWindowReset) >= window {
 		ac.windowSentBytes = 0
 		ac.windowLostBytes = 0
 		ac.lastWindowReset = time.Now()
@@ -185,27 +200,49 @@ func (ac *AdaptiveCongestion) updateLossRate(lostBytes uint64) {
 }
 
 func (ac *AdaptiveCongestion) evaluateSwitch() {
-	// Cooldown check.
-	if time.Since(ac.lastSwitch) < ac.switchCooldown {
-		return
-	}
+	now := time.Now()
 
 	switch {
 	case ac.lossRate > ac.lossThreshold && ac.rttTrend <= 0:
-		// High loss + stable/falling RTT = active interference → Brutal
-		ac.switchTo(ac.brutal, "GFW interference detected")
+		if now.Sub(ac.lastSwitch) < ac.switchCooldown {
+			return
+		}
+		ac.switchTo(ac.brutal, "interference detected")
+		ac.ambiguousStart = time.Time{}
+
 	case ac.lossRate > ac.lossThreshold && ac.rttTrend > 0.1:
-		// High loss + rising RTT = real congestion → BBR
-		ac.switchTo(ac.bbr, "real congestion detected")
+		if now.Sub(ac.lastSwitch) < ac.switchCooldown {
+			return
+		}
+		ac.switchTo(ac.bbr, "real congestion")
+		ac.ambiguousStart = time.Time{}
+
+	case ac.lossRate > ac.lossThreshold && ac.rttTrend > 0 && ac.rttTrend <= 0.1:
+		// Ambiguous zone: if persists > 5s, default to Brutal
+		if ac.ambiguousStart.IsZero() {
+			ac.ambiguousStart = now
+		} else if now.Sub(ac.ambiguousStart) > 5*time.Second {
+			if now.Sub(ac.lastSwitch) >= ac.switchCooldown {
+				ac.switchTo(ac.brutal, "ambiguous zone timeout")
+				ac.ambiguousStart = time.Time{}
+			}
+		}
+
 	case ac.lossRate <= ac.lossThreshold/2:
-		// Low loss → BBR (more efficient)
+		if now.Sub(ac.lastSwitch) < ac.recoveryCooldown {
+			return
+		}
 		ac.switchTo(ac.bbr, "loss recovered")
+		ac.ambiguousStart = time.Time{}
 	}
 }
 
 func (ac *AdaptiveCongestion) switchTo(cc CongestionController, reason string) {
 	if ac.active == cc {
 		return
+	}
+	if cc == ac.bbr {
+		ac.bbr.Reset()
 	}
 	name := "bbr"
 	if cc == ac.brutal {
