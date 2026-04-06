@@ -270,6 +270,18 @@ func TestAdaptive_RTTHistoryMemoryBounded(t *testing.T) {
 	_ = trend
 }
 
+func TestCalculateRTTTrend_SparseRing_NoInflation(t *testing.T) {
+	ac := &AdaptiveCongestion{}
+	// Write exactly 25 samples (> 20 threshold, < 100 ring size)
+	for i := 0; i < 25; i++ {
+		ac.recordRTT(100 * time.Millisecond)
+	}
+	trend := ac.calculateRTTTrend()
+	if trend < -0.05 || trend > 0.05 {
+		t.Errorf("trend should be ~0 for uniform RTT, got %f", trend)
+	}
+}
+
 func BenchmarkAdaptiveOnAck(b *testing.B) {
 	ac := NewAdaptive(nil, nil)
 	rtt := 50 * time.Millisecond
