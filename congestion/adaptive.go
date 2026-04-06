@@ -114,6 +114,9 @@ func (ac *AdaptiveCongestion) OnPacketLoss(lostBytes uint64) {
 }
 
 func (ac *AdaptiveCongestion) recordRTT(rtt time.Duration) {
+	if rtt <= 0 {
+		return
+	}
 	ac.rttRing[ac.rttCount%rttRingSize] = rtt
 	ac.rttCount++
 	ac.rttTrend = ac.calculateRTTTrend()
