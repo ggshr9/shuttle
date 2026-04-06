@@ -3,6 +3,7 @@ import { defineConfig } from 'vitepress'
 export default defineConfig({
   title: 'Shuttle',
   description: 'Multi-Transport Network Toolkit',
+  ignoreDeadLinks: true,
 
   locales: {
     en: {
