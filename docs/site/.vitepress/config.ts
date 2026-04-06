@@ -58,7 +58,7 @@ export default defineConfig({
           {
             text: 'API',
             items: [
-              { text: 'REST API', link: '/en/api/rest' },
+              { text: 'REST API', link: '/en/api/rest-api' },
             ],
           },
         ],
@@ -116,7 +116,7 @@ export default defineConfig({
           {
             text: 'API',
             items: [
-              { text: 'REST API', link: '/zh/api/rest' },
+              { text: 'REST API', link: '/zh/api/rest-api' },
             ],
           },
         ],
