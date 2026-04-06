@@ -11,7 +11,7 @@ import (
 // ByteStreamConfig configures a generic byte-stream transport pipeline.
 type ByteStreamConfig struct {
 	Addr     string                  // Server address (host:port).
-	Dialer   adapter.Dialer          // Establishes the raw connection.
+	Dialer   adapter.NetDialer        // Establishes the raw connection.
 	Security []adapter.SecureWrapper // Security chain applied in order. May be nil.
 	Auth     adapter.Authenticator   // Authentication after security. May be nil.
 	Mux      adapter.Multiplexer     // Stream multiplexer (required).

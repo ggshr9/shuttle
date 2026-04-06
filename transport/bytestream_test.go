@@ -21,8 +21,8 @@ import (
 	tlswrap "github.com/shuttleX/shuttle/transport/security/tls"
 )
 
-// tcpDialer returns an adapter.DialerFunc that wraps net.Dial.
-func tcpDialer() adapter.DialerFunc {
+// tcpDialer returns an adapter.NetDialerFunc that wraps net.Dial.
+func tcpDialer() adapter.NetDialerFunc {
 	return func(ctx context.Context, network, addr string) (net.Conn, error) {
 		var d net.Dialer
 		return d.DialContext(ctx, network, addr)
