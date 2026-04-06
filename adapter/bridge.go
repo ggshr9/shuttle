@@ -2,6 +2,7 @@ package adapter
 
 import (
 	"context"
+	"errors"
 	"net"
 	"sync/atomic"
 	"time"
@@ -25,6 +26,8 @@ type dialerTransport struct {
 	dialer Dialer
 }
 
+// Dial dials addr using the underlying Dialer. The network is hardcoded to "tcp"
+// because Dialer implementations in this package are TCP-based.
 func (dt *dialerTransport) Dial(ctx context.Context, addr string) (Connection, error) {
 	conn, err := dt.dialer.DialContext(ctx, "tcp", addr)
 	if err != nil {
@@ -78,6 +81,8 @@ type transportDialer struct {
 	serverAddr string
 }
 
+// DialContext opens a new Connection to the server address bound at construction.
+// The network and address parameters are ignored; the serverAddr set in TransportAsDialer is used.
 func (td *transportDialer) DialContext(ctx context.Context, network, address string) (net.Conn, error) {
 	conn, err := td.transport.Dial(ctx, td.serverAddr)
 	if err != nil {
@@ -104,9 +109,7 @@ type streamConn struct {
 func (sc *streamConn) Read(b []byte) (int, error)  { return sc.stream.Read(b) }
 func (sc *streamConn) Write(b []byte) (int, error) { return sc.stream.Write(b) }
 func (sc *streamConn) Close() error {
-	err := sc.stream.Close()
-	sc.conn.Close()
-	return err
+	return errors.Join(sc.stream.Close(), sc.conn.Close())
 }
 
 func (sc *streamConn) LocalAddr() net.Addr              { return sc.conn.LocalAddr() }
