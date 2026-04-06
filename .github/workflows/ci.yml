@@ -98,6 +98,6 @@ jobs:
         with:
           go-version: ${{ env.GO_VERSION }}
       - name: Run gosec
-        uses: securego/gosec@v2.21.4
-        with:
-          args: -exclude=G115,G104,G304,G301,G306,G404,G602,G117,G706,G703 -exclude-dir=quicfork ./...
+        run: |
+          go install github.com/securego/gosec/v2/cmd/gosec@latest
+          gosec -exclude=G115,G104,G304,G301,G306,G404,G602,G117,G706,G703 -exclude-dir=quicfork ./...
