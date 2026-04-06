@@ -91,9 +91,12 @@ func (m *Manager) Connect(ctx context.Context, dstVIP net.IP) error {
 	peer.Candidates = remoteCandidates
 	m.mu.Unlock()
 
-	// Perform hole punching
+	// Perform hole punching — register the puncher so receiveLoop forwards
+	// hole-punch packets to it instead of discarding them.
 	puncher := NewHolePuncher(m.udpConn, m.localVIP, m.holePunchTimeout, m.logger)
+	m.setActiveHolePuncher(puncher)
 	punchResult, err := puncher.Punch(ctx, dstVIP, remoteCandidates)
+	m.clearActiveHolePuncher()
 	if err != nil {
 		m.logger.Debug("p2p: hole punch failed", "peer", dstVIP, "err", err)
 		m.markFailed(key)
@@ -244,7 +247,10 @@ func (m *Manager) handleConnect(msg *signal.Message) {
 
 		punchCtx, punchCancel := context.WithTimeout(m.ctx, m.holePunchTimeout)
 		defer punchCancel()
+		// Register puncher so receiveLoop forwards hole-punch packets to it.
+		m.setActiveHolePuncher(puncher)
 		punchResult, err := puncher.Punch(punchCtx, msg.SrcVIP, candidates)
+		m.clearActiveHolePuncher()
 		if err != nil {
 			m.logger.Debug("p2p: hole punch failed", "peer", msg.SrcVIP, "err", err)
 			m.markFailed(key)
@@ -324,9 +330,13 @@ func (m *Manager) receiveLoop() {
 
 		data := buf[:n]
 
-		// Handle hole punch packets
+		// Handle hole punch packets — dispatch to the active HolePuncher (if
+		// any) via channel so the HolePuncher's receiveLoop sees every packet.
+		// Previously this was a bare continue which discarded the packet,
+		// creating a race between Manager and HolePuncher on the shared socket.
 		if IsHolePunchPacket(data) {
-			continue // Handled by HolePuncher
+			m.deliverToHolePuncher(data, addr)
+			continue
 		}
 
 		// Handle P2P data packets

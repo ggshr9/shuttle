@@ -5,15 +5,27 @@ import (
 	"io"
 	"log/slog"
 	"net"
+	"net/netip"
 	"sync"
 )
+
+// hubVIPKey converts a net.IP virtual IP to a netip.Addr map key.
+// IPv4-mapped IPv6 addresses are normalized to plain IPv4 so that
+// net.IPv4(a,b,c,d) and its 16-byte form produce the same key.
+func hubVIPKey(ip net.IP) netip.Addr {
+	addr, ok := netip.AddrFromSlice(ip)
+	if !ok {
+		return netip.Addr{}
+	}
+	return addr.Unmap()
+}
 
 // Hub manages signaling message routing on the server side.
 // It maintains a mapping of virtual IPs to their mesh streams
 // and forwards signaling messages between peers.
 type Hub struct {
 	mu     sync.RWMutex
-	peers  map[[4]byte]*PeerConn
+	peers  map[netip.Addr]*PeerConn
 	logger *slog.Logger
 }
 
@@ -27,15 +39,14 @@ type PeerConn struct {
 // NewHub creates a new signaling hub.
 func NewHub(logger *slog.Logger) *Hub {
 	return &Hub{
-		peers:  make(map[[4]byte]*PeerConn),
+		peers:  make(map[netip.Addr]*PeerConn),
 		logger: logger,
 	}
 }
 
 // Register adds a peer to the hub.
 func (h *Hub) Register(vip net.IP, w io.Writer) {
-	var key [4]byte
-	copy(key[:], vip.To4())
+	key := hubVIPKey(vip)
 
 	conn := &PeerConn{
 		VIP:    vip,
@@ -51,8 +62,7 @@ func (h *Hub) Register(vip net.IP, w io.Writer) {
 
 // Unregister removes a peer from the hub.
 func (h *Hub) Unregister(vip net.IP) {
-	var key [4]byte
-	copy(key[:], vip.To4())
+	key := hubVIPKey(vip)
 
 	h.mu.Lock()
 	delete(h.peers, key)
@@ -63,8 +73,7 @@ func (h *Hub) Unregister(vip net.IP) {
 
 // Forward routes a signaling message to its destination peer.
 func (h *Hub) Forward(msg *Message) error {
-	var dstKey [4]byte
-	copy(dstKey[:], msg.DstVIP.To4())
+	dstKey := hubVIPKey(msg.DstVIP)
 
 	h.mu.RLock()
 	peer, ok := h.peers[dstKey]
@@ -98,8 +107,7 @@ func (h *Hub) Forward(msg *Message) error {
 
 // Broadcast sends a message to all peers except the sender.
 func (h *Hub) Broadcast(msg *Message) {
-	var srcKey [4]byte
-	copy(srcKey[:], msg.SrcVIP.To4())
+	srcKey := hubVIPKey(msg.SrcVIP)
 
 	data := msg.Encode()
 
@@ -123,18 +131,15 @@ func (h *Hub) GetPeerList() []net.IP {
 	defer h.mu.RUnlock()
 
 	peers := make([]net.IP, 0, len(h.peers))
-	for key := range h.peers {
-		ip := make(net.IP, 4)
-		copy(ip, key[:])
-		peers = append(peers, ip)
+	for _, conn := range h.peers {
+		peers = append(peers, conn.VIP)
 	}
 	return peers
 }
 
 // HasPeer checks if a peer is registered.
 func (h *Hub) HasPeer(vip net.IP) bool {
-	var key [4]byte
-	copy(key[:], vip.To4())
+	key := hubVIPKey(vip)
 
 	h.mu.RLock()
 	_, ok := h.peers[key]

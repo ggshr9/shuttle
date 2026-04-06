@@ -74,7 +74,7 @@ func TestAdaptiveOnAckRecordsRTT(t *testing.T) {
 
 func TestAdaptiveRTTHistoryCap(t *testing.T) {
 	ac := NewAdaptive(nil, nil)
-	for i := 0; i < 150; i++ {
+	for i := 1; i <= 150; i++ {
 		ac.OnAck(100, time.Duration(i)*time.Millisecond)
 	}
 
@@ -268,6 +268,31 @@ func TestAdaptive_RTTHistoryMemoryBounded(t *testing.T) {
 	}
 	// Trend should be computable without panic
 	_ = trend
+}
+
+func TestRecordRTT_RejectsZero(t *testing.T) {
+	ac := &AdaptiveCongestion{}
+	ac.recordRTT(0)
+	ac.recordRTT(-1 * time.Millisecond)
+	if ac.rttCount != 0 {
+		t.Errorf("zero/negative RTT should not be recorded, rttCount=%d", ac.rttCount)
+	}
+	ac.recordRTT(50 * time.Millisecond)
+	if ac.rttCount != 1 {
+		t.Errorf("valid RTT should be recorded, rttCount=%d, want 1", ac.rttCount)
+	}
+}
+
+func TestCalculateRTTTrend_SparseRing_NoInflation(t *testing.T) {
+	ac := &AdaptiveCongestion{}
+	// Write exactly 25 samples (> 20 threshold, < 100 ring size)
+	for i := 0; i < 25; i++ {
+		ac.recordRTT(100 * time.Millisecond)
+	}
+	trend := ac.calculateRTTTrend()
+	if trend < -0.05 || trend > 0.05 {
+		t.Errorf("trend should be ~0 for uniform RTT, got %f", trend)
+	}
 }
 
 func BenchmarkAdaptiveOnAck(b *testing.B) {

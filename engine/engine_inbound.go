@@ -69,10 +69,34 @@ func (e *Engine) startInbounds(ctx context.Context, cfg *config.ClientConfig) ([
 		case "direct", "reject", "mesh", "group":
 			continue // don't wrap infrastructure outbounds
 		}
-		// Wrap all proxy-like outbounds (proxy, shadowsocks, vless, trojan, etc.)
+		// Per-outbound circuit breaker: isolates failures so one failing server
+		// cannot block traffic to unrelated outbounds.
 		tagName := tag // capture for closure
+		cb := NewCircuitBreaker(CircuitBreakerConfig{
+			Threshold:    5,
+			BaseCooldown: 10 * time.Second,
+			MaxCooldown:  5 * time.Minute,
+			OnStateChange: func(state CircuitState, cooldown time.Duration) {
+				e.obs.Emit(Event{
+					Type:      EventConnectionError,
+					Timestamp: time.Now(),
+					Message:   fmt.Sprintf("outbound %s: circuit -> %s", tagName, state),
+					BackoffMs: cooldown.Milliseconds(),
+				})
+				if state == CircuitOpen {
+					e.mu.RLock()
+					sm := e.subscriptionManager
+					e.mu.RUnlock()
+					if sm != nil {
+						go sm.RefreshAll(context.Background())
+						e.logger.Info("circuit breaker open: triggering subscription refresh", "outbound", tagName)
+					}
+				}
+			},
+		})
+		// Wrap all proxy-like outbounds (proxy, shadowsocks, vless, trojan, etc.)
 		wrapped := NewResilientOutbound(ob, ResilientOutboundConfig{
-			CircuitBreaker: e.circuitBreaker,
+			CircuitBreaker: cb,
 			RetryConfig:    e.buildRetryConfig(cfg.Retry),
 			OnRetry: func(attempt int, err error) {
 				e.obs.Emit(Event{

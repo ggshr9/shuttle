@@ -435,6 +435,7 @@ type migratedConn struct {
 	migrator *Migrator
 	sel      *Selector
 	addr     string
+	reconnMu sync.Mutex // serializes dialNewAndOpen to prevent connection leaks
 }
 
 func (c *migratedConn) OpenStream(ctx context.Context) (transport.Stream, error) {
@@ -456,6 +457,23 @@ func (c *migratedConn) OpenStream(ctx context.Context) (transport.Stream, error)
 }
 
 func (c *migratedConn) dialNewAndOpen(ctx context.Context) (transport.Stream, error) {
+	c.reconnMu.Lock()
+	defer c.reconnMu.Unlock()
+
+	// Check if another goroutine already reconnected while we were waiting.
+	if c.tc != nil && !c.tc.draining.Load() {
+		stream, err := c.tc.conn.OpenStream(ctx)
+		if err != nil {
+			return nil, err
+		}
+		ts, err := c.migrator.WrapStream(c.tc, stream)
+		if err != nil {
+			stream.Close()
+			return nil, err
+		}
+		return ts, nil
+	}
+
 	c.sel.mu.RLock()
 	active := c.sel.active
 	c.sel.mu.RUnlock()

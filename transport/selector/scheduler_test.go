@@ -10,9 +10,9 @@ func makePaths(n int, available bool) []*PathMetrics {
 	paths := make([]*PathMetrics, n)
 	for i := range paths {
 		paths[i] = &PathMetrics{
-			Available: available,
-			Latency:   time.Duration(i+1) * time.Millisecond,
+			Latency: time.Duration(i+1) * time.Millisecond,
 		}
+		paths[i].SetAvailable(available)
 		if available {
 			paths[i].Conn = &fakeConn{} // non-nil so eligible
 		}
@@ -22,7 +22,7 @@ func makePaths(n int, available bool) []*PathMetrics {
 
 func TestFilterEligibleBasic(t *testing.T) {
 	paths := makePaths(3, true)
-	paths[1].Available = false // make one ineligible
+	paths[1].SetAvailable(false) // make one ineligible
 
 	eligible := filterEligible(paths)
 	if len(eligible) != 2 {

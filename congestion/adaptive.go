@@ -114,28 +114,53 @@ func (ac *AdaptiveCongestion) OnPacketLoss(lostBytes uint64) {
 }
 
 func (ac *AdaptiveCongestion) recordRTT(rtt time.Duration) {
+	if rtt <= 0 {
+		return
+	}
 	ac.rttRing[ac.rttCount%rttRingSize] = rtt
 	ac.rttCount++
 	ac.rttTrend = ac.calculateRTTTrend()
 }
 
 func (ac *AdaptiveCongestion) calculateRTTTrend() float64 {
-	if ac.rttCount < 20 {
+	count := ac.rttCount
+	if count < 20 {
 		return 0
 	}
 
-	var recentAvg, olderAvg float64
-	for i := 0; i < 10; i++ {
-		recentAvg += float64(ac.rttRing[(ac.rttCount-1-i)%rttRingSize])
-		olderAvg += float64(ac.rttRing[(ac.rttCount-11-i)%rttRingSize])
+	// Use at most the number of valid samples, capped at rttRingSize
+	validCount := count
+	if validCount > rttRingSize {
+		validCount = rttRingSize
 	}
-	recentAvg /= 10
-	olderAvg /= 10
+	halfWindow := validCount / 2
+	if halfWindow < 5 {
+		return 0
+	}
+	if halfWindow > 10 {
+		halfWindow = 10
+	}
+
+	// Recent: last halfWindow samples
+	var recentSum time.Duration
+	for i := 0; i < halfWindow; i++ {
+		idx := (count - 1 - i) % rttRingSize
+		recentSum += ac.rttRing[idx]
+	}
+	recentAvg := recentSum / time.Duration(halfWindow)
+
+	// Older: halfWindow samples before the recent ones
+	var olderSum time.Duration
+	for i := 0; i < halfWindow; i++ {
+		idx := (count - 1 - halfWindow - i) % rttRingSize
+		olderSum += ac.rttRing[idx]
+	}
+	olderAvg := olderSum / time.Duration(halfWindow)
 
 	if olderAvg == 0 {
 		return 0
 	}
-	return (recentAvg - olderAvg) / olderAvg
+	return float64(recentAvg-olderAvg) / float64(olderAvg)
 }
 
 const lossWindowDuration = 10 * time.Second
