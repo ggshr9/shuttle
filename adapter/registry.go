@@ -58,3 +58,22 @@ func ResetRegistry() {
 	defer registryMu.Unlock()
 	registry = map[string]TransportFactory{}
 }
+
+// DialerFactory is optionally implemented by TransportFactory for per-request protocols.
+// Existing multiplexed transport factories (h3, reality, cdn, webrtc) do not implement this.
+type DialerFactory interface {
+	NewDialer(cfg map[string]any, opts FactoryOptions) (Dialer, error)
+	NewInboundHandler(cfg map[string]any, opts FactoryOptions) (InboundHandler, error)
+}
+
+// GetDialerFactory returns the DialerFactory for the given type, or nil if not supported.
+func GetDialerFactory(typeName string) DialerFactory {
+	f := Get(typeName)
+	if f == nil {
+		return nil
+	}
+	if df, ok := f.(DialerFactory); ok {
+		return df
+	}
+	return nil
+}

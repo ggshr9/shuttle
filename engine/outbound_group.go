@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net"
 	"sync/atomic"
 	"time"
@@ -21,6 +22,10 @@ const (
 	GroupLoadBalance GroupStrategy = "loadbalance"
 	// GroupQuality ranks outbounds by probe-measured latency and loss.
 	GroupQuality GroupStrategy = "quality"
+	// GroupURLTest auto-selects the lowest-latency available node via periodic health checks.
+	GroupURLTest GroupStrategy = "url-test"
+	// GroupSelect allows manual selection of the active outbound.
+	GroupSelect GroupStrategy = "select"
 )
 
 // ProbeSnapshot is a point-in-time quality reading for an outbound.
@@ -32,10 +37,19 @@ type ProbeSnapshot struct {
 
 // OutboundGroupConfig is the JSON options schema for a group outbound.
 type OutboundGroupConfig struct {
-	Strategy    GroupStrategy `json:"strategy"`
-	Outbounds   []string      `json:"outbounds"`
-	MaxLatency  string        `json:"max_latency,omitempty"`   // duration string, e.g. "200ms"
-	MaxLossRate float64       `json:"max_loss_rate,omitempty"` // 0-1 range
+	Strategy    GroupStrategy    `json:"strategy"`
+	Outbounds   []string         `json:"outbounds"`
+	MaxLatency  string           `json:"max_latency,omitempty"`   // duration string, e.g. "200ms"
+	MaxLossRate float64          `json:"max_loss_rate,omitempty"` // 0-1 range
+	HealthCheck *GroupHealthCheck `json:"health_check,omitempty"` // for url-test strategy
+}
+
+// GroupHealthCheck configures the health checker for url-test groups.
+type GroupHealthCheck struct {
+	URL         string `json:"url,omitempty"`
+	Interval    string `json:"interval,omitempty"`
+	Timeout     string `json:"timeout,omitempty"`
+	ToleranceMS int    `json:"tolerance_ms,omitempty"`
 }
 
 // OutboundGroup wraps multiple outbounds with failover, load-balance, or quality strategy.
@@ -46,6 +60,9 @@ type OutboundGroup struct {
 	counter     atomic.Uint64                    // for round-robin
 	qualityCfg  QualityConfig                    // thresholds for quality strategy
 	probeGetter func() map[string]ProbeSnapshot // returns latest probe data; nil when not quality
+	urlTest     *urlTestState                    // for url-test strategy
+	selectState *selectState                     // for select strategy
+	logger      *slog.Logger
 }
 
 // NewOutboundGroup creates a new OutboundGroup.
@@ -74,6 +91,10 @@ func (g *OutboundGroup) DialContext(ctx context.Context, network, address string
 		return g.dialLoadBalance(ctx, network, address)
 	case GroupQuality:
 		return g.dialQuality(ctx, network, address)
+	case GroupURLTest:
+		return g.dialURLTest(ctx, network, address)
+	case GroupSelect:
+		return g.dialSelect(ctx, network, address)
 	default: // failover is the default
 		return g.dialFailover(ctx, network, address)
 	}
@@ -146,9 +167,13 @@ func (g *OutboundGroup) dialQuality(ctx context.Context, network, address string
 	return nil, fmt.Errorf("outbound group %q: no outbounds available", g.tag)
 }
 
-// Close is a no-op for OutboundGroup. Member outbounds are owned by the
-// engine's outbound map and closed there; the group does not own their lifecycle.
+// Close stops any background loops (e.g. url-test health checks). Member outbounds
+// are owned by the engine's outbound map and closed there; the group does not own
+// their lifecycle.
 func (g *OutboundGroup) Close() error {
+	if g.urlTest != nil {
+		g.urlTest.Stop()
+	}
 	return nil
 }
 
@@ -162,7 +187,7 @@ func parseOutboundGroupConfig(raw json.RawMessage) (OutboundGroupConfig, error) 
 		return cfg, fmt.Errorf("group must have at least one outbound member")
 	}
 	switch cfg.Strategy {
-	case GroupFailover, GroupLoadBalance, GroupQuality, "":
+	case GroupFailover, GroupLoadBalance, GroupQuality, GroupURLTest, GroupSelect, "":
 		// valid (empty defaults to failover)
 	default:
 		return cfg, fmt.Errorf("unknown group strategy: %q", cfg.Strategy)

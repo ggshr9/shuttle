@@ -30,8 +30,10 @@ type ClientConfig struct {
 	Obfs          ObfsConfig           `yaml:"obfs" json:"obfs"`
 	Yamux         YamuxConfig          `yaml:"yamux" json:"yamux"`
 	Log           LogConfig            `yaml:"log" json:"log"`
-	Inbounds      []InboundConfig      `yaml:"inbounds,omitempty" json:"inbounds,omitempty"`
-	Outbounds     []OutboundConfig     `yaml:"outbounds,omitempty" json:"outbounds,omitempty"`
+	Inbounds       []InboundConfig       `yaml:"inbounds,omitempty" json:"inbounds,omitempty"`
+	Outbounds      []OutboundConfig      `yaml:"outbounds,omitempty" json:"outbounds,omitempty"`
+	ProxyProviders []ProxyProviderConfig `yaml:"proxy_providers,omitempty" json:"proxy_providers,omitempty"`
+	RuleProviders  []RuleProviderConfig  `yaml:"rule_providers,omitempty" json:"rule_providers,omitempty"`
 }
 
 // SubscriptionConfig represents a subscription source.

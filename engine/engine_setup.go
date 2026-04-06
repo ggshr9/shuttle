@@ -12,6 +12,7 @@ import (
 	"github.com/shuttleX/shuttle/adapter"
 	"github.com/shuttleX/shuttle/config"
 	"github.com/shuttleX/shuttle/congestion"
+	"github.com/shuttleX/shuttle/provider"
 	"github.com/shuttleX/shuttle/obfs"
 	"github.com/shuttleX/shuttle/proxy"
 	"github.com/shuttleX/shuttle/qos"
@@ -66,7 +67,8 @@ func (e *Engine) buildTransports(cfg *config.ClientConfig, ccAdapter quic.Conges
 }
 
 // buildRouter creates the routing engine including GeoIP/GeoSite and DNS.
-func (e *Engine) buildRouter(cfg *config.ClientConfig) (*router.Router, *router.DNSResolver, *router.Prefetcher) {
+// ruleProviders is passed to the router for rule-provider-based matching; may be nil.
+func (e *Engine) buildRouter(cfg *config.ClientConfig, ruleProviders map[string]*provider.RuleProvider) (*router.Router, *router.DNSResolver, *router.Prefetcher) {
 	geoIPDB := router.NewGeoIPDB()
 	geoSiteDB := router.NewGeoSiteDB()
 
@@ -132,6 +134,9 @@ func (e *Engine) buildRouter(cfg *config.ClientConfig) (*router.Router, *router.
 		DomesticDoH:    cfg.Routing.DNS.DomesticDoH,
 		StripECS:       cfg.Routing.DNS.StripECS,
 		PersistentConn: persistentConn,
+		Mode:           cfg.Routing.DNS.Mode,
+		FakeIPRange:    cfg.Routing.DNS.FakeIPRange,
+		FakeIPFilter:   cfg.Routing.DNS.FakeIPFilter,
 	}, geoIPDB, e.logger)
 
 	var prefetcher *router.Prefetcher
@@ -142,6 +147,7 @@ func (e *Engine) buildRouter(cfg *config.ClientConfig) (*router.Router, *router.
 
 	routerCfg := &router.RouterConfig{
 		DefaultAction: router.Action(cfg.Routing.Default),
+		RuleProviders: ruleProviders,
 	}
 
 	// Map config rule chain entries to router rule chain entries.
@@ -157,6 +163,7 @@ func (e *Engine) buildRouter(cfg *config.ClientConfig) (*router.Router, *router.
 				Process:       entry.Match.Process,
 				Protocol:      entry.Match.Protocol,
 				NetworkType:   entry.Match.NetworkType,
+				RuleProvider:  entry.Match.RuleProvider,
 			},
 			Logic:  entry.Logic,
 			Action: entry.Action,

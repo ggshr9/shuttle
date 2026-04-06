@@ -9,6 +9,7 @@ import (
 	"github.com/shuttleX/shuttle/internal/logutil"
 	"github.com/shuttleX/shuttle/internal/netmon"
 	"github.com/shuttleX/shuttle/mesh"
+	"github.com/shuttleX/shuttle/provider"
 	"github.com/shuttleX/shuttle/proxy"
 	"github.com/shuttleX/shuttle/router"
 	"github.com/shuttleX/shuttle/router/geodata"
@@ -89,6 +90,10 @@ type Engine struct {
 
 	// Subscription manager for auto-refreshing server lists
 	subscriptionManager *subscription.Manager
+
+	// Proxy and rule providers (ecosystem compat)
+	proxyProviders []*provider.ProxyProvider
+	ruleProviders  []*provider.RuleProvider
 }
 
 // New creates a new Engine from the given config.

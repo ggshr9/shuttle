@@ -347,7 +347,7 @@ func TestCompileRuleChain_ValidEntries(t *testing.T) {
 		},
 	}
 
-	rules, err := CompileRuleChain(entries, nil, nil)
+	rules, err := CompileRuleChain(entries, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("CompileRuleChain() error = %v", err)
 	}
@@ -369,7 +369,7 @@ func TestCompileRuleChain_InvalidAction(t *testing.T) {
 			Action: "invalid",
 		},
 	}
-	_, err := CompileRuleChain(entries, nil, nil)
+	_, err := CompileRuleChain(entries, nil, nil, nil)
 	if err == nil {
 		t.Error("expected error for invalid action, got nil")
 	}
@@ -381,7 +381,7 @@ func TestCompileRuleChain_MissingAction(t *testing.T) {
 			Match: RuleMatch{Domain: []string{"example.com"}},
 		},
 	}
-	_, err := CompileRuleChain(entries, nil, nil)
+	_, err := CompileRuleChain(entries, nil, nil, nil)
 	if err == nil {
 		t.Error("expected error for missing action, got nil")
 	}
@@ -395,7 +395,7 @@ func TestCompileRuleChain_InvalidLogic(t *testing.T) {
 			Action: "proxy",
 		},
 	}
-	_, err := CompileRuleChain(entries, nil, nil)
+	_, err := CompileRuleChain(entries, nil, nil, nil)
 	if err == nil {
 		t.Error("expected error for invalid logic, got nil")
 	}
@@ -408,7 +408,7 @@ func TestCompileRuleChain_NoMatchConditions(t *testing.T) {
 			Action: "proxy",
 		},
 	}
-	_, err := CompileRuleChain(entries, nil, nil)
+	_, err := CompileRuleChain(entries, nil, nil, nil)
 	if err == nil {
 		t.Error("expected error for empty match conditions, got nil")
 	}
@@ -421,7 +421,7 @@ func TestCompileRuleChain_InvalidCIDR(t *testing.T) {
 			Action: "proxy",
 		},
 	}
-	_, err := CompileRuleChain(entries, nil, nil)
+	_, err := CompileRuleChain(entries, nil, nil, nil)
 	if err == nil {
 		t.Error("expected error for invalid CIDR, got nil")
 	}

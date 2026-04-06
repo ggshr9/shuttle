@@ -17,7 +17,7 @@ func TestInterfacesCompile(t *testing.T) {
 	var _ adapter.Multiplexer = (adapter.Multiplexer)(nil)
 	var _ adapter.Authenticator = (adapter.Authenticator)(nil)
 
-	var d adapter.Dialer = adapter.DialerFunc(func(ctx context.Context, network, addr string) (net.Conn, error) {
+	var d adapter.NetDialer = adapter.NetDialerFunc(func(ctx context.Context, network, addr string) (net.Conn, error) {
 		return nil, nil
 	})
 	_ = d

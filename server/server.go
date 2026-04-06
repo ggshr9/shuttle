@@ -58,6 +58,9 @@ type Server struct {
 	pluginMetrics *plugin.Metrics
 	pluginChain   *plugin.Chain
 
+	// Per-request protocol inbound listeners (SS, VLESS, Trojan).
+	inboundListeners []*inboundListener
+
 	// reputationCancel stops the reputation cleanup goroutine.
 	reputationCancel context.CancelFunc
 }
@@ -319,6 +322,15 @@ func (s *Server) Start(ctx context.Context) error {
 		return err
 	}
 
+	// Start per-request protocol inbound handlers (SS, VLESS, Trojan).
+	if len(s.cfg.Inbounds) > 0 {
+		ils, err := s.startInbounds(ctx)
+		if err != nil {
+			return fmt.Errorf("start inbounds: %w", err)
+		}
+		s.inboundListeners = ils
+	}
+
 	s.logger.Info("shuttled is running", "listen", s.cfg.Listen)
 	s.eventBus.Emit(ServerEvent{Type: "started", Message: "shuttled is running on " + s.cfg.Listen})
 
@@ -386,6 +398,12 @@ func (s *Server) Shutdown(ctx context.Context) {
 
 	// Phase 1: Stop accepting new connections
 	s.ml.Close()
+
+	// Close per-request protocol inbound listeners.
+	for _, il := range s.inboundListeners {
+		il.listener.Close()
+		il.handler.Close()
+	}
 
 	// Wait for active connections to finish or drain timeout
 	drainDone := make(chan struct{})

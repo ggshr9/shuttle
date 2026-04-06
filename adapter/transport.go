@@ -38,14 +38,15 @@ type ServerTransport interface {
 	Close() error
 }
 
-// Dialer establishes a raw network connection.
-type Dialer interface {
+// NetDialer establishes a raw network connection (TCP/UDP).
+// This is distinct from Dialer, which wraps per-request proxy protocols.
+type NetDialer interface {
 	Dial(ctx context.Context, network, addr string) (net.Conn, error)
 }
 
-// DialerFunc is a convenience adapter for functions that implement Dialer.
-type DialerFunc func(ctx context.Context, network, addr string) (net.Conn, error)
+// NetDialerFunc is a convenience adapter for functions that implement NetDialer.
+type NetDialerFunc func(ctx context.Context, network, addr string) (net.Conn, error)
 
-func (f DialerFunc) Dial(ctx context.Context, network, addr string) (net.Conn, error) {
+func (f NetDialerFunc) Dial(ctx context.Context, network, addr string) (net.Conn, error) {
 	return f(ctx, network, addr)
 }

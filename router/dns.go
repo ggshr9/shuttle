@@ -9,10 +9,13 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"net/netip"
 	"net/url"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/shuttleX/shuttle/router/dns/fakeip"
 )
 
 // DNSConfig configures the DNS resolver.
@@ -27,6 +30,9 @@ type DNSConfig struct {
 	DomesticDoH    string // DoH URL for domestic queries (e.g., "https://dns.alidns.com/dns-query")
 	StripECS       bool   // Strip EDNS Client Subnet from DoH queries
 	PersistentConn bool   // Use persistent HTTP/2 connections with query deduplication
+	Mode           string   // "normal" or "fake-ip"; empty defaults to normal
+	FakeIPRange    string   // CIDR for fake-ip pool (default "198.18.0.0/15")
+	FakeIPFilter   []string // domains to bypass fake-ip
 }
 
 // DNSResolver implements split DNS with anti-pollution.
@@ -38,6 +44,7 @@ type DNSResolver struct {
 	httpClient *http.Client       // injectable HTTP client for DoH (nil = default)
 	mux        *DNSMultiplexer    // persistent connection pool + dedup (nil when disabled)
 	prefetcher *Prefetcher        // optional DNS prefetcher (nil when disabled)
+	fakeIPPool *fakeip.Pool       // fake-ip pool (nil when mode != "fake-ip")
 }
 
 // SetPrefetcher sets the DNS prefetcher that will be notified of successful resolutions.
@@ -79,15 +86,39 @@ func NewDNSResolver(cfg *DNSConfig, geoIP *GeoIPDB, logger *slog.Logger) *DNSRes
 	if cfg.PersistentConn {
 		mux = NewDNSMultiplexer()
 	}
+
+	var pool *fakeip.Pool
+	if cfg.Mode == "fake-ip" {
+		cidrStr := cfg.FakeIPRange
+		if cidrStr == "" {
+			cidrStr = "198.18.0.0/15"
+		}
+		prefix, err := netip.ParsePrefix(cidrStr)
+		if err != nil {
+			logger.Error("fakeip: invalid CIDR, falling back to normal DNS", "cidr", cidrStr, "err", err)
+		} else {
+			p, err := fakeip.NewPool(fakeip.PoolConfig{
+				CIDR:   prefix,
+				Filter: cfg.FakeIPFilter,
+			})
+			if err != nil {
+				logger.Error("fakeip: pool creation failed, falling back to normal DNS", "err", err)
+			} else {
+				pool = p
+			}
+		}
+	}
+
 	return &DNSResolver{
 		config: cfg,
 		cache: &dnsCache{
 			entries: make(map[string]*dnsCacheEntry, cfg.CacheSize),
 			maxSize: cfg.CacheSize,
 		},
-		geoIP:  geoIP,
-		logger: logger,
-		mux:    mux,
+		geoIP:      geoIP,
+		logger:     logger,
+		mux:        mux,
+		fakeIPPool: pool,
 	}
 }
 
@@ -98,12 +129,44 @@ func (r *DNSResolver) Close() {
 	}
 }
 
+// IsFakeIP reports whether ip falls within the fake-ip pool's CIDR range.
+// Returns false when fake-ip mode is not active.
+func (r *DNSResolver) IsFakeIP(ip net.IP) bool {
+	if r.fakeIPPool == nil {
+		return false
+	}
+	addr, ok := netip.AddrFromSlice(ip)
+	if !ok {
+		return false
+	}
+	return r.fakeIPPool.IsFakeIP(addr.Unmap())
+}
+
+// ReverseFakeIP looks up the domain that was assigned the given fake IP.
+// Returns ("", false) when fake-ip mode is not active or the IP is not a known fake IP.
+func (r *DNSResolver) ReverseFakeIP(ip net.IP) (string, bool) {
+	if r.fakeIPPool == nil {
+		return "", false
+	}
+	addr, ok := netip.AddrFromSlice(ip)
+	if !ok {
+		return "", false
+	}
+	return r.fakeIPPool.Reverse(addr.Unmap())
+}
+
 // Resolve resolves a domain using the anti-pollution strategy:
 // 1. Query both domestic and remote DNS
 // 2. If results agree → use domestic (faster)
 // 3. If they disagree → check if domestic result is foreign IP (pollution)
 // 4. If polluted → use remote result
 func (r *DNSResolver) Resolve(ctx context.Context, domain string) ([]net.IP, error) {
+	// Fake-ip mode: return a virtual IP instead of querying upstream DNS.
+	if r.fakeIPPool != nil && r.fakeIPPool.ShouldFakeIP(domain) {
+		fakeAddr := r.fakeIPPool.Lookup(domain)
+		return []net.IP{fakeAddr.AsSlice()}, nil
+	}
+
 	// Check cache first
 	if ips, ok := r.cache.get(domain); ok {
 		return ips, nil

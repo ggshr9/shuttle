@@ -5,6 +5,8 @@ import (
 	"net"
 	"strings"
 	"sync"
+
+	"github.com/shuttleX/shuttle/provider"
 )
 
 // Action defines what to do with a connection.
@@ -69,6 +71,7 @@ type RouterConfig struct {
 	RuleChain     []RuleChainEntry // ordered rules evaluated before legacy stack
 	Rules         []Rule
 	DefaultAction Action
+	RuleProviders map[string]*provider.RuleProvider // optional: used by rule chain entries with RuleProvider match
 }
 
 // NewRouter creates a new routing engine.
@@ -91,7 +94,7 @@ func NewRouter(cfg *RouterConfig, geoIP *GeoIPDB, geoSite *GeoSiteDB, logger *sl
 
 	// Compile the ordered rule chain (evaluated before legacy rules).
 	if len(cfg.RuleChain) > 0 {
-		compiled, err := CompileRuleChain(cfg.RuleChain, geoIP, geoSite)
+		compiled, err := CompileRuleChain(cfg.RuleChain, geoIP, geoSite, cfg.RuleProviders)
 		if err != nil {
 			logger.Error("failed to compile rule chain", "err", err)
 		} else {

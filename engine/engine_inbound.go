@@ -8,6 +8,7 @@ import (
 
 	"github.com/shuttleX/shuttle/adapter"
 	"github.com/shuttleX/shuttle/config"
+	"github.com/shuttleX/shuttle/outbound/healthcheck"
 )
 
 // startInbounds starts all configured inbound listeners using the pluggable
@@ -94,6 +95,23 @@ func (e *Engine) startInbounds(ctx context.Context, cfg *config.ClientConfig) ([
 		grp := NewOutboundGroup(outCfg.Tag, groupCfg.Strategy, members)
 		grp.qualityCfg = QualityConfigFromGroupConfig(groupCfg)
 		grp.probeGetter = e.ProbeSnapshots
+		grp.logger = e.logger
+
+		// Wire strategy-specific state.
+		switch groupCfg.Strategy {
+		case GroupURLTest:
+			hcCfg := buildGroupHealthCheckConfig(groupCfg.HealthCheck)
+			checker := healthcheck.New(hcCfg)
+			toleranceMS := 0
+			if groupCfg.HealthCheck != nil {
+				toleranceMS = groupCfg.HealthCheck.ToleranceMS
+			}
+			grp.SetURLTest(checker, toleranceMS)
+			grp.StartURLTest(ctx)
+		case GroupSelect:
+			grp.SetSelect(members)
+		}
+
 		outbounds[outCfg.Tag] = grp
 	}
 
@@ -146,4 +164,26 @@ func (e *Engine) startInbounds(ctx context.Context, cfg *config.ClientConfig) ([
 	e.mu.Unlock()
 
 	return closers, nil
+}
+
+// buildGroupHealthCheckConfig converts an optional GroupHealthCheck into a
+// healthcheck.Config pointer (nil means use defaults).
+func buildGroupHealthCheckConfig(ghc *GroupHealthCheck) *healthcheck.Config {
+	if ghc == nil {
+		return nil
+	}
+	cfg := &healthcheck.Config{
+		URL: ghc.URL,
+	}
+	if ghc.Interval != "" {
+		if d, err := time.ParseDuration(ghc.Interval); err == nil {
+			cfg.Interval = d
+		}
+	}
+	if ghc.Timeout != "" {
+		if d, err := time.ParseDuration(ghc.Timeout); err == nil {
+			cfg.Timeout = d
+		}
+	}
+	return cfg
 }

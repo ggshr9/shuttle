@@ -16,6 +16,9 @@ dist/
 
 # Frontend
 gui/web/node_modules/
+docs/site/node_modules/
+docs/site/.vitepress/dist/
+docs/site/.vitepress/cache/
 
 # IDE
 .idea/
