@@ -46,24 +46,6 @@ func (e *Engine) startInternal(ctx context.Context) error {
 
 	sysopt.Apply(e.logger)
 
-	e.mu.Lock()
-	e.circuitBreaker = NewCircuitBreaker(CircuitBreakerConfig{
-		OnStateChange: func(state CircuitState, cooldown time.Duration) {
-			if state == CircuitOpen {
-				e.emit(Event{Type: EventConnectionError, Error: "circuit breaker open", BackoffMs: cooldown.Milliseconds()})
-				// Trigger subscription refresh to discover new servers when all existing ones fail.
-				e.mu.RLock()
-				sm := e.subscriptionManager
-				e.mu.RUnlock()
-				if sm != nil {
-					go sm.RefreshAll(context.Background())
-					e.logger.Info("circuit breaker open: triggering subscription refresh")
-				}
-			}
-		},
-	})
-	e.mu.Unlock()
-
 	ctx, cancel := context.WithCancel(ctx)
 
 	// On any failure below, this helper resets state.
