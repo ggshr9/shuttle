@@ -1,7 +1,9 @@
 package engine
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"net"
 	"time"
@@ -419,8 +421,78 @@ func (e *Engine) stopInternal() error {
 	return nil
 }
 
+// isRouterOnlyChange reports true when the two configs differ only in routing or
+// DNS fields, meaning the transport/proxy/mesh plumbing does not need to restart.
+func isRouterOnlyChange(oldCfg, newCfg *config.ClientConfig) bool {
+	if oldCfg == nil || newCfg == nil {
+		return false
+	}
+	oldCopy := oldCfg.DeepCopy()
+	newCopy := newCfg.DeepCopy()
+
+	// Zero out the fields that are handled by the router fast-path.
+	// DNS is nested inside RoutingConfig, so zeroing Routing covers it.
+	// RuleProviders are consumed only by the router, so they are also safe to
+	// hot-swap without restarting transports.
+	oldCopy.Routing = config.RoutingConfig{}
+	newCopy.Routing = config.RoutingConfig{}
+	oldCopy.RuleProviders = nil
+	newCopy.RuleProviders = nil
+
+	oldJSON, err1 := json.Marshal(oldCopy)
+	newJSON, err2 := json.Marshal(newCopy)
+	if err1 != nil || err2 != nil {
+		// If marshalling fails for any reason, fall back to full reload.
+		return false
+	}
+	return bytes.Equal(oldJSON, newJSON)
+}
+
+// reloadRouterOnly hot-swaps the router and DNS resolver without stopping the
+// engine. The caller must hold lifecycleMu.
+func (e *Engine) reloadRouterOnly(cfg *config.ClientConfig) error {
+	e.logger.Debug("router-only reload: rebuilding router")
+
+	// Rule providers are not restarted — pass the existing ones so the new
+	// router can still reference them if the routing rules reference providers.
+	e.mu.RLock()
+	existingRuleProviders := make(map[string]*provider.RuleProvider, len(e.ruleProviders))
+	for _, rp := range e.ruleProviders {
+		existingRuleProviders[rp.Name()] = rp
+	}
+	e.mu.RUnlock()
+
+	newRouter, newDNSResolver, newPrefetcher := e.buildRouter(cfg, existingRuleProviders)
+
+	// Start the new prefetcher (if any) as a background goroutine.
+	if newPrefetcher != nil {
+		e.mu.RLock()
+		ctx := e.parentCtx
+		e.mu.RUnlock()
+		if ctx != nil {
+			e.bgWg.Add(1)
+			go func() {
+				defer e.bgWg.Done()
+				newPrefetcher.Start(ctx)
+			}()
+		}
+	}
+
+	e.mu.Lock()
+	e.currentRouter = newRouter
+	e.dnsResolver = newDNSResolver
+	e.cfg = cfg
+	e.mu.Unlock()
+
+	e.logger.Info("router-only reload complete (zero downtime)")
+	e.emit(Event{Type: EventConfigReloaded, Message: "router-only reload (zero downtime)"})
+	return nil
+}
+
 // Reload stops and restarts the engine with a new config.
 // The new config is validated before stopping; if invalid the engine keeps running.
+// When only routing/DNS fields change the engine performs a zero-downtime
+// router-only hot-swap instead of a full stop-then-start cycle.
 func (e *Engine) Reload(cfg *config.ClientConfig) error {
 	if err := ValidateConfig(cfg); err != nil {
 		return fmt.Errorf("invalid config: %w", err)
@@ -437,6 +509,13 @@ func (e *Engine) Reload(cfg *config.ClientConfig) error {
 
 	if parentCtx == nil {
 		parentCtx = context.Background()
+	}
+
+	// Fast path: if only routing/DNS fields changed and the engine is running,
+	// hot-swap the router without any downtime.
+	if running && isRouterOnlyChange(oldCfg, cfg) {
+		e.logger.Debug("reload: routing-only change detected, using fast path")
+		return e.reloadRouterOnly(cfg)
 	}
 
 	e.logger.Debug("reload triggered", "was_running", running)

@@ -199,6 +199,79 @@ func TestFallbackControllerResetAll(t *testing.T) {
 	}
 }
 
+// TestFallbackControllerResetPeer verifies that ResetPeer clears UsingRelay and
+// accumulated failure counts so a peer that was in relay mode after a failed
+// connection is treated as a fresh direct candidate after a successful ICE
+// restart or reconnect.
+func TestFallbackControllerResetPeer(t *testing.T) {
+	cfg := &FallbackConfig{
+		FailureThreshold:    2,
+		DirectRetryInterval: 60 * time.Second, // long interval so state doesn't auto-expire
+	}
+	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
+	fc := NewFallbackController(cfg, logger)
+
+	vip := net.IPv4(10, 7, 0, 5)
+
+	// Drive the peer into relay mode via consecutive failures.
+	for i := 0; i < cfg.FailureThreshold; i++ {
+		fc.RecordFailure(vip)
+	}
+
+	// Confirm it is now using relay.
+	if fc.GetDecision(vip) != DecisionRelay {
+		t.Fatal("expected DecisionRelay after consecutive failures")
+	}
+	stats := fc.GetPeerStats(vip)
+	if stats == nil || !stats.UsingRelay {
+		t.Fatal("expected UsingRelay=true in peer stats")
+	}
+
+	// Simulate a successful ICE restart: call ResetPeer.
+	fc.ResetPeer(vip)
+
+	// After reset the peer state must be gone — decision reverts to direct.
+	if fc.GetDecision(vip) != DecisionDirect {
+		t.Error("expected DecisionDirect after ResetPeer")
+	}
+	if fc.GetPeerStats(vip) != nil {
+		t.Error("expected nil peer stats after ResetPeer (state should be deleted)")
+	}
+}
+
+// TestFallbackControllerResetPeerClearsCounts verifies that ConsecutiveFails
+// is also zeroed (via deletion) so failures before the restart don't bleed
+// into subsequent failure tracking.
+func TestFallbackControllerResetPeerClearsCounts(t *testing.T) {
+	cfg := &FallbackConfig{
+		FailureThreshold:    5,
+		DirectRetryInterval: 60 * time.Second,
+	}
+	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
+	fc := NewFallbackController(cfg, logger)
+
+	vip := net.IPv4(10, 7, 0, 6)
+
+	// Record 4 failures (one below threshold — peer is still direct but has count=4).
+	for i := 0; i < 4; i++ {
+		fc.RecordFailure(vip)
+	}
+	stats := fc.GetPeerStats(vip)
+	if stats == nil || stats.ConsecutiveFails != 4 {
+		t.Fatalf("expected ConsecutiveFails=4, got %v", stats)
+	}
+
+	// Reset as if ICE restart succeeded.
+	fc.ResetPeer(vip)
+
+	// Record a single failure after reset — should not immediately flip to relay
+	// because the counter should have been cleared.
+	decision := fc.RecordFailure(vip)
+	if decision != DecisionDirect {
+		t.Errorf("expected DecisionDirect after single failure post-reset, got %v", decision)
+	}
+}
+
 func TestDefaultFallbackConfig(t *testing.T) {
 	cfg := DefaultFallbackConfig()
 

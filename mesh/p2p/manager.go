@@ -87,6 +87,9 @@ type Manager struct {
 	// Connection optimization
 	pathCache *PathCache // Remember successful paths
 
+	// Fallback controller tracks relay vs direct state per peer
+	fallback *FallbackController
+
 	// ICE restart configuration
 	iceRestartCooldown    time.Duration
 	iceQualityThreshold   float64 // Restart if quality drops below this (0-100)
@@ -98,6 +101,11 @@ type Manager struct {
 
 	// Incoming data handler
 	dataHandler func(srcVIP net.IP, data []byte)
+
+	// mdns is the optional mDNS service used for LAN peer discovery.
+	// When set, candidates from mDNS peers are only used after the peer's
+	// VIP ownership has been confirmed by a successful X25519 handshake.
+	mdns *MDNSService
 
 	// activeHP is the HolePuncher currently waiting for packets (if any).
 	// Protected by activeHPMu.
@@ -218,6 +226,7 @@ func NewManager(cfg *Config, signalClient *signal.Client, logger *slog.Logger) (
 		spoofConfig:         cfg.SpoofConfig,
 		spoofInfo:           spoofInfo,
 		pathCache:           NewPathCache(24 * time.Hour),
+		fallback:            NewFallbackController(nil, logger),
 		iceRestartEnabled:   cfg.EnableICERestart,
 		iceRestartCooldown:  cfg.ICERestartCooldown,
 		iceQualityThreshold: cfg.ICEQualityThreshold,

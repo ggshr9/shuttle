@@ -4,6 +4,7 @@ import (
 	"context"
 	"log/slog"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/shuttleX/shuttle/plugin"
@@ -21,6 +22,8 @@ type ObservabilityManager struct {
 
 	subMu sync.RWMutex
 	subs  map[chan Event]struct{}
+
+	droppedEvents atomic.Int64
 
 	bgWg sync.WaitGroup
 }
@@ -117,8 +120,15 @@ func (om *ObservabilityManager) Emit(ev Event) { //nolint:gocritic // hugeParam:
 		select {
 		case ch <- ev:
 		default:
+			om.droppedEvents.Add(1)
 		}
 	}
+}
+
+// DroppedEvents returns the total number of events dropped due to full
+// subscriber channel buffers since this manager was created.
+func (om *ObservabilityManager) DroppedEvents() int64 {
+	return om.droppedEvents.Load()
 }
 
 // EmitConnectionEvent is a convenience method that constructs and emits a

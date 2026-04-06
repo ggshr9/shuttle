@@ -390,3 +390,104 @@ func TestAddPeerAddress(t *testing.T) {
 		t.Errorf("Addresses length = %d, want 2", len(peer.Addresses))
 	}
 }
+
+// TestMDNSPeerVerifiedFlag verifies that the Verified field is false by default
+// and that MarkVerified flips it to true for the matching VIP.
+func TestMDNSPeerVerifiedFlag(t *testing.T) {
+	service := NewMDNSService("test", nil)
+
+	vip1 := net.ParseIP("10.7.0.2")
+	vip2 := net.ParseIP("10.7.0.3")
+
+	service.peers["peer-a"] = &MDNSPeer{
+		Name:     "peer-a",
+		VIP:      vip1,
+		Verified: false,
+	}
+	service.peers["peer-b"] = &MDNSPeer{
+		Name:     "peer-b",
+		VIP:      vip2,
+		Verified: false,
+	}
+
+	// Initially both peers are unverified.
+	peerA := service.GetPeerByVIP(vip1)
+	if peerA == nil {
+		t.Fatal("GetPeerByVIP returned nil for peer-a")
+	}
+	if peerA.Verified {
+		t.Error("peer-a should be unverified before handshake")
+	}
+
+	// Verify peer-a by VIP.
+	service.MarkVerified(vip1)
+
+	peerA = service.GetPeerByVIP(vip1)
+	if peerA == nil {
+		t.Fatal("GetPeerByVIP returned nil for peer-a after MarkVerified")
+	}
+	if !peerA.Verified {
+		t.Error("peer-a should be verified after MarkVerified")
+	}
+
+	// peer-b must remain unverified.
+	peerB := service.GetPeerByVIP(vip2)
+	if peerB == nil {
+		t.Fatal("GetPeerByVIP returned nil for peer-b")
+	}
+	if peerB.Verified {
+		t.Error("peer-b should still be unverified")
+	}
+}
+
+// TestMDNSGetPeerByVIP tests looking up a peer by VIP.
+func TestMDNSGetPeerByVIP(t *testing.T) {
+	service := NewMDNSService("test", nil)
+
+	vip := net.ParseIP("10.7.0.5")
+	service.peers["my-peer"] = &MDNSPeer{
+		Name: "my-peer",
+		VIP:  vip,
+		Port: 54321,
+	}
+
+	// Found case.
+	peer := service.GetPeerByVIP(vip)
+	if peer == nil {
+		t.Fatal("GetPeerByVIP returned nil for existing peer")
+	}
+	if peer.Port != 54321 {
+		t.Errorf("peer.Port = %d, want 54321", peer.Port)
+	}
+
+	// Not found case.
+	peer = service.GetPeerByVIP(net.ParseIP("10.7.0.99"))
+	if peer != nil {
+		t.Error("GetPeerByVIP should return nil for unknown VIP")
+	}
+}
+
+// TestMDNSMarkVerifiedUnknownVIP verifies that MarkVerified is a no-op for
+// an unknown VIP (no panic, no spurious side effects).
+func TestMDNSMarkVerifiedUnknownVIP(t *testing.T) {
+	service := NewMDNSService("test", nil)
+	// Should not panic.
+	service.MarkVerified(net.ParseIP("10.7.0.99"))
+}
+
+// TestMDNSVerifiedFlagNotSetOnNewDiscovery ensures that freshly discovered
+// peers always start unverified, regardless of any previous state.
+func TestMDNSVerifiedFlagNotSetOnNewDiscovery(t *testing.T) {
+	service := NewMDNSService("test-host", nil)
+
+	// Simulate discovery of a new peer via mDNS PTR record.
+	service.updatePeer("evil-peer._shuttle._udp.local.", nil, 120)
+
+	peer := service.GetPeer("evil-peer")
+	if peer == nil {
+		t.Fatal("updatePeer did not create peer entry")
+	}
+	if peer.Verified {
+		t.Error("newly discovered mDNS peer must not be pre-verified")
+	}
+}

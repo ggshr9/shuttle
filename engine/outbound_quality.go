@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"math"
 	"sort"
 	"time"
 )
@@ -19,9 +20,16 @@ type qualityEntry struct {
 }
 
 // qualityScore computes a combined score (lower is better).
-// Formula: latency_ms + loss_rate * 1000
+// Formula: latency_ms + 5000*sqrt(loss)  (Mathis-inspired loss penalty)
+// Examples: 1% loss ≈ +500ms, 5% ≈ +1118ms, 10% ≈ +1581ms
 func qualityScore(latency time.Duration, loss float64) float64 {
-	return float64(latency.Milliseconds()) + loss*1000
+	ms := float64(latency.Milliseconds())
+	if loss <= 0 {
+		return ms
+	}
+	// Mathis-inspired: 5000 * sqrt(loss)
+	lossPenalty := 5000 * math.Sqrt(loss)
+	return ms + lossPenalty
 }
 
 // rankByQuality sorts entries by quality score (best first).

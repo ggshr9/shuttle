@@ -849,3 +849,167 @@ func TestSetTransportStrategyNoSelector(t *testing.T) {
 	}
 }
 
+// ---------------------------------------------------------------------------
+// TestIsRouterOnlyChange
+// ---------------------------------------------------------------------------
+
+func TestIsRouterOnlyChange(t *testing.T) {
+	base := config.DefaultClientConfig()
+	base.Server.Addr = "server:443"
+	base.Transport.H3.Enabled = true
+
+	t.Run("nil old config returns false", func(t *testing.T) {
+		if isRouterOnlyChange(nil, base) {
+			t.Error("expected false for nil oldCfg")
+		}
+	})
+
+	t.Run("nil new config returns false", func(t *testing.T) {
+		if isRouterOnlyChange(base, nil) {
+			t.Error("expected false for nil newCfg")
+		}
+	})
+
+	t.Run("identical configs returns true", func(t *testing.T) {
+		if !isRouterOnlyChange(base, base.DeepCopy()) {
+			t.Error("expected true for identical configs")
+		}
+	})
+
+	t.Run("routing rule change returns true", func(t *testing.T) {
+		newCfg := base.DeepCopy()
+		newCfg.Routing.Rules = append(newCfg.Routing.Rules, config.RouteRule{
+			Domains: "example.com",
+			Action:  "direct",
+		})
+		if !isRouterOnlyChange(base, newCfg) {
+			t.Error("expected true for routing-only change (added routing rule)")
+		}
+	})
+
+	t.Run("DNS server change returns true", func(t *testing.T) {
+		newCfg := base.DeepCopy()
+		newCfg.Routing.DNS.Domestic = "8.8.8.8"
+		if !isRouterOnlyChange(base, newCfg) {
+			t.Error("expected true for routing-only change (changed DNS domestic)")
+		}
+	})
+
+	t.Run("rule provider change returns true", func(t *testing.T) {
+		newCfg := base.DeepCopy()
+		newCfg.RuleProviders = append(newCfg.RuleProviders, config.RuleProviderConfig{
+			Name: "test-provider",
+			URL:  "https://example.com/rules.yaml",
+		})
+		if !isRouterOnlyChange(base, newCfg) {
+			t.Error("expected true for routing-only change (added rule provider)")
+		}
+	})
+
+	t.Run("server address change returns false", func(t *testing.T) {
+		newCfg := base.DeepCopy()
+		newCfg.Server.Addr = "other-server:443"
+		if isRouterOnlyChange(base, newCfg) {
+			t.Error("expected false for server address change")
+		}
+	})
+
+	t.Run("transport change returns false", func(t *testing.T) {
+		newCfg := base.DeepCopy()
+		// CDN is disabled by default — enabling it is a real transport change.
+		newCfg.Transport.CDN.Enabled = true
+		if isRouterOnlyChange(base, newCfg) {
+			t.Error("expected false for transport change")
+		}
+	})
+
+	t.Run("mesh change returns false", func(t *testing.T) {
+		newCfg := base.DeepCopy()
+		newCfg.Mesh.Enabled = true
+		if isRouterOnlyChange(base, newCfg) {
+			t.Error("expected false for mesh config change")
+		}
+	})
+}
+
+// ---------------------------------------------------------------------------
+// TestReloadRouterOnly
+// ---------------------------------------------------------------------------
+
+func TestReloadRouterOnly(t *testing.T) {
+	cfg := config.DefaultClientConfig()
+	cfg.Server.Addr = "server:443"
+	cfg.Transport.H3.Enabled = true
+	eng := New(cfg)
+
+	// Simulate a running engine by setting state and a non-nil router placeholder.
+	eng.mu.Lock()
+	eng.state = StateRunning
+	eng.parentCtx = context.Background()
+	eng.mu.Unlock()
+
+	// Collect events from the engine.
+	events := eng.Subscribe()
+
+	// Build a new config that only changes a routing rule.
+	newCfg := cfg.DeepCopy()
+	newCfg.Routing.Rules = append(newCfg.Routing.Rules, config.RouteRule{
+		Domains: "example.com",
+		Action:  "direct",
+	})
+
+	// Call reloadRouterOnly directly (bypasses lifecycle lock).
+	if err := eng.reloadRouterOnly(newCfg); err != nil {
+		t.Fatalf("reloadRouterOnly returned error: %v", err)
+	}
+
+	// The engine config must have been updated.
+	got := eng.Config()
+	if len(got.Routing.Rules) != len(newCfg.Routing.Rules) {
+		t.Errorf("routing rules not updated: got %d rules, want %d", len(got.Routing.Rules), len(newCfg.Routing.Rules))
+	}
+
+	// The engine state must still be Running (no stop happened).
+	eng.mu.RLock()
+	state := eng.state
+	eng.mu.RUnlock()
+	if state != StateRunning {
+		t.Errorf("engine state after router-only reload = %v, want running", state)
+	}
+
+	// A EventConfigReloaded event must have been emitted.
+	select {
+	case ev := <-events:
+		if ev.Type != EventConfigReloaded {
+			t.Errorf("expected EventConfigReloaded, got %v", ev.Type)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for EventConfigReloaded")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// TestReloadDetectsRouterOnlyFastPath
+// ---------------------------------------------------------------------------
+
+func TestReloadDetectsRouterOnlyFastPath(t *testing.T) {
+	cfg := config.DefaultClientConfig()
+	cfg.Server.Addr = "server:443"
+	cfg.Transport.H3.Enabled = true
+
+	// isRouterOnlyChange must return true for a routing-only delta and false for a
+	// transport delta — verified independently of a live engine to avoid touching
+	// any real network or system state.
+	routingOnly := cfg.DeepCopy()
+	routingOnly.Routing.Default = "direct"
+	if !isRouterOnlyChange(cfg, routingOnly) {
+		t.Error("routing default change should be detected as router-only")
+	}
+
+	transportChange := cfg.DeepCopy()
+	transportChange.Transport.CDN.Enabled = true
+	if isRouterOnlyChange(cfg, transportChange) {
+		t.Error("transport change should NOT be detected as router-only")
+	}
+}
+
