@@ -2,6 +2,9 @@ package subscription
 
 import (
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestParseSingbox_Basic(t *testing.T) {
@@ -176,4 +179,56 @@ func TestIsSingboxFormat(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestParseSingbox_PreservesTypeAndOptions(t *testing.T) {
+	jsonData := []byte(`{
+		"outbounds": [
+			{
+				"type": "shadowsocks",
+				"tag": "ss-out",
+				"server": "1.2.3.4",
+				"server_port": 443,
+				"method": "aes-256-gcm",
+				"password": "secret",
+				"multiplex": {"enabled": true, "protocol": "smux"}
+			},
+			{
+				"type": "vless",
+				"tag": "vless-out",
+				"server": "5.6.7.8",
+				"server_port": 443,
+				"uuid": "abc-123",
+				"flow": "xtls-rprx-vision",
+				"tls": {"enabled": true, "server_name": "example.com"}
+			},
+			{
+				"type": "direct",
+				"tag": "direct-out"
+			}
+		]
+	}`)
+	endpoints, err := parseSingbox(jsonData)
+	require.NoError(t, err)
+	require.Len(t, endpoints, 2) // direct is skipped
+
+	// SS
+	assert.Equal(t, "shadowsocks", endpoints[0].Type)
+	assert.Equal(t, "aes-256-gcm", endpoints[0].Options["method"])
+	mux, ok := endpoints[0].Options["multiplex"].(map[string]any)
+	require.True(t, ok)
+	assert.Equal(t, true, mux["enabled"])
+
+	// VLESS
+	assert.Equal(t, "vless", endpoints[1].Type)
+	assert.Equal(t, "abc-123", endpoints[1].Password)
+	assert.Equal(t, "example.com", endpoints[1].SNI)
+	assert.Equal(t, "xtls-rprx-vision", endpoints[1].Options["flow"])
+
+	// Promoted fields NOT in Options
+	assert.Nil(t, endpoints[0].Options["type"])
+	assert.Nil(t, endpoints[0].Options["tag"])
+	assert.Nil(t, endpoints[0].Options["server"])
+	assert.Nil(t, endpoints[0].Options["server_port"])
+	assert.Nil(t, endpoints[0].Options["password"])
 }
