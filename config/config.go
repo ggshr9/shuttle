@@ -52,10 +52,12 @@ type RetryConfig struct {
 
 // ServerEndpoint defines a remote server.
 type ServerEndpoint struct {
-	Addr     string `yaml:"addr" json:"addr"`
-	Name     string `yaml:"name" json:"name"`
-	Password string `yaml:"password" json:"password"`
-	SNI      string `yaml:"sni" json:"sni"`
+	Addr     string         `yaml:"addr" json:"addr"`
+	Name     string         `yaml:"name" json:"name"`
+	Password string         `yaml:"password" json:"password"`
+	SNI      string         `yaml:"sni" json:"sni"`
+	Type     string         `yaml:"type,omitempty" json:"type,omitempty"`
+	Options  map[string]any `yaml:"options,omitempty" json:"options,omitempty"`
 }
 
 // LogConfig configures logging.
@@ -171,13 +173,30 @@ func SaveServerConfig(path string, cfg *ServerConfig) error {
 	return os.WriteFile(path, data, 0600)
 }
 
+// deepCopyServerEndpoint returns an independent copy of a ServerEndpoint,
+// including a fresh copy of the Options map.
+func deepCopyServerEndpoint(ep ServerEndpoint) ServerEndpoint {
+	if ep.Options != nil {
+		opts := make(map[string]any, len(ep.Options))
+		for k, v := range ep.Options {
+			opts[k] = v
+		}
+		ep.Options = opts
+	}
+	return ep
+}
+
 // DeepCopy returns a fully independent copy of the config.
 func (c *ClientConfig) DeepCopy() *ClientConfig {
 	cp := *c
+	// Deep-copy the singular Server's Options map.
+	cp.Server = deepCopyServerEndpoint(c.Server)
 	// Copy slices that contain reference types
 	if c.Servers != nil {
 		cp.Servers = make([]ServerEndpoint, len(c.Servers))
-		copy(cp.Servers, c.Servers)
+		for i, ep := range c.Servers {
+			cp.Servers[i] = deepCopyServerEndpoint(ep)
+		}
 	}
 	if c.Subscriptions != nil {
 		cp.Subscriptions = make([]SubscriptionConfig, len(c.Subscriptions))

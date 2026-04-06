@@ -41,6 +41,17 @@ func (e *Engine) startInbounds(ctx context.Context, cfg *config.ClientConfig) ([
 				return nil, err
 			}
 			outbounds[outCfg.Tag] = ob
+		} else if df := adapter.GetDialerFactory(outCfg.Type); df != nil {
+			// Per-protocol outbound (shadowsocks, vless, trojan, vmess, hysteria2, wireguard, etc.)
+			var optsMap map[string]any
+			if err := json.Unmarshal(outCfg.Options, &optsMap); err != nil {
+				return nil, fmt.Errorf("parse %s outbound %q options: %w", outCfg.Type, outCfg.Tag, err)
+			}
+			dialer, err := df.NewDialer(optsMap, adapter.FactoryOptions{Logger: e.logger})
+			if err != nil {
+				return nil, fmt.Errorf("create %s outbound %q: %w", outCfg.Type, outCfg.Tag, err)
+			}
+			outbounds[outCfg.Tag] = NewDialerOutbound(outCfg.Tag, dialer)
 		} else {
 			ob, err := adapter.CreateOutbound(outCfg.Type, outCfg.Tag, outCfg.Options, adapter.OutboundDeps{Logger: e.logger})
 			if err != nil {
@@ -54,24 +65,27 @@ func (e *Engine) startInbounds(ctx context.Context, cfg *config.ClientConfig) ([
 	// then plugin chain (metrics, conntrack, logger).
 	chain := e.obs.Chain()
 	for tag, ob := range outbounds {
-		if ob.Type() == "proxy" {
-			tagName := tag // capture for closure
-			wrapped := NewResilientOutbound(ob, ResilientOutboundConfig{
-				CircuitBreaker: e.circuitBreaker,
-				RetryConfig:    e.buildRetryConfig(cfg.Retry),
-				OnRetry: func(attempt int, err error) {
-					e.obs.Emit(Event{
-						Type:      EventRetry,
-						Timestamp: time.Now(),
-						Message:   fmt.Sprintf("retry attempt %d for %s: %v", attempt, tagName, err),
-					})
-				},
-			})
-			if chain != nil {
-				outbounds[tag] = NewChainOutbound(wrapped, chain)
-			} else {
-				outbounds[tag] = wrapped
-			}
+		switch ob.Type() {
+		case "direct", "reject", "mesh", "group":
+			continue // don't wrap infrastructure outbounds
+		}
+		// Wrap all proxy-like outbounds (proxy, shadowsocks, vless, trojan, etc.)
+		tagName := tag // capture for closure
+		wrapped := NewResilientOutbound(ob, ResilientOutboundConfig{
+			CircuitBreaker: e.circuitBreaker,
+			RetryConfig:    e.buildRetryConfig(cfg.Retry),
+			OnRetry: func(attempt int, err error) {
+				e.obs.Emit(Event{
+					Type:      EventRetry,
+					Timestamp: time.Now(),
+					Message:   fmt.Sprintf("retry attempt %d for %s: %v", attempt, tagName, err),
+				})
+			},
+		})
+		if chain != nil {
+			outbounds[tag] = NewChainOutbound(wrapped, chain)
+		} else {
+			outbounds[tag] = wrapped
 		}
 	}
 
