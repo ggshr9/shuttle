@@ -736,3 +736,9 @@ func (t *TUNServer) MeshReceiveLoop(ctx context.Context) {
 	}
 }
 
+// maskBits returns the prefix length of an IP mask.
+func maskBits(m net.IPMask) int {
+	ones, _ := m.Size()
+	return ones
+}
+
