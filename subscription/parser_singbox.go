@@ -18,6 +18,9 @@ var skipOutboundTypes = map[string]bool{
 
 // singboxPromotedFields are fields extracted into ServerEndpoint top-level
 // fields and must NOT be stored in Options.
+// Note: "tls" is intentionally NOT promoted — the full TLS block must pass
+// through in Options so factories can access enabled, insecure, alpn, etc.
+// SNI is extracted separately from full["tls"]["server_name"] below.
 var singboxPromotedFields = map[string]bool{
 	"type":        true,
 	"tag":         true,
@@ -25,7 +28,6 @@ var singboxPromotedFields = map[string]bool{
 	"server_port": true,
 	"password":    true,
 	"uuid":        true,
-	"tls":         true,
 }
 
 // singboxBaseOutbound holds only the fields we promote to ServerEndpoint.

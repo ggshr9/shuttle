@@ -292,3 +292,43 @@ func TestIsClashFormat_StillDetects(t *testing.T) {
 	data := []byte("proxies:\n  - name: test\n    type: ss\n")
 	assert.True(t, isClashFormat(data))
 }
+
+func TestParseClash_ServerNameHyphenSNI(t *testing.T) {
+	// Clash configs sometimes use "server-name" (hyphenated) for SNI.
+	// Verify it is promoted to ep.SNI and excluded from Options.
+	yamlData := []byte(`proxies:
+  - name: trojan-hyphen
+    type: trojan
+    server: 1.2.3.4
+    port: 443
+    password: secret
+    server-name: sni.example.com
+`)
+	endpoints, err := parseClash(yamlData)
+	require.NoError(t, err)
+	require.Len(t, endpoints, 1)
+
+	ep := endpoints[0]
+	assert.Equal(t, "sni.example.com", ep.SNI, "server-name must be extracted as SNI")
+	// Must not leak into Options.
+	if ep.Options != nil {
+		assert.Nil(t, ep.Options["server-name"], "server-name must not appear in Options")
+	}
+}
+
+func TestParseClash_SNIFallbackPriority(t *testing.T) {
+	// When multiple SNI-related fields are present, "sni" takes precedence.
+	yamlData := []byte(`proxies:
+  - name: priority-test
+    type: trojan
+    server: 1.2.3.4
+    port: 443
+    password: secret
+    sni: primary.example.com
+    server-name: secondary.example.com
+`)
+	endpoints, err := parseClash(yamlData)
+	require.NoError(t, err)
+	require.Len(t, endpoints, 1)
+	assert.Equal(t, "primary.example.com", endpoints[0].SNI, "sni field must take priority over server-name")
+}

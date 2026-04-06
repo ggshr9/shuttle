@@ -50,15 +50,16 @@ func containsProxiesKey(data []byte) bool {
 // promotedFields are fields extracted into ServerEndpoint top-level fields
 // and must NOT be stored in Options.
 var promotedFields = map[string]bool{
-	"name":      true,
-	"type":      true,
-	"server":    true,
-	"port":      true,
-	"password":  true,
-	"uuid":      true,
-	"sni":       true,
-	"servername": true,
-	"servname":  true,
+	"name":        true,
+	"type":        true,
+	"server":      true,
+	"port":        true,
+	"password":    true,
+	"uuid":        true,
+	"sni":         true,
+	"servername":  true,
+	"servname":    true,
+	"server-name": true,
 }
 
 // parseClash parses a Clash YAML subscription and returns a slice of
@@ -101,10 +102,13 @@ func parseClash(data []byte) ([]config.ServerEndpoint, error) {
 				ep.Password = stringField(p, "password")
 			}
 
-			// SNI: try "sni" first, then "servername", then "servname".
+			// SNI: try "sni" first, then "servername", "server-name", then "servname".
 			ep.SNI = stringField(p, "sni")
 			if ep.SNI == "" {
 				ep.SNI = stringField(p, "servername")
+			}
+			if ep.SNI == "" {
+				ep.SNI = stringField(p, "server-name")
 			}
 			if ep.SNI == "" {
 				ep.SNI = stringField(p, "servname")
