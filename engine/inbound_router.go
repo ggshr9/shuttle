@@ -33,6 +33,23 @@ func (r *inboundRouter) RouteConnection(ctx context.Context, meta *adapter.ConnM
 		return nil, err
 	}
 
+	// Fake-ip reverse lookup: if the destination IP is a fake IP, recover the
+	// original domain so routing rules can match on it and the proxy outbound
+	// sends the real hostname to the remote server.
+	if ip != nil && r.dnsResolver.IsFakeIP(ip) {
+		if domain, ok := r.dnsResolver.ReverseFakeIP(ip); ok {
+			host = domain
+			if port != "" {
+				meta.Destination = net.JoinHostPort(domain, port)
+			} else {
+				meta.Destination = domain
+			}
+			// Clear resolved IP so the direct outbound path below will
+			// re-resolve the real domain to a real IP.
+			ip = nil
+		}
+	}
+
 	procName := meta.Process
 	if procName == "" {
 		procName = proxy.ProcessFromContext(ctx)

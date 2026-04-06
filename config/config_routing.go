@@ -67,6 +67,10 @@ type DNSConfig struct {
 	DomesticDoH    string    `yaml:"domestic_doh" json:"domestic_doh"`       // DoH URL for domestic queries (e.g., "https://dns.alidns.com/dns-query")
 	StripECS       bool      `yaml:"strip_ecs" json:"strip_ecs"`            // Strip EDNS Client Subnet
 	PersistentConn *bool     `yaml:"persistent_conn" json:"persistent_conn"` // Persistent HTTP/2 connections for DoH (default true)
+	Mode           string   `yaml:"mode,omitempty" json:"mode,omitempty"`                       // "normal" or "fake-ip"
+	FakeIPRange    string   `yaml:"fake_ip_range,omitempty" json:"fake_ip_range,omitempty"`     // CIDR for fake-ip pool (default "198.18.0.0/15")
+	FakeIPFilter   []string `yaml:"fake_ip_filter,omitempty" json:"fake_ip_filter,omitempty"`   // domains to bypass fake-ip
+	Persist        bool     `yaml:"persist,omitempty" json:"persist,omitempty"`                  // persist fake-ip mappings across restarts
 }
 
 // DNSRemote configures the remote DNS server.

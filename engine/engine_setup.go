@@ -134,6 +134,9 @@ func (e *Engine) buildRouter(cfg *config.ClientConfig, ruleProviders map[string]
 		DomesticDoH:    cfg.Routing.DNS.DomesticDoH,
 		StripECS:       cfg.Routing.DNS.StripECS,
 		PersistentConn: persistentConn,
+		Mode:           cfg.Routing.DNS.Mode,
+		FakeIPRange:    cfg.Routing.DNS.FakeIPRange,
+		FakeIPFilter:   cfg.Routing.DNS.FakeIPFilter,
 	}, geoIPDB, e.logger)
 
 	var prefetcher *router.Prefetcher
