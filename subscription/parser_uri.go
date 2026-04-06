@@ -2,6 +2,7 @@ package subscription
 
 import (
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"net/url"
 	"strconv"
@@ -11,7 +12,7 @@ import (
 )
 
 // ParseURI parses a single proxy URI and returns a ProxyNode.
-// Supported schemes: ss://, vless://, trojan://
+// Supported schemes: ss://, vless://, trojan://, hysteria2://, hy2://, vmess://
 func ParseURI(uri string) (*provider.ProxyNode, error) {
 	switch {
 	case strings.HasPrefix(uri, "ss://"):
@@ -20,6 +21,10 @@ func ParseURI(uri string) (*provider.ProxyNode, error) {
 		return parseVLESSURI(uri)
 	case strings.HasPrefix(uri, "trojan://"):
 		return parseTrojanURI(uri)
+	case strings.HasPrefix(uri, "hysteria2://"), strings.HasPrefix(uri, "hy2://"):
+		return parseHysteria2URI(uri)
+	case strings.HasPrefix(uri, "vmess://"):
+		return parseVMessURI(uri)
 	default:
 		return nil, fmt.Errorf("unsupported URI scheme: %q", uri)
 	}
@@ -216,6 +221,130 @@ func parseTrojanURI(raw string) (*provider.ProxyNode, error) {
 		Name:    name,
 		Type:    "trojan",
 		Server:  host,
+		Port:    port,
+		Options: opts,
+	}, nil
+}
+
+// parseHysteria2URI parses a Hysteria2 URI.
+// Format: hysteria2://password@host:port?sni=xxx&insecure=1#name
+// Also accepts the hy2:// alias.
+func parseHysteria2URI(raw string) (*provider.ProxyNode, error) {
+	u, err := url.Parse(raw)
+	if err != nil {
+		return nil, fmt.Errorf("hysteria2:// URI parse error: %w", err)
+	}
+
+	name, _ := url.PathUnescape(u.Fragment)
+
+	password := u.User.Username()
+	if password == "" {
+		return nil, fmt.Errorf("hysteria2:// URI: missing password")
+	}
+
+	host, portStr, err := splitHostPort(u.Host)
+	if err != nil {
+		return nil, fmt.Errorf("hysteria2:// URI: %w", err)
+	}
+	port, err := strconv.Atoi(portStr)
+	if err != nil {
+		return nil, fmt.Errorf("hysteria2:// URI: invalid port %q", portStr)
+	}
+
+	opts := map[string]any{
+		"password": password,
+	}
+
+	// Copy all query parameters into options.
+	for k, vs := range u.Query() {
+		if len(vs) > 0 {
+			opts[k] = vs[0]
+		}
+	}
+
+	return &provider.ProxyNode{
+		Name:    name,
+		Type:    "hysteria2",
+		Server:  host,
+		Port:    port,
+		Options: opts,
+	}, nil
+}
+
+// parseVMessURI parses a VMess URI.
+// Format: vmess://base64(json) where the JSON contains proxy configuration.
+// Standard fields: ps (name), add (server), port, id (UUID), scy (cipher),
+// net, host, path, tls, sni.
+func parseVMessURI(raw string) (*provider.ProxyNode, error) {
+	b64Part := strings.TrimPrefix(raw, "vmess://")
+	decoded, err := base64Decode(b64Part)
+	if err != nil {
+		return nil, fmt.Errorf("vmess:// URI: cannot decode base64: %w", err)
+	}
+
+	var v struct {
+		PS   string      `json:"ps"`
+		Add  string      `json:"add"`
+		Port interface{} `json:"port"` // can be string or number
+		ID   string      `json:"id"`
+		Scy  string      `json:"scy"`
+		Net  string      `json:"net"`
+		Host string      `json:"host"`
+		Path string      `json:"path"`
+		TLS  string      `json:"tls"`
+		SNI  string      `json:"sni"`
+	}
+	if err := json.Unmarshal([]byte(decoded), &v); err != nil {
+		return nil, fmt.Errorf("vmess:// URI: JSON decode error: %w", err)
+	}
+
+	if v.Add == "" {
+		return nil, fmt.Errorf("vmess:// URI: missing server address")
+	}
+	if v.ID == "" {
+		return nil, fmt.Errorf("vmess:// URI: missing UUID (id)")
+	}
+
+	// Port can be encoded as a JSON number or a string.
+	var port int
+	switch pv := v.Port.(type) {
+	case float64:
+		port = int(pv)
+	case string:
+		port, err = strconv.Atoi(pv)
+		if err != nil {
+			return nil, fmt.Errorf("vmess:// URI: invalid port %q", pv)
+		}
+	default:
+		return nil, fmt.Errorf("vmess:// URI: unexpected port type %T", v.Port)
+	}
+
+	opts := map[string]any{
+		"uuid": v.ID,
+	}
+	if v.Scy != "" {
+		opts["cipher"] = v.Scy
+	}
+	if v.Net != "" {
+		opts["network"] = v.Net
+	}
+	if v.Host != "" {
+		opts["host"] = v.Host
+	}
+	if v.Path != "" {
+		opts["path"] = v.Path
+	}
+	if v.TLS != "" {
+		opts["tls"] = v.TLS
+	}
+	if v.SNI != "" {
+		opts["sni"] = v.SNI
+	}
+
+	return &provider.ProxyNode{
+		Name:    v.PS,
+		Type:    "vmess",
+		Server:  v.Add,
 		Port:    port,
 		Options: opts,
 	}, nil
