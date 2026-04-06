@@ -60,9 +60,10 @@ func TestAdaptiveRecoverOnImprove(t *testing.T) {
 	t.Parallel()
 
 	ac := congestion.NewAdaptive(&congestion.AdaptiveConfig{
-		LossThreshold:  0.05,
-		SwitchCooldown: 1 * time.Nanosecond,
-		BrutalRate:     10 * 1024 * 1024,
+		LossThreshold:    0.05,
+		SwitchCooldown:   1 * time.Nanosecond,
+		RecoveryCooldown: 1 * time.Nanosecond,
+		BrutalRate:       10 * 1024 * 1024,
 	}, nil)
 
 	// Build stable RTT history so rttTrend <= 0.
@@ -348,9 +349,10 @@ func TestAdaptiveMultipleSwitchCycles(t *testing.T) {
 	t.Parallel()
 
 	ac := congestion.NewAdaptive(&congestion.AdaptiveConfig{
-		LossThreshold:  0.05,
-		SwitchCooldown: 1 * time.Nanosecond,
-		BrutalRate:     10 * 1024 * 1024,
+		LossThreshold:    0.05,
+		SwitchCooldown:   1 * time.Nanosecond,
+		RecoveryCooldown: 1 * time.Nanosecond,
+		BrutalRate:       10 * 1024 * 1024,
 	}, nil)
 
 	rtt := 50 * time.Millisecond
