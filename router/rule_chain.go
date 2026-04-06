@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"net"
 	"strings"
+
+	"github.com/shuttleX/shuttle/provider"
 )
 
 // MatchContext holds per-connection fields for rule chain matching.
@@ -78,6 +80,7 @@ type RuleMatch struct {
 	Process       []string
 	Protocol      []string
 	NetworkType   []string
+	RuleProvider  []string
 }
 
 // ---------------------------------------------------------------------------
@@ -310,12 +313,30 @@ func (m *networkTypeMatcher) Match(ctx *MatchContext) bool {
 	return ok
 }
 
+// ruleProviderMatcher matches against one or more RuleProviders.
+type ruleProviderMatcher struct {
+	providers []*provider.RuleProvider
+}
+
+func (m *ruleProviderMatcher) Match(ctx *MatchContext) bool {
+	for _, rp := range m.providers {
+		if ctx.Domain != "" && rp.MatchDomain(ctx.Domain) {
+			return true
+		}
+		if ctx.IP != nil && rp.MatchIP(ctx.IP.String()) {
+			return true
+		}
+	}
+	return false
+}
+
 // ---------------------------------------------------------------------------
 // Compiler
 // ---------------------------------------------------------------------------
 
 // CompileRuleChain builds compiled rules from rule chain entries.
-func CompileRuleChain(entries []RuleChainEntry, geoIP *GeoIPDB, geoSite *GeoSiteDB) ([]compiledRule, error) {
+// ruleProviders may be nil if no rule providers are configured.
+func CompileRuleChain(entries []RuleChainEntry, geoIP *GeoIPDB, geoSite *GeoSiteDB, ruleProviders map[string]*provider.RuleProvider) ([]compiledRule, error) {
 	rules := make([]compiledRule, 0, len(entries))
 	for i, entry := range entries {
 		var logic logicOp
@@ -371,6 +392,17 @@ func CompileRuleChain(entries []RuleChainEntry, geoIP *GeoIPDB, geoSite *GeoSite
 		}
 		if len(m.NetworkType) > 0 {
 			matchers = append(matchers, newNetworkTypeMatcher(m.NetworkType))
+		}
+		if len(m.RuleProvider) > 0 {
+			var rps []*provider.RuleProvider
+			for _, name := range m.RuleProvider {
+				rp, ok := ruleProviders[name]
+				if !ok {
+					return nil, fmt.Errorf("rule_chain[%d]: rule provider %q not found", i, name)
+				}
+				rps = append(rps, rp)
+			}
+			matchers = append(matchers, &ruleProviderMatcher{providers: rps})
 		}
 
 		if len(matchers) == 0 {

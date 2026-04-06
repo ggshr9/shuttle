@@ -157,6 +157,7 @@ func (e *Engine) buildRouter(cfg *config.ClientConfig) (*router.Router, *router.
 				Process:       entry.Match.Process,
 				Protocol:      entry.Match.Protocol,
 				NetworkType:   entry.Match.NetworkType,
+				RuleProvider:  entry.Match.RuleProvider,
 			},
 			Logic:  entry.Logic,
 			Action: entry.Action,

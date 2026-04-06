@@ -91,7 +91,7 @@ func NewRouter(cfg *RouterConfig, geoIP *GeoIPDB, geoSite *GeoSiteDB, logger *sl
 
 	// Compile the ordered rule chain (evaluated before legacy rules).
 	if len(cfg.RuleChain) > 0 {
-		compiled, err := CompileRuleChain(cfg.RuleChain, geoIP, geoSite)
+		compiled, err := CompileRuleChain(cfg.RuleChain, geoIP, geoSite, nil)
 		if err != nil {
 			logger.Error("failed to compile rule chain", "err", err)
 		} else {
