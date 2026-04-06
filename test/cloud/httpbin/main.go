@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"time"
 )
 
 func main() {
@@ -21,7 +22,7 @@ func main() {
 
 	mux.HandleFunc("/ip", func(w http.ResponseWriter, r *http.Request) {
 		host, _, _ := net.SplitHostPort(r.RemoteAddr)
-		json.NewEncoder(w).Encode(map[string]string{"origin": host})
+		_ = json.NewEncoder(w).Encode(map[string]string{"origin": host})
 	})
 
 	mux.HandleFunc("/get", func(w http.ResponseWriter, r *http.Request) {
@@ -33,7 +34,7 @@ func main() {
 		for k, v := range r.URL.Query() {
 			args[k] = strings.Join(v, ", ")
 		}
-		json.NewEncoder(w).Encode(map[string]any{
+		_ = json.NewEncoder(w).Encode(map[string]any{
 			"headers":    headers,
 			"args":       args,
 			"url":        fmt.Sprintf("http://%s%s", r.Host, r.RequestURI),
@@ -48,15 +49,20 @@ func main() {
 		for k, v := range r.Header {
 			headers[k] = strings.Join(v, ", ")
 		}
-		json.NewEncoder(w).Encode(map[string]any{"headers": headers})
+		_ = json.NewEncoder(w).Encode(map[string]any{"headers": headers})
 	})
 
 	mux.HandleFunc("/user-agent", func(w http.ResponseWriter, r *http.Request) {
-		json.NewEncoder(w).Encode(map[string]string{"user-agent": r.UserAgent()})
+		_ = json.NewEncoder(w).Encode(map[string]string{"user-agent": r.UserAgent()})
 	})
 
 	fmt.Fprintf(os.Stderr, "httpbin listening on %s\n", addr)
-	if err := http.ListenAndServe(addr, mux); err != nil {
+	srv := &http.Server{
+		Addr:              addr,
+		Handler:           mux,
+		ReadHeaderTimeout: 10 * time.Second,
+	}
+	if err := srv.ListenAndServe(); err != nil {
 		fmt.Fprintf(os.Stderr, "httpbin: %v\n", err)
 		os.Exit(1)
 	}

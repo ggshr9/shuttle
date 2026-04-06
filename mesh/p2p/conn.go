@@ -46,7 +46,6 @@ type P2PConn struct {
 	recvKey  [32]byte
 
 	sendNonce uint64
-	recvNonce uint64
 
 	lastSend atomic.Int64
 	lastRecv atomic.Int64

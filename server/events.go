@@ -76,7 +76,7 @@ func (eb *ServerEventBus) Emit(ev ServerEvent) {
 
 	for _, ch := range snapshot {
 		func() {
-			defer func() { recover() }()
+			defer func() { _ = recover() }()
 			select {
 			case ch <- ev:
 			default:

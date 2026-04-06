@@ -59,8 +59,8 @@ func (sc *statsCollector) collect() {
 		case webrtc.ICECandidatePairStats:
 			if v.Nominated {
 				stats.RTT = time.Duration(v.CurrentRoundTripTime * float64(time.Second))
-				stats.BytesSent = uint64(v.BytesSent)
-				stats.BytesRecv = uint64(v.BytesReceived)
+				stats.BytesSent = v.BytesSent
+				stats.BytesRecv = v.BytesReceived
 				stats.PacketsSent = uint64(v.PacketsSent)
 				stats.PacketsRecv = uint64(v.PacketsReceived)
 			}
