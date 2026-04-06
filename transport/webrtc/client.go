@@ -17,7 +17,7 @@ import (
 	"github.com/pion/webrtc/v4"
 	"github.com/shuttleX/shuttle/transport"
 	ymux "github.com/shuttleX/shuttle/transport/mux/yamux"
-	"nhooyr.io/websocket"
+	"github.com/coder/websocket"
 )
 
 // ClientConfig holds configuration for a WebRTC client transport.

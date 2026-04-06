@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"time"
 
-	"nhooyr.io/websocket"
+	"github.com/coder/websocket"
 )
 
 // SignalMessageType identifies the type of a WebSocket signaling message.
