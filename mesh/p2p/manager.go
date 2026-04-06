@@ -102,6 +102,11 @@ type Manager struct {
 	// Incoming data handler
 	dataHandler func(srcVIP net.IP, data []byte)
 
+	// mdns is the optional mDNS service used for LAN peer discovery.
+	// When set, candidates from mDNS peers are only used after the peer's
+	// VIP ownership has been confirmed by a successful X25519 handshake.
+	mdns *MDNSService
+
 	// activeHP is the HolePuncher currently waiting for packets (if any).
 	// Protected by activeHPMu.
 	activeHPMu sync.Mutex

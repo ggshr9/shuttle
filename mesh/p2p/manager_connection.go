@@ -73,8 +73,26 @@ func (m *Manager) Connect(ctx context.Context, dstVIP net.IP) error {
 
 	m.logger.Info("p2p: initiating connection", "peer", dstVIP)
 
+	// Build local candidate list, augmenting with a verified mDNS host
+	// candidate when one is available (fast LAN path on reconnect).
+	candidates := m.candidates
+	m.mu.RLock()
+	mdnsSvc := m.mdns
+	m.mu.RUnlock()
+	if mdnsSvc != nil {
+		if mdnsPeer := mdnsSvc.GetPeerByVIP(dstVIP); mdnsPeer != nil && mdnsPeer.Verified && mdnsPeer.Port > 0 {
+			for _, addr := range mdnsPeer.Addresses {
+				hostCandidate := NewCandidate(CandidateHost, &net.UDPAddr{IP: addr, Port: mdnsPeer.Port})
+				candidates = append(candidates, hostCandidate)
+			}
+			m.logger.Debug("p2p: added verified mDNS host candidates",
+				"peer", dstVIP,
+				"count", len(mdnsPeer.Addresses))
+		}
+	}
+
 	// Convert candidates to signal format
-	candidateInfos := m.candidatesToInfo(m.candidates)
+	candidateInfos := m.candidatesToInfo(candidates)
 
 	// Perform signaling handshake
 	result, err := m.signalClient.Handshake(ctx, dstVIP, m.localPub, candidateInfos, m.holePunchTimeout)
@@ -114,6 +132,16 @@ func (m *Manager) Connect(ctx context.Context, dstVIP net.IP) error {
 		m.markFailed(key)
 		return fmt.Errorf("p2p: derive shared secret: %w", err)
 	}
+
+	// X25519 handshake succeeded — the remote peer owns this VIP.
+	// Mark it verified in mDNS so future reconnects can use the LAN shortcut.
+	m.mu.RLock()
+	mdnsSvcMark := m.mdns
+	m.mu.RUnlock()
+	if mdnsSvcMark != nil {
+		mdnsSvcMark.MarkVerified(dstVIP)
+	}
+
 	sendKey, recvKey, err := DeriveP2PKeys(sharedSecret, true)
 	if err != nil {
 		m.markFailed(key)
@@ -268,6 +296,15 @@ func (m *Manager) handleConnect(msg *signal.Message) {
 			m.markFailed(key)
 			return
 		}
+
+		// X25519 handshake succeeded — mark this VIP as verified in mDNS.
+		m.mu.RLock()
+		mdnsSvc := m.mdns
+		m.mu.RUnlock()
+		if mdnsSvc != nil {
+			mdnsSvc.MarkVerified(msg.SrcVIP)
+		}
+
 		sendKey, recvKey, err := DeriveP2PKeys(sharedSecret, false)
 		if err != nil {
 			m.logger.Debug("p2p: derive keys failed", "peer", msg.SrcVIP, "err", err)

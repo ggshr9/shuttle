@@ -276,6 +276,15 @@ func (m *Manager) upnpRefreshLoop() {
 	}
 }
 
+// SetMDNS attaches an MDNSService for LAN peer discovery. mDNS-advertised
+// candidates are gated behind Verified=true (set by MarkVerified after the
+// X25519 handshake) to prevent VIP spoofing attacks on the local network.
+func (m *Manager) SetMDNS(svc *MDNSService) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.mdns = svc
+}
+
 // pathCacheCleanupLoop periodically cleans up expired path cache entries.
 func (m *Manager) pathCacheCleanupLoop() {
 	ticker := time.NewTicker(1 * time.Hour)

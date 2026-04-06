@@ -38,12 +38,13 @@ const (
 
 // MDNSPeer represents a discovered peer on the local network.
 type MDNSPeer struct {
-	Name      string        // Peer instance name
-	VIP       net.IP        // Virtual IP (mesh VIP)
-	Addresses []net.IP      // Local IP addresses
-	Port      int           // P2P UDP port
-	LastSeen  time.Time     // Last time this peer was seen
+	Name      string            // Peer instance name
+	VIP       net.IP            // Virtual IP (mesh VIP)
+	Addresses []net.IP          // Local IP addresses
+	Port      int               // P2P UDP port
+	LastSeen  time.Time         // Last time this peer was seen
 	Metadata  map[string]string // Additional metadata from TXT records
+	Verified  bool              // true after X25519 crypto handshake confirms VIP ownership
 }
 
 // MDNSService handles mDNS service announcement and discovery.
@@ -218,6 +219,33 @@ func (s *MDNSService) GetPeer(name string) *MDNSPeer {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.peers[name]
+}
+
+// GetPeerByVIP returns the first peer whose advertised VIP matches.
+// Returns nil if no matching peer is found.
+func (s *MDNSService) GetPeerByVIP(vip net.IP) *MDNSPeer {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	for _, peer := range s.peers {
+		if peer.VIP != nil && peer.VIP.Equal(vip) {
+			return peer
+		}
+	}
+	return nil
+}
+
+// MarkVerified marks the mDNS peer that advertised the given VIP as verified.
+// Verification is set after a successful X25519 crypto handshake confirms that
+// the peer actually owns the VIP it broadcasts, preventing LAN VIP spoofing.
+func (s *MDNSService) MarkVerified(vip net.IP) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, peer := range s.peers {
+		if peer.VIP != nil && peer.VIP.Equal(vip) {
+			peer.Verified = true
+			return
+		}
+	}
 }
 
 // Query sends a query to discover peers.
