@@ -4,6 +4,9 @@ import (
 	"bytes"
 	"crypto/rand"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestHybridKEMKeyGeneration(t *testing.T) {
@@ -203,6 +206,20 @@ func TestHybridKEMShortCiphertext(t *testing.T) {
 			t.Errorf("Decapsulate with %d-byte ciphertext should have failed", size)
 		}
 	}
+}
+
+func TestHybridKEM_Roundtrip(t *testing.T) {
+	pub, priv, err := GenerateHybridKEMKeypair()
+	require.NoError(t, err)
+
+	ct, sharedA, err := HybridEncapsulate(pub)
+	require.NoError(t, err)
+
+	sharedB, err := HybridDecapsulate(priv, ct)
+	require.NoError(t, err)
+
+	assert.Equal(t, sharedA, sharedB)
+	assert.Len(t, sharedA, 32)
 }
 
 func TestHybridKEMNilInputs(t *testing.T) {
