@@ -27,6 +27,7 @@ type RuleMatch struct {
 	Process       []string `yaml:"process,omitempty" json:"process,omitempty"`
 	Protocol      []string `yaml:"protocol,omitempty" json:"protocol,omitempty"`
 	NetworkType   []string `yaml:"network_type,omitempty" json:"network_type,omitempty"`
+	RuleProvider  []string `yaml:"rule_provider,omitempty" json:"rule_provider,omitempty"`
 }
 
 // GeoDataConfig configures automatic GeoIP/GeoSite data management.
