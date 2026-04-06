@@ -238,6 +238,59 @@ func TestDefaultClientConfig(t *testing.T) {
 	}
 }
 
+func TestServerEndpoint_TypeAndOptions(t *testing.T) {
+	ep := ServerEndpoint{
+		Addr:     "1.2.3.4:443",
+		Name:     "my-ss-server",
+		Password: "secret",
+		Type:     "shadowsocks",
+		Options: map[string]any{
+			"method": "aes-256-gcm",
+		},
+	}
+	if ep.Type != "shadowsocks" {
+		t.Errorf("Type = %q, want %q", ep.Type, "shadowsocks")
+	}
+	if ep.Options["method"] != "aes-256-gcm" {
+		t.Errorf("Options[method] = %v, want %q", ep.Options["method"], "aes-256-gcm")
+	}
+}
+
+func TestServerEndpoint_DeepCopyOptions(t *testing.T) {
+	cfg := &ClientConfig{
+		Server: ServerEndpoint{
+			Addr: "1.2.3.4:443",
+			Type: "shadowsocks",
+			Options: map[string]any{
+				"method": "aes-256-gcm",
+			},
+		},
+		Servers: []ServerEndpoint{
+			{
+				Addr: "5.6.7.8:443",
+				Type: "trojan",
+				Options: map[string]any{
+					"sni": "example.com",
+				},
+			},
+		},
+	}
+
+	cp := cfg.DeepCopy()
+
+	// Mutate originals
+	cfg.Server.Options["method"] = "chacha20-ietf-poly1305"
+	cfg.Servers[0].Options["sni"] = "changed.com"
+
+	// Copy should be unaffected
+	if cp.Server.Options["method"] != "aes-256-gcm" {
+		t.Errorf("DeepCopy Server.Options mutated: got %v", cp.Server.Options["method"])
+	}
+	if cp.Servers[0].Options["sni"] != "example.com" {
+		t.Errorf("DeepCopy Servers[0].Options mutated: got %v", cp.Servers[0].Options["sni"])
+	}
+}
+
 // validClientConfig returns a DefaultClientConfig with required fields filled
 // in so that it passes all validation checks. DefaultClientConfig() is a GUI
 // template and intentionally omits server-specific values like public keys.
