@@ -546,6 +546,32 @@ func (t *TUNServer) calculateTOS(dstPort uint16, protocol, process string) uint8
 }
 
 // ---------------------------------------------------------------------------
+// Packet buffer pool
+// ---------------------------------------------------------------------------
+
+var tunPacketPool = sync.Pool{
+	New: func() any {
+		b := make([]byte, 1600) // slightly above max MTU
+		return &b
+	},
+}
+
+func getTUNPacket(size int) []byte {
+	bp := tunPacketPool.Get().(*[]byte)
+	b := *bp
+	if cap(b) < size {
+		b = make([]byte, size)
+		*bp = b
+	}
+	return b[:size]
+}
+
+func putTUNPacket(buf []byte) {
+	b := buf[:cap(buf)]
+	tunPacketPool.Put(&b)
+}
+
+// ---------------------------------------------------------------------------
 // Packet construction helpers
 // ---------------------------------------------------------------------------
 
@@ -562,21 +588,25 @@ func (t *TUNServer) writeTUN(pkt []byte) {
 func (t *TUNServer) sendTCPSynAck(srcIP, dstIP [4]byte, srcPort, dstPort uint16, clientISN uint32) {
 	pkt := buildTCPPacket(srcIP, dstIP, srcPort, dstPort, 0, clientISN+1, tcpFlagSYN|tcpFlagACK, nil)
 	t.writeTUN(pkt)
+	putTUNPacket(pkt)
 }
 
 func (t *TUNServer) sendTCPReset(srcIP, dstIP [4]byte, srcPort, dstPort uint16, ackNum uint32) {
 	pkt := buildTCPPacket(srcIP, dstIP, srcPort, dstPort, 0, ackNum, tcpFlagRST|tcpFlagACK, nil)
 	t.writeTUN(pkt)
+	putTUNPacket(pkt)
 }
 
 func (t *TUNServer) injectTCPData(srcIP, dstIP [4]byte, srcPort, dstPort uint16, seq uint32, data []byte, tos uint8) {
 	pkt := buildTCPPacketWithTOS(srcIP, dstIP, srcPort, dstPort, seq, 0, tcpFlagACK, data, tos)
 	t.writeTUN(pkt)
+	putTUNPacket(pkt)
 }
 
 func (t *TUNServer) injectUDPPacket(srcIP, dstIP [4]byte, srcPort, dstPort uint16, data []byte, tos uint8) {
 	pkt := buildUDPPacketWithTOS(srcIP, dstIP, srcPort, dstPort, data, tos)
 	t.writeTUN(pkt)
+	putTUNPacket(pkt)
 }
 
 // buildTCPPacket constructs a raw IPv4+TCP packet with optional TOS marking.
@@ -588,7 +618,7 @@ func buildTCPPacket(srcIP, dstIP [4]byte, srcPort, dstPort uint16, seq, ack uint
 func buildTCPPacketWithTOS(srcIP, dstIP [4]byte, srcPort, dstPort uint16, seq, ack uint32, flags byte, payload []byte, tos uint8) []byte {
 	tcpLen := 20 + len(payload)
 	totalLen := 20 + tcpLen
-	pkt := make([]byte, totalLen)
+	pkt := getTUNPacket(totalLen)
 
 	// IPv4 header
 	pkt[0] = 0x45      // version=4, IHL=5
@@ -628,7 +658,7 @@ func buildTCPPacketWithTOS(srcIP, dstIP [4]byte, srcPort, dstPort uint16, seq, a
 func buildUDPPacketWithTOS(srcIP, dstIP [4]byte, srcPort, dstPort uint16, payload []byte, tos uint8) []byte {
 	udpLen := 8 + len(payload)
 	totalLen := 20 + udpLen
-	pkt := make([]byte, totalLen)
+	pkt := getTUNPacket(totalLen)
 
 	// IPv4 header
 	pkt[0] = 0x45
