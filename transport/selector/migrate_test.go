@@ -3,7 +3,9 @@ package selector
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"net"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -263,6 +265,94 @@ func TestMigrator_DrainTimeout(t *testing.T) {
 	stats := m.Stats()
 	if len(stats) != 0 {
 		t.Fatalf("expected 0 tracked connections after force-close, got %d", len(stats))
+	}
+}
+
+// countingTransport tracks how many times Dial is called, returning a fresh
+// fakeConn each time. Used to detect connection leaks in concurrent tests.
+type countingTransport struct {
+	typeName  string
+	dialCount atomic.Int64
+}
+
+func (t *countingTransport) Dial(_ context.Context, _ string) (transport.Connection, error) {
+	t.dialCount.Add(1)
+	return &migMockConn{}, nil
+}
+func (t *countingTransport) Type() string { return t.typeName }
+func (t *countingTransport) Close() error { return nil }
+
+// TestMigratedConnConcurrentDialNewAndOpen verifies that when multiple
+// goroutines call dialNewAndOpen concurrently on a draining connection, only
+// one new connection is dialed (no connection leak).
+func TestMigratedConnConcurrentDialNewAndOpen(t *testing.T) {
+	const goroutines = 20
+
+	ct := &countingTransport{typeName: "h3"}
+
+	// Build a minimal Selector with ct as the active transport.
+	sel := &Selector{
+		active:  ct,
+		logger:  slog.Default(),
+		migrator: NewMigrator(nil),
+	}
+
+	// Create an initial draining connection.
+	initialConn := &migMockConn{}
+	tc := sel.migrator.Track(initialConn, "h3")
+	tc.draining.Store(true) // simulate draining state
+
+	mc := &migratedConn{
+		sel:      sel,
+		migrator: sel.migrator,
+		tc:       tc,
+		addr:     "127.0.0.1:443",
+	}
+
+	// Use a WaitGroup barrier so all goroutines start at the same time,
+	// maximising the chance of exposing a concurrent-dial race.
+	var ready sync.WaitGroup
+	ready.Add(goroutines)
+	start := make(chan struct{})
+
+	// Fire goroutines that all call dialNewAndOpen concurrently.
+	type result struct {
+		stream transport.Stream
+		err    error
+	}
+	results := make(chan result, goroutines)
+	for i := 0; i < goroutines; i++ {
+		go func() {
+			ready.Done()
+			<-start
+			s, err := mc.dialNewAndOpen(context.Background())
+			results <- result{s, err}
+		}()
+	}
+	ready.Wait()
+	close(start) // release all goroutines simultaneously
+
+	// Collect results.
+	var successes int
+	for i := 0; i < goroutines; i++ {
+		r := <-results
+		if r.err != nil {
+			t.Errorf("dialNewAndOpen error: %v", r.err)
+			continue
+		}
+		successes++
+		r.stream.Close()
+	}
+
+	if successes != goroutines {
+		t.Fatalf("expected %d successful streams, got %d", goroutines, successes)
+	}
+
+	// The fix: only ONE new connection should have been dialed regardless of
+	// how many goroutines raced. Without the mutex, every goroutine would dial
+	// its own connection, causing a leak.
+	if got := ct.dialCount.Load(); got != 1 {
+		t.Fatalf("Dial called %d times, want 1 (connection leak detected)", got)
 	}
 }
 
