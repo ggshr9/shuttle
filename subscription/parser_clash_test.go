@@ -2,6 +2,9 @@ package subscription
 
 import (
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 const clashBasic = `proxies:
@@ -229,4 +232,63 @@ func TestParseClash_MultipleTypes(t *testing.T) {
 	if hy.SNI != "hy2.example.com" {
 		t.Errorf("hysteria2 sni = %q, want %q", hy.SNI, "hy2.example.com")
 	}
+}
+
+func TestParseClash_PreservesTypeAndOptions(t *testing.T) {
+	yamlData := []byte(`proxies:
+  - name: my-ss
+    type: ss
+    server: 1.2.3.4
+    port: 443
+    password: secret
+    cipher: aes-256-gcm
+    plugin: obfs
+    plugin-opts:
+      mode: http
+  - name: my-vless
+    type: vless
+    server: 5.6.7.8
+    port: 443
+    uuid: abc-def-123
+    network: ws
+    ws-opts:
+      path: /vless
+    tls: true
+    sni: example.com
+`)
+	endpoints, err := parseClash(yamlData)
+	require.NoError(t, err)
+	require.Len(t, endpoints, 2)
+
+	// SS server preserves type and cipher
+	assert.Equal(t, "ss", endpoints[0].Type)
+	assert.Equal(t, "1.2.3.4:443", endpoints[0].Addr)
+	assert.Equal(t, "secret", endpoints[0].Password)
+	assert.Equal(t, "aes-256-gcm", endpoints[0].Options["cipher"])
+	assert.Equal(t, "obfs", endpoints[0].Options["plugin"])
+	pluginOpts, ok := endpoints[0].Options["plugin-opts"].(map[string]any)
+	require.True(t, ok)
+	assert.Equal(t, "http", pluginOpts["mode"])
+
+	// VLESS server preserves type, uuid->password, network, ws-opts
+	assert.Equal(t, "vless", endpoints[1].Type)
+	assert.Equal(t, "abc-def-123", endpoints[1].Password)
+	assert.Equal(t, "example.com", endpoints[1].SNI)
+	assert.Equal(t, "ws", endpoints[1].Options["network"])
+	assert.Equal(t, true, endpoints[1].Options["tls"])
+	wsOpts, ok := endpoints[1].Options["ws-opts"].(map[string]any)
+	require.True(t, ok)
+	assert.Equal(t, "/vless", wsOpts["path"])
+
+	// Promoted fields should NOT be in Options
+	assert.Nil(t, endpoints[0].Options["name"])
+	assert.Nil(t, endpoints[0].Options["type"])
+	assert.Nil(t, endpoints[0].Options["server"])
+	assert.Nil(t, endpoints[0].Options["port"])
+	assert.Nil(t, endpoints[0].Options["password"])
+}
+
+func TestIsClashFormat_StillDetects(t *testing.T) {
+	data := []byte("proxies:\n  - name: test\n    type: ss\n")
+	assert.True(t, isClashFormat(data))
 }

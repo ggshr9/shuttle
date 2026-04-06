@@ -8,21 +8,15 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// clashConfig is a minimal representation of a Clash YAML config.
+// clashConfig is used only for format detection via isClashFormat.
 type clashConfig struct {
 	Proxies []clashProxy `yaml:"proxies"`
 }
 
-// clashProxy represents a single proxy entry in Clash format.
+// clashProxy is kept for backward-compat with isClashFormat detection.
 type clashProxy struct {
-	Name     string `yaml:"name"`
-	Type     string `yaml:"type"`
-	Server   string `yaml:"server"`
-	Port     int    `yaml:"port"`
-	Password string `yaml:"password"`
-	UUID     string `yaml:"uuid"`     // vmess/vless
-	SNI      string `yaml:"sni"`      // trojan, vless, hysteria2
-	ServName string `yaml:"servname"` // hysteria2 alternate SNI field
+	Name string `yaml:"name"`
+	Type string `yaml:"type"`
 }
 
 // isClashFormat returns true if data looks like a Clash YAML subscription
@@ -53,39 +47,80 @@ func containsProxiesKey(data []byte) bool {
 	return false
 }
 
+// promotedFields are fields extracted into ServerEndpoint top-level fields
+// and must NOT be stored in Options.
+var promotedFields = map[string]bool{
+	"name":      true,
+	"type":      true,
+	"server":    true,
+	"port":      true,
+	"password":  true,
+	"uuid":      true,
+	"sni":       true,
+	"servername": true,
+	"servname":  true,
+}
+
 // parseClash parses a Clash YAML subscription and returns a slice of
 // ServerEndpoint values. Supported proxy types: ss, trojan, vmess, vless,
-// hysteria2. Returns an error if data is invalid or contains no proxies.
+// hysteria2, hysteria, wireguard. All transport options are preserved in
+// ServerEndpoint.Options. Returns an error if data is invalid or contains no proxies.
 func parseClash(data []byte) ([]config.ServerEndpoint, error) {
-	var cfg clashConfig
-	if err := yaml.Unmarshal(data, &cfg); err != nil {
+	// Parse the raw YAML into a map to capture all fields generically.
+	var raw struct {
+		Proxies []map[string]any `yaml:"proxies"`
+	}
+	if err := yaml.Unmarshal(data, &raw); err != nil {
 		return nil, fmt.Errorf("parse clash yaml: %w", err)
 	}
 
-	if len(cfg.Proxies) == 0 {
+	if len(raw.Proxies) == 0 {
 		return nil, fmt.Errorf("no proxies found in clash config")
 	}
 
 	var endpoints []config.ServerEndpoint
-	for _, p := range cfg.Proxies {
-		switch strings.ToLower(p.Type) {
-		case "ss", "trojan", "vmess", "vless", "hysteria2":
+	for _, p := range raw.Proxies {
+		proxyType := strings.ToLower(stringField(p, "type"))
+		switch proxyType {
+		case "ss", "trojan", "vmess", "vless", "hysteria2", "hysteria", "wireguard":
+			// Build the endpoint.
+			server := stringField(p, "server")
+			port := intField(p, "port")
+
 			ep := config.ServerEndpoint{
-				Name: p.Name,
-				Addr: fmt.Sprintf("%s:%d", p.Server, p.Port),
-				SNI:  p.SNI,
+				Name: stringField(p, "name"),
+				Addr: fmt.Sprintf("%s:%d", server, port),
+				Type: proxyType,
 			}
-			// Pick password: ss/trojan/hysteria2 use "password", vmess/vless use "uuid".
-			switch strings.ToLower(p.Type) {
+
+			// Password: vmess/vless use "uuid", all others use "password".
+			switch proxyType {
 			case "vmess", "vless":
-				ep.Password = p.UUID
+				ep.Password = stringField(p, "uuid")
 			default:
-				ep.Password = p.Password
+				ep.Password = stringField(p, "password")
 			}
-			// hysteria2 may also carry servname as SNI.
-			if ep.SNI == "" && p.ServName != "" {
-				ep.SNI = p.ServName
+
+			// SNI: try "sni" first, then "servername", then "servname".
+			ep.SNI = stringField(p, "sni")
+			if ep.SNI == "" {
+				ep.SNI = stringField(p, "servername")
 			}
+			if ep.SNI == "" {
+				ep.SNI = stringField(p, "servname")
+			}
+
+			// Collect all remaining fields into Options.
+			options := make(map[string]any)
+			for k, v := range p {
+				if !promotedFields[k] {
+					options[k] = v
+				}
+			}
+			if len(options) > 0 {
+				ep.Options = options
+			}
+
 			endpoints = append(endpoints, ep)
 		}
 	}
@@ -94,4 +129,31 @@ func parseClash(data []byte) ([]config.ServerEndpoint, error) {
 		return nil, fmt.Errorf("no supported proxies found in clash config")
 	}
 	return endpoints, nil
+}
+
+// stringField extracts a string value from a map, returning "" if absent or wrong type.
+func stringField(m map[string]any, key string) string {
+	v, ok := m[key]
+	if !ok {
+		return ""
+	}
+	s, _ := v.(string)
+	return s
+}
+
+// intField extracts an integer value from a map, returning 0 if absent or wrong type.
+func intField(m map[string]any, key string) int {
+	v, ok := m[key]
+	if !ok {
+		return 0
+	}
+	switch n := v.(type) {
+	case int:
+		return n
+	case float64:
+		return int(n)
+	case int64:
+		return int(n)
+	}
+	return 0
 }
