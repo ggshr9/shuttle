@@ -12,6 +12,7 @@ import (
 	"github.com/shuttleX/shuttle/adapter"
 	"github.com/shuttleX/shuttle/config"
 	"github.com/shuttleX/shuttle/congestion"
+	"github.com/shuttleX/shuttle/provider"
 	"github.com/shuttleX/shuttle/obfs"
 	"github.com/shuttleX/shuttle/proxy"
 	"github.com/shuttleX/shuttle/qos"
@@ -66,7 +67,8 @@ func (e *Engine) buildTransports(cfg *config.ClientConfig, ccAdapter quic.Conges
 }
 
 // buildRouter creates the routing engine including GeoIP/GeoSite and DNS.
-func (e *Engine) buildRouter(cfg *config.ClientConfig) (*router.Router, *router.DNSResolver, *router.Prefetcher) {
+// ruleProviders is passed to the router for rule-provider-based matching; may be nil.
+func (e *Engine) buildRouter(cfg *config.ClientConfig, ruleProviders map[string]*provider.RuleProvider) (*router.Router, *router.DNSResolver, *router.Prefetcher) {
 	geoIPDB := router.NewGeoIPDB()
 	geoSiteDB := router.NewGeoSiteDB()
 
@@ -142,6 +144,7 @@ func (e *Engine) buildRouter(cfg *config.ClientConfig) (*router.Router, *router.
 
 	routerCfg := &router.RouterConfig{
 		DefaultAction: router.Action(cfg.Routing.Default),
+		RuleProviders: ruleProviders,
 	}
 
 	// Map config rule chain entries to router rule chain entries.

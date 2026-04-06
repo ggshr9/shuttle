@@ -9,6 +9,7 @@ import (
 	"github.com/shuttleX/shuttle/config"
 	"github.com/shuttleX/shuttle/internal/netmon"
 	"github.com/shuttleX/shuttle/internal/sysopt"
+	"github.com/shuttleX/shuttle/provider"
 	"github.com/shuttleX/shuttle/proxy"
 	"github.com/shuttleX/shuttle/stream"
 	"github.com/shuttleX/shuttle/subscription"
@@ -119,8 +120,66 @@ func (e *Engine) startInternal(ctx context.Context) error {
 	e.cancel = cancel
 	e.mu.Unlock()
 
+	// Initialize proxy providers from config.
+	var proxyProviders []*provider.ProxyProvider
+	for _, ppCfg := range cfgSnap.ProxyProviders {
+		interval := time.Hour
+		if ppCfg.Interval != "" {
+			if d, err := time.ParseDuration(ppCfg.Interval); err == nil {
+				interval = d
+			}
+		}
+		pp, err := provider.NewProxyProvider(provider.ProxyProviderConfig{
+			Name:     ppCfg.Name,
+			URL:      ppCfg.URL,
+			Path:     ppCfg.Path,
+			Interval: interval,
+			Filter:   ppCfg.Filter,
+		})
+		if err != nil {
+			e.logger.Warn("failed to create proxy provider", "name", ppCfg.Name, "err", err)
+			continue
+		}
+		pp.Start(ctx)
+		proxyProviders = append(proxyProviders, pp)
+		e.logger.Info("proxy provider started", "name", ppCfg.Name)
+	}
+	e.mu.Lock()
+	e.proxyProviders = proxyProviders
+	e.mu.Unlock()
+
+	// Initialize rule providers from config.
+	var ruleProviders []*provider.RuleProvider
+	ruleProviderMap := make(map[string]*provider.RuleProvider)
+	for _, rpCfg := range cfgSnap.RuleProviders {
+		interval := time.Hour
+		if rpCfg.Interval != "" {
+			if d, err := time.ParseDuration(rpCfg.Interval); err == nil {
+				interval = d
+			}
+		}
+		rp, err := provider.NewRuleProvider(provider.RuleProviderConfig{
+			Name:     rpCfg.Name,
+			URL:      rpCfg.URL,
+			Path:     rpCfg.Path,
+			Behavior: rpCfg.Behavior,
+			Interval: interval,
+		})
+		if err != nil {
+			e.logger.Warn("failed to create rule provider", "name", rpCfg.Name, "err", err)
+			continue
+		}
+		rp.Start(ctx)
+		ruleProviders = append(ruleProviders, rp)
+		ruleProviderMap[rpCfg.Name] = rp
+		e.logger.Info("rule provider started", "name", rpCfg.Name)
+	}
+	e.mu.Lock()
+	e.ruleProviders = ruleProviders
+	e.mu.Unlock()
+
 	e.logger.Debug("building router and DNS resolver")
-	rt, dnsResolver, prefetcher := e.buildRouter(cfgSnap)
+	rt, dnsResolver, prefetcher := e.buildRouter(cfgSnap, ruleProviderMap)
 	if prefetcher != nil {
 		e.bgWg.Add(1)
 		go func() {
@@ -325,10 +384,18 @@ func (e *Engine) stopInternal() error {
 		e.logger.Warn("observability goroutines did not exit within timeout")
 	}
 
-	// Stop subscription manager before taking the final lock.
+	// Stop providers before taking the final lock.
 	e.mu.RLock()
+	pps := e.proxyProviders
+	rps := e.ruleProviders
 	sm := e.subscriptionManager
 	e.mu.RUnlock()
+	for _, pp := range pps {
+		pp.Stop()
+	}
+	for _, rp := range rps {
+		rp.Stop()
+	}
 	if sm != nil {
 		sm.StopAutoRefresh()
 	}
@@ -361,6 +428,8 @@ func (e *Engine) stopInternal() error {
 	e.circuitBreaker = nil
 	e.proactiveMigrator = nil
 	e.subscriptionManager = nil
+	e.proxyProviders = nil
+	e.ruleProviders = nil
 	e.mu.Unlock()
 
 	e.logger.Debug("engine state transition", "from", "stopping", "to", "stopped")

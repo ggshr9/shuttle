@@ -37,10 +37,19 @@ type ProbeSnapshot struct {
 
 // OutboundGroupConfig is the JSON options schema for a group outbound.
 type OutboundGroupConfig struct {
-	Strategy    GroupStrategy `json:"strategy"`
-	Outbounds   []string      `json:"outbounds"`
-	MaxLatency  string        `json:"max_latency,omitempty"`   // duration string, e.g. "200ms"
-	MaxLossRate float64       `json:"max_loss_rate,omitempty"` // 0-1 range
+	Strategy    GroupStrategy    `json:"strategy"`
+	Outbounds   []string         `json:"outbounds"`
+	MaxLatency  string           `json:"max_latency,omitempty"`   // duration string, e.g. "200ms"
+	MaxLossRate float64          `json:"max_loss_rate,omitempty"` // 0-1 range
+	HealthCheck *GroupHealthCheck `json:"health_check,omitempty"` // for url-test strategy
+}
+
+// GroupHealthCheck configures the health checker for url-test groups.
+type GroupHealthCheck struct {
+	URL         string `json:"url,omitempty"`
+	Interval    string `json:"interval,omitempty"`
+	Timeout     string `json:"timeout,omitempty"`
+	ToleranceMS int    `json:"tolerance_ms,omitempty"`
 }
 
 // OutboundGroup wraps multiple outbounds with failover, load-balance, or quality strategy.
