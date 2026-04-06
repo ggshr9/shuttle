@@ -11,7 +11,7 @@ server:
 
 # Transport preference
 transport:
-  preferred: "auto"  # auto falls back from H3 (UDP) to Reality (TCP) in Docker
+  preferred: "reality"  # Reality (TCP) works reliably through Docker networks
   h3:
     enabled: true
     path_prefix: "/shuttle"

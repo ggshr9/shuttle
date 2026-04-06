@@ -125,13 +125,13 @@ func (d *Dialer) getOrDial(ctx context.Context) (*quic.Conn, error) {
 	// Authenticate on the first stream.
 	authStream, err := conn.OpenStreamSync(ctx)
 	if err != nil {
-		conn.CloseWithError(1, "auth stream failed")
+		_ = conn.CloseWithError(1, "auth stream failed")
 		return nil, fmt.Errorf("hysteria2/dialer: open auth stream: %w", err)
 	}
 
 	if err := EncodeAuth(authStream, d.password); err != nil {
 		authStream.Close()
-		conn.CloseWithError(1, "auth write failed")
+		_ = conn.CloseWithError(1, "auth write failed")
 		return nil, fmt.Errorf("hysteria2/dialer: write auth: %w", err)
 	}
 
@@ -140,7 +140,7 @@ func (d *Dialer) getOrDial(ctx context.Context) (*quic.Conn, error) {
 	// length-prefixed and the server knows exactly how many bytes to read.
 	status, err := ReadAuthResult(authStream)
 	if err != nil {
-		conn.CloseWithError(1, "auth read failed")
+		_ = conn.CloseWithError(1, "auth read failed")
 		return nil, fmt.Errorf("hysteria2/dialer: read auth result: %w", err)
 	}
 

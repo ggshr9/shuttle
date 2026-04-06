@@ -93,8 +93,7 @@ type Manager struct {
 	iceRestartEnabled     bool
 
 	// Trickle ICE configuration
-	trickleEnabled    bool
-	trickleGatherer   *TrickleICEGatherer
+	trickleEnabled bool
 	iceGeneration     int // Current ICE credential generation
 
 	// Incoming data handler
