@@ -58,6 +58,7 @@ type Config struct {
 	WarmUpConns       int           // pre-dial N connections on startup (0 = disabled)
 	PoolMaxIdle       int           // max idle connections per transport (0 = default 4)
 	PoolIdleTTL       time.Duration // idle connection TTL (0 = default 60s)
+	DrainTimeout      time.Duration // max time to wait for streams to finish before force-closing (0 = default 30s)
 }
 
 // New creates a new transport selector.
@@ -83,7 +84,7 @@ func New(transports []transport.ClientTransport, cfg *Config, logger *slog.Logge
 		probeIntervalDur:  cfg.ProbeInterval,
 		logger:            logger,
 	}
-	s.migrator = NewMigrator(logger)
+	s.migrator = NewMigrator(logger, MigratorConfig{DrainTimeout: cfg.DrainTimeout})
 	for _, t := range transports {
 		s.probes[t.Type()] = &ProbeResult{
 			Transport: t,
