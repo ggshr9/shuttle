@@ -1,8 +1,11 @@
 package engine
 
 import (
+	"math"
+	"github.com/stretchr/testify/assert"
 	"testing"
 	"time"
+
 )
 
 func TestQualityScore(t *testing.T) {
@@ -20,11 +23,17 @@ func TestQualityScore(t *testing.T) {
 		t.Errorf("expected lowLoss score (%v) < highLoss score (%v)", lowLoss, highLoss)
 	}
 
-	// Verify formula: latency_ms + loss * 1000
+	// Verify formula: latency_ms + 5000*sqrt(loss)
 	score := qualityScore(50*time.Millisecond, 0.1)
-	expected := 50.0 + 0.1*1000 // 150.0
+	expected := 50.0 + 5000*math.Sqrt(0.1) // ≈ 1630.28
 	if score != expected {
 		t.Errorf("qualityScore(50ms, 0.1) = %v, want %v", score, expected)
+	}
+
+	// Zero loss returns latency only (no NaN/negative from sqrt).
+	zeroLoss := qualityScore(100*time.Millisecond, 0)
+	if zeroLoss != 100.0 {
+		t.Errorf("qualityScore(100ms, 0) = %v, want 100.0", zeroLoss)
 	}
 }
 
@@ -129,4 +138,11 @@ func TestQualityFilter_NoLimits(t *testing.T) {
 	if len(result) != len(entries) {
 		t.Fatalf("expected %d entries (no filtering), got %d", len(entries), len(result))
 	}
+}
+
+func TestQualityScore_LossyNodePenalized(t *testing.T) {
+	scoreLossy := qualityScore(200*time.Millisecond, 0.01)
+	scoreClean := qualityScore(250*time.Millisecond, 0.0)
+	assert.Greater(t, scoreLossy, scoreClean,
+		"1%% loss at 200ms should score worse than 0%% loss at 250ms")
 }
