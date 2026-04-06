@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net"
 	"sync/atomic"
 	"time"
@@ -21,6 +22,10 @@ const (
 	GroupLoadBalance GroupStrategy = "loadbalance"
 	// GroupQuality ranks outbounds by probe-measured latency and loss.
 	GroupQuality GroupStrategy = "quality"
+	// GroupURLTest auto-selects the lowest-latency available node via periodic health checks.
+	GroupURLTest GroupStrategy = "url-test"
+	// GroupSelect allows manual selection of the active outbound.
+	GroupSelect GroupStrategy = "select"
 )
 
 // ProbeSnapshot is a point-in-time quality reading for an outbound.
@@ -46,6 +51,8 @@ type OutboundGroup struct {
 	counter     atomic.Uint64                    // for round-robin
 	qualityCfg  QualityConfig                    // thresholds for quality strategy
 	probeGetter func() map[string]ProbeSnapshot // returns latest probe data; nil when not quality
+	urlTest     *urlTestState                    // for url-test strategy
+	logger      *slog.Logger
 }
 
 // NewOutboundGroup creates a new OutboundGroup.
@@ -74,6 +81,10 @@ func (g *OutboundGroup) DialContext(ctx context.Context, network, address string
 		return g.dialLoadBalance(ctx, network, address)
 	case GroupQuality:
 		return g.dialQuality(ctx, network, address)
+	case GroupURLTest:
+		return g.dialURLTest(ctx, network, address)
+	case GroupSelect:
+		return g.dialSelect(ctx, network, address)
 	default: // failover is the default
 		return g.dialFailover(ctx, network, address)
 	}
@@ -146,10 +157,20 @@ func (g *OutboundGroup) dialQuality(ctx context.Context, network, address string
 	return nil, fmt.Errorf("outbound group %q: no outbounds available", g.tag)
 }
 
-// Close is a no-op for OutboundGroup. Member outbounds are owned by the
-// engine's outbound map and closed there; the group does not own their lifecycle.
+// Close stops any background loops (e.g. url-test health checks). Member outbounds
+// are owned by the engine's outbound map and closed there; the group does not own
+// their lifecycle.
 func (g *OutboundGroup) Close() error {
+	if g.urlTest != nil {
+		g.urlTest.Stop()
+	}
 	return nil
+}
+
+// dialSelect is a placeholder for the select strategy (Task 5).
+func (g *OutboundGroup) dialSelect(ctx context.Context, network, address string) (net.Conn, error) {
+	// Fall back to failover until select strategy is implemented.
+	return g.dialFailover(ctx, network, address)
 }
 
 // parseOutboundGroupConfig unmarshals OutboundGroupConfig from raw JSON.
@@ -162,7 +183,7 @@ func parseOutboundGroupConfig(raw json.RawMessage) (OutboundGroupConfig, error) 
 		return cfg, fmt.Errorf("group must have at least one outbound member")
 	}
 	switch cfg.Strategy {
-	case GroupFailover, GroupLoadBalance, GroupQuality, "":
+	case GroupFailover, GroupLoadBalance, GroupQuality, GroupURLTest, GroupSelect, "":
 		// valid (empty defaults to failover)
 	default:
 		return cfg, fmt.Errorf("unknown group strategy: %q", cfg.Strategy)
