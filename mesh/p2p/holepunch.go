@@ -14,6 +14,12 @@ import (
 // Hole punch packet magic
 var HolePunchMagic = []byte{'H', 'O', 'L', 'E'}
 
+// hpPacket is an inbound hole-punch packet delivered via channel.
+type hpPacket struct {
+	data []byte
+	addr *net.UDPAddr
+}
+
 // Hole punch packet types
 const (
 	HolePunchRequest byte = 0x01
@@ -84,6 +90,16 @@ type HolePuncher struct {
 	timeout    time.Duration
 	interval   time.Duration
 	logger     *slog.Logger
+
+	// inbound receives hole-punch packets for processing by receiveLoop.
+	// When managed by a Manager, packets arrive via Deliver().
+	// When used standalone, a self-pump goroutine reads from the UDP socket.
+	inbound chan hpPacket
+
+	// managed indicates that a Manager is responsible for delivering packets
+	// via Deliver(). When false (standalone), Punch starts a self-pump goroutine
+	// that reads from the UDP socket directly.
+	managed bool
 }
 
 // NewHolePuncher creates a new hole puncher.
@@ -100,6 +116,19 @@ func NewHolePuncher(conn *net.UDPConn, localVIP net.IP, timeout time.Duration, l
 		timeout:  timeout,
 		interval: 100 * time.Millisecond,
 		logger:   logger,
+		inbound:  make(chan hpPacket, 64),
+	}
+}
+
+// Deliver enqueues an inbound hole-punch packet for processing by receiveLoop.
+// The caller's buffer is copied so the caller may reuse it immediately.
+func (hp *HolePuncher) Deliver(data []byte, addr *net.UDPAddr) {
+	pkt := make([]byte, len(data))
+	copy(pkt, data)
+	select {
+	case hp.inbound <- hpPacket{data: pkt, addr: addr}:
+	default:
+		// drop if buffer full
 	}
 }
 
@@ -122,6 +151,13 @@ func (hp *HolePuncher) Punch(ctx context.Context, remoteVIP net.IP, candidates [
 
 	resultCh := make(chan *HolePunchResult, 1)
 	errCh := make(chan error, 1)
+
+	// When used standalone (not under a Manager), start a self-pump goroutine
+	// that reads from the UDP socket and feeds the inbound channel so that
+	// receiveLoop has a single packet source regardless of usage context.
+	if !hp.managed {
+		go hp.socketPump(ctx)
+	}
 
 	// Start receiver goroutine
 	go hp.receiveLoop(ctx, remoteVIP, resultCh)
@@ -184,10 +220,12 @@ func (hp *HolePuncher) sendLoop(ctx context.Context, remoteVIP net.IP, candidate
 	}
 }
 
-// receiveLoop receives hole punch responses.
-func (hp *HolePuncher) receiveLoop(ctx context.Context, remoteVIP net.IP, resultCh chan<- *HolePunchResult) {
+// socketPump reads UDP packets from the socket and forwards them to the
+// inbound channel. Used only when the HolePuncher is not managed by a Manager
+// (i.e., standalone usage). When managed, the Manager's receiveLoop calls
+// Deliver() instead to avoid a concurrent ReadFromUDP race.
+func (hp *HolePuncher) socketPump(ctx context.Context) {
 	buf := make([]byte, 1500)
-
 	for {
 		select {
 		case <-ctx.Done():
@@ -201,80 +239,98 @@ func (hp *HolePuncher) receiveLoop(ctx context.Context, remoteVIP net.IP, result
 			if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
 				continue
 			}
-			hp.logger.Debug("holepunch: receive error", "err", err)
+			hp.logger.Debug("holepunch: socket pump error", "err", err)
 			continue
 		}
 
-		// Check if it's a hole punch packet
-		if !IsHolePunchPacket(buf[:n]) {
-			continue
-		}
+		hp.Deliver(buf[:n], addr)
+	}
+}
 
-		pkt, err := DecodeHolePunchPacket(buf[:n])
-		if err != nil {
-			continue
-		}
-
-		// Verify it's from the expected peer
-		if !pkt.SrcVIP.Equal(remoteVIP) {
-			continue
-		}
-
-		hp.logger.Debug("holepunch: received",
-			"type", pkt.Type,
-			"from", addr,
-			"seq", pkt.Seq)
-
-		switch pkt.Type {
-		case HolePunchRequest:
-			// Send response
-			resp := &HolePunchPacket{
-				Type:      HolePunchResponse,
-				SrcVIP:    hp.localVIP,
-				DstVIP:    remoteVIP,
-				Timestamp: pkt.Timestamp,
-				Seq:       pkt.Seq,
-			}
-			_, _ = hp.conn.WriteToUDP(resp.Encode(), addr)
-
-		case HolePunchResponse:
-			// Calculate RTT
-			rtt := time.Duration(time.Now().UnixNano() - pkt.Timestamp)
-
-			// Send ACK
-			ack := &HolePunchPacket{
-				Type:      HolePunchAck,
-				SrcVIP:    hp.localVIP,
-				DstVIP:    remoteVIP,
-				Timestamp: time.Now().UnixNano(),
-				Seq:       pkt.Seq,
-			}
-			_, _ = hp.conn.WriteToUDP(ack.Encode(), addr)
-
-			// Report success
-			result := &HolePunchResult{
-				RemoteAddr: addr,
-				RTT:        rtt,
-			}
-
-			select {
-			case resultCh <- result:
-			default:
-			}
+// receiveLoop receives hole punch responses from the inbound channel.
+// Packets are delivered by Manager.receiveLoop via Deliver() to avoid a
+// read race on the shared UDP socket.
+func (hp *HolePuncher) receiveLoop(ctx context.Context, remoteVIP net.IP, resultCh chan<- *HolePunchResult) {
+	for {
+		select {
+		case <-ctx.Done():
 			return
+		case incoming := <-hp.inbound:
+			data := incoming.data
+			addr := incoming.addr
 
-		case HolePunchAck:
-			// ACK received - connection confirmed
-			result := &HolePunchResult{
-				RemoteAddr: addr,
-				RTT:        0,
+			// Check if it's a hole punch packet (should always be true since
+			// Manager only delivers hole-punch packets, but be defensive).
+			if !IsHolePunchPacket(data) {
+				continue
 			}
 
-			select {
-			case resultCh <- result:
-			default:
+			pkt, err := DecodeHolePunchPacket(data)
+			if err != nil {
+				continue
 			}
-			return
+
+			// Verify it's from the expected peer
+			if !pkt.SrcVIP.Equal(remoteVIP) {
+				continue
+			}
+
+			hp.logger.Debug("holepunch: received",
+				"type", pkt.Type,
+				"from", addr,
+				"seq", pkt.Seq)
+
+			switch pkt.Type {
+			case HolePunchRequest:
+				// Send response
+				resp := &HolePunchPacket{
+					Type:      HolePunchResponse,
+					SrcVIP:    hp.localVIP,
+					DstVIP:    remoteVIP,
+					Timestamp: pkt.Timestamp,
+					Seq:       pkt.Seq,
+				}
+				_, _ = hp.conn.WriteToUDP(resp.Encode(), addr)
+
+			case HolePunchResponse:
+				// Calculate RTT
+				rtt := time.Duration(time.Now().UnixNano() - pkt.Timestamp)
+
+				// Send ACK
+				ack := &HolePunchPacket{
+					Type:      HolePunchAck,
+					SrcVIP:    hp.localVIP,
+					DstVIP:    remoteVIP,
+					Timestamp: time.Now().UnixNano(),
+					Seq:       pkt.Seq,
+				}
+				_, _ = hp.conn.WriteToUDP(ack.Encode(), addr)
+
+				// Report success
+				result := &HolePunchResult{
+					RemoteAddr: addr,
+					RTT:        rtt,
+				}
+
+				select {
+				case resultCh <- result:
+				default:
+				}
+				return
+
+			case HolePunchAck:
+				// ACK received - connection confirmed
+				result := &HolePunchResult{
+					RemoteAddr: addr,
+					RTT:        0,
+				}
+
+				select {
+				case resultCh <- result:
+				default:
+				}
+				return
+			}
 		}
 	}
 }

@@ -99,6 +99,11 @@ type Manager struct {
 	// Incoming data handler
 	dataHandler func(srcVIP net.IP, data []byte)
 
+	// activeHP is the HolePuncher currently waiting for packets (if any).
+	// Protected by activeHPMu.
+	activeHPMu sync.Mutex
+	activeHP   *HolePuncher
+
 	// Goroutine lifecycle
 	wg sync.WaitGroup
 
@@ -427,6 +432,34 @@ func (m *Manager) deriveSharedSecret(remotePub [32]byte) ([]byte, error) {
 		return nil, fmt.Errorf("x25519: %w", err)
 	}
 	return shared, nil
+}
+
+// setActiveHolePuncher registers hp as the current hole puncher so that
+// receiveLoop can forward hole-punch packets to it. It also marks hp as
+// managed so that Punch does not start a competing socket read goroutine.
+func (m *Manager) setActiveHolePuncher(hp *HolePuncher) {
+	hp.managed = true
+	m.activeHPMu.Lock()
+	m.activeHP = hp
+	m.activeHPMu.Unlock()
+}
+
+// clearActiveHolePuncher removes the current hole puncher registration.
+func (m *Manager) clearActiveHolePuncher() {
+	m.activeHPMu.Lock()
+	m.activeHP = nil
+	m.activeHPMu.Unlock()
+}
+
+// deliverToHolePuncher forwards a hole-punch packet to the active HolePuncher
+// (if any). Called from receiveLoop under no locks.
+func (m *Manager) deliverToHolePuncher(data []byte, addr *net.UDPAddr) {
+	m.activeHPMu.Lock()
+	hp := m.activeHP
+	m.activeHPMu.Unlock()
+	if hp != nil {
+		hp.Deliver(data, addr)
+	}
 }
 
 // isPrivateIP checks if an IP is in a private range
