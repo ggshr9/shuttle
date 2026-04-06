@@ -10,6 +10,12 @@ import (
 	"time"
 )
 
+// callbackEntry pairs a unique ID with its callback function.
+type callbackEntry struct {
+	id int64
+	fn func(*Message)
+}
+
 // Client handles signaling communication on the client side.
 type Client struct {
 	localVIP net.IP
@@ -17,7 +23,8 @@ type Client struct {
 	logger   *slog.Logger
 
 	mu        sync.Mutex
-	callbacks map[byte][]MessageCallback
+	callbacks map[byte][]callbackEntry
+	nextCBID  int64
 	pending   map[string]chan *Message // key: dstVIP string, for waiting responses
 }
 
@@ -30,16 +37,37 @@ func NewClient(localVIP net.IP, stream io.ReadWriter, logger *slog.Logger) *Clie
 		localVIP:  localVIP,
 		stream:    stream,
 		logger:    logger,
-		callbacks: make(map[byte][]MessageCallback),
+		callbacks: make(map[byte][]callbackEntry),
 		pending:   make(map[string]chan *Message),
 	}
 }
 
 // OnMessage registers a callback for a specific message type.
 func (c *Client) OnMessage(msgType byte, callback MessageCallback) {
+	c.registerCallback(msgType, callback)
+}
+
+// registerCallback adds a callback and returns its unique ID.
+func (c *Client) registerCallback(msgType byte, fn func(*Message)) int64 {
 	c.mu.Lock()
-	c.callbacks[msgType] = append(c.callbacks[msgType], callback)
-	c.mu.Unlock()
+	defer c.mu.Unlock()
+	c.nextCBID++
+	id := c.nextCBID
+	c.callbacks[msgType] = append(c.callbacks[msgType], callbackEntry{id: id, fn: fn})
+	return id
+}
+
+// removeCallback removes the callback identified by id from the given message type.
+func (c *Client) removeCallback(msgType byte, id int64) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	cbs := c.callbacks[msgType]
+	for i, cb := range cbs {
+		if cb.id == id {
+			c.callbacks[msgType] = append(cbs[:i], cbs[i+1:]...)
+			return
+		}
+	}
 }
 
 // SendCandidates sends ICE candidates to a peer.
@@ -221,7 +249,7 @@ func (c *Client) Run(ctx context.Context) error {
 		c.mu.Unlock()
 
 		for _, cb := range callbacks {
-			go cb(msg)
+			go cb.fn(msg)
 		}
 	}
 }
@@ -229,10 +257,10 @@ func (c *Client) Run(ctx context.Context) error {
 // ExchangeCandidates performs a candidate exchange with a peer.
 // Returns the remote candidates.
 func (c *Client) ExchangeCandidates(ctx context.Context, dstVIP net.IP, localCandidates []*CandidateInfo, timeout time.Duration) ([]*CandidateInfo, error) {
-	// Set up callback to receive remote candidates
+	// Set up callback to receive remote candidates; deregistered on return.
 	remoteCh := make(chan []*CandidateInfo, 1)
 
-	c.OnMessage(SignalCandidate, func(msg *Message) {
+	cbID := c.registerCallback(SignalCandidate, func(msg *Message) {
 		if !msg.SrcVIP.Equal(dstVIP) {
 			return
 		}
@@ -248,6 +276,7 @@ func (c *Client) ExchangeCandidates(ctx context.Context, dstVIP net.IP, localCan
 		default:
 		}
 	})
+	defer c.removeCallback(SignalCandidate, cbID)
 
 	// Send our candidates
 	if err := c.SendCandidates(dstVIP, localCandidates); err != nil {
