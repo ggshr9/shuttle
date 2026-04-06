@@ -34,3 +34,6 @@ Thumbs.db
 test/cloud/bin/
 test/cloud/logs/
 test/cloud/pids/
+
+# Worktrees
+.worktrees/
