@@ -609,6 +609,107 @@ func TestHubConcurrentMixedOperations(t *testing.T) {
 	wg.Wait()
 }
 
+// TestHubIPv6NoCollision verifies that distinct IPv6 VIPs produce distinct keys
+// and do not collide to the same map entry as they did with [4]byte keys.
+func TestHubIPv6NoCollision(t *testing.T) {
+	h := newTestHub()
+
+	vip1 := net.ParseIP("fd00:7::2")
+	vip2 := net.ParseIP("fd00:7::3")
+
+	buf1 := &bytes.Buffer{}
+	buf2 := &bytes.Buffer{}
+
+	h.Register(vip1, buf1)
+	h.Register(vip2, buf2)
+
+	if h.PeerCount() != 2 {
+		t.Fatalf("expected 2 peers for distinct IPv6 VIPs, got %d (key collision!)", h.PeerCount())
+	}
+
+	if !h.HasPeer(vip1) {
+		t.Fatal("vip1 should be registered")
+	}
+	if !h.HasPeer(vip2) {
+		t.Fatal("vip2 should be registered")
+	}
+
+	// Forward a message only to vip2; vip1 must not receive it.
+	msg := &Message{
+		Type:    SignalConnect,
+		SrcVIP:  vip1,
+		DstVIP:  vip2,
+		Payload: []byte("hello ipv6"),
+	}
+	if err := h.Forward(msg); err != nil {
+		t.Fatalf("Forward failed: %v", err)
+	}
+
+	if buf2.Len() == 0 {
+		t.Fatal("vip2 should have received the message")
+	}
+	if buf1.Len() != 0 {
+		t.Fatal("vip1 should not have received the message (collision detected!)")
+	}
+}
+
+// TestHubMixedIPv4IPv6 verifies IPv4 and IPv6 VIPs coexist without collision.
+func TestHubMixedIPv4IPv6(t *testing.T) {
+	h := newTestHub()
+
+	v4VIP := net.IPv4(10, 7, 0, 2)
+	v6VIP := net.ParseIP("fd00:7::2")
+
+	buf4 := &bytes.Buffer{}
+	buf6 := &bytes.Buffer{}
+
+	h.Register(v4VIP, buf4)
+	h.Register(v6VIP, buf6)
+
+	if h.PeerCount() != 2 {
+		t.Fatalf("expected 2 peers for IPv4+IPv6 VIPs, got %d (key collision!)", h.PeerCount())
+	}
+
+	// Forward to v6VIP; v4VIP must not receive it.
+	msg := &Message{
+		Type:    SignalConnect,
+		SrcVIP:  v4VIP,
+		DstVIP:  v6VIP,
+		Payload: []byte("ipv4->ipv6"),
+	}
+	if err := h.Forward(msg); err != nil {
+		t.Fatalf("Forward failed: %v", err)
+	}
+
+	if buf6.Len() == 0 {
+		t.Fatal("v6VIP should have received the message")
+	}
+	if buf4.Len() != 0 {
+		t.Fatal("v4VIP should not have received the message (collision detected!)")
+	}
+}
+
+// TestHubIPv6Unregister verifies that IPv6 peers can be unregistered correctly.
+func TestHubIPv6Unregister(t *testing.T) {
+	h := newTestHub()
+
+	vip := net.ParseIP("fd00:7::5")
+	h.Register(vip, &bytes.Buffer{})
+
+	if !h.HasPeer(vip) {
+		t.Fatal("IPv6 peer should be registered")
+	}
+
+	h.Unregister(vip)
+
+	if h.HasPeer(vip) {
+		t.Fatal("IPv6 peer should be unregistered")
+	}
+	if h.PeerCount() != 0 {
+		t.Fatalf("expected 0 peers, got %d", h.PeerCount())
+	}
+}
+
 // threadSafeWriter wraps a bytes.Buffer with a mutex for concurrent writes.
 type threadSafeWriter struct {
 	buf *bytes.Buffer

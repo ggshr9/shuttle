@@ -6,6 +6,7 @@ import (
 	"io"
 	"log/slog"
 	"net"
+	"net/netip"
 	"sync"
 )
 
@@ -295,25 +296,35 @@ func (d *DualStackAllocator) NetworkV4() *net.IPNet { return d.v4.Network() }
 // NetworkV6 returns the IPv6 network.
 func (d *DualStackAllocator) NetworkV6() *net.IPNet { return d.v6.Network() }
 
+// vipKey converts a net.IP virtual IP to a netip.Addr map key.
+// IPv4-mapped IPv6 addresses are normalized to plain IPv4 so that
+// net.IPv4(a,b,c,d) and its 16-byte form produce the same key.
+func vipKey(ip net.IP) netip.Addr {
+	addr, ok := netip.AddrFromSlice(ip)
+	if !ok {
+		return netip.Addr{}
+	}
+	return addr.Unmap()
+}
+
 // PeerTable maps virtual IPs to their mesh streams and handles forwarding.
 type PeerTable struct {
 	mu     sync.RWMutex
-	peers  map[[4]byte]io.WriteCloser
+	peers  map[netip.Addr]io.WriteCloser
 	logger *slog.Logger
 }
 
 // NewPeerTable creates a new peer table.
 func NewPeerTable(logger *slog.Logger) *PeerTable {
 	return &PeerTable{
-		peers:  make(map[[4]byte]io.WriteCloser),
+		peers:  make(map[netip.Addr]io.WriteCloser),
 		logger: logger,
 	}
 }
 
 // Register adds a peer with its virtual IP.
 func (pt *PeerTable) Register(ip net.IP, w io.WriteCloser) {
-	var key [4]byte
-	copy(key[:], ip.To4())
+	key := vipKey(ip)
 	pt.mu.Lock()
 	pt.peers[key] = w
 	pt.mu.Unlock()
@@ -322,8 +333,7 @@ func (pt *PeerTable) Register(ip net.IP, w io.WriteCloser) {
 
 // Unregister removes a peer.
 func (pt *PeerTable) Unregister(ip net.IP) {
-	var key [4]byte
-	copy(key[:], ip.To4())
+	key := vipKey(ip)
 	pt.mu.Lock()
 	delete(pt.peers, key)
 	pt.mu.Unlock()
@@ -331,15 +341,33 @@ func (pt *PeerTable) Unregister(ip net.IP) {
 }
 
 // Forward sends a packet to the peer owning dstIP. Returns false if no such peer.
+// Supports both IPv4 (version 4) and IPv6 (version 6) packets.
 func (pt *PeerTable) Forward(pkt []byte) bool {
-	if len(pkt) < 20 {
+	if len(pkt) < 1 {
 		return false
 	}
-	var dstIP [4]byte
-	copy(dstIP[:], pkt[16:20])
+
+	var dstKey netip.Addr
+	version := pkt[0] >> 4
+	switch version {
+	case 4:
+		// IPv4: minimum header 20 bytes, dst at bytes 16-20
+		if len(pkt) < 20 {
+			return false
+		}
+		dstKey = netip.AddrFrom4([4]byte(pkt[16:20]))
+	case 6:
+		// IPv6: fixed 40-byte header, dst at bytes 24-40
+		if len(pkt) < 40 {
+			return false
+		}
+		dstKey = netip.AddrFrom16([16]byte(pkt[24:40]))
+	default:
+		return false
+	}
 
 	pt.mu.RLock()
-	w, ok := pt.peers[dstIP]
+	w, ok := pt.peers[dstKey]
 	if !ok {
 		pt.mu.RUnlock()
 		return false
@@ -351,7 +379,7 @@ func (pt *PeerTable) Forward(pkt []byte) bool {
 	pt.mu.RUnlock()
 
 	if err != nil {
-		pt.logger.Debug("mesh forward error", "dst", net.IP(dstIP[:]), "err", err)
+		pt.logger.Debug("mesh forward error", "dst", dstKey, "err", err)
 		return false
 	}
 	return true

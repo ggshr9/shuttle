@@ -561,6 +561,151 @@ func TestIPv6AllocatorNetwork(t *testing.T) {
 	}
 }
 
+// TestPeerTableIPv6NoCollision verifies that distinct IPv6 VIPs produce distinct
+// keys in PeerTable and do not collide to {0,0,0,0} as they did with [4]byte keys.
+func TestPeerTableIPv6NoCollision(t *testing.T) {
+	logger := slog.Default()
+	pt := NewPeerTable(logger)
+
+	// Two distinct IPv6 VIPs
+	vip1 := net.ParseIP("fd00:7::2")
+	vip2 := net.ParseIP("fd00:7::3")
+
+	r1, w1 := io.Pipe()
+	r2, w2 := io.Pipe()
+	defer r1.Close()
+	defer r2.Close()
+
+	pt.Register(vip1, &frameWriter{w: w1})
+	pt.Register(vip2, &frameWriter{w: w2})
+
+	// Build a minimal IPv6 packet to vip2.
+	// IPv6 header: version/TC/FL (4B) | payload len (2B) | next header (1B) | hop limit (1B)
+	//              src addr (16B) | dst addr (16B) = 40 bytes total.
+	pkt := make([]byte, 40)
+	pkt[0] = 0x60                         // version=6
+	copy(pkt[8:24], vip1.To16())          // src
+	copy(pkt[24:40], vip2.To16())         // dst
+
+	done := make(chan []byte, 1)
+	go func() {
+		frame, err := ReadFrame(r2)
+		if err != nil {
+			t.Errorf("ReadFrame r2: %v", err)
+			return
+		}
+		done <- frame
+	}()
+
+	if !pt.Forward(pkt) {
+		t.Fatal("Forward returned false for IPv6 packet")
+	}
+
+	got := <-done
+	if !bytes.Equal(got, pkt) {
+		t.Fatalf("forwarded IPv6 packet mismatch")
+	}
+
+	// Packet destined for vip1 must NOT arrive on r2 (no key collision).
+	pkt2 := make([]byte, 40)
+	pkt2[0] = 0x60
+	copy(pkt2[8:24], vip2.To16())         // src
+	copy(pkt2[24:40], vip1.To16())        // dst
+
+	done1 := make(chan []byte, 1)
+	go func() {
+		frame, err := ReadFrame(r1)
+		if err != nil {
+			t.Errorf("ReadFrame r1: %v", err)
+			return
+		}
+		done1 <- frame
+	}()
+
+	if !pt.Forward(pkt2) {
+		t.Fatal("Forward returned false for IPv6 packet to vip1")
+	}
+
+	got1 := <-done1
+	if !bytes.Equal(got1, pkt2) {
+		t.Fatalf("forwarded IPv6 packet to vip1 mismatch")
+	}
+
+	pt.Unregister(vip1)
+	pt.Unregister(vip2)
+	w1.Close()
+	w2.Close()
+}
+
+// TestPeerTableMixedIPv4IPv6 verifies IPv4 and IPv6 VIPs coexist without collision.
+func TestPeerTableMixedIPv4IPv6(t *testing.T) {
+	logger := slog.Default()
+	pt := NewPeerTable(logger)
+
+	v4IP := net.IPv4(10, 7, 0, 2).To4()
+	v6IP := net.ParseIP("fd00:7::2")
+
+	r4, w4 := io.Pipe()
+	r6, w6 := io.Pipe()
+	defer r4.Close()
+	defer r6.Close()
+
+	pt.Register(v4IP, &frameWriter{w: w4})
+	pt.Register(v6IP, &frameWriter{w: w6})
+
+	// IPv4 packet to v4IP
+	pkt4 := make([]byte, 40)
+	pkt4[0] = 0x45
+	pkt4[3] = 40
+	copy(pkt4[16:20], v4IP)
+
+	done4 := make(chan []byte, 1)
+	go func() {
+		frame, err := ReadFrame(r4)
+		if err != nil {
+			t.Errorf("ReadFrame r4: %v", err)
+			return
+		}
+		done4 <- frame
+	}()
+
+	if !pt.Forward(pkt4) {
+		t.Fatal("Forward returned false for IPv4 packet")
+	}
+	got4 := <-done4
+	if !bytes.Equal(got4, pkt4) {
+		t.Fatalf("IPv4 packet forwarded to wrong peer")
+	}
+
+	// IPv6 packet to v6IP
+	pkt6 := make([]byte, 40)
+	pkt6[0] = 0x60
+	copy(pkt6[24:40], v6IP.To16())
+
+	done6 := make(chan []byte, 1)
+	go func() {
+		frame, err := ReadFrame(r6)
+		if err != nil {
+			t.Errorf("ReadFrame r6: %v", err)
+			return
+		}
+		done6 <- frame
+	}()
+
+	if !pt.Forward(pkt6) {
+		t.Fatal("Forward returned false for IPv6 packet")
+	}
+	got6 := <-done6
+	if !bytes.Equal(got6, pkt6) {
+		t.Fatalf("IPv6 packet forwarded to wrong peer")
+	}
+
+	pt.Unregister(v4IP)
+	pt.Unregister(v6IP)
+	w4.Close()
+	w6.Close()
+}
+
 func TestDualStackAllocator(t *testing.T) {
 	alloc, err := NewDualStackAllocator("10.7.0.0/24", "fd00:7::/64")
 	if err != nil {
