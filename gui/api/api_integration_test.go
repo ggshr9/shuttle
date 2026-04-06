@@ -11,7 +11,7 @@ import (
 
 	"github.com/shuttleX/shuttle/config"
 
-	"nhooyr.io/websocket"
+	"github.com/coder/websocket"
 )
 
 // =============================================================================

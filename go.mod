@@ -6,6 +6,7 @@ toolchain go1.24.12
 
 require (
 	fyne.io/systray v1.12.0
+	github.com/coder/websocket v1.8.14
 	github.com/flynn/noise v1.1.0
 	github.com/hashicorp/yamux v0.1.2
 	github.com/pion/ice/v4 v4.2.0
@@ -18,7 +19,6 @@ require (
 	golang.org/x/sys v0.40.0
 	golang.zx2c4.com/wireguard v0.0.0-20250521234502-f333402bd9cb
 	gopkg.in/yaml.v3 v3.0.1
-	nhooyr.io/websocket v1.8.17
 )
 
 require (

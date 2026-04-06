@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"nhooyr.io/websocket"
+	"github.com/coder/websocket"
 
 	"github.com/shuttleX/shuttle/engine"
 	"github.com/shuttleX/shuttle/speedtest"

@@ -7,7 +7,7 @@ import (
 
 	"github.com/pion/webrtc/v4"
 	ymux "github.com/shuttleX/shuttle/transport/mux/yamux"
-	"nhooyr.io/websocket"
+	"github.com/coder/websocket"
 )
 
 func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {

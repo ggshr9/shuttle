@@ -7,7 +7,7 @@ import (
 
 	pionwebrtc "github.com/pion/webrtc/v4"
 	ymux "github.com/shuttleX/shuttle/transport/mux/yamux"
-	"nhooyr.io/websocket"
+	"github.com/coder/websocket"
 )
 
 const (
