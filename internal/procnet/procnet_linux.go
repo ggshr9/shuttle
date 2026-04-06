@@ -83,10 +83,10 @@ func listLinux() ([]ProcInfo, error) {
 		if err != nil {
 			continue
 		}
-		fdPath := filepath.Join("/proc", entry.Name(), "fd")
+		fdPath := filepath.Join("/proc", entry.Name(), "fd") //nolint:gocritic // /proc is a real filesystem path
 		fds, _ := os.ReadDir(fdPath)
 		for _, fd := range fds {
-			link, _ := os.Readlink(filepath.Join(fdPath, fd.Name()))
+			link, _ := os.Readlink(filepath.Join(fdPath, fd.Name())) //nolint:gocritic // /proc is a real filesystem path
 			if !strings.HasPrefix(link, "socket:[") {
 				continue
 			}
