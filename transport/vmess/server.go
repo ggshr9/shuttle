@@ -3,7 +3,6 @@ package vmess
 import (
 	"bufio"
 	"context"
-	"encoding/binary"
 	"fmt"
 	"io"
 	"log"
@@ -115,22 +114,6 @@ func (s *Server) lookupAuthID(authID [AuthIDLen]byte) ([16]byte, bool) {
 	}
 
 	return [16]byte{}, false
-}
-
-// authIDBytes converts an auth_id byte slice to a fixed array.
-func authIDBytes(b []byte) [AuthIDLen]byte {
-	var out [AuthIDLen]byte
-	copy(out[:], b)
-	return out
-}
-
-// readUint16 reads a big-endian uint16 from r.
-func readUint16(r io.Reader) (uint16, error) {
-	var buf [2]byte
-	if _, err := io.ReadFull(r, buf[:]); err != nil {
-		return 0, err
-	}
-	return binary.BigEndian.Uint16(buf[:]), nil
 }
 
 // bufferedConn wraps a bufio.Reader (for reads) with the original net.Conn.

@@ -2,6 +2,7 @@ package engine
 
 import (
 	"bytes"
+	"context"
 	"net"
 	"sync"
 	"testing"
@@ -35,6 +36,7 @@ func TestNewEngine(t *testing.T) {
 
 	if eng == nil {
 		t.Fatal("New returned nil")
+		return
 	}
 	if eng.state != StateStopped {
 		t.Errorf("initial state = %v, want StateStopped", eng.state)
@@ -828,7 +830,7 @@ func TestSetTransportStrategyUnknown(t *testing.T) {
 	cfg := config.DefaultClientConfig()
 	eng := New(cfg)
 
-	err := eng.SetTransportStrategy(nil, "bogus")
+	err := eng.SetTransportStrategy(context.TODO(), "bogus")
 	if err == nil {
 		t.Fatal("expected error for unknown strategy, got nil")
 	}
@@ -840,7 +842,7 @@ func TestSetTransportStrategyNoSelector(t *testing.T) {
 
 	// Engine is stopped — selector is nil. All valid strategies should return an error.
 	for _, s := range []string{"auto", "priority", "latency", "multipath"} {
-		err := eng.SetTransportStrategy(nil, s)
+		err := eng.SetTransportStrategy(context.TODO(), s)
 		if err == nil {
 			t.Errorf("strategy=%q: expected error (no active selector), got nil", s)
 		}

@@ -123,8 +123,8 @@ func (e *Engine) startInbounds(ctx context.Context, cfg *config.ClientConfig) ([
 
 	ibRouter := e.traffic.BuildInboundRouter(rt, dnsResolver, outbounds, outbounds["proxy"])
 
-	var closers []func() error
-	var started []adapter.Inbound
+	closers := make([]func() error, 0, len(cfg.Inbounds))
+	started := make([]adapter.Inbound, 0, len(cfg.Inbounds))
 
 	// On failure, only clean up what startInbounds created (inbounds + outbounds).
 	// The caller (startInternal) handles sel, cancel, and state.

@@ -55,7 +55,7 @@ func TestDecodeHolePunchPacketInvalid(t *testing.T) {
 
 	// Wrong magic
 	wrongMagic := make([]byte, HolePunchPacketSize)
-	copy(wrongMagic[0:4], []byte("NOPE"))
+	copy(wrongMagic[0:4], "NOPE")
 	_, err = DecodeHolePunchPacket(wrongMagic)
 	if err == nil {
 		t.Error("expected error for wrong magic")

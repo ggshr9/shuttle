@@ -15,7 +15,7 @@ func (e *Engine) Unsubscribe(ch <-chan Event) {
 	e.obs.Unsubscribe(ch)
 }
 
-func (e *Engine) emit(ev Event) {
+func (e *Engine) emit(ev Event) { //nolint:gocritic // hugeParam: Event is stack-allocated in hot path
 	e.obs.Emit(ev)
 }
 

@@ -29,6 +29,7 @@ func TestPresetByID(t *testing.T) {
 	p := PresetByID("loyalsoldier")
 	if p == nil {
 		t.Fatal("expected loyalsoldier preset")
+		return
 	}
 	if p.DirectList == "" {
 		t.Fatal("loyalsoldier preset missing DirectList URL")
@@ -42,6 +43,7 @@ func TestPresetByIDV2fly(t *testing.T) {
 	p := PresetByID("v2fly")
 	if p == nil {
 		t.Fatal("expected v2fly preset")
+		return
 	}
 	if p.DirectList == "" {
 		t.Fatal("v2fly preset missing DirectList URL")
@@ -52,6 +54,7 @@ func TestPresetByIDCustom(t *testing.T) {
 	p := PresetByID("custom")
 	if p == nil {
 		t.Fatal("expected custom preset")
+		return
 	}
 	// Custom preset has empty URLs (user fills them in)
 	if p.DirectList != "" {

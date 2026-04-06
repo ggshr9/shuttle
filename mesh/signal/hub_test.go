@@ -16,6 +16,7 @@ func TestNewHub(t *testing.T) {
 	h := newTestHub()
 	if h == nil {
 		t.Fatal("NewHub returned nil")
+		return
 	}
 	if h.peers == nil {
 		t.Fatal("peers map is nil")

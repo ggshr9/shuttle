@@ -124,7 +124,7 @@ func parseBenchLine(line string) (BenchResult, bool) {
 
 // Check compares benchmark results against budgets and returns results.
 func Check(budgets []Budget, results []BenchResult) []CheckResult {
-	var checks []CheckResult
+	checks := make([]CheckResult, 0, len(budgets))
 	for _, b := range budgets {
 		cr := CheckResult{Budget: b}
 		br := findResult(b.Name, results)

@@ -14,8 +14,6 @@ const (
 
 	// maxUDPPayload is the maximum UDP datagram payload size.
 	maxUDPPayload = 65507
-	// udpFrameHeaderMin is the minimum frame header size: 2 (length) + 1 (atyp) + 4 (ipv4) + 2 (port).
-	udpFrameHeaderMin = 9
 )
 
 // WriteUDPFrame writes a length-prefixed UDP frame to w.

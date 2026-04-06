@@ -82,7 +82,7 @@ func TestByteStreamServer_FullPipeline(t *testing.T) {
 	}()
 
 	// Client side: ByteStreamClient with TLS + HMAC + yamux.
-	client := NewByteStreamClient(ByteStreamConfig{
+	client := NewByteStreamClient(&ByteStreamConfig{
 		Addr:     ln.Addr().String(),
 		Dialer:   tcpDialer(),
 		Security: []adapter.SecureWrapper{tlsClient},
@@ -172,7 +172,7 @@ func TestByteStreamServer_WrongPassword(t *testing.T) {
 	}()
 
 	// Client side with wrong password.
-	client := NewByteStreamClient(ByteStreamConfig{
+	client := NewByteStreamClient(&ByteStreamConfig{
 		Addr:     ln.Addr().String(),
 		Dialer:   tcpDialer(),
 		Security: []adapter.SecureWrapper{tlsClient},

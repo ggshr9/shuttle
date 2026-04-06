@@ -121,7 +121,7 @@ func (e *Engine) startInternal(ctx context.Context) error {
 	e.mu.Unlock()
 
 	// Initialize proxy providers from config.
-	var proxyProviders []*provider.ProxyProvider
+	proxyProviders := make([]*provider.ProxyProvider, 0, len(cfgSnap.ProxyProviders))
 	for _, ppCfg := range cfgSnap.ProxyProviders {
 		interval := time.Hour
 		if ppCfg.Interval != "" {
@@ -149,8 +149,8 @@ func (e *Engine) startInternal(ctx context.Context) error {
 	e.mu.Unlock()
 
 	// Initialize rule providers from config.
-	var ruleProviders []*provider.RuleProvider
-	ruleProviderMap := make(map[string]*provider.RuleProvider)
+	ruleProviders := make([]*provider.RuleProvider, 0, len(cfgSnap.RuleProviders))
+	ruleProviderMap := make(map[string]*provider.RuleProvider, len(cfgSnap.RuleProviders))
 	for _, rpCfg := range cfgSnap.RuleProviders {
 		interval := time.Hour
 		if rpCfg.Interval != "" {

@@ -25,12 +25,16 @@ func main() {
 		os.Exit(2)
 	}
 
+	os.Exit(run(bf, *inputPath))
+}
+
+func run(bf *checkperf.BudgetFile, inputPath string) int {
 	input := os.Stdin
-	if *inputPath != "" {
-		f, err := os.Open(*inputPath)
+	if inputPath != "" {
+		f, err := os.Open(inputPath)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-			os.Exit(2)
+			return 2
 		}
 		defer f.Close()
 		input = f
@@ -39,7 +43,7 @@ func main() {
 	results, err := checkperf.ParseBenchmarks(input)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error parsing benchmarks: %v\n", err)
-		os.Exit(2)
+		return 2
 	}
 
 	checks := checkperf.Check(bf.Budgets, results)
@@ -47,7 +51,8 @@ func main() {
 
 	for _, c := range checks {
 		if !c.Missing && !c.Pass() {
-			os.Exit(1)
+			return 1
 		}
 	}
+	return 0
 }

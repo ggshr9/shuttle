@@ -1,6 +1,7 @@
 package transport
 
 import (
+	"bytes"
 	"context"
 	"crypto/tls"
 	"fmt"
@@ -76,7 +77,7 @@ func TestByteStreamPipeline_ConcurrentStreams(t *testing.T) {
 	}()
 
 	// Client: ByteStreamClient with TLS + HMAC + yamux.
-	client := NewByteStreamClient(ByteStreamConfig{
+	client := NewByteStreamClient(&ByteStreamConfig{
 		Addr:     ln.Addr().String(),
 		Dialer:   tcpDialer(),
 		Security: []adapter.SecureWrapper{tlsClient},
@@ -118,7 +119,7 @@ func TestByteStreamPipeline_ConcurrentStreams(t *testing.T) {
 				t.Errorf("stream %d ReadFull: %v", id, err)
 				return
 			}
-			if string(buf) != string(msg) {
+			if !bytes.Equal(buf, msg) {
 				t.Errorf("stream %d: got %q, want %q", id, buf, msg)
 			}
 		}(i)

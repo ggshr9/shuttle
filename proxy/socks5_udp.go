@@ -15,10 +15,6 @@ const (
 
 	// udpBufSize is the maximum size for a single UDP datagram read from the client.
 	udpBufSize = 65535
-	// udpIdleTimeout is how long to wait for a response on a UDP stream before cleanup.
-	udpIdleTimeout = 5 * time.Second
-	// udpAssociateReadTimeout is the max time to wait for the first datagram.
-	udpAssociateReadTimeout = 120 * time.Second
 )
 
 // udpStreamEntry tracks a transport stream opened for a specific UDP target.

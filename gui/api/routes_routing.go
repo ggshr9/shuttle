@@ -211,7 +211,8 @@ func registerRoutingRoutes(mux *http.ServeMux, eng *engine.Engine) {
 			routerCfg := &router.RouterConfig{
 				DefaultAction: router.Action(cfg.Routing.Default),
 			}
-			for _, rule := range cfg.Routing.Rules {
+			for i := range cfg.Routing.Rules {
+				rule := &cfg.Routing.Rules[i]
 				rr := router.Rule{Action: router.Action(rule.Action)}
 				switch {
 				case rule.Domains != "":

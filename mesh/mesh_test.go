@@ -142,20 +142,6 @@ func TestIPAllocatorExhaustion(t *testing.T) {
 	}
 }
 
-// pipeWriter wraps a pipe writer to implement io.WriteCloser and serializes writes.
-type syncWriter struct {
-	mu sync.Mutex
-	w  io.WriteCloser
-}
-
-func (sw *syncWriter) Write(p []byte) (int, error) {
-	sw.mu.Lock()
-	defer sw.mu.Unlock()
-	return sw.w.Write(p)
-}
-
-func (sw *syncWriter) Close() error { return sw.w.Close() }
-
 // frameWriter wraps a writer to produce length-prefixed frames.
 type frameWriter struct {
 	mu sync.Mutex

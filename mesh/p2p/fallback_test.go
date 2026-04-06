@@ -113,6 +113,7 @@ func TestFallbackControllerGetPeerStats(t *testing.T) {
 	stats := fc.GetPeerStats(vip)
 	if stats == nil {
 		t.Fatal("expected non-nil stats")
+		return
 	}
 
 	if stats.PacketsSent != 2 {

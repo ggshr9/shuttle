@@ -197,7 +197,10 @@ func (s *Server) newPeerConnection() (*webrtc.PeerConnection, error) {
 	se.DetachDataChannels()
 	if s.config.LoopbackOnly {
 		se.SetICEMulticastDNSMode(ice.MulticastDNSModeDisabled)
-		se.SetNAT1To1IPs([]string{"127.0.0.1"}, webrtc.ICECandidateTypeHost)
+		_ = se.SetICEAddressRewriteRules(webrtc.ICEAddressRewriteRule{
+			External:        []string{"127.0.0.1"},
+			AsCandidateType: webrtc.ICECandidateTypeHost,
+		})
 		se.SetIncludeLoopbackCandidate(true)
 	}
 	api := webrtc.NewAPI(webrtc.WithSettingEngine(se))

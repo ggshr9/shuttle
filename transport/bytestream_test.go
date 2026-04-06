@@ -83,7 +83,7 @@ func TestByteStreamClient_DialAndStream(t *testing.T) {
 	}()
 
 	// Client side.
-	client := NewByteStreamClient(ByteStreamConfig{
+	client := NewByteStreamClient(&ByteStreamConfig{
 		Addr:     ln.Addr().String(),
 		Dialer:   tcpDialer(),
 		Auth:     authenticator,
@@ -235,7 +235,7 @@ func TestByteStreamClient_WithTLS(t *testing.T) {
 	}()
 
 	// Client side.
-	client := NewByteStreamClient(ByteStreamConfig{
+	client := NewByteStreamClient(&ByteStreamConfig{
 		Addr:     ln.Addr().String(),
 		Dialer:   tcpDialer(),
 		Security: []adapter.SecureWrapper{tlsClient},

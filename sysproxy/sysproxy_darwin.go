@@ -15,8 +15,9 @@ func getNetworkServices() ([]string, error) {
 		return nil, fmt.Errorf("list network services: %w", err)
 	}
 
-	var services []string
-	for _, line := range strings.Split(string(out), "\n") {
+	lines := strings.Split(string(out), "\n")
+	services := make([]string, 0, len(lines))
+	for _, line := range lines {
 		line = strings.TrimSpace(line)
 		// Skip header line and empty lines
 		if line == "" || strings.HasPrefix(line, "An asterisk") {
@@ -49,9 +50,9 @@ func set(cfg ProxyConfig) error {
 func setForService(service string, cfg ProxyConfig) error {
 	if !cfg.Enable {
 		// Disable all proxies
-		exec.Command("networksetup", "-setwebproxystate", service, "off").Run()
-		exec.Command("networksetup", "-setsecurewebproxystate", service, "off").Run()
-		exec.Command("networksetup", "-setsocksfirewallproxystate", service, "off").Run()
+		_ = exec.Command("networksetup", "-setwebproxystate", service, "off").Run()
+		_ = exec.Command("networksetup", "-setsecurewebproxystate", service, "off").Run()
+		_ = exec.Command("networksetup", "-setsocksfirewallproxystate", service, "off").Run()
 		return nil
 	}
 
@@ -60,11 +61,11 @@ func setForService(service string, cfg ProxyConfig) error {
 		host, port := splitHostPort(cfg.HTTPAddr)
 		if host != "" && port != "" {
 			// HTTP proxy
-			exec.Command("networksetup", "-setwebproxy", service, host, port).Run()
-			exec.Command("networksetup", "-setwebproxystate", service, "on").Run()
+			_ = exec.Command("networksetup", "-setwebproxy", service, host, port).Run()
+			_ = exec.Command("networksetup", "-setwebproxystate", service, "on").Run()
 			// HTTPS proxy (uses same address)
-			exec.Command("networksetup", "-setsecurewebproxy", service, host, port).Run()
-			exec.Command("networksetup", "-setsecurewebproxystate", service, "on").Run()
+			_ = exec.Command("networksetup", "-setsecurewebproxy", service, host, port).Run()
+			_ = exec.Command("networksetup", "-setsecurewebproxystate", service, "on").Run()
 		}
 	}
 
@@ -72,15 +73,15 @@ func setForService(service string, cfg ProxyConfig) error {
 	if cfg.SOCKSAddr != "" {
 		host, port := splitHostPort(cfg.SOCKSAddr)
 		if host != "" && port != "" {
-			exec.Command("networksetup", "-setsocksfirewallproxy", service, host, port).Run()
-			exec.Command("networksetup", "-setsocksfirewallproxystate", service, "on").Run()
+			_ = exec.Command("networksetup", "-setsocksfirewallproxy", service, host, port).Run()
+			_ = exec.Command("networksetup", "-setsocksfirewallproxystate", service, "on").Run()
 		}
 	}
 
 	// Set bypass domains
 	if len(cfg.Bypass) > 0 {
 		bypassList := strings.Join(cfg.Bypass, " ")
-		exec.Command("networksetup", "-setproxybypassdomains", service, bypassList).Run()
+		_ = exec.Command("networksetup", "-setproxybypassdomains", service, bypassList).Run()
 	}
 
 	return nil

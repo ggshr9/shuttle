@@ -91,7 +91,7 @@ func (h *logHandler) Enabled(_ context.Context, _ slog.Level) bool {
 	return true
 }
 
-func (h *logHandler) Handle(_ context.Context, r slog.Record) error {
+func (h *logHandler) Handle(_ context.Context, r slog.Record) error { //nolint:gocritic // hugeParam: slog.Handler interface
 	var b strings.Builder
 	b.WriteString(r.Time.Format("15:04:05"))
 	b.WriteString(" ")

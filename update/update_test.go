@@ -86,7 +86,7 @@ func TestBuildUpdateInfo(t *testing.T) {
 	Version = "1.0.0"
 	defer func() { Version = oldVersion }()
 
-	info := c.buildUpdateInfo(release)
+	info := c.buildUpdateInfo(&release)
 
 	if !info.Available {
 		t.Error("Expected update to be available")
@@ -109,7 +109,7 @@ func TestBuildUpdateInfoDevVersion(t *testing.T) {
 	Version = "dev"
 	defer func() { Version = oldVersion }()
 
-	info := c.buildUpdateInfo(release)
+	info := c.buildUpdateInfo(&release)
 
 	if info.Available {
 		t.Error("Dev version should not show updates available")

@@ -443,7 +443,7 @@ func (c *UPnPClient) soapRequest(action, body string) (string, error) {
 	}
 
 	req.Header.Set("Content-Type", "text/xml; charset=\"utf-8\"")
-	req.Header.Set("SOAPAction", fmt.Sprintf("\"%s\"", action))
+	req.Header.Set("SOAPAction", fmt.Sprintf("%q", action))
 
 	client := &http.Client{Timeout: 5 * time.Second}
 	resp, err := client.Do(req)

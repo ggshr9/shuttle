@@ -52,9 +52,6 @@ const (
 	AuthIDLen = 16
 	NonceLen  = 12
 
-	// maxChunkSize is the maximum body chunk payload (16 KB).
-	maxChunkSize = 16384
-
 	ResponseOK    byte = 0x00
 	ResponseError byte = 0x01
 )

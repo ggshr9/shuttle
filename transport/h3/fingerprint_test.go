@@ -83,6 +83,7 @@ func TestDefaultChromeTransportParamsValues(t *testing.T) {
 	params := DefaultChromeTransportParams()
 	if params == nil {
 		t.Fatal("DefaultChromeTransportParams returned nil")
+		return
 	}
 
 	tests := []struct {
@@ -120,6 +121,7 @@ func TestDefaultFingerprintValues(t *testing.T) {
 	fp := DefaultFingerprint()
 	if fp == nil {
 		t.Fatal("DefaultFingerprint returned nil")
+		return
 	}
 	if fp.Browser != "chrome" {
 		t.Fatalf("Browser = %q, want \"chrome\"", fp.Browser)

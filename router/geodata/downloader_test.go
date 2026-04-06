@@ -15,6 +15,7 @@ func TestNewDownloader(t *testing.T) {
 	d := NewDownloader(dir, nil)
 	if d == nil {
 		t.Fatal("NewDownloader returned nil")
+		return
 	}
 	if d.dataDir != dir {
 		t.Fatalf("dataDir = %q, want %q", d.dataDir, dir)

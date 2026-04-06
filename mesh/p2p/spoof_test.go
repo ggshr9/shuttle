@@ -143,7 +143,7 @@ func TestCreateSpoofedConnHighPort(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateSpoofedConn failed: %v", err)
 	}
-	defer conn.Close()
+	conn.Close()
 }
 
 func TestGetSpoofInfo(t *testing.T) {

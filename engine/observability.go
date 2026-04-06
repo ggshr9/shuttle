@@ -102,7 +102,7 @@ func (om *ObservabilityManager) Unsubscribe(ch <-chan Event) {
 
 // Emit sends an event to all subscribers. It is non-blocking: if a subscriber's
 // channel buffer is full the event is dropped for that subscriber.
-func (om *ObservabilityManager) Emit(ev Event) {
+func (om *ObservabilityManager) Emit(ev Event) { //nolint:gocritic // hugeParam: Event is stack-allocated, hot path
 	ev.Timestamp = time.Now()
 	om.logger.Debug("emitting event", slog.String("type", ev.Type.String()))
 

@@ -65,7 +65,7 @@ func TestBuildIPCConfig(t *testing.T) {
 		},
 	}
 
-	ipc, err := buildIPCConfig(cfg)
+	ipc, err := buildIPCConfig(&cfg)
 	if err != nil {
 		t.Fatalf("buildIPCConfig: %v", err)
 	}
@@ -107,7 +107,7 @@ func TestBuildIPCConfig_MissingPrivateKey(t *testing.T) {
 			{PublicKey: generateTestKey(0x20)},
 		},
 	}
-	_, err := buildIPCConfig(cfg)
+	_, err := buildIPCConfig(&cfg)
 	if err == nil {
 		t.Fatal("expected error for missing private key")
 	}
@@ -125,7 +125,7 @@ func TestBuildIPCConfig_NoPresharedKey(t *testing.T) {
 		},
 	}
 
-	ipc, err := buildIPCConfig(cfg)
+	ipc, err := buildIPCConfig(&cfg)
 	if err != nil {
 		t.Fatalf("buildIPCConfig: %v", err)
 	}
@@ -153,7 +153,7 @@ func TestBuildIPCConfig_MultiplePeers(t *testing.T) {
 		},
 	}
 
-	ipc, err := buildIPCConfig(cfg)
+	ipc, err := buildIPCConfig(&cfg)
 	if err != nil {
 		t.Fatalf("buildIPCConfig: %v", err)
 	}
@@ -298,7 +298,7 @@ func TestNewDialerValidation(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := NewDialer(tt.cfg, nil)
+			_, err := NewDialer(&tt.cfg, nil)
 			if err == nil {
 				t.Fatal("expected validation error")
 			}

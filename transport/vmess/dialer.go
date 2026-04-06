@@ -28,7 +28,7 @@ type Dialer struct {
 }
 
 // NewDialer creates a Dialer from the given config.
-func NewDialer(cfg DialerConfig) (*Dialer, error) {
+func NewDialer(cfg *DialerConfig) (*Dialer, error) {
 	if cfg.Server == "" {
 		return nil, fmt.Errorf("vmess/dialer: server address required")
 	}

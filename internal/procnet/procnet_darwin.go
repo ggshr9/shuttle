@@ -13,7 +13,7 @@ import (
 func ListNetworkProcesses() ([]ProcInfo, error) {
 	out, err := exec.Command("lsof", "-i", "-nP", "-Fpcn").Output()
 	if err != nil {
-		return nil, nil
+		return nil, err
 	}
 	return parseLsofFpcn(string(out)), nil
 }

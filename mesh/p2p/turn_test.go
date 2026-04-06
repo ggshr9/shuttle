@@ -1,6 +1,7 @@
 package p2p
 
 import (
+	"context"
 	"net"
 	"testing"
 	"time"
@@ -393,7 +394,7 @@ func TestTURNClientCreatePermissionNotAllocated(t *testing.T) {
 
 	peerAddr := &net.UDPAddr{IP: net.ParseIP("192.168.1.1"), Port: 1234}
 
-	err := client.CreatePermission(nil, peerAddr)
+	err := client.CreatePermission(context.TODO(), peerAddr)
 	if err == nil {
 		t.Error("CreatePermission should fail when not allocated")
 	}
@@ -419,7 +420,7 @@ func TestParseErrorResponse(t *testing.T) {
 	data[21] = 0x09 // ERROR-CODE type
 	data[22] = 0x00
 	data[23] = 0x08 // Length
-	// Reserved + class (4) + number (01) = 401
+	// Reserved, class (4), number (01) encode error 401.
 	data[24] = 0x00
 	data[25] = 0x00
 	data[26] = 0x04 // Class

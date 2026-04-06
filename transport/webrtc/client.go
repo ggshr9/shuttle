@@ -9,7 +9,6 @@ import (
 	"io"
 	"net/http"
 	"strings"
-	"sync"
 	"sync/atomic"
 	"time"
 
@@ -35,7 +34,6 @@ type ClientConfig struct {
 // Client implements transport.ClientTransport using WebRTC DataChannels.
 type Client struct {
 	config *ClientConfig
-	mu     sync.Mutex
 	closed atomic.Bool
 }
 
@@ -81,7 +79,10 @@ func (c *Client) newPeerConnection() (*webrtc.PeerConnection, error) {
 	se.DetachDataChannels()
 	if c.config.LoopbackOnly {
 		se.SetICEMulticastDNSMode(ice.MulticastDNSModeDisabled)
-		se.SetNAT1To1IPs([]string{"127.0.0.1"}, webrtc.ICECandidateTypeHost)
+		_ = se.SetICEAddressRewriteRules(webrtc.ICEAddressRewriteRule{
+			External:        []string{"127.0.0.1"},
+			AsCandidateType: webrtc.ICECandidateTypeHost,
+		})
 		se.SetIncludeLoopbackCandidate(true)
 	}
 
@@ -142,13 +143,16 @@ func (c *Client) Dial(ctx context.Context, addr string) (transport.Connection, e
 // dialWS establishes a connection via WebSocket signaling with Trickle ICE.
 func (c *Client) dialWS(ctx context.Context) (transport.Connection, error) {
 	// Connect to WebSocket
-	wsConn, _, err := websocket.Dial(ctx, c.config.SignalURL, &websocket.DialOptions{
+	wsConn, wsResp, err := websocket.Dial(ctx, c.config.SignalURL, &websocket.DialOptions{
 		HTTPClient: &http.Client{
 			Transport: &http.Transport{
 				TLSClientConfig: &tls.Config{MinVersion: tls.VersionTLS12},
 			},
 		},
 	})
+	if wsResp != nil && wsResp.Body != nil {
+		wsResp.Body.Close()
+	}
 	if err != nil {
 		return nil, fmt.Errorf("webrtc ws dial: %w", err)
 	}

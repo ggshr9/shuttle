@@ -46,7 +46,7 @@ func NewRecorderManual() *Recorder {
 }
 
 // Record adds an event to the timeline.
-func (r *Recorder) Record(e Event) {
+func (r *Recorder) Record(e Event) { //nolint:gocritic // hugeParam: keeping value semantics for test API
 	if e.Time.IsZero() {
 		e.Time = time.Now()
 	}
@@ -173,12 +173,13 @@ func (r *Recorder) Format() string {
 		offset := e.Time.Sub(r.start)
 		ms := float64(offset) / float64(time.Millisecond)
 
-		arrow := ""
-		if e.From != "" && e.To != "" {
+		var arrow string
+		switch {
+		case e.From != "" && e.To != "":
 			arrow = fmt.Sprintf("%-8s → %-8s", e.From, e.To)
-		} else if e.From != "" {
+		case e.From != "":
 			arrow = fmt.Sprintf("%-8s          ", e.From)
-		} else {
+		default:
 			arrow = fmt.Sprintf("%-19s", "")
 		}
 

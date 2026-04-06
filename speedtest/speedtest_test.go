@@ -223,7 +223,7 @@ func TestTestAllStreamWithLocalServer(t *testing.T) {
 	resultCh := make(chan TestResult, len(servers))
 	go tester.TestAllStream(ctx, servers, resultCh)
 
-	var results []TestResult
+	results := make([]TestResult, 0, len(servers))
 	for result := range resultCh {
 		results = append(results, result)
 	}

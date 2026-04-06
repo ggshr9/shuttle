@@ -42,6 +42,7 @@ func TestURLTestState_SelectBest(t *testing.T) {
 	sel := state.selected.Load()
 	if sel == nil {
 		t.Fatal("expected a selected outbound, got nil")
+		return
 	}
 	if (*sel).Tag() != "fast" {
 		t.Errorf("selected = %q, want %q", (*sel).Tag(), "fast")
@@ -77,6 +78,7 @@ func TestURLTestState_TolerancePreventsSwitch(t *testing.T) {
 	first := state.selected.Load()
 	if first == nil {
 		t.Fatal("expected initial selection")
+		return
 	}
 	firstTag := (*first).Tag()
 
@@ -86,6 +88,7 @@ func TestURLTestState_TolerancePreventsSwitch(t *testing.T) {
 	second := state.selected.Load()
 	if second == nil {
 		t.Fatal("expected selection after second pass")
+		return
 	}
 	if (*second).Tag() != firstTag {
 		t.Errorf("expected no switch due to tolerance, was %q now %q", firstTag, (*second).Tag())

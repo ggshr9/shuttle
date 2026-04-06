@@ -1,6 +1,7 @@
 package webrtc
 
 import (
+	"context"
 	"encoding/json"
 	"testing"
 )
@@ -44,7 +45,7 @@ func TestClientClosedDial(t *testing.T) {
 		Password:  "secret",
 	})
 	c.Close()
-	_, err := c.Dial(nil, "")
+	_, err := c.Dial(context.TODO(), "")
 	if err == nil {
 		t.Fatal("expected error dialing closed client")
 	}
@@ -172,7 +173,7 @@ func TestValidateSDP(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			err := validateSDP(tt.sdp)
 			if (err != nil) != tt.wantErr {
-				t.Errorf("validateSDP(%q) error = %v, wantErr = %v", tt.sdp[:min(len(tt.sdp), 20)], err, tt.wantErr)
+				t.Errorf("validateSDP(%q) error = %v, wantErr = %v", tt.sdp[:minInt(len(tt.sdp), 20)], err, tt.wantErr)
 			}
 		})
 	}
@@ -255,7 +256,7 @@ func TestSignalResponseError(t *testing.T) {
 	}
 }
 
-func min(a, b int) int {
+func minInt(a, b int) int {
 	if a < b {
 		return a
 	}

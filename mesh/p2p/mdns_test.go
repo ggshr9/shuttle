@@ -11,6 +11,7 @@ func TestNewMDNSService(t *testing.T) {
 
 	if service == nil {
 		t.Fatal("NewMDNSService returned nil")
+		return
 	}
 
 	if service.instanceName != "test-instance" {
@@ -23,6 +24,7 @@ func TestNewMDNSServiceAutoName(t *testing.T) {
 
 	if service == nil {
 		t.Fatal("NewMDNSService returned nil")
+		return
 	}
 
 	if service.instanceName == "" {
@@ -70,6 +72,7 @@ func TestMDNSServiceGetPeer(t *testing.T) {
 	peer := service.GetPeer("peer1")
 	if peer == nil {
 		t.Fatal("GetPeer returned nil")
+		return
 	}
 	if peer.Port != 12345 {
 		t.Errorf("peer.Port = %d, want 12345", peer.Port)

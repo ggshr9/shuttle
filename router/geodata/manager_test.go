@@ -12,7 +12,7 @@ func TestStatusPersistence(t *testing.T) {
 	dir := t.TempDir()
 
 	// Create manager and simulate an update timestamp
-	m := NewManager(ManagerConfig{
+	m := NewManager(&ManagerConfig{
 		DataDir: dir,
 	}, nil)
 
@@ -45,7 +45,7 @@ func TestStatusPersistence(t *testing.T) {
 	}
 
 	// Create a new manager from the same directory — should load persisted timestamp
-	m2 := NewManager(ManagerConfig{
+	m2 := NewManager(&ManagerConfig{
 		DataDir: dir,
 	}, nil)
 
@@ -59,7 +59,7 @@ func TestStatusPersistenceMissingFile(t *testing.T) {
 	dir := t.TempDir()
 
 	// No status.json exists — should not error
-	m := NewManager(ManagerConfig{
+	m := NewManager(&ManagerConfig{
 		DataDir: dir,
 	}, nil)
 
@@ -77,7 +77,7 @@ func TestStatusPersistenceCorruptFile(t *testing.T) {
 	_ = os.WriteFile(statusPath, []byte("not json"), 0o600)
 
 	// Should not error, just ignore corrupt data
-	m := NewManager(ManagerConfig{
+	m := NewManager(&ManagerConfig{
 		DataDir: dir,
 	}, nil)
 
@@ -91,7 +91,7 @@ func TestManagerNextUpdate(t *testing.T) {
 	dir := t.TempDir()
 	now := time.Now().Truncate(time.Second)
 
-	m := NewManager(ManagerConfig{
+	m := NewManager(&ManagerConfig{
 		DataDir:        dir,
 		AutoUpdate:     true,
 		UpdateInterval: "1h",
@@ -111,7 +111,7 @@ func TestManagerNextUpdate(t *testing.T) {
 func TestManagerHasAllFiles(t *testing.T) {
 	dir := t.TempDir()
 
-	m := NewManager(ManagerConfig{
+	m := NewManager(&ManagerConfig{
 		DataDir: dir,
 	}, nil)
 
@@ -130,7 +130,7 @@ func TestManagerHasAllFiles(t *testing.T) {
 }
 
 func TestManagerBuildSources(t *testing.T) {
-	m := NewManager(ManagerConfig{
+	m := NewManager(&ManagerConfig{
 		DirectListURL:  "https://example.com/direct.txt",
 		ProxyListURL:   "https://example.com/proxy.txt",
 		RejectListURL:  "https://example.com/reject.txt",
@@ -145,7 +145,7 @@ func TestManagerBuildSources(t *testing.T) {
 	}
 
 	// Without optional URLs
-	m2 := NewManager(ManagerConfig{
+	m2 := NewManager(&ManagerConfig{
 		DirectListURL: "https://example.com/direct.txt",
 		ProxyListURL:  "https://example.com/proxy.txt",
 		RejectListURL: "https://example.com/reject.txt",

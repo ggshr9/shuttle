@@ -26,7 +26,6 @@ func runAPI(configPath, listen string, autoConnect bool) {
 	slog.SetDefault(logger)
 
 	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
 
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
@@ -41,6 +40,7 @@ func runAPI(configPath, listen string, autoConnect bool) {
 	srv := api.NewServer(eng, nil)
 	addr, err := srv.ListenAndServe(listen)
 	if err != nil {
+		cancel()
 		fmt.Fprintf(os.Stderr, "Failed to start API server: %v\n", err)
 		os.Exit(1)
 	}

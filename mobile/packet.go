@@ -14,13 +14,15 @@ var (
 	pktInbound chan *PacketResult
 )
 
-func initPacketPipe() {
+// InitPacketPipe prepares the inbound packet channel.
+func InitPacketPipe() {
 	pktMu.Lock()
 	pktInbound = make(chan *PacketResult, 256)
 	pktMu.Unlock()
 }
 
-func closePacketPipe() {
+// ClosePacketPipe shuts down the inbound packet channel.
+func ClosePacketPipe() {
 	pktMu.Lock()
 	if pktInbound != nil {
 		close(pktInbound)
@@ -62,9 +64,9 @@ func ReadPacket() *PacketResult {
 	return pkt
 }
 
-// enqueueInboundPacket sends a processed packet to the native layer.
+// EnqueueInboundPacket sends a processed packet to the native layer.
 // Called by the engine when a response packet needs to be delivered to the TUN.
-func enqueueInboundPacket(data []byte, proto int32) {
+func EnqueueInboundPacket(data []byte, proto int32) {
 	pktMu.Lock()
 	ch := pktInbound
 	pktMu.Unlock()

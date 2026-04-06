@@ -130,18 +130,6 @@ func TestSpeedTestAll_Concurrency(t *testing.T) {
 	// and returns connections whose Close() blocks for `holdDuration`.
 
 	const numServers = 4
-	const holdDuration = 25 * time.Millisecond
-
-	// delayedConn wraps net.Conn and sleeps before Close returns.
-	type delayedConn struct {
-		net.Conn
-	}
-	closeWithDelay := func(inner net.Conn) net.Conn {
-		return struct {
-			net.Conn
-		}{inner}
-	}
-	_ = closeWithDelay // not used below; use goroutine-based approach instead
 
 	// Approach: use a channel to count simultaneous workers that are in the
 	// "active" window (between semaphore acquire and release). We do this
