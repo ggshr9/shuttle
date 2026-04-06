@@ -20,17 +20,33 @@ type RequestHeader struct {
 	Cmd     byte   // CmdTCP or CmdUDP
 	Network string // "tcp" or "udp"
 	Address string // "host:port"
+	Flow    string // XTLS flow, e.g. "xtls-rprx-vision" (empty = no addons)
 }
 
 // EncodeRequest writes a VLESS request header to w.
-// Format: [version(1)=0][uuid(16)][addon_len(1)=0][cmd(1)][addr(SOCKS5)]
+// Format: [version(1)=0][uuid(16)][addon_len(1)][addons(addon_len)][cmd(1)][addr(SOCKS5)]
+//
+// When h.Flow is non-empty the addons field encodes the flow string using
+// protobuf wire format: tag 0x0a (field 1, wire type 2) + varint length + bytes.
+// This is the format used by XTLS Vision (xtls-rprx-vision).
 func EncodeRequest(w io.Writer, h *RequestHeader) error {
-	// version + uuid + addon_len + cmd = 1+16+1+1 = 19 bytes
-	buf := make([]byte, 19)
-	buf[0] = Version
-	copy(buf[1:17], h.UUID[:])
-	buf[17] = 0 // addon_len
-	buf[18] = h.Cmd
+	// Build optional addons bytes for the flow field.
+	var addons []byte
+	if h.Flow != "" {
+		flowBytes := []byte(h.Flow)
+		// Protobuf field 1, wire type 2 (length-delimited): tag = (1 << 3) | 2 = 0x0a
+		addons = append(addons, 0x0a)
+		addons = append(addons, byte(len(flowBytes)))
+		addons = append(addons, flowBytes...)
+	}
+
+	// version + uuid + addon_len + [addons] + cmd = 1+16+1+len(addons)+1
+	buf := make([]byte, 0, 19+len(addons))
+	buf = append(buf, Version)
+	buf = append(buf, h.UUID[:]...)
+	buf = append(buf, byte(len(addons)))
+	buf = append(buf, addons...)
+	buf = append(buf, h.Cmd)
 
 	if _, err := w.Write(buf); err != nil {
 		return fmt.Errorf("vless: write request header: %w", err)
@@ -45,7 +61,8 @@ func EncodeRequest(w io.Writer, h *RequestHeader) error {
 
 // DecodeRequest reads a VLESS request header from r.
 func DecodeRequest(r io.Reader) (*RequestHeader, error) {
-	buf := make([]byte, 19)
+	// Read: version(1) + uuid(16) + addon_len(1) = 18 bytes
+	buf := make([]byte, 18)
 	if _, err := io.ReadFull(r, buf); err != nil {
 		return nil, fmt.Errorf("vless: read request header: %w", err)
 	}
@@ -54,7 +71,10 @@ func DecodeRequest(r io.Reader) (*RequestHeader, error) {
 		return nil, fmt.Errorf("vless: unsupported version %d", buf[0])
 	}
 
+	h := &RequestHeader{}
+	copy(h.UUID[:], buf[1:17])
 	addonLen := buf[17]
+
 	if addonLen > 0 {
 		// Skip addon bytes.
 		if _, err := io.ReadFull(r, make([]byte, addonLen)); err != nil {
@@ -62,10 +82,12 @@ func DecodeRequest(r io.Reader) (*RequestHeader, error) {
 		}
 	}
 
-	h := &RequestHeader{
-		Cmd: buf[18],
+	// Read cmd byte (comes after addons).
+	cmdBuf := make([]byte, 1)
+	if _, err := io.ReadFull(r, cmdBuf); err != nil {
+		return nil, fmt.Errorf("vless: read cmd: %w", err)
 	}
-	copy(h.UUID[:], buf[1:17])
+	h.Cmd = cmdBuf[0]
 
 	network, addr, err := shared.DecodeAddr(r)
 	if err != nil {

@@ -4,6 +4,7 @@
     "dashboard": "Dashboard",
     "servers": "Servers",
     "subscriptions": "Subscriptions",
+    "groups": "Groups",
     "routing": "Routing",
     "mesh": "Mesh",
     "logs": "Logs",
@@ -384,6 +385,23 @@
     "addToStart": "Add a proxy server to get started",
     "importConfig": "Import Config",
     "orAddManually": "or add manually below"
+  },
+  "groups": {
+    "title": "Outbound Groups",
+    "groups": "groups",
+    "refresh": "Refresh",
+    "noGroups": "No outbound groups configured",
+    "noGroupsHelp": "Define outbound groups in your config to manage multi-server strategies here",
+    "noMembers": "No members",
+    "test": "Test",
+    "testing": "Testing...",
+    "testDone": "Test completed for {tag}",
+    "selected": "Active",
+    "activeNode": "Active node",
+    "selectDone": "{member} selected",
+    "use": "Use",
+    "active": "Active",
+    "unreachable": "unreachable"
   },
   "mesh": {
     "title": "Mesh VPN",

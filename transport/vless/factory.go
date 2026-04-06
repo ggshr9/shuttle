@@ -45,11 +45,13 @@ func (f *factory) NewDialer(cfg map[string]any, _ adapter.FactoryOptions) (adapt
 	}
 
 	tlsOpts := extractTLSOptions(cfg)
+	flow, _ := cfg["flow"].(string)
 
 	d, err := NewDialer(&DialerConfig{
 		Server: server,
 		UUID:   uuid,
 		TLS:    tlsOpts,
+		Flow:   flow,
 	})
 	if err != nil {
 		return nil, err

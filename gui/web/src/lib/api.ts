@@ -314,6 +314,20 @@ export interface MeshPeer {
   score?: number
 }
 
+export interface GroupInfo {
+  tag: string
+  strategy: string
+  members: string[]
+  selected?: string
+  latencies?: Record<string, number>
+}
+
+export interface GroupTestResult {
+  tag: string
+  latency_ms: number
+  available: boolean
+}
+
 export const api = {
   status: () => request<Status>('GET', '/api/status'),
   connect: () => request<void>('POST', '/api/connect'),
@@ -402,6 +416,12 @@ export const api = {
   meshStatus: () => request<MeshStatus>('GET', '/api/mesh/status'),
   meshPeers: () => request<MeshPeer[]>('GET', '/api/mesh/peers'),
   meshConnectPeer: (vip: string) => request<void>('POST', `/api/mesh/peers/${encodeURIComponent(vip)}/connect`),
+  // Outbound Groups
+  getGroups: () => request<GroupInfo[]>('GET', '/api/groups'),
+  getGroup: (tag: string) => request<GroupInfo>('GET', `/api/groups/${encodeURIComponent(tag)}`),
+  testGroup: (tag: string) => request<GroupTestResult[]>('POST', `/api/groups/${encodeURIComponent(tag)}/test`),
+  selectGroupMember: (groupTag: string, member: string) =>
+    request<void>('PUT', `/api/groups/${encodeURIComponent(groupTag)}/selected`, { selected: member }),
   // Diagnostics
   downloadDiagnostics: async (): Promise<void> => {
     const headers: Record<string, string> = {}
