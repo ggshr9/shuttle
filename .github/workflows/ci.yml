@@ -97,7 +97,7 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: ${{ env.GO_VERSION }}
+      - name: Install gosec
+        run: curl -sfL https://raw.githubusercontent.com/securego/gosec/master/install.sh | sh -s -- -b $(go env GOPATH)/bin
       - name: Run gosec
-        run: |
-          go install github.com/securego/gosec/v2/cmd/gosec@latest
-          gosec -exclude=G115,G104,G304,G301,G306,G404,G602,G117,G706,G703 -exclude-dir=quicfork ./...
+        run: gosec -exclude=G115,G104,G304,G301,G306,G404,G602,G117,G706,G703 -exclude-dir=quicfork ./...
