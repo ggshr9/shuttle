@@ -26,6 +26,7 @@ func TestCollectDiagnostics(t *testing.T) {
 
 	if bundle == nil {
 		t.Fatal("CollectDiagnostics returned nil")
+		return
 	}
 
 	// Check timestamp is set

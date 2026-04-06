@@ -63,7 +63,7 @@ func (eb *ServerEventBus) Unsubscribe(ch <-chan ServerEvent) {
 // Emit sends an event to all subscribers. It is non-blocking: if a subscriber's
 // channel buffer is full the event is dropped for that subscriber. Closed
 // channels (from a racing Unsubscribe) are handled gracefully via recover.
-func (eb *ServerEventBus) Emit(ev ServerEvent) {
+func (eb *ServerEventBus) Emit(ev ServerEvent) { //nolint:gocritic // hugeParam: hot path event emission
 	ev.Timestamp = time.Now()
 
 	// Snapshot subscribers under read lock, then release before sending.

@@ -26,6 +26,7 @@ func TestNewResolver(t *testing.T) {
 	r := NewResolver()
 	if r == nil {
 		t.Fatal("NewResolver returned nil")
+		return
 	}
 	if r.ttl != 5*time.Second {
 		t.Fatalf("ttl = %v, want 5s", r.ttl)

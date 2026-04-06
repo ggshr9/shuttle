@@ -1,6 +1,7 @@
 package p2p
 
 import (
+	"bytes"
 	"fmt"
 	"net"
 	"testing"
@@ -43,7 +44,7 @@ func TestP2PConnectionLocal(t *testing.T) {
 		t.Fatalf("Failed to receive: %v", err)
 	}
 
-	if string(buf[:n]) != string(testData) {
+	if !bytes.Equal(buf[:n], testData) {
 		t.Errorf("Data mismatch: got %q, want %q", buf[:n], testData)
 	}
 

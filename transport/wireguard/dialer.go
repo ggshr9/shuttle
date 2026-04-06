@@ -46,7 +46,7 @@ type Dialer struct {
 }
 
 // NewDialer creates and starts a WireGuard tunnel from the given config.
-func NewDialer(cfg TunnelConfig, logger *slog.Logger) (*Dialer, error) {
+func NewDialer(cfg *TunnelConfig, logger *slog.Logger) (*Dialer, error) {
 	if logger == nil {
 		logger = slog.Default()
 	}
@@ -166,7 +166,7 @@ func (d *Dialer) Close() error {
 
 // buildIPCConfig converts TunnelConfig to WireGuard IPC format.
 // WireGuard IPC uses hex-encoded keys, not base64.
-func buildIPCConfig(cfg TunnelConfig) (string, error) {
+func buildIPCConfig(cfg *TunnelConfig) (string, error) {
 	var b strings.Builder
 
 	privHex, err := base64ToHex(cfg.PrivateKey)

@@ -32,7 +32,7 @@ type Dialer struct {
 }
 
 // NewDialer creates a Hysteria2 Dialer from the given config.
-func NewDialer(cfg DialerConfig) (*Dialer, error) {
+func NewDialer(cfg *DialerConfig) (*Dialer, error) {
 	if cfg.Server == "" {
 		return nil, fmt.Errorf("hysteria2/dialer: server address required")
 	}
@@ -148,7 +148,7 @@ func (d *Dialer) getOrDial(ctx context.Context) (*quic.Conn, error) {
 	authStream.CancelRead(0)
 	authStream.Close()
 	if status != AuthOK {
-		conn.CloseWithError(1, "auth rejected")
+		_ = conn.CloseWithError(1, "auth rejected")
 		return nil, fmt.Errorf("hysteria2/dialer: authentication failed (status=%d)", status)
 	}
 

@@ -13,7 +13,6 @@ type HealthChecker struct {
 	manager  *NodeManager
 	interval time.Duration
 	timeout  time.Duration
-	mu       sync.Mutex
 	cancel   context.CancelFunc
 	logger   *slog.Logger
 }

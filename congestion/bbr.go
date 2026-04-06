@@ -36,19 +36,12 @@ type BBRController struct {
 	bwFilterIdx int
 
 	// RTT probe timer.
-	rtPropExpiry  time.Time
-	rtPropStamp   time.Time
-	probeRTTDone  bool
-	probeRTTRound uint64
+	rtPropExpiry time.Time
+	probeRTTDone bool
 
 	// ProbeBW pacing gain cycle index (0-7).
 	cycleIdx   int
 	cycleStart time.Time
-
-	// Round counting.
-	roundCount   uint64
-	roundStart   bool
-	nextRoundDel uint64
 
 	// Startup growth tracking.
 	filledPipe bool

@@ -97,12 +97,12 @@ func TestDecodeStreamHeader_Truncated(t *testing.T) {
 }
 
 func TestNewDialer_Validation(t *testing.T) {
-	_, err := hysteria2.NewDialer(hysteria2.DialerConfig{})
+	_, err := hysteria2.NewDialer(&hysteria2.DialerConfig{})
 	if err == nil {
 		t.Fatal("expected error for empty config")
 	}
 
-	_, err = hysteria2.NewDialer(hysteria2.DialerConfig{Server: "x:1"})
+	_, err = hysteria2.NewDialer(&hysteria2.DialerConfig{Server: "x:1"})
 	if err == nil {
 		t.Fatal("expected error for missing password")
 	}
@@ -202,7 +202,7 @@ func TestHysteria2_EchoThroughServer(t *testing.T) {
 	time.Sleep(50 * time.Millisecond)
 
 	// 3. Create Hysteria2 client dialer.
-	dialer, err := hysteria2.NewDialer(hysteria2.DialerConfig{
+	dialer, err := hysteria2.NewDialer(&hysteria2.DialerConfig{
 		Server:   serverAddr,
 		Password: password,
 		TLS:      testTLSOptions(),
@@ -256,7 +256,7 @@ func TestHysteria2_BadPassword(t *testing.T) {
 
 	time.Sleep(50 * time.Millisecond)
 
-	dialer, err := hysteria2.NewDialer(hysteria2.DialerConfig{
+	dialer, err := hysteria2.NewDialer(&hysteria2.DialerConfig{
 		Server:   serverAddr,
 		Password: "wrong-password",
 		TLS:      testTLSOptions(),
@@ -319,7 +319,7 @@ func TestHysteria2_MultiplexedStreams(t *testing.T) {
 
 	time.Sleep(50 * time.Millisecond)
 
-	dialer, err := hysteria2.NewDialer(hysteria2.DialerConfig{
+	dialer, err := hysteria2.NewDialer(&hysteria2.DialerConfig{
 		Server:   serverAddr,
 		Password: password,
 		TLS:      testTLSOptions(),

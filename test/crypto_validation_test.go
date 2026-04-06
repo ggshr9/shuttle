@@ -194,6 +194,7 @@ func TestSelfSignedCertProperties(t *testing.T) {
 	block, _ := pem.Decode(certPEM)
 	if block == nil {
 		t.Fatal("failed to decode certificate PEM")
+		return
 	}
 	cert, err := x509.ParseCertificate(block.Bytes)
 	if err != nil {
@@ -233,6 +234,7 @@ func TestSelfSignedCertProperties(t *testing.T) {
 	keyBlock, _ := pem.Decode(keyPEM)
 	if keyBlock == nil {
 		t.Fatal("failed to decode key PEM")
+		return
 	}
 	ecKey, err := x509.ParseECPrivateKey(keyBlock.Bytes)
 	if err != nil {

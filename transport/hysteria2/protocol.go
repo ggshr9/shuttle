@@ -3,10 +3,11 @@
 package hysteria2
 
 import (
+	"crypto/rand"
 	"encoding/binary"
 	"fmt"
 	"io"
-	"math/rand"
+	mathrand "math/rand"
 	"net"
 
 	"github.com/quic-go/quic-go"
@@ -29,9 +30,9 @@ func EncodeStreamHeader(w io.Writer, requestID uint32, address string) error {
 	}
 
 	// Random padding 0-64 bytes
-	paddingLen := rand.Intn(65) //nolint:gosec // non-crypto padding
+	paddingLen := mathrand.Intn(65) //nolint:gosec // non-crypto padding
 	padding := make([]byte, paddingLen)
-	rand.Read(padding) //nolint:gosec,errcheck
+	_, _ = rand.Read(padding)
 
 	// Header: 4 + 2 + len(addr) + 2 + paddingLen
 	buf := make([]byte, 4+2+len(addrBytes)+2+paddingLen)

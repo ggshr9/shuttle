@@ -111,7 +111,7 @@ func (t *TUNServer) teardownRoutes() {
 	if err != nil {
 		return
 	}
-	exec.Command("route", "delete", "-net", ipNet.String()).Run()
+	_ = exec.Command("route", "delete", "-net", ipNet.String()).Run()
 }
 
 // AddMeshRoute adds a route for the mesh subnet through the TUN device.

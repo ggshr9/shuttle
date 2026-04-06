@@ -368,7 +368,7 @@ func stopEventForwarder() {
 }
 
 // forwardEvent dispatches an engine event to the registered callback.
-func forwardEvent(ev engine.Event) {
+func forwardEvent(ev engine.Event) { //nolint:gocritic // hugeParam: event handler signature
 	cb := getCallback()
 	if cb == nil {
 		return

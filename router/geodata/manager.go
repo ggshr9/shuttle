@@ -78,12 +78,12 @@ type persistedStatus struct {
 }
 
 // NewManager creates a new geo data manager.
-func NewManager(cfg ManagerConfig, logger *slog.Logger) *Manager {
+func NewManager(cfg *ManagerConfig, logger *slog.Logger) *Manager {
 	if logger == nil {
 		logger = slog.Default()
 	}
 	m := &Manager{
-		cfg:        cfg,
+		cfg:        *cfg,
 		downloader: NewDownloader(cfg.DataDir, logger),
 		logger:     logger,
 	}

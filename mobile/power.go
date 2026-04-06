@@ -58,8 +58,8 @@ func GetPowerState() int {
 	return int(powerState)
 }
 
-// onPowerStateChange registers an internal callback for power state changes.
-func onPowerStateChange(cb func(PowerState)) {
+// OnPowerStateChange registers an internal callback for power state changes.
+func OnPowerStateChange(cb func(PowerState)) {
 	powerMu.Lock()
 	lowPowerCb = cb
 	powerMu.Unlock()

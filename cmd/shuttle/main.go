@@ -236,7 +236,6 @@ func run(configPath string) {
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
 
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
@@ -247,6 +246,7 @@ func run(configPath string) {
 
 	eng := engine.New(cfg)
 	if err := eng.Start(ctx); err != nil {
+		cancel()
 		fmt.Fprintf(os.Stderr, "Failed to start: %v\n", err)
 		os.Exit(1)
 	}

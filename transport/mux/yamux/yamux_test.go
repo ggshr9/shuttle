@@ -1,6 +1,7 @@
 package yamux_test
 
 import (
+	"bytes"
 	"context"
 	"net"
 	"testing"
@@ -64,7 +65,7 @@ func TestYamuxMux_ClientServer(t *testing.T) {
 
 	// Verify server received the data.
 	got := <-dataCh
-	if string(got) != string(msg) {
+	if !bytes.Equal(got, msg) {
 		t.Fatalf("got %q, want %q", got, msg)
 	}
 

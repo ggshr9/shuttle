@@ -55,7 +55,7 @@ func handleSpeedtestWS(w http.ResponseWriter, r *http.Request, eng *engine.Engin
 	ctx := r.Context()
 
 	// Collect all servers to test
-	var servers []speedtest.Server
+	servers := make([]speedtest.Server, 0, 1+len(cfg.Servers))
 	if cfg.Server.Addr != "" {
 		servers = append(servers, speedtest.Server{
 			Addr:     cfg.Server.Addr,

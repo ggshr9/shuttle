@@ -33,7 +33,7 @@ func (f *factory) NewDialer(cfg map[string]any, opts adapter.FactoryOptions) (ad
 		return nil, fmt.Errorf("wireguard factory: %w", err)
 	}
 
-	d, err := NewDialer(tc, opts.Logger)
+	d, err := NewDialer(&tc, opts.Logger)
 	if err != nil {
 		return nil, err
 	}

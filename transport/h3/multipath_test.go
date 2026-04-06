@@ -128,6 +128,7 @@ func TestMultipathManagerSelectPath_Failover(t *testing.T) {
 	selected := mgr.SelectPath()
 	if selected == nil {
 		t.Fatal("expected a path to be selected")
+		return
 	}
 	if selected.iface != "eth0" {
 		t.Errorf("expected eth0, got %s", selected.iface)
@@ -138,6 +139,7 @@ func TestMultipathManagerSelectPath_Failover(t *testing.T) {
 	selected = mgr.SelectPath()
 	if selected == nil {
 		t.Fatal("expected a path after failover")
+		return
 	}
 	if selected.iface != "wlan0" {
 		t.Errorf("expected wlan0 after failover, got %s", selected.iface)
@@ -170,6 +172,7 @@ func TestMultipathManagerSelectPath_Aggregate(t *testing.T) {
 		p := mgr.SelectPath()
 		if p == nil {
 			t.Fatal("expected a path")
+			return
 		}
 		seen[p.iface]++
 	}
@@ -200,6 +203,7 @@ func TestMultipathManagerSelectPath_Redundant(t *testing.T) {
 	selected := mgr.SelectPath()
 	if selected == nil {
 		t.Fatal("expected a path")
+		return
 	}
 	if selected.iface != "wlan0" {
 		t.Errorf("expected wlan0 (lower RTT), got %s", selected.iface)
@@ -210,6 +214,7 @@ func TestMultipathManagerSelectPath_Redundant(t *testing.T) {
 	selected = mgr.SelectPath()
 	if selected == nil {
 		t.Fatal("expected a path")
+		return
 	}
 	if selected.iface != "eth0" {
 		t.Errorf("expected eth0 as fallback, got %s", selected.iface)

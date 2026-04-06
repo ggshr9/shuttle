@@ -46,7 +46,7 @@ func main() {
 			initCmd.PrintDefaults()
 		}
 		_ = initCmd.Parse(os.Args[2:])
-		initServer(initParams{
+		initServer(&initParams{
 			Dir:       *dir,
 			Domain:    *domain,
 			Password:  *password,
@@ -235,7 +235,7 @@ type initParams struct {
 	Mesh      bool
 }
 
-func initServer(p initParams) {
+func initServer(p *initParams) {
 	var transports []string
 	switch p.Transport {
 	case "h3":
@@ -429,7 +429,7 @@ func run(configPath string) {
 	case err := <-errCh:
 		if err != nil {
 			logger.Error("server exited with error", "err", err)
-			os.Exit(1)
+			return // defer will run shutdown
 		}
 	}
 

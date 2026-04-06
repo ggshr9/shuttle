@@ -127,8 +127,9 @@ func ListPresets() string {
 		Name        string `json:"name"`
 		Description string `json:"description"`
 	}
-	var list []presetInfo
-	for _, p := range []*NetworkPreset{PresetWiFi, PresetLTE, Preset5G, PresetSlowCellular, PresetDataSaver} {
+	presets := []*NetworkPreset{PresetWiFi, PresetLTE, Preset5G, PresetSlowCellular, PresetDataSaver}
+	list := make([]presetInfo, 0, len(presets))
+	for _, p := range presets {
 		list = append(list, presetInfo{Name: p.Name, Description: p.Description})
 	}
 	data, _ := json.Marshal(list)

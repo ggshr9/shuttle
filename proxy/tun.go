@@ -624,11 +624,6 @@ func buildTCPPacketWithTOS(srcIP, dstIP [4]byte, srcPort, dstPort uint16, seq, a
 	return pkt
 }
 
-// buildUDPPacket constructs a raw IPv4+UDP packet.
-func buildUDPPacket(srcIP, dstIP [4]byte, srcPort, dstPort uint16, payload []byte) []byte {
-	return buildUDPPacketWithTOS(srcIP, dstIP, srcPort, dstPort, payload, 0)
-}
-
 // buildUDPPacketWithTOS constructs a raw IPv4+UDP packet with TOS/DSCP marking.
 func buildUDPPacketWithTOS(srcIP, dstIP [4]byte, srcPort, dstPort uint16, payload []byte, tos uint8) []byte {
 	udpLen := 8 + len(payload)
@@ -741,8 +736,3 @@ func (t *TUNServer) MeshReceiveLoop(ctx context.Context) {
 	}
 }
 
-// maskBits returns the prefix length of an IP mask.
-func maskBits(m net.IPMask) int {
-	ones, _ := m.Size()
-	return ones
-}

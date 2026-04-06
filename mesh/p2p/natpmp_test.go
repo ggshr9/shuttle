@@ -9,6 +9,7 @@ func TestNewNATPMPClient(t *testing.T) {
 	client := NewNATPMPClient(nil)
 	if client == nil {
 		t.Fatal("NewNATPMPClient returned nil")
+		return
 	}
 
 	if client.mappings == nil {
@@ -143,6 +144,7 @@ func TestPortMapperWithNATPMP(t *testing.T) {
 	pm := NewPortMapper(nil)
 	if pm == nil {
 		t.Fatal("NewPortMapper returned nil")
+		return
 	}
 
 	// Verify NAT-PMP client is initialized

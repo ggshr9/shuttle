@@ -97,7 +97,7 @@ func TestVMess_EchoThroughServer(t *testing.T) {
 	}()
 
 	// 3. Create VMess client dialer (no TLS).
-	dialer, err := vmess.NewDialer(vmess.DialerConfig{
+	dialer, err := vmess.NewDialer(&vmess.DialerConfig{
 		Server:   serverLn.Addr().String(),
 		UUID:     testUUID,
 		Security: vmess.SecurityNone,
@@ -158,7 +158,7 @@ func TestVMess_BadUUIDRejected(t *testing.T) {
 	var badUUID [16]byte
 	badUUID[0] = 0xFF
 
-	dialer, err := vmess.NewDialer(vmess.DialerConfig{
+	dialer, err := vmess.NewDialer(&vmess.DialerConfig{
 		Server:   serverLn.Addr().String(),
 		UUID:     badUUID,
 		Security: vmess.SecurityNone,
@@ -225,7 +225,7 @@ func TestVMess_LargePayload(t *testing.T) {
 	}()
 
 	// 3. Dial through VMess.
-	dialer, err := vmess.NewDialer(vmess.DialerConfig{
+	dialer, err := vmess.NewDialer(&vmess.DialerConfig{
 		Server:   serverLn.Addr().String(),
 		UUID:     testUUID,
 		Security: vmess.SecurityNone,

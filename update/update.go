@@ -107,13 +107,13 @@ func (c *Checker) Check(force bool) (*UpdateInfo, error) {
 		return nil, fmt.Errorf("parse release: %w", err)
 	}
 
-	info := c.buildUpdateInfo(release)
+	info := c.buildUpdateInfo(&release)
 	c.cached = info
 	c.lastCheck = time.Now()
 	return info, nil
 }
 
-func (c *Checker) buildUpdateInfo(release Release) *UpdateInfo {
+func (c *Checker) buildUpdateInfo(release *Release) *UpdateInfo {
 	latestVersion := strings.TrimPrefix(release.TagName, "v")
 	currentVersion := strings.TrimPrefix(Version, "v")
 

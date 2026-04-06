@@ -57,6 +57,10 @@ issues:
       linters:
         - errcheck  # test code intentionally ignores errors for brevity
         - gosec     # test code has intentional unsafe patterns
+    - path: _test\.go
+      linters:
+        - staticcheck
+      text: "SA5011"  # false positive: t.Fatal terminates but staticcheck doesn't see it
     - linters:
         - gosec
       text: "G115:"  # integer overflow: bounded casts in networking code

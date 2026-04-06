@@ -127,14 +127,9 @@ func (d *NATDetector) Detect() (*NATInfo, error) {
 	// - If port is preserved: likely Full Cone or Restricted Cone
 	// - If port is not preserved: likely Port-Restricted Cone
 
-	if info.PortPreserved {
-		// Conservative assumption: Port-Restricted Cone
-		// Full Cone would require testing if external hosts can reach us
-		info.Type = NATPortRestricted
-	} else {
-		// Port not preserved - Port-Restricted Cone
-		info.Type = NATPortRestricted
-	}
+	// Conservative assumption: Port-Restricted Cone
+	// Full Cone would require testing if external hosts can reach us
+	info.Type = NATPortRestricted
 
 	return info, nil
 }
@@ -187,12 +182,11 @@ func (d *NATDetector) DetectWithMultipleSockets() (*NATInfo, error) {
 	portDelta1 := result1.PublicAddr.Port - result1.LocalAddr.Port
 	portDelta2 := result2.PublicAddr.Port - result2.LocalAddr.Port
 
-	if portDelta1 != portDelta2 {
+	switch {
+	case portDelta1 != portDelta2:
 		// NAT uses different port mapping strategies - likely symmetric
 		info.Type = NATSymmetric
-	} else if !info.PortPreserved {
-		info.Type = NATPortRestricted
-	} else {
+	default:
 		// Conservative: assume Port-Restricted until proven otherwise
 		info.Type = NATPortRestricted
 	}
@@ -273,11 +267,7 @@ func (d *NATDetector) DetectParallel(ctx context.Context) (*NATInfo, error) {
 	}
 
 	// At this point, we know it's some form of cone NAT
-	if info.PortPreserved {
-		info.Type = NATPortRestricted
-	} else {
-		info.Type = NATPortRestricted
-	}
+	info.Type = NATPortRestricted
 
 	return info, nil
 }

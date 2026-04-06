@@ -339,7 +339,7 @@ func (s *Server) Start(ctx context.Context) error {
 		conn, err := s.ml.Accept(ctx)
 		if err != nil {
 			if ctx.Err() != nil {
-				return nil
+				return ctx.Err()
 			}
 			s.logger.Error("accept error", "err", err)
 			continue

@@ -67,11 +67,9 @@ func TestIsEnabled(t *testing.T) {
 func TestGetAutoStartArgs(t *testing.T) {
 	args := GetAutoStartArgs()
 
-	if args != nil {
-		for _, arg := range args {
-			if arg != "--hidden" {
-				t.Errorf("unexpected arg %q", arg)
-			}
+	for _, arg := range args {
+		if arg != "--hidden" {
+			t.Errorf("unexpected arg %q", arg)
 		}
 	}
 }

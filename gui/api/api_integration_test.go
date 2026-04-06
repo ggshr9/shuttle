@@ -141,7 +141,7 @@ func TestAPIConcurrentRequests(t *testing.T) {
 	wg.Wait()
 	close(errors)
 
-	var errs []string
+	errs := make([]string, 0, len(errors))
 	for e := range errors {
 		errs = append(errs, e)
 	}
@@ -167,7 +167,10 @@ func TestAPIWebSocketEvents(t *testing.T) {
 	defer cancel()
 
 	wsURL := "ws" + srv.URL[4:] + "/api/logs" // http://... -> ws://...
-	conn, _, err := websocket.Dial(ctx, wsURL, nil)
+	conn, resp, err := websocket.Dial(ctx, wsURL, nil)
+	if resp != nil && resp.Body != nil {
+		defer resp.Body.Close()
+	}
 	if err != nil {
 		t.Skipf("WebSocket connection failed (may not be supported in test env): %v", err)
 	}

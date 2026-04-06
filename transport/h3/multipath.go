@@ -71,7 +71,7 @@ func (m *MultipathManager) DiscoverPaths() ([]string, error) {
 		return nil, fmt.Errorf("list interfaces: %w", err)
 	}
 
-	var result []string
+	result := make([]string, 0, len(ifaces))
 	for _, iface := range ifaces {
 		// Skip loopback and down interfaces.
 		if iface.Flags&net.FlagLoopback != 0 {

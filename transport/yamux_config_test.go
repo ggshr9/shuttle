@@ -11,6 +11,7 @@ func TestYamuxSessionConfig_Nil(t *testing.T) {
 	cfg := YamuxSessionConfig(nil)
 	if cfg == nil {
 		t.Fatal("expected non-nil config for nil input")
+		return
 	}
 	// Should return default values.
 	if cfg.MaxStreamWindowSize != 256*1024 {

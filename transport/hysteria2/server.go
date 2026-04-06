@@ -116,7 +116,7 @@ func (s *Server) Close() error {
 }
 
 func (s *Server) handleConnection(ctx context.Context, conn *quic.Conn, handler adapter.ConnHandler) {
-	defer conn.CloseWithError(0, "done")
+	defer func() { _ = conn.CloseWithError(0, "done") }()
 
 	// First stream must be auth.
 	authStream, err := conn.AcceptStream(ctx)

@@ -85,7 +85,7 @@ func (a *App) GetConfig() config.ClientConfig {
 }
 
 // SetConfig reloads with new config.
-func (a *App) SetConfig(cfg config.ClientConfig) error {
+func (a *App) SetConfig(cfg config.ClientConfig) error { //nolint:gocritic // hugeParam: Wails binding requires value type
 	return a.eng.Reload(&cfg)
 }
 

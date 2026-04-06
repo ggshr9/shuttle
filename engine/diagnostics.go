@@ -252,8 +252,7 @@ func redactMap(m map[string]interface{}) {
 // redactSlice recursively walks a slice and redacts sensitive values in nested maps.
 func redactSlice(s []interface{}) {
 	for _, item := range s {
-		switch val := item.(type) {
-		case map[string]interface{}:
+		if val, ok := item.(map[string]interface{}); ok {
 			redactMap(val)
 		}
 	}

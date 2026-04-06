@@ -165,13 +165,14 @@ func (ac *AdaptiveCongestion) evaluateSwitch() {
 		return
 	}
 
-	if ac.lossRate > ac.lossThreshold && ac.rttTrend <= 0 {
+	switch {
+	case ac.lossRate > ac.lossThreshold && ac.rttTrend <= 0:
 		// High loss + stable/falling RTT = active interference → Brutal
 		ac.switchTo(ac.brutal, "GFW interference detected")
-	} else if ac.lossRate > ac.lossThreshold && ac.rttTrend > 0.1 {
+	case ac.lossRate > ac.lossThreshold && ac.rttTrend > 0.1:
 		// High loss + rising RTT = real congestion → BBR
 		ac.switchTo(ac.bbr, "real congestion detected")
-	} else if ac.lossRate <= ac.lossThreshold/2 {
+	case ac.lossRate <= ac.lossThreshold/2:
 		// Low loss → BBR (more efficient)
 		ac.switchTo(ac.bbr, "loss recovered")
 	}

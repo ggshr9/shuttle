@@ -24,7 +24,7 @@ type inboundListener struct {
 // (Shadowsocks, VLESS, Trojan, etc.) from ServerConfig.Inbounds.
 // Returns a slice of inboundListeners that must be closed on shutdown.
 func (s *Server) startInbounds(ctx context.Context) ([]*inboundListener, error) {
-	var listeners []*inboundListener
+	listeners := make([]*inboundListener, 0, len(s.cfg.Inbounds))
 
 	for _, inCfg := range s.cfg.Inbounds {
 		il, err := s.startOneInbound(ctx, inCfg)
@@ -134,7 +134,7 @@ func (s *Server) inboundConnHandler(ctx context.Context) adapter.ConnHandler {
 		}
 		s.metrics.ConnOpened(transportName)
 		connStart := time.Now()
-		defer s.metrics.ConnClosed(transportName, time.Since(connStart))
+		defer func() { s.metrics.ConnClosed(transportName, time.Since(connStart)) }()
 
 		if s.adminInfo != nil {
 			s.adminInfo.TotalConns.Add(1)

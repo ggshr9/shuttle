@@ -25,8 +25,8 @@ type byteStreamClient struct {
 
 // NewByteStreamClient creates a ClientTransport by composing
 // dialer → security chain → authenticator → multiplexer.
-func NewByteStreamClient(cfg ByteStreamConfig) adapter.ClientTransport {
-	return &byteStreamClient{cfg: cfg}
+func NewByteStreamClient(cfg *ByteStreamConfig) adapter.ClientTransport {
+	return &byteStreamClient{cfg: *cfg}
 }
 
 func (c *byteStreamClient) Dial(ctx context.Context, addr string) (adapter.Connection, error) {

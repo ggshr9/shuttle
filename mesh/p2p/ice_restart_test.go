@@ -105,6 +105,7 @@ func TestNewICECredentials(t *testing.T) {
 
 	if creds == nil {
 		t.Fatal("NewICECredentials returned nil")
+		return
 	}
 
 	if len(creds.UsernameFragment) < 4 {
@@ -166,6 +167,7 @@ func TestDefaultICEAgentConfig(t *testing.T) {
 
 	if cfg == nil {
 		t.Fatal("DefaultICEAgentConfig returned nil")
+		return
 	}
 
 	// STUNServers may be empty when SHUTTLE_TEST_NO_EXTERNAL is set
@@ -191,6 +193,7 @@ func TestNewICEAgent(t *testing.T) {
 
 	if agent == nil {
 		t.Fatal("NewICEAgent returned nil")
+		return
 	}
 
 	if agent.localCredentials == nil {
@@ -247,6 +250,7 @@ func TestICEAgent_GetLocalCredentials(t *testing.T) {
 
 	if creds == nil {
 		t.Fatal("GetLocalCredentials returned nil")
+		return
 	}
 
 	if creds.UsernameFragment == "" {

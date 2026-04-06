@@ -28,19 +28,13 @@ const (
 
 // mDNS flags and types
 const (
-	mdnsQueryFlag    = 0x0000
-	mdnsResponseFlag = 0x8400
-
-	mdnsTypeA     = 1   // IPv4 address
-	mdnsTypeAAAA  = 28  // IPv6 address
-	mdnsTypePTR   = 12  // Pointer (service discovery)
-	mdnsTypeSRV   = 33  // Service location
-	mdnsTypeTXT   = 16  // Text record
-	mdnsClassIN   = 1   // Internet class
+	mdnsTypeA    = 1  // IPv4 address
+	mdnsTypeAAAA = 28 // IPv6 address
+	mdnsTypePTR  = 12 // Pointer (service discovery)
+	mdnsTypeSRV  = 33 // Service location
+	mdnsTypeTXT  = 16 // Text record
+	mdnsClassIN  = 1  // Internet class
 )
-
-// mdnsClassFlush is CLASS with cache-flush bit set
-const mdnsClassFlush uint16 = 0x8001
 
 // MDNSPeer represents a discovered peer on the local network.
 type MDNSPeer struct {
@@ -387,7 +381,6 @@ func (s *MDNSService) processPacket(data []byte, from *net.UDPAddr) {
 		offset = newOffset
 
 		rtype := uint16(data[offset])<<8 | uint16(data[offset+1])
-		// rclass := uint16(data[offset+2])<<8 | uint16(data[offset+3])
 		ttl := uint32(data[offset+4])<<24 | uint32(data[offset+5])<<16 |
 			uint32(data[offset+6])<<8 | uint32(data[offset+7])
 		rdlen := int(data[offset+8])<<8 | int(data[offset+9])
@@ -618,7 +611,7 @@ func (s *MDNSService) buildQuery() []byte {
 	buf[offset+1] = 1
 	offset += 2
 
-	// ANCOUNT, NSCOUNT, ARCOUNT = 0
+	// ANCOUNT, NSCOUNT, ARCOUNT are zero (already zeroed).
 	offset += 6
 
 	// Question: _shuttle._udp.local PTR
@@ -660,14 +653,14 @@ func (s *MDNSService) buildResponseWithTTL(ttl int) []byte {
 	buf[offset+1] = 0x00
 	offset += 2
 
-	// QDCOUNT = 0
+	// QDCOUNT is zero (already zeroed).
 	offset += 2
 
-	// ANCOUNT = 4 (PTR, SRV, TXT, A)
+	// ANCOUNT: 4 records (PTR, SRV, TXT, A).
 	buf[offset+1] = 4
 	offset += 2
 
-	// NSCOUNT, ARCOUNT = 0
+	// NSCOUNT, ARCOUNT are zero (already zeroed).
 	offset += 4
 
 	fullName := instanceName + "." + shuttleServiceName

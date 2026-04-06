@@ -43,7 +43,7 @@ func (e *Engine) ListGroups() []GroupInfo {
 	outbounds := e.outbounds
 	e.mu.RUnlock()
 
-	var groups []GroupInfo
+	groups := make([]GroupInfo, 0, len(outbounds))
 	for _, ob := range outbounds {
 		grp, ok := ob.(*OutboundGroup)
 		if !ok {
@@ -103,7 +103,7 @@ func (e *Engine) TestGroup(tag string) ([]TestResult, error) {
 	}
 
 	// For non-url-test groups, return basic member list with unknown latency.
-	var out []TestResult
+	out := make([]TestResult, 0, len(grp.outbounds))
 	for _, ob := range grp.outbounds {
 		out = append(out, TestResult{Tag: ob.Tag(), Latency: -1, Available: true})
 	}
@@ -175,7 +175,7 @@ func (e *Engine) ListProxyProviders() []ProviderInfo {
 	providers := e.proxyProviders
 	e.mu.RUnlock()
 
-	var out []ProviderInfo
+	out := make([]ProviderInfo, 0, len(providers))
 	for _, p := range providers {
 		out = append(out, proxyProviderToInfo(p))
 	}
@@ -202,7 +202,7 @@ func (e *Engine) ListRuleProviders() []ProviderInfo {
 	providers := e.ruleProviders
 	e.mu.RUnlock()
 
-	var out []ProviderInfo
+	out := make([]ProviderInfo, 0, len(providers))
 	for _, p := range providers {
 		out = append(out, ruleProviderToInfo(p))
 	}

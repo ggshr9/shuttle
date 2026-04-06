@@ -151,7 +151,8 @@ func (e *Engine) buildRouter(cfg *config.ClientConfig, ruleProviders map[string]
 	}
 
 	// Map config rule chain entries to router rule chain entries.
-	for _, entry := range cfg.Routing.RuleChain {
+	for i := range cfg.Routing.RuleChain {
+		entry := &cfg.Routing.RuleChain[i]
 		routerCfg.RuleChain = append(routerCfg.RuleChain, router.RuleChainEntry{
 			Match: router.RuleMatch{
 				Domain:        entry.Match.Domain,
@@ -170,7 +171,8 @@ func (e *Engine) buildRouter(cfg *config.ClientConfig, ruleProviders map[string]
 		})
 	}
 
-	for _, rule := range cfg.Routing.Rules {
+	for i := range cfg.Routing.Rules {
+		rule := &cfg.Routing.Rules[i]
 		r := router.Rule{Action: router.Action(rule.Action)}
 		switch {
 		case rule.Domains != "":
@@ -342,7 +344,7 @@ func (e *Engine) getOrCreateGeoManager(cfg *config.ClientConfig) *geodata.Manage
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	if e.geoManager == nil {
-		e.geoManager = geodata.NewManager(geodata.ManagerConfig{
+		e.geoManager = geodata.NewManager(&geodata.ManagerConfig{
 			Enabled:        cfg.Routing.GeoData.Enabled,
 			DataDir:        cfg.Routing.GeoData.DataDir,
 			AutoUpdate:     cfg.Routing.GeoData.AutoUpdate,

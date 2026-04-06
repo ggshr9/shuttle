@@ -28,11 +28,10 @@ type Node struct {
 
 // NodeManager manages multiple proxy nodes with health checking and failover.
 type NodeManager struct {
-	mu      sync.RWMutex
-	nodes   []*Node
-	active  *Node
-	checker *HealthChecker
-	logger  *slog.Logger
+	mu     sync.RWMutex
+	nodes  []*Node
+	active *Node
+	logger *slog.Logger
 }
 
 // NewNodeManager creates a new node manager.
@@ -113,11 +112,12 @@ func (nm *NodeManager) UpdateScore(name string, latency time.Duration, loss floa
 			n.Loss = loss
 			n.LastCheck = time.Now()
 			n.Score = calculateScore(latency, loss)
-			if loss > 0.5 {
+			switch {
+			case loss > 0.5:
 				n.Status = NodeUnhealthy
-			} else if loss > 0.1 || latency > 500*time.Millisecond {
+			case loss > 0.1 || latency > 500*time.Millisecond:
 				n.Status = NodeDegraded
-			} else {
+			default:
 				n.Status = NodeHealthy
 			}
 			return
@@ -126,7 +126,7 @@ func (nm *NodeManager) UpdateScore(name string, latency time.Duration, loss floa
 }
 
 func calculateScore(latency time.Duration, loss float64) float64 {
-	// Score = 1000 / (latency_ms * (1 + loss*10))
+	// Score: higher is better, penalized by latency and packet loss.
 	latMs := float64(latency) / float64(time.Millisecond)
 	if latMs < 1 {
 		latMs = 1

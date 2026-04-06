@@ -276,12 +276,12 @@ func TestEmptyPeriods(t *testing.T) {
 	defer s.Close()
 
 	weekly := s.GetWeeklySummary(4)
-	if weekly != nil && len(weekly) != 0 {
+	if len(weekly) != 0 {
 		t.Errorf("GetWeeklySummary with no data returned %d items, want 0", len(weekly))
 	}
 
 	monthly := s.GetMonthlySummary(6)
-	if monthly != nil && len(monthly) != 0 {
+	if len(monthly) != 0 {
 		t.Errorf("GetMonthlySummary with no data returned %d items, want 0", len(monthly))
 	}
 

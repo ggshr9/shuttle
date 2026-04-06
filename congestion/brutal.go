@@ -84,7 +84,7 @@ func (b *BrutalController) updateCwnd() {
 		return
 	}
 	rttSec := float64(b.rtt) / float64(time.Second)
-	lossFactor := 1.0
+	var lossFactor float64
 	if b.lossRate < 0.99 {
 		lossFactor = 1.0 / (1.0 - b.lossRate)
 	} else {

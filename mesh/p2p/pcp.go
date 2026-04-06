@@ -295,11 +295,6 @@ func (c *PCPClient) buildMapRequest(clientIP net.IP, protocol, internalPort, ext
 
 	// Suggested external port (2 bytes)
 	binary.BigEndian.PutUint16(buf[offset:offset+2], uint16(externalPort))
-	offset += 2
-
-	// Suggested external IP address (16 bytes)
-	// Use all zeros to let server assign
-	// buf[offset:offset+16] = 0
 
 	return buf
 }
@@ -348,15 +343,13 @@ func (c *PCPClient) parseMapResponse(data []byte, expectedNonce [12]byte) (*PCPM
 	}
 	offset += 12
 
-	// Protocol
-	// protocol := data[offset]
+	// Protocol (1 byte, skip).
 	offset += 1
 
 	// Reserved
 	offset += 3
 
-	// Internal port
-	// internalPort := binary.BigEndian.Uint16(data[offset:offset+2])
+	// Internal port (2 bytes, skip).
 	offset += 2
 
 	// Assigned external port
