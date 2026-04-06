@@ -5,6 +5,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -58,14 +59,14 @@ func TestChecker_FailedCheck(t *testing.T) {
 		t.Errorf("expected Available=false for unreachable address")
 	}
 
-	// After 1 failure with tolerance=1, Results() should also show unavailable.
+	// After 1 failure, Results() should also show unavailable (node never succeeded).
 	results := checker.Results()
 	r, ok := results["node-b"]
 	if !ok {
 		t.Fatal("expected node-b in results")
 	}
 	if r.Available {
-		t.Errorf("Results() should show Available=false after tolerance reached")
+		t.Errorf("Results() should show Available=false for a node that never succeeded")
 	}
 }
 
@@ -73,10 +74,9 @@ func TestChecker_FailedCheck(t *testing.T) {
 // after consecutiveFail >= tolerance.
 func TestChecker_ToleranceThreshold(t *testing.T) {
 	// Server state: first 2 requests fail (return 500), third succeeds (204).
-	reqCount := 0
+	var reqCount atomic.Int32
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		reqCount++
-		if reqCount <= 2 {
+		if reqCount.Add(1) <= 2 {
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
@@ -94,45 +94,41 @@ func TestChecker_ToleranceThreshold(t *testing.T) {
 		return net.Dial("tcp", srv.Listener.Addr().String())
 	}
 
-	// First check: fails (consecutiveFail=1, tolerance=3 → still "up").
+	// First check: raw result is false (500), but node has never succeeded →
+	// Results() should show Available=false (everSucceeded=false).
 	r1 := checker.Check(context.Background(), "node-c", dial)
 	if r1.Available {
 		t.Errorf("check 1: raw result should be Available=false (500 response)")
 	}
-	if got, _ := checker.Result("node-c"); !got.Available {
-		// consecutiveFail(1) < tolerance(3), so Results() should still show available
-		// based on the last raw result. Note: our tolerance only overrides Available
-		// to false when failures >= tolerance; with 1 failure the stored result is
-		// already false, so we check the counter directly via Results().
-		// Actually the raw result IS false (500), and consecutiveFail=1 < 3,
-		// so Results() returns the raw result (Available=false here is correct).
+	got1, ok1 := checker.Result("node-c")
+	if !ok1 {
+		t.Fatal("node-c not found after first check")
+	}
+	if got1.Available {
+		t.Errorf("Result() after check 1: expected Available=false (node never succeeded)")
 	}
 
-	// Verify consecutiveFail hasn't crossed tolerance yet (node is "borderline").
-	// Internally consecutiveFail=1, tolerance=3 — node should NOT be marked down
-	// beyond what the raw check says. We can check this by inspecting Results().
-	results := checker.Results()
-	if _, ok := results["node-c"]; !ok {
-		t.Fatal("node-c not found in results after first check")
-	}
-
-	// Second check: fails (consecutiveFail=2, tolerance=3).
+	// Second check: fails again (consecutiveFail=2, tolerance=3, everSucceeded=false).
 	checker.Check(context.Background(), "node-c", dial)
+	got2, _ := checker.Result("node-c")
+	if got2.Available {
+		t.Errorf("Result() after check 2: expected Available=false (still never succeeded)")
+	}
 
-	// Third check: succeeds (consecutiveFail resets to 0).
+	// Third check: succeeds (consecutiveFail resets to 0, everSucceeded=true).
 	r3 := checker.Check(context.Background(), "node-c", dial)
 	if !r3.Available {
-		t.Errorf("check 3: expected Available=true after successful 204 response")
+		t.Errorf("check 3: expected raw Available=true after successful 204 response")
 	}
 
 	// After the success, Results() should show available.
-	results = checker.Results()
+	results := checker.Results()
 	r, ok := results["node-c"]
 	if !ok {
 		t.Fatal("node-c not found in results")
 	}
 	if !r.Available {
-		t.Errorf("Results(): expected Available=true after recovery, got false")
+		t.Errorf("Results(): expected Available=true after first success, got false")
 	}
 }
 

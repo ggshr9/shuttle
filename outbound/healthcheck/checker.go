@@ -23,7 +23,6 @@ type Config struct {
 	Interval  time.Duration // default: 300s
 	Timeout   time.Duration // default: 5s
 	Tolerance int           // consecutive failures before marking down, default: 3
-	Lazy      bool          // only check when used
 }
 
 // Result is the outcome of a single health check.
@@ -38,6 +37,7 @@ type nodeState struct {
 	mu              sync.Mutex
 	lastResult      Result
 	consecutiveFail int
+	everSucceeded   bool
 }
 
 // Checker performs HTTP health checks against outbounds.
@@ -103,9 +103,9 @@ func (c *Checker) Check(ctx context.Context, tag string, dial DialFunc) Result {
 	transport := &http.Transport{
 		DialContext: dial,
 	}
+	defer transport.CloseIdleConnections()
 	client := &http.Client{
 		Transport: transport,
-		// Disable redirects — any redirect counts as a failure.
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
 			return http.ErrUseLastResponse
 		},
@@ -143,6 +143,7 @@ func (c *Checker) Check(ctx context.Context, tag string, dial DialFunc) Result {
 	ns.lastResult = result
 	if available {
 		ns.consecutiveFail = 0
+		ns.everSucceeded = true
 	} else {
 		ns.consecutiveFail++
 	}
@@ -161,9 +162,9 @@ func (c *Checker) Results() map[string]Result {
 	for tag, ns := range c.nodes {
 		ns.mu.Lock()
 		r := ns.lastResult
-		if ns.consecutiveFail >= c.cfg.Tolerance {
-			r.Available = false
-		}
+		// A node is considered available if it has succeeded at least once
+		// and has not accumulated consecutive failures up to the tolerance limit.
+		r.Available = ns.everSucceeded && ns.consecutiveFail < c.cfg.Tolerance
 		ns.mu.Unlock()
 		out[tag] = r
 	}
@@ -182,9 +183,9 @@ func (c *Checker) Result(tag string) (Result, bool) {
 
 	ns.mu.Lock()
 	r := ns.lastResult
-	if ns.consecutiveFail >= c.cfg.Tolerance {
-		r.Available = false
-	}
+	// A node is considered available if it has succeeded at least once
+	// and has not accumulated consecutive failures up to the tolerance limit.
+	r.Available = ns.everSucceeded && ns.consecutiveFail < c.cfg.Tolerance
 	ns.mu.Unlock()
 	return r, true
 }
