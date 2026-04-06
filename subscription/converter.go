@@ -61,7 +61,7 @@ func ToOutboundConfigs(servers []config.ServerEndpoint) []config.OutboundConfig 
 
 		if adapterType, known := clashTypeToAdapterType[s.Type]; known {
 			outboundType = adapterType
-			opts = buildAdapterOptions(s)
+			opts = buildAdapterOptions(s, adapterType)
 		} else {
 			outboundType = "proxy"
 			raw, _ := json.Marshal(map[string]string{"server": s.Addr})
@@ -81,7 +81,12 @@ func ToOutboundConfigs(servers []config.ServerEndpoint) []config.OutboundConfig 
 // buildAdapterOptions constructs the options map for a known-protocol adapter outbound.
 // It splits Addr into server/server_port, includes password and SNI when present,
 // then merges all entries from ServerEndpoint.Options (which take precedence).
-func buildAdapterOptions(s config.ServerEndpoint) json.RawMessage {
+//
+// Key normalization is applied per adapterType to bridge Clash YAML field names
+// to the keys expected by each transport factory:
+//   - vless/vmess: Password is written as "uuid" (factories read cfg["uuid"])
+//   - shadowsocks: "cipher" (from Clash YAML) is renamed to "method" after merging
+func buildAdapterOptions(s config.ServerEndpoint, adapterType string) json.RawMessage {
 	m := make(map[string]any)
 
 	host, portStr, err := net.SplitHostPort(s.Addr)
@@ -95,9 +100,16 @@ func buildAdapterOptions(s config.ServerEndpoint) json.RawMessage {
 		m["server"] = s.Addr
 	}
 
+	// Key normalization: VLESS/VMess factories read "uuid", not "password".
 	if s.Password != "" {
-		m["password"] = s.Password
+		switch adapterType {
+		case "vless", "vmess":
+			m["uuid"] = s.Password
+		default:
+			m["password"] = s.Password
+		}
 	}
+
 	if s.SNI != "" {
 		m["sni"] = s.SNI
 	}
@@ -105,6 +117,14 @@ func buildAdapterOptions(s config.ServerEndpoint) json.RawMessage {
 	// Merge extra options; keys from Options override the defaults above.
 	for k, v := range s.Options {
 		m[k] = v
+	}
+
+	// Key normalization: Shadowsocks factory reads "method"; Clash YAML uses "cipher".
+	if adapterType == "shadowsocks" {
+		if cipher, ok := m["cipher"]; ok {
+			m["method"] = cipher
+			delete(m, "cipher")
+		}
 	}
 
 	raw, _ := json.Marshal(m)

@@ -54,7 +54,7 @@ func TestFullPipeline_ClashSubscriptionToOutboundConfigs(t *testing.T) {
 	assert.Equal(t, "shadowsocks", configs[0].Type)
 	var ssOpts map[string]any
 	require.NoError(t, json.Unmarshal(configs[0].Options, &ssOpts))
-	assert.Equal(t, "aes-256-gcm", ssOpts["cipher"])
+	assert.Equal(t, "aes-256-gcm", ssOpts["method"]) // cipher normalized to method by buildAdapterOptions
 	assert.Equal(t, "jp1.example.com", ssOpts["server"])
 	assert.Equal(t, "hunter2", ssOpts["password"])
 

@@ -132,7 +132,7 @@ func TestToOutboundConfigs_RoutesPerProtocol(t *testing.T) {
 	require.NoError(t, json.Unmarshal(configs[0].Options, &ssOpts))
 	assert.Equal(t, "1.2.3.4", ssOpts["server"])
 	assert.Equal(t, float64(443), ssOpts["server_port"]) // JSON numbers → float64
-	assert.Equal(t, "aes-256-gcm", ssOpts["cipher"])
+	assert.Equal(t, "aes-256-gcm", ssOpts["method"]) // cipher normalized to method
 	assert.Equal(t, "secret", ssOpts["password"])
 
 	// Empty type → "proxy"
@@ -144,7 +144,7 @@ func TestToOutboundConfigs_RoutesPerProtocol(t *testing.T) {
 	require.NoError(t, json.Unmarshal(configs[2].Options, &vlessOpts))
 	assert.Equal(t, "xtls-rprx-vision", vlessOpts["flow"])
 	assert.Equal(t, "ws", vlessOpts["network"])
-	assert.Equal(t, "uuid-123", vlessOpts["password"])
+	assert.Equal(t, "uuid-123", vlessOpts["uuid"]) // password normalized to uuid for vless
 }
 
 func TestToOutboundConfigs_DeduplicatesTags(t *testing.T) {
