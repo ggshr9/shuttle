@@ -52,6 +52,7 @@ type OutboundGroup struct {
 	qualityCfg  QualityConfig                    // thresholds for quality strategy
 	probeGetter func() map[string]ProbeSnapshot // returns latest probe data; nil when not quality
 	urlTest     *urlTestState                    // for url-test strategy
+	selectState *selectState                     // for select strategy
 	logger      *slog.Logger
 }
 
@@ -165,12 +166,6 @@ func (g *OutboundGroup) Close() error {
 		g.urlTest.Stop()
 	}
 	return nil
-}
-
-// dialSelect is a placeholder for the select strategy (Task 5).
-func (g *OutboundGroup) dialSelect(ctx context.Context, network, address string) (net.Conn, error) {
-	// Fall back to failover until select strategy is implemented.
-	return g.dialFailover(ctx, network, address)
 }
 
 // parseOutboundGroupConfig unmarshals OutboundGroupConfig from raw JSON.
