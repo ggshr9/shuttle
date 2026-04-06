@@ -4,6 +4,7 @@
     "dashboard": "仪表板",
     "servers": "服务器",
     "subscriptions": "订阅",
+    "groups": "出站组",
     "routing": "路由",
     "mesh": "Mesh 组网",
     "logs": "日志",
@@ -384,6 +385,23 @@
     "addToStart": "添加代理服务器以开始使用",
     "importConfig": "导入配置",
     "orAddManually": "或在下方手动添加"
+  },
+  "groups": {
+    "title": "出站组",
+    "groups": "个组",
+    "refresh": "刷新",
+    "noGroups": "未配置出站组",
+    "noGroupsHelp": "在配置文件中定义出站组，以在此处管理多服务器策略",
+    "noMembers": "无成员",
+    "test": "测速",
+    "testing": "测速中...",
+    "testDone": "{tag} 测速完成",
+    "selected": "当前",
+    "activeNode": "活跃节点",
+    "selectDone": "已选择 {member}",
+    "use": "使用",
+    "active": "已选",
+    "unreachable": "不可达"
   },
   "mesh": {
     "title": "Mesh 组网",
