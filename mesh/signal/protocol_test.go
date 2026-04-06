@@ -1,6 +1,7 @@
 package signal
 
 import (
+	"bytes"
 	"net"
 	"testing"
 )
@@ -29,7 +30,7 @@ func TestMessageEncodeDecode(t *testing.T) {
 	if !decoded.DstVIP.Equal(original.DstVIP) {
 		t.Errorf("DstVIP: got %v, want %v", decoded.DstVIP, original.DstVIP)
 	}
-	if string(decoded.Payload) != string(original.Payload) {
+	if !bytes.Equal(decoded.Payload, original.Payload) {
 		t.Errorf("Payload: got %q, want %q", decoded.Payload, original.Payload)
 	}
 }

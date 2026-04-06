@@ -29,14 +29,15 @@ func NewFilter(patterns []string) *Filter {
 			continue
 		}
 
-		if strings.HasPrefix(p, "+.") {
+		switch {
+		case strings.HasPrefix(p, "+."):
 			// Suffix pattern: "+.lan" → skip any domain ending in ".lan"
 			suffix := p[1:] // keep the leading dot, e.g. ".lan"
 			f.suffixes = append(f.suffixes, suffix)
-		} else if strings.ContainsAny(p, "*?[") {
+		case strings.ContainsAny(p, "*?["):
 			// Glob pattern
 			f.patterns = append(f.patterns, p)
-		} else {
+		default:
 			// Exact match
 			f.exact[p] = true
 		}

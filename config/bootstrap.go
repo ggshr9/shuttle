@@ -149,7 +149,7 @@ func Bootstrap(opts *InitOptions) (*InitResult, error) {
 	if _, port, err := net.SplitHostPort(opts.Listen); err == nil {
 		listenPort = port
 	}
-	shareAddr := serverAddr
+	var shareAddr string
 	if listenPort != "443" {
 		shareAddr = net.JoinHostPort(serverAddr, listenPort)
 	} else {

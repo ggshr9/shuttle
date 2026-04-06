@@ -185,8 +185,9 @@ func (c *ClientConfig) DeepCopy() *ClientConfig {
 	}
 	if c.Routing.Rules != nil {
 		cp.Routing.Rules = make([]RouteRule, len(c.Routing.Rules))
-		for i, r := range c.Routing.Rules {
-			cp.Routing.Rules[i] = r
+		for i := range c.Routing.Rules {
+			r := &c.Routing.Rules[i]
+			cp.Routing.Rules[i] = *r
 			if r.Process != nil {
 				cp.Routing.Rules[i].Process = make([]string, len(r.Process))
 				copy(cp.Routing.Rules[i].Process, r.Process)

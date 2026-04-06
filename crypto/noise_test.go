@@ -1,6 +1,7 @@
 package crypto
 
 import (
+	"bytes"
 	"testing"
 )
 
@@ -88,7 +89,7 @@ func TestNoiseHandshake(t *testing.T) {
 	if err != nil {
 		t.Fatalf("responder decrypt failed: %v", err)
 	}
-	if string(decrypted) != string(plaintext) {
+	if !bytes.Equal(decrypted, plaintext) {
 		t.Fatalf("decrypted mismatch: got %q, want %q", decrypted, plaintext)
 	}
 
@@ -102,7 +103,7 @@ func TestNoiseHandshake(t *testing.T) {
 	if err != nil {
 		t.Fatalf("initiator decrypt failed: %v", err)
 	}
-	if string(decrypted2) != string(plaintext2) {
+	if !bytes.Equal(decrypted2, plaintext2) {
 		t.Fatalf("decrypted2 mismatch: got %q, want %q", decrypted2, plaintext2)
 	}
 

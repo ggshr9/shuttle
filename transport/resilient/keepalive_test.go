@@ -90,17 +90,6 @@ func (c *pongConn) Close() error {
 func (c *pongConn) LocalAddr() net.Addr  { return mockAddr{"local"} }
 func (c *pongConn) RemoteAddr() net.Addr { return mockAddr{"remote"} }
 
-// hangStream never returns from Read (simulates a timeout scenario).
-type hangStream struct{}
-
-func (s *hangStream) Read(p []byte) (int, error) {
-	// Block until the heat death of the universe (or context cancel).
-	select {}
-}
-func (s *hangStream) Write(p []byte) (int, error) { return len(p), nil }
-func (s *hangStream) Close() error                { return nil }
-func (s *hangStream) StreamID() uint64             { return 0 }
-
 // ---------- Heartbeat tests ----------
 
 func TestHeartbeatHealthyConnection(t *testing.T) {
@@ -303,7 +292,7 @@ func TestStaleDetectorFiresAfterMaxIdle(t *testing.T) {
 	nowMu.Unlock()
 
 	ticker.Tick()
-	waitFor(t, time.Second, func() bool { return fired.Load() })
+	waitFor(t, time.Second, fired.Load)
 }
 
 func TestStaleDetectorDoesNotFireWhenActive(t *testing.T) {

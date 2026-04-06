@@ -7,7 +7,6 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
-	"sync"
 	"sync/atomic"
 
 	"github.com/shuttleX/shuttle/config"
@@ -30,7 +29,6 @@ type ClientConfig struct {
 // Client implements transport.ClientTransport using Reality (TLS + Noise IK + yamux).
 type Client struct {
 	config *ClientConfig
-	mu     sync.Mutex
 	closed atomic.Bool
 }
 

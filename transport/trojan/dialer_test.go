@@ -93,7 +93,7 @@ func TestTrojan_EchoThroughServer(t *testing.T) {
 	}()
 
 	// 3. Create Trojan client dialer (no TLS)
-	dialer, err := trojan.NewDialer(trojan.DialerConfig{
+	dialer, err := trojan.NewDialer(&trojan.DialerConfig{
 		Server:   serverLn.Addr().String(),
 		Password: password,
 	})
