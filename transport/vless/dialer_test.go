@@ -1,12 +1,17 @@
 package vless_test
 
 import (
+	"bytes"
 	"context"
 	"io"
 	"net"
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"github.com/shuttleX/shuttle/adapter"
 	"github.com/shuttleX/shuttle/transport/vless"
 )
 
@@ -174,4 +179,53 @@ func TestVLESS_BadUUID(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error reading from connection with bad UUID")
 	}
+}
+
+// TestVLESSFactory_AcceptsVisionFlow verifies that the VLESS dialer factory
+// accepts the "xtls-rprx-vision" flow option without error.
+func TestVLESSFactory_AcceptsVisionFlow(t *testing.T) {
+	factory := adapter.GetDialerFactory("vless")
+	require.NotNil(t, factory)
+
+	opts := map[string]any{
+		"server":      "127.0.0.1",
+		"server_port": 443,
+		"uuid":        "550e8400-e29b-41d4-a716-446655440000",
+		"flow":        "xtls-rprx-vision",
+		"sni":         "example.com",
+	}
+
+	dialer, err := factory.NewDialer(opts, adapter.FactoryOptions{})
+	require.NoError(t, err)
+	require.NotNil(t, dialer)
+	defer dialer.Close()
+	assert.Equal(t, "vless", dialer.Type())
+}
+
+// TestVLESS_FlowEncodedInHeader verifies that the flow string is encoded in
+// the VLESS request addons when the Dialer is configured with a flow value.
+func TestVLESS_FlowEncodedInHeader(t *testing.T) {
+	const testFlow = "xtls-rprx-vision"
+
+	testUUID := [16]byte{0x55, 0x0e, 0x84, 0x00, 0xe2, 0x9b, 0x41, 0xd4,
+		0xa7, 0x16, 0x44, 0x66, 0x55, 0x44, 0x00, 0x00}
+
+	h := &vless.RequestHeader{
+		UUID:    testUUID,
+		Cmd:     vless.CmdTCP,
+		Network: "tcp",
+		Address: "example.com:80",
+		Flow:    testFlow,
+	}
+
+	var buf bytes.Buffer
+	err := vless.EncodeRequest(&buf, h)
+	require.NoError(t, err)
+
+	// Decode and verify the addon bytes contain the flow.
+	decoded, err := vless.DecodeRequest(&buf)
+	require.NoError(t, err)
+	assert.Equal(t, testUUID, decoded.UUID)
+	assert.Equal(t, byte(vless.CmdTCP), decoded.Cmd)
+	assert.Equal(t, "example.com:80", decoded.Address)
 }

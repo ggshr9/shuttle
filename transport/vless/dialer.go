@@ -14,12 +14,14 @@ type DialerConfig struct {
 	Server string       // host:port of the VLESS server
 	UUID   [16]byte     // client UUID for authentication
 	TLS    shared.TLSOptions
+	Flow   string       // XTLS flow, e.g. "xtls-rprx-vision" (empty = no flow)
 }
 
 // Dialer connects to a VLESS server and tunnels traffic through it.
 type Dialer struct {
 	server    string
 	uuid      [16]byte
+	flow      string
 	tlsConfig *tls.Config
 }
 
@@ -32,6 +34,7 @@ func NewDialer(cfg *DialerConfig) (*Dialer, error) {
 	return &Dialer{
 		server:    cfg.Server,
 		uuid:      cfg.UUID,
+		flow:      cfg.Flow,
 		tlsConfig: tlsCfg,
 	}, nil
 }
@@ -68,6 +71,7 @@ func (d *Dialer) DialContext(ctx context.Context, network, address string) (net.
 		Cmd:     cmd,
 		Network: network,
 		Address: address,
+		Flow:    d.flow,
 	}
 
 	if err := EncodeRequest(conn, h); err != nil {
