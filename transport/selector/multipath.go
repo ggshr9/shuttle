@@ -28,15 +28,28 @@ type PathInfo struct {
 // PathMetrics tracks per-path quality metrics and holds the persistent connection.
 type PathMetrics struct {
 	Transport     transport.ClientTransport
-	Conn          transport.Connection
+	Conn          transport.Connection // guarded by mu
 	Latency       time.Duration
 	ActiveStreams int64 // atomic
 	TotalStreams  int64 // atomic
 	Failures      int64 // atomic — consecutive failures
 	BytesSent     int64 // atomic — total bytes sent via this path
 	BytesReceived int64 // atomic — total bytes received via this path
-	Available     bool
+	available     atomic.Bool // replaces Available bool
 	mu            sync.Mutex
+}
+
+// IsAvailable returns true if this path is currently available.
+func (pm *PathMetrics) IsAvailable() bool { return pm.available.Load() }
+
+// SetAvailable sets the availability state of this path.
+func (pm *PathMetrics) SetAvailable(v bool) { pm.available.Store(v) }
+
+// GetConn returns the current connection under the path mutex.
+func (pm *PathMetrics) GetConn() transport.Connection {
+	pm.mu.Lock()
+	defer pm.mu.Unlock()
+	return pm.Conn
 }
 
 // MultipathPool manages persistent connections across all available transports.
@@ -73,8 +86,8 @@ func NewMultipathPool(
 	for _, t := range transports {
 		pm := &PathMetrics{
 			Transport: t,
-			Available: false,
 		}
+		// available defaults to false via atomic.Bool zero value.
 		// Attempt initial dial; failures are non-blocking — healthLoop will retry.
 		conn, err := t.Dial(poolCtx, serverAddr)
 		if err != nil {
@@ -82,7 +95,7 @@ func NewMultipathPool(
 			atomic.StoreInt64(&pm.Failures, 1)
 		} else {
 			pm.Conn = conn
-			pm.Available = true
+			pm.SetAvailable(true)
 			logger.Info("multipath: path connected", "transport", t.Type())
 		}
 		pool.paths = append(pool.paths, pm)
@@ -117,7 +130,7 @@ func (p *MultipathPool) PathInfos() []PathInfo {
 			Latency:       pm.Latency.Milliseconds(),
 			ActiveStreams: atomic.LoadInt64(&pm.ActiveStreams),
 			TotalStreams:  atomic.LoadInt64(&pm.TotalStreams),
-			Available:     pm.Available,
+			Available:     pm.IsAvailable(),
 			Failures:      atomic.LoadInt64(&pm.Failures),
 			BytesSent:     atomic.LoadInt64(&pm.BytesSent),
 			BytesReceived: atomic.LoadInt64(&pm.BytesReceived),
@@ -134,8 +147,8 @@ func (p *MultipathPool) UpdateMetrics(probes map[string]*ProbeResult) {
 		if pr, ok := probes[pm.Transport.Type()]; ok {
 			pm.mu.Lock()
 			pm.Latency = pr.Latency
-			pm.Available = pr.Available
 			pm.mu.Unlock()
+			pm.SetAvailable(pr.Available)
 		}
 	}
 }
@@ -154,8 +167,8 @@ func (p *MultipathPool) Close() error {
 			}
 			pm.Conn = nil
 		}
-		pm.Available = false
 		pm.mu.Unlock()
+		pm.SetAvailable(false)
 	}
 	return firstErr
 }
@@ -197,8 +210,8 @@ func (p *MultipathPool) checkPaths() {
 			}
 			pm.mu.Lock()
 			pm.Conn = conn
-			pm.Available = true
 			pm.mu.Unlock()
+			pm.SetAvailable(true)
 			atomic.StoreInt64(&pm.Failures, 0)
 			p.logger.Info("multipath: path reconnected", "transport", pm.Transport.Type())
 		}
@@ -248,14 +261,11 @@ func (mc *multipathConn) openStreamFallback(ctx context.Context, failed *PathMet
 		if pm == failed {
 			continue
 		}
-		if !pm.Available || pm.Conn == nil || atomic.LoadInt64(&pm.Failures) >= 3 {
+		if !pm.IsAvailable() || atomic.LoadInt64(&pm.Failures) >= 3 {
 			continue
 		}
 
-		pm.mu.Lock()
-		conn := pm.Conn
-		pm.mu.Unlock()
-
+		conn := pm.GetConn()
 		if conn == nil {
 			continue
 		}

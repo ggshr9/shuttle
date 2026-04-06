@@ -107,7 +107,7 @@ func (s *loadBalanceScheduler) Pick(paths []*PathMetrics) *PathMetrics {
 func filterEligible(paths []*PathMetrics) []*PathMetrics {
 	var out []*PathMetrics
 	for _, p := range paths {
-		if p.Available && p.Conn != nil && atomic.LoadInt64(&p.Failures) < 3 {
+		if p.IsAvailable() && p.GetConn() != nil && atomic.LoadInt64(&p.Failures) < 3 {
 			out = append(out, p)
 		}
 	}
