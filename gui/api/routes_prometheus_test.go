@@ -43,6 +43,9 @@ func TestPrometheusEndpoint(t *testing.T) {
 		"# HELP shuttle_circuit_breaker_state",
 		"# TYPE shuttle_circuit_breaker_state gauge",
 		"shuttle_circuit_breaker_state ",
+		"# HELP shuttle_draining_connections",
+		"# TYPE shuttle_draining_connections gauge",
+		"shuttle_draining_connections ",
 	}
 
 	for _, want := range expectedMetrics {

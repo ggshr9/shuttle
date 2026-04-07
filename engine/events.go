@@ -125,6 +125,7 @@ type EngineStatus struct {
 	Streams             *StreamStats           `json:"streams,omitempty"`
 	TransportBreakdown  []stream.TransportStats `json:"transport_breakdown,omitempty"`
 	CircuitState        string                  `json:"circuit_state,omitempty"`
+	DrainingConns       int                     `json:"draining_conns,omitempty"`
 }
 
 // StreamStats summarises per-stream metrics for the API.

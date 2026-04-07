@@ -448,6 +448,31 @@ func isRouterOnlyChange(oldCfg, newCfg *config.ClientConfig) bool {
 	return bytes.Equal(oldJSON, newJSON)
 }
 
+// isStrategyOnlyChange reports true when the two configs differ only in the
+// transport selection strategy (Transport.Preferred), meaning we can hot-switch
+// via SetTransportStrategy instead of a full stop+start cycle.
+func isStrategyOnlyChange(oldCfg, newCfg *config.ClientConfig) bool {
+	if oldCfg == nil || newCfg == nil {
+		return false
+	}
+	if oldCfg.Transport.Preferred == newCfg.Transport.Preferred {
+		return false // no strategy change at all
+	}
+	oldCopy := oldCfg.DeepCopy()
+	newCopy := newCfg.DeepCopy()
+
+	// Zero out the strategy field so the rest of the config can be compared.
+	oldCopy.Transport.Preferred = ""
+	newCopy.Transport.Preferred = ""
+
+	oldJSON, err1 := json.Marshal(oldCopy)
+	newJSON, err2 := json.Marshal(newCopy)
+	if err1 != nil || err2 != nil {
+		return false
+	}
+	return bytes.Equal(oldJSON, newJSON)
+}
+
 // reloadRouterOnly hot-swaps the router and DNS resolver without stopping the
 // engine. The caller must hold lifecycleMu.
 func (e *Engine) reloadRouterOnly(cfg *config.ClientConfig) error {
@@ -516,6 +541,20 @@ func (e *Engine) Reload(cfg *config.ClientConfig) error {
 	if running && isRouterOnlyChange(oldCfg, cfg) {
 		e.logger.Debug("reload: routing-only change detected, using fast path")
 		return e.reloadRouterOnly(cfg)
+	}
+
+	// Fast path: if only the transport strategy changed, use SetTransportStrategy
+	// to avoid a full stop+start cycle.
+	if running && isStrategyOnlyChange(oldCfg, cfg) {
+		e.logger.Debug("reload: strategy-only change detected, using SetTransportStrategy")
+		if err := e.SetTransportStrategy(parentCtx, cfg.Transport.Preferred); err != nil {
+			return fmt.Errorf("strategy hot-switch: %w", err)
+		}
+		e.mu.Lock()
+		e.cfg = cfg
+		e.mu.Unlock()
+		e.emit(Event{Type: EventConfigReloaded, Message: "strategy-only reload (zero downtime)"})
+		return nil
 	}
 
 	e.logger.Debug("reload triggered", "was_running", running)

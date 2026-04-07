@@ -933,6 +933,49 @@ func TestIsRouterOnlyChange(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
+// TestIsStrategyOnlyChange
+// ---------------------------------------------------------------------------
+
+func TestIsStrategyOnlyChange(t *testing.T) {
+	base := config.DefaultClientConfig()
+	base.Server.Addr = "server:443"
+	base.Transport.H3.Enabled = true
+	base.Transport.Preferred = "auto"
+
+	t.Run("nil configs return false", func(t *testing.T) {
+		if isStrategyOnlyChange(nil, base) {
+			t.Error("expected false for nil oldCfg")
+		}
+		if isStrategyOnlyChange(base, nil) {
+			t.Error("expected false for nil newCfg")
+		}
+	})
+
+	t.Run("same strategy returns false", func(t *testing.T) {
+		if isStrategyOnlyChange(base, base.DeepCopy()) {
+			t.Error("expected false when strategy is unchanged")
+		}
+	})
+
+	t.Run("strategy-only change returns true", func(t *testing.T) {
+		newCfg := base.DeepCopy()
+		newCfg.Transport.Preferred = "latency"
+		if !isStrategyOnlyChange(base, newCfg) {
+			t.Error("expected true for strategy-only change")
+		}
+	})
+
+	t.Run("strategy plus server change returns false", func(t *testing.T) {
+		newCfg := base.DeepCopy()
+		newCfg.Transport.Preferred = "multipath"
+		newCfg.Server.Addr = "other:443"
+		if isStrategyOnlyChange(base, newCfg) {
+			t.Error("expected false when strategy + server changed")
+		}
+	})
+}
+
+// ---------------------------------------------------------------------------
 // TestReloadRouterOnly
 // ---------------------------------------------------------------------------
 

@@ -48,5 +48,9 @@ func registerPrometheusRoutes(mux *http.ServeMux, eng *engine.Engine) {
 			cbState = 2
 		}
 		fmt.Fprintf(w, "shuttle_circuit_breaker_state %d\n\n", cbState)
+
+		fmt.Fprintf(w, "# HELP shuttle_draining_connections Connections being drained during migration\n")
+		fmt.Fprintf(w, "# TYPE shuttle_draining_connections gauge\n")
+		fmt.Fprintf(w, "shuttle_draining_connections %d\n\n", status.DrainingConns)
 	})
 }

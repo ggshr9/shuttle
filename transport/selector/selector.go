@@ -430,6 +430,12 @@ func (s *Selector) Migrate() {
 
 func (s *Selector) Type() string { return "selector" }
 
+// MigrationStats returns the current state of all tracked connections in the
+// migrator. Useful for exposing draining connection info to APIs.
+func (s *Selector) MigrationStats() []ConnMigrationStats {
+	return s.migrator.Stats()
+}
+
 func (s *Selector) Close() error {
 	s.mu.Lock()
 	pool := s.multipathPool
