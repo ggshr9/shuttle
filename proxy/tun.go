@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net"
+	"net/netip"
 	"os"
 	"sync"
 	"sync/atomic"
@@ -69,8 +70,8 @@ func NewTUNServer(cfg *TUNConfig, dialer Dialer, logger *slog.Logger) *TUNServer
 // ---------------------------------------------------------------------------
 
 type natKey struct {
-	srcIP   [4]byte
-	dstIP   [4]byte
+	srcIP   netip.Addr
+	dstIP   netip.Addr
 	srcPort uint16
 	dstPort uint16
 }
@@ -275,11 +276,14 @@ func (t *TUNServer) readLoop(ctx context.Context) {
 			continue
 		}
 		version := pkt[0] >> 4
-		if version != 4 {
-			continue // IPv4 only for now
+		switch version {
+		case 4:
+			t.handleIPv4(ctx, pkt)
+		case 6:
+			if len(pkt) >= 40 {
+				t.handleIPv6(ctx, pkt)
+			}
 		}
-
-		t.handleIPv4(ctx, pkt)
 	}
 }
 
@@ -310,8 +314,8 @@ func (t *TUNServer) handleIPv4(ctx context.Context, pkt []byte) {
 
 	// Mesh interception: if destination is in the mesh subnet, send via mesh
 	if mh := t.MeshHandler; mh != nil {
-		dstIP := net.IP(pkt[16:20])
-		if mh.IsMeshDestination(dstIP) {
+		meshDstIP := net.IP(pkt[16:20])
+		if mh.IsMeshDestination(meshDstIP) {
 			if err := mh.SendPacket(pkt[:totalLen]); err != nil {
 				t.logger.Debug("mesh send error", "err", err)
 			}
@@ -321,9 +325,11 @@ func (t *TUNServer) handleIPv4(ctx context.Context, pkt []byte) {
 
 	proto := pkt[9]
 
-	var srcIP, dstIP [4]byte
-	copy(srcIP[:], pkt[12:16])
-	copy(dstIP[:], pkt[16:20])
+	var src4, dst4 [4]byte
+	copy(src4[:], pkt[12:16])
+	copy(dst4[:], pkt[16:20])
+	srcIP := netip.AddrFrom4(src4)
+	dstIP := netip.AddrFrom4(dst4)
 
 	payload := pkt[ihl:totalLen]
 
@@ -346,7 +352,7 @@ const (
 	tcpFlagACK = 0x10
 )
 
-func (t *TUNServer) handleTCP(ctx context.Context, srcIP, dstIP [4]byte, tcpData []byte) {
+func (t *TUNServer) handleTCP(ctx context.Context, srcIP, dstIP netip.Addr, tcpData []byte) {
 	if len(tcpData) < 20 {
 		return
 	}
@@ -399,7 +405,7 @@ func (t *TUNServer) handleTCP(ctx context.Context, srcIP, dstIP [4]byte, tcpData
 
 func (t *TUNServer) dialAndProxyTCP(ctx context.Context, key natKey, clientISN uint32) {
 	addr := net.JoinHostPort(
-		net.IP(key.dstIP[:]).String(),
+		key.dstIP.String(),
 		fmt.Sprintf("%d", key.dstPort),
 	)
 
@@ -458,7 +464,7 @@ func (t *TUNServer) dialAndProxyTCP(ctx context.Context, key natKey, clientISN u
 // UDP handling
 // ---------------------------------------------------------------------------
 
-func (t *TUNServer) handleUDP(ctx context.Context, srcIP, dstIP [4]byte, udpData []byte) {
+func (t *TUNServer) handleUDP(ctx context.Context, srcIP, dstIP netip.Addr, udpData []byte) {
 	if len(udpData) < 8 {
 		return
 	}
@@ -481,7 +487,7 @@ func (t *TUNServer) handleUDP(ctx context.Context, srcIP, dstIP [4]byte, udpData
 
 func (t *TUNServer) dialAndProxyUDP(ctx context.Context, key natKey, initialPayload []byte) {
 	addr := net.JoinHostPort(
-		net.IP(key.dstIP[:]).String(),
+		key.dstIP.String(),
 		fmt.Sprintf("%d", key.dstPort),
 	)
 
@@ -585,28 +591,44 @@ func (t *TUNServer) writeTUN(pkt []byte) {
 	}
 }
 
-func (t *TUNServer) sendTCPSynAck(srcIP, dstIP [4]byte, srcPort, dstPort uint16, clientISN uint32) {
-	pkt := buildTCPPacket(srcIP, dstIP, srcPort, dstPort, 0, clientISN+1, tcpFlagSYN|tcpFlagACK, nil)
+func (t *TUNServer) sendTCPSynAck(srcIP, dstIP netip.Addr, srcPort, dstPort uint16, clientISN uint32) {
+	pkt := buildTCPPacketAddr(srcIP, dstIP, srcPort, dstPort, 0, clientISN+1, tcpFlagSYN|tcpFlagACK, nil, 0)
 	t.writeTUN(pkt)
 	putTUNPacket(pkt)
 }
 
-func (t *TUNServer) sendTCPReset(srcIP, dstIP [4]byte, srcPort, dstPort uint16, ackNum uint32) {
-	pkt := buildTCPPacket(srcIP, dstIP, srcPort, dstPort, 0, ackNum, tcpFlagRST|tcpFlagACK, nil)
+func (t *TUNServer) sendTCPReset(srcIP, dstIP netip.Addr, srcPort, dstPort uint16, ackNum uint32) {
+	pkt := buildTCPPacketAddr(srcIP, dstIP, srcPort, dstPort, 0, ackNum, tcpFlagRST|tcpFlagACK, nil, 0)
 	t.writeTUN(pkt)
 	putTUNPacket(pkt)
 }
 
-func (t *TUNServer) injectTCPData(srcIP, dstIP [4]byte, srcPort, dstPort uint16, seq uint32, data []byte, tos uint8) {
-	pkt := buildTCPPacketWithTOS(srcIP, dstIP, srcPort, dstPort, seq, 0, tcpFlagACK, data, tos)
+func (t *TUNServer) injectTCPData(srcIP, dstIP netip.Addr, srcPort, dstPort uint16, seq uint32, data []byte, tos uint8) {
+	pkt := buildTCPPacketAddr(srcIP, dstIP, srcPort, dstPort, seq, 0, tcpFlagACK, data, tos)
 	t.writeTUN(pkt)
 	putTUNPacket(pkt)
 }
 
-func (t *TUNServer) injectUDPPacket(srcIP, dstIP [4]byte, srcPort, dstPort uint16, data []byte, tos uint8) {
-	pkt := buildUDPPacketWithTOS(srcIP, dstIP, srcPort, dstPort, data, tos)
+func (t *TUNServer) injectUDPPacket(srcIP, dstIP netip.Addr, srcPort, dstPort uint16, data []byte, tos uint8) {
+	pkt := buildUDPPacketAddr(srcIP, dstIP, srcPort, dstPort, data, tos)
 	t.writeTUN(pkt)
 	putTUNPacket(pkt)
+}
+
+// buildTCPPacketAddr dispatches to IPv4 or IPv6 TCP packet builder based on address family.
+func buildTCPPacketAddr(srcIP, dstIP netip.Addr, srcPort, dstPort uint16, seq, ack uint32, flags byte, payload []byte, tos uint8) []byte {
+	if srcIP.Is4() {
+		return buildTCPPacketWithTOS(srcIP.As4(), dstIP.As4(), srcPort, dstPort, seq, ack, flags, payload, tos)
+	}
+	return buildTCPPacketV6WithTOS(srcIP.As16(), dstIP.As16(), srcPort, dstPort, seq, ack, flags, payload, tos)
+}
+
+// buildUDPPacketAddr dispatches to IPv4 or IPv6 UDP packet builder based on address family.
+func buildUDPPacketAddr(srcIP, dstIP netip.Addr, srcPort, dstPort uint16, payload []byte, tos uint8) []byte {
+	if srcIP.Is4() {
+		return buildUDPPacketWithTOS(srcIP.As4(), dstIP.As4(), srcPort, dstPort, payload, tos)
+	}
+	return buildUDPPacketV6WithTOS(srcIP.As16(), dstIP.As16(), srcPort, dstPort, payload, tos)
 }
 
 // buildTCPPacket constructs a raw IPv4+TCP packet with optional TOS marking.
