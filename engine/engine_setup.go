@@ -137,6 +137,8 @@ func (e *Engine) buildRouter(cfg *config.ClientConfig, ruleProviders map[string]
 		Mode:           cfg.Routing.DNS.Mode,
 		FakeIPRange:    cfg.Routing.DNS.FakeIPRange,
 		FakeIPFilter:   cfg.Routing.DNS.FakeIPFilter,
+		Hosts:          cfg.Routing.DNS.Hosts,
+		DomainPolicy:   convertDomainPolicy(cfg.Routing.DNS.DomainPolicy),
 	}, geoIPDB, e.logger)
 
 	var prefetcher *router.Prefetcher
@@ -161,6 +163,8 @@ func (e *Engine) buildRouter(cfg *config.ClientConfig, ruleProviders map[string]
 				GeoSite:       entry.Match.GeoSite,
 				IPCIDR:        entry.Match.IPCIDR,
 				GeoIP:         entry.Match.GeoIP,
+				Port:          entry.Match.Port,
+				SrcIP:         entry.Match.SrcIP,
 				Process:       entry.Match.Process,
 				Protocol:      entry.Match.Protocol,
 				NetworkType:   entry.Match.NetworkType,
@@ -312,4 +316,16 @@ func (e *Engine) getOrCreateGeoManager(cfg *config.ClientConfig) *geodata.Manage
 		}, e.logger)
 	}
 	return e.geoManager
+}
+
+// convertDomainPolicy converts config DomainPolicyEntry slice to router DomainPolicyEntry slice.
+func convertDomainPolicy(entries []config.DomainPolicyEntry) []router.DomainPolicyEntry {
+	if len(entries) == 0 {
+		return nil
+	}
+	out := make([]router.DomainPolicyEntry, len(entries))
+	for i, e := range entries {
+		out[i] = router.DomainPolicyEntry{Domain: e.Domain, Server: e.Server}
+	}
+	return out
 }

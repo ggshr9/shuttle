@@ -24,6 +24,8 @@ type RuleMatch struct {
 	GeoSite       []string `yaml:"geosite,omitempty" json:"geosite,omitempty"`
 	IPCIDR        []string `yaml:"ip_cidr,omitempty" json:"ip_cidr,omitempty"`
 	GeoIP         []string `yaml:"geoip,omitempty" json:"geoip,omitempty"`
+	Port          []string `yaml:"port,omitempty" json:"port,omitempty"`
+	SrcIP         []string `yaml:"src_ip,omitempty" json:"src_ip,omitempty"`
 	Process       []string `yaml:"process,omitempty" json:"process,omitempty"`
 	Protocol      []string `yaml:"protocol,omitempty" json:"protocol,omitempty"`
 	NetworkType   []string `yaml:"network_type,omitempty" json:"network_type,omitempty"`
@@ -71,6 +73,16 @@ type DNSConfig struct {
 	FakeIPRange    string   `yaml:"fake_ip_range,omitempty" json:"fake_ip_range,omitempty"`     // CIDR for fake-ip pool (default "198.18.0.0/15")
 	FakeIPFilter   []string `yaml:"fake_ip_filter,omitempty" json:"fake_ip_filter,omitempty"`   // domains to bypass fake-ip
 	Persist        bool     `yaml:"persist,omitempty" json:"persist,omitempty"`                  // persist fake-ip mappings across restarts
+	Hosts          map[string]string  `yaml:"hosts,omitempty" json:"hosts,omitempty"`            // static hostname → IP mappings (supports *.example.com wildcards)
+	DomainPolicy   []DomainPolicyEntry `yaml:"domain_policy,omitempty" json:"domain_policy,omitempty"` // per-domain nameserver policy
+}
+
+// DomainPolicyEntry maps a domain pattern to a specific DNS server.
+// Domain supports "+.example.com" (matches example.com and all subdomains)
+// or exact match like "corp.internal".
+type DomainPolicyEntry struct {
+	Domain string `yaml:"domain" json:"domain"`
+	Server string `yaml:"server" json:"server"` // DoH URL (https://...) or plain UDP (host:port)
 }
 
 // DNSRemote configures the remote DNS server.

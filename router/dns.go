@@ -34,6 +34,14 @@ type DNSConfig struct {
 	Mode           string   // "normal" or "fake-ip"; empty defaults to normal
 	FakeIPRange    string   // CIDR for fake-ip pool (default "198.18.0.0/15")
 	FakeIPFilter   []string // domains to bypass fake-ip
+	Hosts          map[string]string   // static hostname → IP mappings (supports *.example.com wildcards)
+	DomainPolicy   []DomainPolicyEntry // per-domain nameserver policy
+}
+
+// DomainPolicyEntry maps a domain pattern to a specific DNS server.
+type DomainPolicyEntry struct {
+	Domain string
+	Server string // DoH URL (https://...) or plain UDP (host:port)
 }
 
 // DNSResolver implements split DNS with anti-pollution.
@@ -168,8 +176,24 @@ func (r *DNSResolver) Resolve(ctx context.Context, domain string) ([]net.IP, err
 		return []net.IP{fakeAddr.AsSlice()}, nil
 	}
 
+	// Static hosts table — checked before cache
+	if ip := r.resolveHosts(domain); ip != nil {
+		return []net.IP{ip}, nil
+	}
+
 	// Check cache first
 	if ips, ok := r.cache.get(domain); ok {
+		return ips, nil
+	}
+
+	// Per-domain DNS policy — route to a specific nameserver
+	if server := r.matchDomainPolicy(domain); server != "" {
+		ips, err := r.querySpecificServer(ctx, domain, server)
+		if err != nil {
+			return nil, err
+		}
+		r.cache.put(domain, ips, r.config.CacheTTL, r.isDomesticServer(server))
+		r.recordPrefetch(domain)
 		return ips, nil
 	}
 
@@ -214,6 +238,76 @@ func (r *DNSResolver) Resolve(ctx context.Context, domain string) ([]net.IP, err
 	}
 
 	return r.selectResult(domain, domResult.ips, domResult.err, remResult.ips, remResult.err)
+}
+
+// resolveHosts checks the static hosts table for a matching entry.
+// Supports exact match and wildcard (*.example.com) patterns.
+func (r *DNSResolver) resolveHosts(domain string) net.IP {
+	if len(r.config.Hosts) == 0 {
+		return nil
+	}
+	// Exact match
+	if addr, ok := r.config.Hosts[domain]; ok {
+		return net.ParseIP(addr)
+	}
+	// Wildcard: *.example.com matches sub.example.com
+	parts := strings.SplitN(domain, ".", 2)
+	if len(parts) == 2 {
+		if addr, ok := r.config.Hosts["*."+parts[1]]; ok {
+			return net.ParseIP(addr)
+		}
+	}
+	return nil
+}
+
+// matchDomainPolicy returns the DNS server for a domain if it matches a policy entry.
+// Supports "+.example.com" (matches example.com and all subdomains) and exact match.
+func (r *DNSResolver) matchDomainPolicy(domain string) string {
+	for _, entry := range r.config.DomainPolicy {
+		pattern := entry.Domain
+		if strings.HasPrefix(pattern, "+.") {
+			// "+.example.com" matches "example.com" and "*.example.com"
+			base := pattern[2:]
+			if domain == base || strings.HasSuffix(domain, "."+base) {
+				return entry.Server
+			}
+		} else {
+			// Exact match
+			if domain == pattern {
+				return entry.Server
+			}
+		}
+	}
+	return ""
+}
+
+// querySpecificServer queries a specific DNS server. Supports DoH (https://...) and plain UDP (host:port).
+func (r *DNSResolver) querySpecificServer(ctx context.Context, domain, server string) ([]net.IP, error) {
+	if strings.HasPrefix(server, "https://") || strings.HasPrefix(server, "http://") {
+		return r.resolveDoH(ctx, server, domain)
+	}
+	// Plain UDP DNS
+	resolver := &net.Resolver{
+		PreferGo: true,
+		Dial: func(ctx context.Context, network, address string) (net.Conn, error) {
+			d := net.Dialer{Timeout: 3 * time.Second}
+			return d.DialContext(ctx, "udp", server)
+		},
+	}
+	addrs, err := resolver.LookupIPAddr(ctx, domain)
+	if err != nil {
+		return nil, err
+	}
+	ips := make([]net.IP, len(addrs))
+	for i, addr := range addrs {
+		ips[i] = addr.IP
+	}
+	return ips, nil
+}
+
+// isDomesticServer returns true if the server appears to be a domestic (Chinese) DNS server.
+func (r *DNSResolver) isDomesticServer(server string) bool {
+	return server == r.config.DomesticServer || server == r.config.DomesticDoH
 }
 
 func (r *DNSResolver) selectResult(domain string, domIPs []net.IP, domErr error, remIPs []net.IP, remErr error) ([]net.IP, error) {
