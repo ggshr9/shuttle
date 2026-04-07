@@ -47,12 +47,27 @@ func main() {
 		importURI(uri, output)
 	case "run":
 		runCmd := flag.NewFlagSet("run", flag.ExitOnError)
-		configPath := runCmd.String("c", "", "path to config file (required)")
+		configPath := runCmd.String("c", "", "path to config file")
+		serverAddr := runCmd.String("s", "", "server address (shortcut: generate config from server+password)")
+		password := runCmd.String("p", "", "password (use with -s for quick connect)")
 		runCmd.Usage = func() {
-			fmt.Fprintf(os.Stderr, "Usage: shuttle run -c <config.yaml>\n\nFlags:\n")
+			fmt.Fprintf(os.Stderr, "Usage:\n  shuttle run -s server:443 -p password   Quick connect (like Brook)\n  shuttle run -c config.yaml              Use existing config\n\nFlags:\n")
 			runCmd.PrintDefaults()
 		}
 		_ = runCmd.Parse(os.Args[2:])
+		if *serverAddr != "" && *password != "" {
+			// Brook-style: quick connect without config file
+			cfg := config.DefaultClientConfig()
+			cfg.Server.Addr = *serverAddr
+			cfg.Server.Password = *password
+			tmpPath := "/tmp/shuttle-quick.yaml"
+			if err := config.SaveClientConfig(tmpPath, cfg); err != nil {
+				fmt.Fprintf(os.Stderr, "Failed to create config: %v\n", err)
+				os.Exit(1)
+			}
+			*configPath = tmpPath
+			fmt.Fprintf(os.Stderr, "Connecting to %s...\n", *serverAddr)
+		}
 		if *configPath == "" {
 			runCmd.Usage()
 			os.Exit(1)
@@ -90,13 +105,16 @@ func main() {
 
 func printUsage() {
 	fmt.Fprintf(os.Stderr, "Shuttle v%s — Break the impossible triangle\n\n", version)
-	fmt.Fprintf(os.Stderr, "Usage:\n")
-	fmt.Fprintf(os.Stderr, "  shuttle run -c <config.yaml>            Start the client\n")
-	fmt.Fprintf(os.Stderr, "  shuttle api -c <config.yaml>            Headless API server (for Docker/testing)\n")
-	fmt.Fprintf(os.Stderr, "  shuttle import <shuttle://...>          Import server config from URI\n")
+	fmt.Fprintf(os.Stderr, "Quick start:\n")
+	fmt.Fprintf(os.Stderr, "  shuttle run -s server:443 -p password   Connect to a server\n")
+	fmt.Fprintf(os.Stderr, "  shuttle import \"shuttle://...\"          Import from URI and run\n\n")
+	fmt.Fprintf(os.Stderr, "Commands:\n")
+	fmt.Fprintf(os.Stderr, "  shuttle run -c <config.yaml>            Start with config file\n")
+	fmt.Fprintf(os.Stderr, "  shuttle api -c <config.yaml>            Headless API server\n")
+	fmt.Fprintf(os.Stderr, "  shuttle import <shuttle://...>          Import server config\n")
 	fmt.Fprintf(os.Stderr, "  shuttle genkey                          Generate key pair\n")
 	fmt.Fprintf(os.Stderr, "  shuttle version                         Show version\n")
-	fmt.Fprintf(os.Stderr, "  shuttle completion <bash|zsh|fish>       Generate shell completions\n")
+	fmt.Fprintf(os.Stderr, "  shuttle completion <bash|zsh|fish>      Shell completions\n")
 	fmt.Fprintf(os.Stderr, "  shuttle help                            Show this help\n")
 }
 

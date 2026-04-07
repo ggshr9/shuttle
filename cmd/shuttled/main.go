@@ -73,11 +73,27 @@ func main() {
 	case "run":
 		runCmd := flag.NewFlagSet("run", flag.ExitOnError)
 		configPath := runCmd.String("c", "", "path to config file (auto-detects or auto-init if empty)")
+		password := runCmd.String("p", "", "password (shortcut: auto-init + run in one step)")
+		listen := runCmd.String("l", "", "listen address (default :443)")
 		runCmd.Usage = func() {
-			fmt.Fprintf(os.Stderr, "Usage: shuttled run [-c <config.yaml>]\n\nIf -c is not provided, looks for config in /etc/shuttle/ or ~/.shuttle/.\nIf no config found, auto-initializes with defaults.\n\nFlags:\n")
+			fmt.Fprintf(os.Stderr, "Usage:\n  shuttled run -p yourpassword          One-step server (like Brook)\n  shuttled run -c config.yaml            Use existing config\n  shuttled run                           Auto-detect or auto-init\n\nFlags:\n")
 			runCmd.PrintDefaults()
 		}
 		_ = runCmd.Parse(os.Args[2:])
+		if *password != "" {
+			// Brook-style: one command to init + run
+			opts := &config.InitOptions{Password: *password, Force: true}
+			if *listen != "" {
+				opts.Listen = *listen
+			}
+			result, err := config.Bootstrap(opts)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Init failed: %v\n", err)
+				os.Exit(1)
+			}
+			printInitResult(result)
+			*configPath = result.ConfigPath
+		}
 		run(*configPath)
 	case "completion":
 		if len(os.Args) < 3 {
@@ -96,13 +112,15 @@ func main() {
 
 func printUsage() {
 	fmt.Fprintf(os.Stderr, "Shuttled v%s — Shuttle Server\n\n", version)
-	fmt.Fprintf(os.Stderr, "Usage:\n")
-	fmt.Fprintf(os.Stderr, "  shuttled init                    Zero-config server setup (generates everything)\n")
-	fmt.Fprintf(os.Stderr, "  shuttled run [-c config.yaml]    Start the server (auto-init if no config)\n")
+	fmt.Fprintf(os.Stderr, "Quick start:\n")
+	fmt.Fprintf(os.Stderr, "  shuttled run -p yourpassword     One-line server (generates everything)\n\n")
+	fmt.Fprintf(os.Stderr, "Commands:\n")
+	fmt.Fprintf(os.Stderr, "  shuttled run [-c config.yaml]    Start the server\n")
+	fmt.Fprintf(os.Stderr, "  shuttled init                    Generate config without starting\n")
 	fmt.Fprintf(os.Stderr, "  shuttled share -c <config.yaml> --addr <domain:port>  Generate import URI\n")
 	fmt.Fprintf(os.Stderr, "  shuttled genkey                  Generate key pair\n")
 	fmt.Fprintf(os.Stderr, "  shuttled version                 Show version\n")
-	fmt.Fprintf(os.Stderr, "  shuttled completion <shell>      Generate shell completions\n")
+	fmt.Fprintf(os.Stderr, "  shuttled completion <shell>      Shell completions\n")
 	fmt.Fprintf(os.Stderr, "  shuttled help                    Show this help\n")
 }
 
