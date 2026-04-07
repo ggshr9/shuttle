@@ -92,8 +92,10 @@ func (t *TUNServer) configureTUN() error {
 			return fmt.Errorf("invalid ipv6_cidr: %w", err)
 		}
 		ones, _ := ipv6Net.Mask.Size()
-		exec.Command("netsh", "interface", "ipv6", "add", "address", dev,
-			ipv6Addr.String()+"/"+fmt.Sprint(ones)).Run()
+		if out, err := exec.Command("netsh", "interface", "ipv6", "add", "address", dev,
+			ipv6Addr.String()+"/"+fmt.Sprint(ones)).CombinedOutput(); err != nil {
+			return fmt.Errorf("netsh ipv6 add address: %s: %w", string(out), err)
+		}
 	}
 
 	return nil

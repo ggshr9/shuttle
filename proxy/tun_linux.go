@@ -85,7 +85,9 @@ func (t *TUNServer) setupRoutes() error {
 	if t.config.IPv6CIDR != "" {
 		_, ipv6Net, _ := net.ParseCIDR(t.config.IPv6CIDR)
 		if ipv6Net != nil {
-			exec.Command("ip", "-6", "route", "add", ipv6Net.String(), "dev", t.config.DeviceName).Run()
+			if out, err := exec.Command("ip", "-6", "route", "add", ipv6Net.String(), "dev", t.config.DeviceName).CombinedOutput(); err != nil {
+				return fmt.Errorf("ip -6 route add: %s: %w", string(out), err)
+			}
 		}
 	}
 	t.logger.Info("routes configured", "cidr", ipNet.String(), "dev", t.config.DeviceName)

@@ -135,18 +135,8 @@ func TestValidateClashMigration_InvalidYAML(t *testing.T) {
 
 func TestValidateClashMigration_EmptyConfig(t *testing.T) {
 	report := ValidateClashMigration([]byte(""))
-	if report.ServerCount != 0 {
-		t.Errorf("expected 0 servers, got %d", report.ServerCount)
-	}
-	if report.GroupCount != 0 {
-		t.Errorf("expected 0 groups, got %d", report.GroupCount)
-	}
-	if report.RuleCount != 0 {
-		t.Errorf("expected 0 rules, got %d", report.RuleCount)
-	}
-	// Always-supported features still present
-	if !containsStr(report.Supported, "Proxy servers import") {
-		t.Errorf("expected always-supported features, got: %v", report.Supported)
+	if !containsStr(report.Unsupported, "Empty config") {
+		t.Errorf("expected 'Empty config' in unsupported, got: %v", report.Unsupported)
 	}
 }
 

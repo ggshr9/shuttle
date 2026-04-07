@@ -28,6 +28,11 @@ func ValidateClashMigration(data []byte) MigrationReport {
 	}
 	report := MigrationReport{}
 
+	if len(data) == 0 {
+		report.Unsupported = append(report.Unsupported, "Empty config")
+		return report
+	}
+
 	if err := yaml.Unmarshal(data, &clash); err != nil {
 		report.Unsupported = append(report.Unsupported, "Invalid YAML: "+err.Error())
 		return report
@@ -77,7 +82,8 @@ func ValidateClashMigration(data []byte) MigrationReport {
 		}
 	}
 
-	// Check rule types
+	// Check rule types (deduplicate both supported and unsupported)
+	supportedRuleTypes := map[string]string{}
 	unsupportedRuleTypes := map[string]bool{}
 	for _, rule := range clash.Rules {
 		parts := splitRule(rule)
@@ -90,18 +96,21 @@ func ValidateClashMigration(data []byte) MigrationReport {
 			"IP-CIDR", "IP-CIDR6", "PROCESS-NAME", "MATCH":
 			// supported natively
 		case "SRC-IP-CIDR":
-			report.Supported = append(report.Supported, "SRC-IP-CIDR rules → src_ip matcher")
+			supportedRuleTypes[ruleType] = "SRC-IP-CIDR rules → src_ip matcher"
 		case "DST-PORT", "SRC-PORT":
-			report.Supported = append(report.Supported, ruleType+" rules → port matcher")
+			supportedRuleTypes[ruleType] = ruleType + " rules → port matcher"
 		case "IN-TYPE", "NETWORK":
-			report.Supported = append(report.Supported, ruleType+" → network_type matcher")
+			supportedRuleTypes[ruleType] = ruleType + " → network_type matcher"
 		case "SUB-RULE", "NOT", "AND", "OR":
 			unsupportedRuleTypes[ruleType] = true
 		case "RULE-SET":
-			report.Supported = append(report.Supported, "RULE-SET → rule providers")
+			supportedRuleTypes[ruleType] = "RULE-SET → rule providers"
 		default:
 			unsupportedRuleTypes[ruleType] = true
 		}
+	}
+	for _, msg := range supportedRuleTypes {
+		report.Supported = append(report.Supported, msg)
 	}
 	for rt := range unsupportedRuleTypes {
 		report.Unsupported = append(report.Unsupported, "Rule type not supported: "+rt)
@@ -120,7 +129,7 @@ func ValidateClashMigration(data []byte) MigrationReport {
 
 // splitRule splits a Clash rule string like "DOMAIN,example.com,PROXY" into its parts.
 func splitRule(rule string) []string {
-	var parts []string
+	parts := make([]string, 0, 3)
 	for _, p := range strings.SplitN(rule, ",", 3) {
 		parts = append(parts, strings.TrimSpace(p))
 	}
