@@ -211,3 +211,177 @@ func TestDNSResolver_DomesticDoH(t *testing.T) {
 		}
 	})
 }
+
+// --- Task 4: DNS Hosts Table ---
+
+func TestResolveHosts_ExactMatch(t *testing.T) {
+	r := newTestResolver(&DNSConfig{
+		Hosts: map[string]string{
+			"myhost.local": "10.0.0.1",
+			"other.local":  "10.0.0.2",
+		},
+	}, nil)
+
+	ip := r.resolveHosts("myhost.local")
+	if ip == nil || !ip.Equal(net.ParseIP("10.0.0.1")) {
+		t.Fatalf("expected 10.0.0.1, got %v", ip)
+	}
+
+	ip2 := r.resolveHosts("other.local")
+	if ip2 == nil || !ip2.Equal(net.ParseIP("10.0.0.2")) {
+		t.Fatalf("expected 10.0.0.2, got %v", ip2)
+	}
+}
+
+func TestResolveHosts_Wildcard(t *testing.T) {
+	r := newTestResolver(&DNSConfig{
+		Hosts: map[string]string{
+			"*.example.com": "10.0.0.99",
+		},
+	}, nil)
+
+	// sub.example.com should match *.example.com
+	ip := r.resolveHosts("sub.example.com")
+	if ip == nil || !ip.Equal(net.ParseIP("10.0.0.99")) {
+		t.Fatalf("expected 10.0.0.99, got %v", ip)
+	}
+
+	// foo.example.com should also match
+	ip2 := r.resolveHosts("foo.example.com")
+	if ip2 == nil || !ip2.Equal(net.ParseIP("10.0.0.99")) {
+		t.Fatalf("expected 10.0.0.99, got %v", ip2)
+	}
+
+	// example.com itself should NOT match *.example.com
+	ip3 := r.resolveHosts("example.com")
+	if ip3 != nil {
+		t.Fatalf("expected nil for bare domain, got %v", ip3)
+	}
+}
+
+func TestResolveHosts_NoMatch(t *testing.T) {
+	r := newTestResolver(&DNSConfig{
+		Hosts: map[string]string{
+			"myhost.local": "10.0.0.1",
+		},
+	}, nil)
+
+	ip := r.resolveHosts("unknown.local")
+	if ip != nil {
+		t.Fatalf("expected nil for unknown domain, got %v", ip)
+	}
+}
+
+func TestResolveHosts_EmptyHosts(t *testing.T) {
+	r := newTestResolver(&DNSConfig{}, nil)
+
+	ip := r.resolveHosts("anything.com")
+	if ip != nil {
+		t.Fatalf("expected nil for empty hosts, got %v", ip)
+	}
+}
+
+func TestResolveHosts_InResolve(t *testing.T) {
+	// Verify that Resolve() returns hosts entries without hitting upstream DNS
+	r := newTestResolver(&DNSConfig{
+		Hosts: map[string]string{
+			"static.local": "192.168.1.100",
+		},
+		// No upstream servers configured — would fail if hosts didn't short-circuit
+		RemoteServer:   "https://127.0.0.1:1/invalid",
+		DomesticServer: "127.0.0.1:1",
+		LeakPrevention: true,
+	}, nil)
+
+	ctx := context.Background()
+	ips, err := r.Resolve(ctx, "static.local")
+	if err != nil {
+		t.Fatalf("Resolve with hosts entry should not fail: %v", err)
+	}
+	if len(ips) != 1 || !ips[0].Equal(net.ParseIP("192.168.1.100")) {
+		t.Fatalf("expected [192.168.1.100], got %v", ips)
+	}
+}
+
+// --- Task 5: Per-Domain DNS Policy ---
+
+func TestDomainPolicy_ExactMatch(t *testing.T) {
+	r := newTestResolver(&DNSConfig{
+		DomainPolicy: []DomainPolicyEntry{
+			{Domain: "corp.internal", Server: "10.0.0.1:53"},
+		},
+	}, nil)
+
+	server := r.matchDomainPolicy("corp.internal")
+	if server != "10.0.0.1:53" {
+		t.Fatalf("expected 10.0.0.1:53, got %q", server)
+	}
+}
+
+func TestDomainPolicy_SubdomainMatch(t *testing.T) {
+	r := newTestResolver(&DNSConfig{
+		DomainPolicy: []DomainPolicyEntry{
+			{Domain: "+.google.com", Server: "https://8.8.8.8/dns-query"},
+		},
+	}, nil)
+
+	// Exact base domain matches +.google.com
+	server := r.matchDomainPolicy("google.com")
+	if server != "https://8.8.8.8/dns-query" {
+		t.Fatalf("expected base domain match, got %q", server)
+	}
+
+	// Subdomain matches +.google.com
+	server2 := r.matchDomainPolicy("mail.google.com")
+	if server2 != "https://8.8.8.8/dns-query" {
+		t.Fatalf("expected subdomain match, got %q", server2)
+	}
+
+	// Deep subdomain matches
+	server3 := r.matchDomainPolicy("a.b.google.com")
+	if server3 != "https://8.8.8.8/dns-query" {
+		t.Fatalf("expected deep subdomain match, got %q", server3)
+	}
+}
+
+func TestDomainPolicy_NoMatch(t *testing.T) {
+	r := newTestResolver(&DNSConfig{
+		DomainPolicy: []DomainPolicyEntry{
+			{Domain: "+.google.com", Server: "https://8.8.8.8/dns-query"},
+			{Domain: "corp.internal", Server: "10.0.0.1:53"},
+		},
+	}, nil)
+
+	server := r.matchDomainPolicy("example.com")
+	if server != "" {
+		t.Fatalf("expected no match, got %q", server)
+	}
+}
+
+func TestDomainPolicy_DoHServerInResolve(t *testing.T) {
+	// Verify that domain policy routes to the specific DoH server
+	const dohJSON = `{"Status":0,"Answer":[{"type":1,"data":"172.16.0.1"}]}`
+	srv, reqCount := newDoHServer(t, dohJSON)
+
+	r := newTestResolver(&DNSConfig{
+		DomainPolicy: []DomainPolicyEntry{
+			{Domain: "+.corp.example", Server: srv.URL},
+		},
+		// Main servers are invalid — would fail if policy didn't short-circuit
+		RemoteServer:   "https://127.0.0.1:1/invalid",
+		DomesticServer: "127.0.0.1:1",
+		LeakPrevention: true,
+	}, srv.Client())
+
+	ctx := context.Background()
+	ips, err := r.Resolve(ctx, "app.corp.example")
+	if err != nil {
+		t.Fatalf("Resolve with domain policy should not fail: %v", err)
+	}
+	if len(ips) != 1 || !ips[0].Equal(net.ParseIP("172.16.0.1")) {
+		t.Fatalf("expected [172.16.0.1], got %v", ips)
+	}
+	if reqCount.Load() != 1 {
+		t.Fatalf("expected exactly 1 request to policy server, got %d", reqCount.Load())
+	}
+}
