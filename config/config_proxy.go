@@ -31,6 +31,7 @@ type TUNConfig struct {
 	Enabled    bool     `yaml:"enabled" json:"enabled"`
 	DeviceName string   `yaml:"device_name" json:"device_name"`
 	CIDR       string   `yaml:"cidr" json:"cidr"`
+	IPv6CIDR   string   `yaml:"ipv6_cidr,omitempty" json:"ipv6_cidr,omitempty"` // e.g. "fd00::1/64"
 	MTU        int      `yaml:"mtu" json:"mtu"`
 	AutoRoute  bool     `yaml:"auto_route" json:"auto_route"`
 	TunFD      int      `yaml:"-" json:"-"`                        // externally provided fd (Android)

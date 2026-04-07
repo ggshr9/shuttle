@@ -20,6 +20,7 @@ import (
 type TUNConfig struct {
 	DeviceName string
 	CIDR       string // e.g., "198.18.0.0/16"
+	IPv6CIDR   string // e.g., "fd00::1/64"
 	MTU        int
 	AutoRoute  bool
 	TunFD      int // externally provided fd; if > 0, skip createTUN

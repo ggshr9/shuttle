@@ -13,6 +13,7 @@ import (
 type TUNInboundConfig struct {
 	DeviceName string `json:"device_name,omitempty"`
 	CIDR       string `json:"cidr,omitempty"`
+	IPv6CIDR   string `json:"ipv6_cidr,omitempty"` // e.g. "fd00::1/64"
 	MTU        int    `json:"mtu,omitempty"`
 	AutoRoute  bool   `json:"auto_route,omitempty"`
 	TunFD      int    `json:"tun_fd,omitempty"`
@@ -42,6 +43,7 @@ func (t *TUNInbound) Start(ctx context.Context, router adapter.InboundRouter) er
 	t.server = NewTUNServer(&TUNConfig{
 		DeviceName: t.config.DeviceName,
 		CIDR:       t.config.CIDR,
+		IPv6CIDR:   t.config.IPv6CIDR,
 		MTU:        t.config.MTU,
 		AutoRoute:  t.config.AutoRoute,
 		TunFD:      t.config.TunFD,

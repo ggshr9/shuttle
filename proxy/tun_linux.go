@@ -65,6 +65,11 @@ func (t *TUNServer) configureTUN() error {
 			return fmt.Errorf("%s: %s: %w", args[0], string(out), err)
 		}
 	}
+	if t.config.IPv6CIDR != "" {
+		if err := exec.Command("ip", "-6", "addr", "add", t.config.IPv6CIDR, "dev", dev).Run(); err != nil {
+			return fmt.Errorf("configure tun ipv6: %w", err)
+		}
+	}
 	return nil
 }
 
@@ -76,6 +81,12 @@ func (t *TUNServer) setupRoutes() error {
 	out, err := exec.Command("ip", "route", "add", ipNet.String(), "dev", t.config.DeviceName).CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("ip route add: %s: %w", string(out), err)
+	}
+	if t.config.IPv6CIDR != "" {
+		_, ipv6Net, _ := net.ParseCIDR(t.config.IPv6CIDR)
+		if ipv6Net != nil {
+			exec.Command("ip", "-6", "route", "add", ipv6Net.String(), "dev", t.config.DeviceName).Run()
+		}
 	}
 	t.logger.Info("routes configured", "cidr", ipNet.String(), "dev", t.config.DeviceName)
 	return nil

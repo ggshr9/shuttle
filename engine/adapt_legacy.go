@@ -46,6 +46,9 @@ func adaptLegacyConfig(cfg *config.ClientConfig) {
 			"auto_route":  t.AutoRoute,
 			"tun_fd":      t.TunFD,
 		}
+		if t.IPv6CIDR != "" {
+			tunOpts["ipv6_cidr"] = t.IPv6CIDR
+		}
 		if t.PerAppMode != "" {
 			tunOpts["per_app_mode"] = t.PerAppMode
 		}

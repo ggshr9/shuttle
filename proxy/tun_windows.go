@@ -86,6 +86,16 @@ func (t *TUNServer) configureTUN() error {
 		}
 	}
 
+	if t.config.IPv6CIDR != "" {
+		ipv6Addr, ipv6Net, err := net.ParseCIDR(t.config.IPv6CIDR)
+		if err != nil {
+			return fmt.Errorf("invalid ipv6_cidr: %w", err)
+		}
+		ones, _ := ipv6Net.Mask.Size()
+		exec.Command("netsh", "interface", "ipv6", "add", "address", dev,
+			ipv6Addr.String()+"/"+fmt.Sprint(ones)).Run()
+	}
+
 	return nil
 }
 
