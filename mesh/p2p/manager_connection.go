@@ -449,7 +449,11 @@ func (m *Manager) retryLoop() {
 			m.mu.RUnlock()
 
 			for _, vip := range toRetry {
-				go func(v net.IP) { _ = m.Connect(m.ctx, v) }(vip)
+				go func(v net.IP) {
+					if err := m.Connect(m.ctx, v); err != nil {
+						m.logger.Debug("background reconnect failed", "vip", v, "err", err)
+					}
+				}(vip)
 			}
 		}
 	}

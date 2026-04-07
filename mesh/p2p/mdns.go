@@ -344,7 +344,9 @@ func (s *MDNSService) announce() {
 func (s *MDNSService) sendGoodbye() {
 	// Build response with TTL=0
 	packet := s.buildResponseWithTTL(0)
-	_ = s.sendPacket(packet)
+	if err := s.sendPacket(packet); err != nil {
+		s.logger.Debug("mdns: goodbye packet failed", "err", err)
+	}
 }
 
 // sendPacket sends a packet to the mDNS multicast address.

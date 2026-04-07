@@ -310,7 +310,9 @@ func (c *TURNClient) Close() error {
 	defer cancel()
 
 	req := c.buildRefreshRequest(0)
-	_ = c.sendRequest(ctx, req)
+	if err := c.sendRequest(ctx, req); err != nil {
+		c.logger.Debug("TURN deallocate request failed", "err", err)
+	}
 
 	if conn != nil {
 		conn.Close()
