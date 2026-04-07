@@ -24,9 +24,6 @@ type NoiseHandshake struct {
 	isInitiator bool
 	completed   bool
 
-	// Keep raw keys for backward compatibility
-	sendKey [32]byte
-	recvKey [32]byte
 }
 
 // ClampPrivateKey applies Curve25519 key clamping to a 32-byte private key.
@@ -118,10 +115,7 @@ func (h *NoiseHandshake) finalize(cs0, cs1 *noise.CipherState) {
 func (h *NoiseHandshake) SendCipher() *noise.CipherState { return h.sendCipher }
 func (h *NoiseHandshake) RecvCipher() *noise.CipherState { return h.recvCipher }
 
-// SendKey returns a 32-byte key derived from the send cipher for backward compat.
-func (h *NoiseHandshake) SendKey() [32]byte { return h.sendKey }
-func (h *NoiseHandshake) RecvKey() [32]byte { return h.recvKey }
-func (h *NoiseHandshake) Completed() bool   { return h.completed }
+func (h *NoiseHandshake) Completed() bool { return h.completed }
 
 // PeerPublicKey returns the remote party's static public key (available after handshake).
 func (h *NoiseHandshake) PeerPublicKey() []byte {

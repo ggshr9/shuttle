@@ -51,8 +51,7 @@ type NATStatus struct {
 
 // GetPeerState returns the state of a peer connection.
 func (m *Manager) GetPeerState(vip net.IP) ConnectionState {
-	var key [4]byte
-	copy(key[:], vip.To4())
+	key := vipKey(vip)
 
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -160,13 +159,6 @@ func (m *Manager) GetPortMappingInfo() *PortMappingInfo {
 		LocalPort:    m.udpConn.LocalAddr().(*net.UDPAddr).Port,
 	}
 }
-
-// GetUPnPInfo returns UPnP port mapping information.
-// Deprecated: Use GetPortMappingInfo instead.
-func (m *Manager) GetUPnPInfo() *PortMappingInfo {
-	return m.GetPortMappingInfo()
-}
-
 // IsUPnPEnabled returns whether UPnP port mapping is active.
 func (m *Manager) IsUPnPEnabled() bool {
 	return m.upnpEnabled

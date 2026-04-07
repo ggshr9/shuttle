@@ -12,8 +12,7 @@ import (
 // SendPacket sends a packet to a peer.
 // Uses P2P connection if available, falls back to relay.
 func (m *Manager) SendPacket(dstVIP net.IP, data []byte) error {
-	var key [4]byte
-	copy(key[:], dstVIP.To4())
+	key := vipKey(dstVIP)
 
 	m.mu.RLock()
 	peer, exists := m.peers[key]
@@ -49,18 +48,10 @@ func (m *Manager) SendPacket(dstVIP net.IP, data []byte) error {
 
 // Connect initiates a P2P connection to a peer.
 func (m *Manager) Connect(ctx context.Context, dstVIP net.IP) error {
-	var key [4]byte
-	copy(key[:], dstVIP.To4())
+	key := vipKey(dstVIP)
 
 	m.mu.Lock()
-	peer, exists := m.peers[key]
-	if !exists {
-		peer = &PeerConnection{
-			VIP:   dstVIP,
-			State: StateDisconnected,
-		}
-		m.peers[key] = peer
-	}
+	peer := m.getOrCreatePeer(dstVIP)
 
 	if peer.State == StateConnected || peer.State == StateConnecting {
 		m.mu.Unlock()
@@ -211,18 +202,8 @@ func (m *Manager) handleCandidates(msg *signal.Message) {
 		return
 	}
 
-	var key [4]byte
-	copy(key[:], msg.SrcVIP.To4())
-
 	m.mu.Lock()
-	peer, exists := m.peers[key]
-	if !exists {
-		peer = &PeerConnection{
-			VIP:   msg.SrcVIP,
-			State: StateDisconnected,
-		}
-		m.peers[key] = peer
-	}
+	peer := m.getOrCreatePeer(msg.SrcVIP)
 	peer.Candidates = m.infoCandidates(candidates)
 	m.mu.Unlock()
 
@@ -239,18 +220,10 @@ func (m *Manager) handleConnect(msg *signal.Message) {
 		return
 	}
 
-	var key [4]byte
-	copy(key[:], msg.SrcVIP.To4())
+	key := vipKey(msg.SrcVIP)
 
 	m.mu.Lock()
-	peer, exists := m.peers[key]
-	if !exists {
-		peer = &PeerConnection{
-			VIP:   msg.SrcVIP,
-			State: StateDisconnected,
-		}
-		m.peers[key] = peer
-	}
+	peer := m.getOrCreatePeer(msg.SrcVIP)
 	m.mu.Unlock()
 
 	m.logger.Info("p2p: received connection request", "peer", msg.SrcVIP)
@@ -335,8 +308,7 @@ func (m *Manager) handleConnect(msg *signal.Message) {
 
 // handleDisconnect handles disconnect notifications.
 func (m *Manager) handleDisconnect(msg *signal.Message) {
-	var key [4]byte
-	copy(key[:], msg.SrcVIP.To4())
+	key := vipKey(msg.SrcVIP)
 
 	m.mu.Lock()
 	if peer, ok := m.peers[key]; ok {

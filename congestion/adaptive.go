@@ -177,11 +177,7 @@ func (ac *AdaptiveCongestion) calculateRTTTrend() float64 {
 }
 
 func (ac *AdaptiveCongestion) resetWindowIfNeeded() {
-	window := ac.detectionWindow
-	if window == 0 {
-		window = 3 * time.Second
-	}
-	if time.Since(ac.lastWindowReset) >= window {
+	if time.Since(ac.lastWindowReset) >= ac.detectionWindow {
 		ac.windowSentBytes = 0
 		ac.windowLostBytes = 0
 		ac.lastWindowReset = time.Now()

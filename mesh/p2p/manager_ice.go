@@ -14,8 +14,7 @@ func (m *Manager) TriggerICERestart(peerVIP net.IP, reason byte) error {
 		return fmt.Errorf("p2p: ICE restart is disabled")
 	}
 
-	var key [4]byte
-	copy(key[:], peerVIP.To4())
+	key := vipKey(peerVIP)
 
 	m.mu.Lock()
 	peer, exists := m.peers[key]
@@ -71,15 +70,7 @@ func (m *Manager) TriggerICERestart(peerVIP net.IP, reason byte) error {
 	}
 
 	// Re-gather candidates and reconnect
-	go func() {
-		// Wait a bit to allow the signal to be delivered
-		time.Sleep(500 * time.Millisecond)
-		if err := m.Connect(m.ctx, peerVIP); err != nil {
-			m.logger.Debug("p2p: reconnect after ICE restart failed",
-				"peer", peerVIP,
-				"err", err)
-		}
-	}()
+	m.scheduleReconnect(peerVIP)
 
 	return nil
 }
@@ -92,23 +83,13 @@ func (m *Manager) handleICERestart(msg *signal.Message) {
 		return
 	}
 
-	var key [4]byte
-	copy(key[:], msg.SrcVIP.To4())
-
 	m.logger.Info("p2p: received ICE restart request",
 		"peer", msg.SrcVIP,
 		"reason", restartInfo.Reason,
 		"generation", restartInfo.Generation)
 
 	m.mu.Lock()
-	peer, exists := m.peers[key]
-	if !exists {
-		peer = &PeerConnection{
-			VIP:   msg.SrcVIP,
-			State: StateDisconnected,
-		}
-		m.peers[key] = peer
-	}
+	peer := m.getOrCreatePeer(msg.SrcVIP)
 
 	// Update ICE credentials from remote
 	peer.ICEGeneration = int(restartInfo.Generation)
@@ -125,15 +106,7 @@ func (m *Manager) handleICERestart(msg *signal.Message) {
 
 	// If we were connected, initiate reconnection
 	if oldState == StateConnected {
-		go func() {
-			// Wait a bit to allow the remote side to be ready
-			time.Sleep(500 * time.Millisecond)
-			if err := m.Connect(m.ctx, msg.SrcVIP); err != nil {
-				m.logger.Debug("p2p: reconnect after ICE restart failed",
-					"peer", msg.SrcVIP,
-					"err", err)
-			}
-		}()
+		m.scheduleReconnect(msg.SrcVIP)
 	}
 }
 
@@ -200,8 +173,7 @@ func (m *Manager) checkConnectionQuality() {
 
 // RecordRTT records an RTT sample for a peer's quality monitor.
 func (m *Manager) RecordRTT(peerVIP net.IP, rtt time.Duration) {
-	var key [4]byte
-	copy(key[:], peerVIP.To4())
+	key := vipKey(peerVIP)
 
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -216,8 +188,7 @@ func (m *Manager) RecordRTT(peerVIP net.IP, rtt time.Duration) {
 
 // RecordPacketLoss records packet loss for a peer's quality monitor.
 func (m *Manager) RecordPacketLoss(peerVIP net.IP) {
-	var key [4]byte
-	copy(key[:], peerVIP.To4())
+	key := vipKey(peerVIP)
 
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -232,8 +203,7 @@ func (m *Manager) RecordPacketLoss(peerVIP net.IP) {
 
 // GetPeerQuality returns quality metrics for a peer.
 func (m *Manager) GetPeerQuality(peerVIP net.IP) *QualityMetrics {
-	var key [4]byte
-	copy(key[:], peerVIP.To4())
+	key := vipKey(peerVIP)
 
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -247,8 +217,7 @@ func (m *Manager) GetPeerQuality(peerVIP net.IP) *QualityMetrics {
 
 // GetICERestartStats returns ICE restart statistics for a peer.
 func (m *Manager) GetICERestartStats(peerVIP net.IP) *ICERestartStats {
-	var key [4]byte
-	copy(key[:], peerVIP.To4())
+	key := vipKey(peerVIP)
 
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -272,18 +241,8 @@ func (m *Manager) handleTrickleCandidate(msg *signal.Message) {
 		return
 	}
 
-	var key [4]byte
-	copy(key[:], msg.SrcVIP.To4())
-
 	m.mu.Lock()
-	peer, exists := m.peers[key]
-	if !exists {
-		peer = &PeerConnection{
-			VIP:   msg.SrcVIP,
-			State: StateDisconnected,
-		}
-		m.peers[key] = peer
-	}
+	peer := m.getOrCreatePeer(msg.SrcVIP)
 
 	// Convert to internal candidate type
 	candidate := &Candidate{
@@ -327,12 +286,10 @@ func (m *Manager) handleEndOfCandidates(msg *signal.Message) {
 		return
 	}
 
-	var key [4]byte
-	copy(key[:], msg.SrcVIP.To4())
+	key := vipKey(msg.SrcVIP)
 
 	m.mu.Lock()
-	peer, exists := m.peers[key]
-	if exists {
+	if peer, exists := m.peers[key]; exists {
 		peer.ICEGeneration = int(info.Generation)
 	}
 	m.mu.Unlock()
