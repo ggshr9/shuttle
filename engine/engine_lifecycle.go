@@ -88,7 +88,7 @@ func (e *Engine) startInternal(ctx context.Context) error {
 	}
 
 	e.logger.Debug("initializing transport selector", "strategy", strategy, "count", len(transports))
-	poolIdleTTL, _ := time.ParseDuration(cfgSnap.Transport.PoolIdleTTL)
+	poolIdleTTL := parseDurationOr(cfgSnap.Transport.PoolIdleTTL, 0)
 	sel := selector.New(transports, &selector.Config{
 		Strategy:          strategy,
 		ServerAddr:        cfgSnap.Server.Addr,
@@ -107,12 +107,7 @@ func (e *Engine) startInternal(ctx context.Context) error {
 	// Initialize proxy providers from config.
 	proxyProviders := make([]*provider.ProxyProvider, 0, len(cfgSnap.ProxyProviders))
 	for _, ppCfg := range cfgSnap.ProxyProviders {
-		interval := time.Hour
-		if ppCfg.Interval != "" {
-			if d, err := time.ParseDuration(ppCfg.Interval); err == nil {
-				interval = d
-			}
-		}
+		interval := parseDurationOr(ppCfg.Interval, time.Hour)
 		pp, err := provider.NewProxyProvider(provider.ProxyProviderConfig{
 			Name:     ppCfg.Name,
 			URL:      ppCfg.URL,
@@ -136,12 +131,7 @@ func (e *Engine) startInternal(ctx context.Context) error {
 	ruleProviders := make([]*provider.RuleProvider, 0, len(cfgSnap.RuleProviders))
 	ruleProviderMap := make(map[string]*provider.RuleProvider, len(cfgSnap.RuleProviders))
 	for _, rpCfg := range cfgSnap.RuleProviders {
-		interval := time.Hour
-		if rpCfg.Interval != "" {
-			if d, err := time.ParseDuration(rpCfg.Interval); err == nil {
-				interval = d
-			}
-		}
+		interval := parseDurationOr(rpCfg.Interval, time.Hour)
 		rp, err := provider.NewRuleProvider(provider.RuleProviderConfig{
 			Name:     rpCfg.Name,
 			URL:      rpCfg.URL,
@@ -231,12 +221,7 @@ func (e *Engine) startInternal(ctx context.Context) error {
 	e.obs.StartSpeedLoop(ctx)
 
 	// Parse migration probe timeout from config.
-	migrateTimeout := 3 * time.Second
-	if cfgSnap.Transport.MigrationProbeTimeout != "" {
-		if d, err := time.ParseDuration(cfgSnap.Transport.MigrationProbeTimeout); err == nil {
-			migrateTimeout = d
-		}
-	}
+	migrateTimeout := parseDurationOr(cfgSnap.Transport.MigrationProbeTimeout, 3*time.Second)
 
 	// Build a simple TCP probe function: try to dial the server address.
 	serverAddr := cfgSnap.Server.Addr
@@ -328,45 +313,26 @@ func (e *Engine) stopInternal() error {
 		_ = e.meshManager.Close()
 	}
 
-	done := make(chan struct{})
-	go func() {
-		defer close(done)
+	waitWithTimeout(func() {
 		for _, c := range closers {
 			_ = c()
 		}
 		if sel != nil {
 			sel.Close()
 		}
-	}()
-	select {
-	case <-done:
-	case <-time.After(stopTimeout):
+	}, stopTimeout, func() {
 		e.logger.Warn("engine stop timed out, forcing shutdown")
-	}
+	})
 
 	// Wait for background goroutines (MeshReceiveLoop, etc.) to exit.
-	bgDone := make(chan struct{})
-	go func() {
-		e.bgWg.Wait()
-		close(bgDone)
-	}()
-	select {
-	case <-bgDone:
-	case <-time.After(5 * time.Second):
+	waitWithTimeout(e.bgWg.Wait, 5*time.Second, func() {
 		e.logger.Warn("background goroutines did not exit within timeout")
-	}
+	})
 
 	// Wait for observability background goroutines (speed loop).
-	obsDone := make(chan struct{})
-	go func() {
-		e.obs.WaitBackground()
-		close(obsDone)
-	}()
-	select {
-	case <-obsDone:
-	case <-time.After(5 * time.Second):
+	waitWithTimeout(e.obs.WaitBackground, 5*time.Second, func() {
 		e.logger.Warn("observability goroutines did not exit within timeout")
-	}
+	})
 
 	// Stop providers before taking the final lock.
 	e.mu.RLock()
@@ -587,6 +553,21 @@ func (e *Engine) Reload(cfg *config.ClientConfig) error {
 		return fmt.Errorf("start with new config: %w", err)
 	}
 	return nil
+}
+
+// waitWithTimeout runs fn in a goroutine and waits up to timeout for it to
+// finish. If the timeout expires first, onTimeout is called.
+func waitWithTimeout(fn func(), timeout time.Duration, onTimeout func()) {
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		fn()
+	}()
+	select {
+	case <-done:
+	case <-time.After(timeout):
+		onTimeout()
+	}
 }
 
 

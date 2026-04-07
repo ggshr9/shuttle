@@ -171,30 +171,8 @@ func (e *Engine) buildRouter(cfg *config.ClientConfig, ruleProviders map[string]
 		})
 	}
 
-	for i := range cfg.Routing.Rules {
-		rule := &cfg.Routing.Rules[i]
-		r := router.Rule{Action: router.Action(rule.Action)}
-		switch {
-		case rule.Domains != "":
-			r.Type = "domain"
-			r.Values = []string{rule.Domains}
-		case rule.GeoSite != "":
-			r.Type = "geosite"
-			r.Values = []string{rule.GeoSite}
-		case rule.GeoIP != "":
-			r.Type = "geoip"
-			r.Values = []string{rule.GeoIP}
-		case len(rule.Process) > 0:
-			r.Type = "process"
-			r.Values = rule.Process
-		case rule.Protocol != "":
-			r.Type = "protocol"
-			r.Values = []string{rule.Protocol}
-		case len(rule.IPCIDR) > 0:
-			r.Type = "ip-cidr"
-			r.Values = rule.IPCIDR
-		}
-		routerCfg.Rules = append(routerCfg.Rules, r)
+	for _, rule := range cfg.Routing.Rules {
+		routerCfg.Rules = append(routerCfg.Rules, router.ConfigRuleToRouterRule(rule))
 	}
 	e.logger.Debug("router built", "rules", len(routerCfg.Rules), "default_action", routerCfg.DefaultAction, "dns_prefetch", cfg.Routing.DNS.Prefetch)
 	rt := router.NewRouter(routerCfg, geoIPDB, geoSiteDB, e.logger)
@@ -207,20 +185,8 @@ func (e *Engine) buildRetryConfig(cfg config.RetryConfig) RetryConfig {
 	if cfg.MaxAttempts > 0 {
 		rc.MaxAttempts = cfg.MaxAttempts
 	}
-	if cfg.InitialBackoff != "" {
-		if d, err := time.ParseDuration(cfg.InitialBackoff); err == nil {
-			rc.InitialBackoff = d
-		} else {
-			e.logger.Warn("invalid duration, using default", "field", "retry.initial_backoff", "value", cfg.InitialBackoff, "err", err)
-		}
-	}
-	if cfg.MaxBackoff != "" {
-		if d, err := time.ParseDuration(cfg.MaxBackoff); err == nil {
-			rc.MaxBackoff = d
-		} else {
-			e.logger.Warn("invalid duration, using default", "field", "retry.max_backoff", "value", cfg.MaxBackoff, "err", err)
-		}
-	}
+	rc.InitialBackoff = parseDurationOr(cfg.InitialBackoff, rc.InitialBackoff)
+	rc.MaxBackoff = parseDurationOr(cfg.MaxBackoff, rc.MaxBackoff)
 	return rc
 }
 
@@ -314,20 +280,8 @@ func (e *Engine) buildShaperConfig(cfg config.ObfsConfig) obfs.ShaperConfig {
 	}
 	sc := obfs.DefaultShaperConfig()
 	sc.Enabled = true
-	if cfg.MinDelay != "" {
-		if d, err := time.ParseDuration(cfg.MinDelay); err == nil {
-			sc.MinDelay = d
-		} else {
-			e.logger.Warn("invalid duration, using default", "field", "obfs.min_delay", "value", cfg.MinDelay, "err", err)
-		}
-	}
-	if cfg.MaxDelay != "" {
-		if d, err := time.ParseDuration(cfg.MaxDelay); err == nil {
-			sc.MaxDelay = d
-		} else {
-			e.logger.Warn("invalid duration, using default", "field", "obfs.max_delay", "value", cfg.MaxDelay, "err", err)
-		}
-	}
+	sc.MinDelay = parseDurationOr(cfg.MinDelay, sc.MinDelay)
+	sc.MaxDelay = parseDurationOr(cfg.MaxDelay, sc.MaxDelay)
 	if cfg.ChunkSize > 0 {
 		sc.ChunkMinSize = cfg.ChunkSize
 		// Set max to 2x min or at least 1400, whichever is larger

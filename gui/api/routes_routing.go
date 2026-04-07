@@ -211,24 +211,8 @@ func registerRoutingRoutes(mux *http.ServeMux, eng *engine.Engine) {
 			routerCfg := &router.RouterConfig{
 				DefaultAction: router.Action(cfg.Routing.Default),
 			}
-			for i := range cfg.Routing.Rules {
-				rule := &cfg.Routing.Rules[i]
-				rr := router.Rule{Action: router.Action(rule.Action)}
-				switch {
-				case rule.Domains != "":
-					rr.Type = "domain"
-					rr.Values = []string{rule.Domains}
-				case rule.GeoSite != "":
-					rr.Type = "geosite"
-					rr.Values = []string{rule.GeoSite}
-				case rule.GeoIP != "":
-					rr.Type = "geoip"
-					rr.Values = []string{rule.GeoIP}
-				case len(rule.IPCIDR) > 0:
-					rr.Type = "ip-cidr"
-					rr.Values = rule.IPCIDR
-				}
-				routerCfg.Rules = append(routerCfg.Rules, rr)
+			for _, rule := range cfg.Routing.Rules {
+				routerCfg.Rules = append(routerCfg.Rules, router.ConfigRuleToRouterRule(rule))
 			}
 			rt = router.NewRouter(routerCfg, nil, nil, nil)
 		}
@@ -242,24 +226,8 @@ func registerRoutingRoutes(mux *http.ServeMux, eng *engine.Engine) {
 
 		// Convert config rules to router rules
 		var rules []router.Rule
-		for i := range cfg.Routing.Rules {
-			rule := &cfg.Routing.Rules[i]
-			rr := router.Rule{Action: router.Action(rule.Action)}
-			switch {
-			case rule.Domains != "":
-				rr.Type = "domain"
-				rr.Values = []string{rule.Domains}
-			case rule.GeoSite != "":
-				rr.Type = "geosite"
-				rr.Values = []string{rule.GeoSite}
-			case rule.GeoIP != "":
-				rr.Type = "geoip"
-				rr.Values = []string{rule.GeoIP}
-			case len(rule.IPCIDR) > 0:
-				rr.Type = "ip-cidr"
-				rr.Values = rule.IPCIDR
-			}
-			rules = append(rules, rr)
+		for _, rule := range cfg.Routing.Rules {
+			rules = append(rules, router.ConfigRuleToRouterRule(rule))
 		}
 
 		// Use the engine's GeoSite DB if available
