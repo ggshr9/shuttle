@@ -421,56 +421,56 @@ func (e *Engine) stopInternal() error {
 	return nil
 }
 
+// configEqualExcept returns true when old and new configs are identical after
+// the zero function has cleared the fields to ignore. Both configs are
+// deep-copied before zeroing so the originals are not modified.
+func configEqualExcept(old, new *config.ClientConfig, zero func(o, n *config.ClientConfig)) bool {
+	if old == nil || new == nil {
+		return false
+	}
+	o, n := old.DeepCopy(), new.DeepCopy()
+	zero(o, n)
+	ob, err1 := json.Marshal(o)
+	nb, err2 := json.Marshal(n)
+	if err1 != nil || err2 != nil {
+		return false
+	}
+	return bytes.Equal(ob, nb)
+}
+
 // isRouterOnlyChange reports true when the two configs differ only in routing or
 // DNS fields, meaning the transport/proxy/mesh plumbing does not need to restart.
 func isRouterOnlyChange(oldCfg, newCfg *config.ClientConfig) bool {
-	if oldCfg == nil || newCfg == nil {
-		return false
-	}
-	oldCopy := oldCfg.DeepCopy()
-	newCopy := newCfg.DeepCopy()
-
-	// Zero out the fields that are handled by the router fast-path.
-	// DNS is nested inside RoutingConfig, so zeroing Routing covers it.
-	// RuleProviders are consumed only by the router, so they are also safe to
-	// hot-swap without restarting transports.
-	oldCopy.Routing = config.RoutingConfig{}
-	newCopy.Routing = config.RoutingConfig{}
-	oldCopy.RuleProviders = nil
-	newCopy.RuleProviders = nil
-
-	oldJSON, err1 := json.Marshal(oldCopy)
-	newJSON, err2 := json.Marshal(newCopy)
-	if err1 != nil || err2 != nil {
-		// If marshalling fails for any reason, fall back to full reload.
-		return false
-	}
-	return bytes.Equal(oldJSON, newJSON)
+	return configEqualExcept(oldCfg, newCfg, func(o, n *config.ClientConfig) {
+		o.Routing = config.RoutingConfig{}
+		n.Routing = config.RoutingConfig{}
+		o.RuleProviders = nil
+		n.RuleProviders = nil
+	})
 }
 
 // isStrategyOnlyChange reports true when the two configs differ only in the
-// transport selection strategy (Transport.Preferred), meaning we can hot-switch
-// via SetTransportStrategy instead of a full stop+start cycle.
+// transport selection strategy (Transport.Preferred) AND the new value is a
+// selector strategy (auto/priority/latency/multipath). Transport-specific
+// preferred values like "h3"/"reality" are not selector strategies and must
+// go through a full reload.
 func isStrategyOnlyChange(oldCfg, newCfg *config.ClientConfig) bool {
 	if oldCfg == nil || newCfg == nil {
 		return false
 	}
 	if oldCfg.Transport.Preferred == newCfg.Transport.Preferred {
-		return false // no strategy change at all
-	}
-	oldCopy := oldCfg.DeepCopy()
-	newCopy := newCfg.DeepCopy()
-
-	// Zero out the strategy field so the rest of the config can be compared.
-	oldCopy.Transport.Preferred = ""
-	newCopy.Transport.Preferred = ""
-
-	oldJSON, err1 := json.Marshal(oldCopy)
-	newJSON, err2 := json.Marshal(newCopy)
-	if err1 != nil || err2 != nil {
 		return false
 	}
-	return bytes.Equal(oldJSON, newJSON)
+	// Only fire for values that SetTransportStrategy can handle.
+	switch newCfg.Transport.Preferred {
+	case "", "auto", "priority", "latency", "multipath":
+	default:
+		return false
+	}
+	return configEqualExcept(oldCfg, newCfg, func(o, n *config.ClientConfig) {
+		o.Transport.Preferred = ""
+		n.Transport.Preferred = ""
+	})
 }
 
 // reloadRouterOnly hot-swaps the router and DNS resolver without stopping the
@@ -546,8 +546,12 @@ func (e *Engine) Reload(cfg *config.ClientConfig) error {
 	// Fast path: if only the transport strategy changed, use SetTransportStrategy
 	// to avoid a full stop+start cycle.
 	if running && isStrategyOnlyChange(oldCfg, cfg) {
-		e.logger.Debug("reload: strategy-only change detected, using SetTransportStrategy")
-		if err := e.SetTransportStrategy(parentCtx, cfg.Transport.Preferred); err != nil {
+		strategy := cfg.Transport.Preferred
+		if strategy == "" {
+			strategy = "auto"
+		}
+		e.logger.Debug("reload: strategy-only change detected", "strategy", strategy)
+		if err := e.SetTransportStrategy(parentCtx, strategy); err != nil {
 			return fmt.Errorf("strategy hot-switch: %w", err)
 		}
 		e.mu.Lock()

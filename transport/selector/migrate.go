@@ -221,6 +221,20 @@ type ConnMigrationStats struct {
 	DrainStarted time.Time `json:"drain_started,omitempty"`
 }
 
+// DrainingCount returns the number of connections currently draining.
+// Cheaper than Stats() when only the count is needed.
+func (m *Migrator) DrainingCount() int {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	count := 0
+	for _, tc := range m.connections {
+		if tc.draining.Load() {
+			count++
+		}
+	}
+	return count
+}
+
 // Stats returns the current state of all tracked connections.
 func (m *Migrator) Stats() []ConnMigrationStats {
 	m.mu.Lock()

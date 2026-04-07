@@ -430,9 +430,19 @@ func (s *Selector) Migrate() {
 
 func (s *Selector) Type() string { return "selector" }
 
-// MigrationStats returns the current state of all tracked connections in the
-// migrator. Useful for exposing draining connection info to APIs.
+// DrainingCount returns the number of connections currently draining.
+func (s *Selector) DrainingCount() int {
+	if s.migrator == nil {
+		return 0
+	}
+	return s.migrator.DrainingCount()
+}
+
+// MigrationStats returns the current state of all tracked connections.
 func (s *Selector) MigrationStats() []ConnMigrationStats {
+	if s.migrator == nil {
+		return nil
+	}
 	return s.migrator.Stats()
 }
 

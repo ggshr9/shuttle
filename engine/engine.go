@@ -184,12 +184,7 @@ func (e *Engine) Status() EngineStatus {
 				Latency:   probe.Latency.Milliseconds(),
 			})
 		}
-		// Count draining connections from the migrator.
-		for _, ms := range sel.MigrationStats() {
-			if ms.Draining {
-				status.DrainingConns++
-			}
-		}
+		status.DrainingConns = sel.DrainingCount()
 		if paths := sel.ActivePaths(); len(paths) > 0 {
 			for _, sp := range paths {
 				status.MultipathPaths = append(status.MultipathPaths, PathInfo{

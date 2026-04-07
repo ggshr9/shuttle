@@ -973,6 +973,16 @@ func TestIsStrategyOnlyChange(t *testing.T) {
 			t.Error("expected false when strategy + server changed")
 		}
 	})
+
+	t.Run("transport-specific preferred rejects fast path", func(t *testing.T) {
+		for _, tp := range []string{"h3", "reality", "cdn", "webrtc"} {
+			newCfg := base.DeepCopy()
+			newCfg.Transport.Preferred = tp
+			if isStrategyOnlyChange(base, newCfg) {
+				t.Errorf("expected false for transport-specific preferred=%q", tp)
+			}
+		}
+	})
 }
 
 // ---------------------------------------------------------------------------
