@@ -1,5 +1,12 @@
-// Package trojan implements the Trojan protocol with SHA224 authentication
-// and cover-site fallback for censorship resistance.
+// Package trojan implements the Trojan proxy protocol.
+//
+// Wire format:
+//
+//	[56B hex(SHA224(password))]["\r\n"][1B cmd][1B addr-type][variable addr][2B port]["\r\n"][payload...]
+//
+// Authentication: 56-byte hex-encoded SHA224 hash of the password.
+// Address types: SOCKS5 convention (0x01=IPv4, 0x03=domain, 0x04=IPv6).
+// Fallback: failed auth forwards to a real HTTPS server.
 package trojan
 
 import (

@@ -40,6 +40,16 @@ func NewClient(cfg *ClientConfig) *Client {
 // Type returns the transport type identifier.
 func (c *Client) Type() string { return "reality" }
 
+// Reality Transport Architecture
+//
+// Three security layers:
+// 1. TLS 1.3 with SNI impersonation — outer layer looks like HTTPS to DPI
+// 2. Noise IK handshake (Noise_IK_25519_ChaChaPoly_SHA256) — mutual authentication
+// 3. Optional post-quantum hybrid KEM (X25519 + ML-KEM-768) — quantum resistance
+//
+// Failed Noise auth → server forwards to real HTTPS backend (TargetAddr).
+// After auth, traffic is multiplexed via yamux.
+
 // Dial establishes a Reality connection to the given address.
 func (c *Client) Dial(ctx context.Context, addr string) (transport.Connection, error) {
 	if c.closed.Load() {

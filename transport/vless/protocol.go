@@ -1,3 +1,12 @@
+// Package vless implements the VLESS proxy protocol (v0).
+//
+// Wire format (per-stream):
+//
+//	Request:  [1B version][16B UUID][0B addons-len][1B cmd][2B port][1B addr-type][variable addr]
+//	Response: [1B version][0B addons-len][payload...]
+//
+// Address types: 0x01=IPv4(4B), 0x03=domain(1B len + N), 0x04=IPv6(16B)
+// Commands: 0x01=TCP, 0x02=UDP
 package vless
 
 import (
