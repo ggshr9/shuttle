@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net"
+	"strconv"
 
 	"github.com/shuttleX/shuttle/adapter"
 	"github.com/shuttleX/shuttle/proxy"
@@ -55,7 +56,23 @@ func (r *inboundRouter) RouteConnection(ctx context.Context, meta *adapter.ConnM
 		procName = proxy.ProcessFromContext(ctx)
 	}
 
-	action := r.routerEngine.Match(host, ip, procName, meta.Protocol)
+	// Extract destination port for port-based routing.
+	var dstPort uint16
+	if port != "" {
+		if pn, err := strconv.ParseUint(port, 10, 16); err == nil {
+			dstPort = uint16(pn)
+		}
+	}
+
+	// Extract source IP for source-IP-based routing.
+	var srcIP net.IP
+	if meta.Source != nil {
+		if tcpAddr, ok := meta.Source.(*net.TCPAddr); ok {
+			srcIP = tcpAddr.IP
+		}
+	}
+
+	action := r.routerEngine.Match(host, ip, procName, meta.Protocol, dstPort, srcIP)
 
 	// Look up outbound: try well-known actions first, then treat the action
 	// string as a custom outbound tag, falling back to the default outbound.

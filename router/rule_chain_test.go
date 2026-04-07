@@ -447,7 +447,7 @@ func TestRuleChain_BeforeLegacy(t *testing.T) {
 	r := NewRouter(cfg, nil, nil, nil)
 
 	// Rule chain should win over the legacy domain rule.
-	got := r.Match("example.com", nil, "", "")
+	got := r.Match("example.com", nil, "", "", 0, nil)
 	if got != ActionReject {
 		t.Errorf("Match(example.com) = %q, want %q (rule chain should override legacy)", got, ActionReject)
 	}
@@ -469,19 +469,19 @@ func TestRuleChain_FallsThroughToLegacy(t *testing.T) {
 	r := NewRouter(cfg, nil, nil, nil)
 
 	// "blocked.com" matches rule chain
-	got := r.Match("blocked.com", nil, "", "")
+	got := r.Match("blocked.com", nil, "", "", 0, nil)
 	if got != ActionReject {
 		t.Errorf("Match(blocked.com) = %q, want %q", got, ActionReject)
 	}
 
 	// "example.com" falls through to legacy
-	got = r.Match("example.com", nil, "", "")
+	got = r.Match("example.com", nil, "", "", 0, nil)
 	if got != ActionDirect {
 		t.Errorf("Match(example.com) = %q, want %q (should fall through to legacy)", got, ActionDirect)
 	}
 
 	// "other.com" falls through to default
-	got = r.Match("other.com", nil, "", "")
+	got = r.Match("other.com", nil, "", "", 0, nil)
 	if got != ActionProxy {
 		t.Errorf("Match(other.com) = %q, want %q (should fall through to default)", got, ActionProxy)
 	}
@@ -498,17 +498,17 @@ func TestRuleChain_Empty(t *testing.T) {
 	}
 	r := NewRouter(cfg, nil, nil, nil)
 
-	got := r.Match("example.com", nil, "", "")
+	got := r.Match("example.com", nil, "", "", 0, nil)
 	if got != ActionDirect {
 		t.Errorf("Match(example.com) = %q, want %q", got, ActionDirect)
 	}
 
-	got = r.Match("", nil, "chrome", "")
+	got = r.Match("", nil, "chrome", "", 0, nil)
 	if got != ActionReject {
 		t.Errorf("Match(chrome) = %q, want %q", got, ActionReject)
 	}
 
-	got = r.Match("other.com", nil, "", "")
+	got = r.Match("other.com", nil, "", "", 0, nil)
 	if got != ActionProxy {
 		t.Errorf("Match(other.com) = %q, want %q", got, ActionProxy)
 	}
@@ -531,19 +531,19 @@ func TestRuleChain_ANDWithMultipleConditions(t *testing.T) {
 	r := NewRouter(cfg, nil, nil, nil)
 
 	// Both conditions match
-	got := r.Match("sub.example.com", nil, "chrome", "")
+	got := r.Match("sub.example.com", nil, "chrome", "", 0, nil)
 	if got != ActionReject {
 		t.Errorf("AND both match: got %q, want %q", got, ActionReject)
 	}
 
 	// Only domain matches
-	got = r.Match("sub.example.com", nil, "firefox", "")
+	got = r.Match("sub.example.com", nil, "firefox", "", 0, nil)
 	if got != ActionProxy {
 		t.Errorf("AND only domain: got %q, want %q", got, ActionProxy)
 	}
 
 	// Only process matches
-	got = r.Match("other.com", nil, "chrome", "")
+	got = r.Match("other.com", nil, "chrome", "", 0, nil)
 	if got != ActionProxy {
 		t.Errorf("AND only process: got %q, want %q", got, ActionProxy)
 	}
@@ -566,19 +566,19 @@ func TestRuleChain_ORWithMultipleConditions(t *testing.T) {
 	r := NewRouter(cfg, nil, nil, nil)
 
 	// Domain matches
-	got := r.Match("blocked.com", nil, "", "")
+	got := r.Match("blocked.com", nil, "", "", 0, nil)
 	if got != ActionReject {
 		t.Errorf("OR domain match: got %q, want %q", got, ActionReject)
 	}
 
 	// Process matches
-	got = r.Match("", nil, "torrent", "")
+	got = r.Match("", nil, "torrent", "", 0, nil)
 	if got != ActionReject {
 		t.Errorf("OR process match: got %q, want %q", got, ActionReject)
 	}
 
 	// Neither matches
-	got = r.Match("other.com", nil, "chrome", "")
+	got = r.Match("other.com", nil, "chrome", "", 0, nil)
 	if got != ActionProxy {
 		t.Errorf("OR neither match: got %q, want %q", got, ActionProxy)
 	}
@@ -601,21 +601,21 @@ func TestRuleChain_WithNetworkType(t *testing.T) {
 	r := NewRouter(cfg, nil, nil, nil)
 
 	// Without network type set, networkType matcher won't match
-	got := r.Match("video.example.com", nil, "", "")
+	got := r.Match("video.example.com", nil, "", "", 0, nil)
 	if got != ActionProxy {
 		t.Errorf("no network type: got %q, want %q", got, ActionProxy)
 	}
 
 	// Set to cellular — both conditions match
 	r.SetNetworkType("cellular")
-	got = r.Match("video.example.com", nil, "", "")
+	got = r.Match("video.example.com", nil, "", "", 0, nil)
 	if got != ActionReject {
 		t.Errorf("cellular + video: got %q, want %q", got, ActionReject)
 	}
 
 	// Set to wifi — network type doesn't match
 	r.SetNetworkType("wifi")
-	got = r.Match("video.example.com", nil, "", "")
+	got = r.Match("video.example.com", nil, "", "", 0, nil)
 	if got != ActionProxy {
 		t.Errorf("wifi + video: got %q, want %q", got, ActionProxy)
 	}
@@ -633,12 +633,12 @@ func TestRuleChain_WithIPCIDR(t *testing.T) {
 	}
 	r := NewRouter(cfg, nil, nil, nil)
 
-	got := r.Match("", net.ParseIP("10.1.2.3"), "", "")
+	got := r.Match("", net.ParseIP("10.1.2.3"), "", "", 0, nil)
 	if got != ActionDirect {
 		t.Errorf("IP in CIDR: got %q, want %q", got, ActionDirect)
 	}
 
-	got = r.Match("", net.ParseIP("192.168.1.1"), "", "")
+	got = r.Match("", net.ParseIP("192.168.1.1"), "", "", 0, nil)
 	if got != ActionProxy {
 		t.Errorf("IP not in CIDR: got %q, want %q", got, ActionProxy)
 	}
@@ -661,9 +661,129 @@ func TestRuleChain_OrderMatters(t *testing.T) {
 	r := NewRouter(cfg, nil, nil, nil)
 
 	// First rule should win
-	got := r.Match("example.com", nil, "", "")
+	got := r.Match("example.com", nil, "", "", 0, nil)
 	if got != ActionReject {
 		t.Errorf("first rule should win: got %q, want %q", got, ActionReject)
+	}
+}
+
+func TestRuleChain_Negate(t *testing.T) {
+	cfg := &RouterConfig{
+		RuleChain: []RuleChainEntry{
+			{
+				// Reject everything EXCEPT example.com
+				Match:  RuleMatch{Domain: []string{"example.com"}},
+				Negate: true,
+				Action: "reject",
+			},
+		},
+		DefaultAction: ActionProxy,
+	}
+	r := NewRouter(cfg, nil, nil, nil)
+
+	// example.com matches the domain matcher, but negate inverts it => no match => fall through to default
+	got := r.Match("example.com", nil, "", "", 0, nil)
+	if got != ActionProxy {
+		t.Errorf("negated match should NOT fire: got %q, want %q", got, ActionProxy)
+	}
+
+	// other.com does NOT match the domain matcher, negate inverts => match => reject
+	got = r.Match("other.com", nil, "", "", 0, nil)
+	if got != ActionReject {
+		t.Errorf("negated non-match should fire: got %q, want %q", got, ActionReject)
+	}
+}
+
+func TestRuleChain_NegateWithAND(t *testing.T) {
+	cfg := &RouterConfig{
+		RuleChain: []RuleChainEntry{
+			{
+				// Negate: match everything that is NOT (domain=example.com AND process=chrome)
+				Match: RuleMatch{
+					Domain:  []string{"example.com"},
+					Process: []string{"chrome"},
+				},
+				Logic:  "and",
+				Negate: true,
+				Action: "reject",
+			},
+		},
+		DefaultAction: ActionProxy,
+	}
+	r := NewRouter(cfg, nil, nil, nil)
+
+	// Both match => AND=true => negate=false => falls through
+	got := r.Match("example.com", nil, "chrome", "", 0, nil)
+	if got != ActionProxy {
+		t.Errorf("both match + negate: got %q, want %q", got, ActionProxy)
+	}
+
+	// Only domain matches => AND=false => negate=true => reject
+	got = r.Match("example.com", nil, "firefox", "", 0, nil)
+	if got != ActionReject {
+		t.Errorf("partial match + negate: got %q, want %q", got, ActionReject)
+	}
+}
+
+func TestRuleChain_PortRouting(t *testing.T) {
+	cfg := &RouterConfig{
+		RuleChain: []RuleChainEntry{
+			{
+				Match:  RuleMatch{Port: []string{"80", "443", "8080-8090"}},
+				Action: "direct",
+			},
+		},
+		DefaultAction: ActionProxy,
+	}
+	r := NewRouter(cfg, nil, nil, nil)
+
+	got := r.Match("example.com", nil, "", "", 80, nil)
+	if got != ActionDirect {
+		t.Errorf("port 80: got %q, want %q", got, ActionDirect)
+	}
+
+	got = r.Match("example.com", nil, "", "", 8085, nil)
+	if got != ActionDirect {
+		t.Errorf("port 8085: got %q, want %q", got, ActionDirect)
+	}
+
+	got = r.Match("example.com", nil, "", "", 22, nil)
+	if got != ActionProxy {
+		t.Errorf("port 22: got %q, want %q", got, ActionProxy)
+	}
+
+	// No port info
+	got = r.Match("example.com", nil, "", "", 0, nil)
+	if got != ActionProxy {
+		t.Errorf("port 0: got %q, want %q", got, ActionProxy)
+	}
+}
+
+func TestRuleChain_SrcIPRouting(t *testing.T) {
+	cfg := &RouterConfig{
+		RuleChain: []RuleChainEntry{
+			{
+				Match:  RuleMatch{SrcIP: []string{"192.168.1.0/24"}},
+				Action: "direct",
+			},
+		},
+		DefaultAction: ActionProxy,
+	}
+	r := NewRouter(cfg, nil, nil, nil)
+
+	got := r.Match("example.com", nil, "", "", 0, net.ParseIP("192.168.1.50"))
+	if got != ActionDirect {
+		t.Errorf("srcIP in range: got %q, want %q", got, ActionDirect)
+	}
+
+	got = r.Match("example.com", nil, "", "", 0, net.ParseIP("10.0.0.1"))
+	if got != ActionProxy {
+		t.Errorf("srcIP not in range: got %q, want %q", got, ActionProxy)
+	}
+
+	got = r.Match("example.com", nil, "", "", 0, nil)
+	if got != ActionProxy {
+		t.Errorf("nil srcIP: got %q, want %q", got, ActionProxy)
 	}
 }
 
@@ -686,6 +806,6 @@ func BenchmarkRuleChainMatch(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_ = r.Match("www.google.com", ip, "chrome", "quic")
+		_ = r.Match("www.google.com", ip, "chrome", "quic", 0, nil)
 	}
 }

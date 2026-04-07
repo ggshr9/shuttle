@@ -12,6 +12,8 @@ import (
 type MatchContext struct {
 	Domain      string
 	IP          net.IP
+	Port        uint16
+	SrcIP       net.IP
 	Process     string
 	Protocol    string
 	NetworkType string
@@ -33,29 +35,38 @@ const (
 type compiledRule struct {
 	matchers []Matcher
 	logic    logicOp
+	negate   bool
 	action   Action
 }
 
-// Match evaluates all matchers using the configured logic (AND/OR).
+// Match evaluates all matchers using the configured logic (AND/OR),
+// then inverts the result if negate is set.
 func (r *compiledRule) Match(ctx *MatchContext) bool {
 	if len(r.matchers) == 0 {
 		return false
 	}
+	var result bool
 	if r.logic == logicOr {
 		for _, m := range r.matchers {
 			if m.Match(ctx) {
-				return true
+				result = true
+				break
 			}
 		}
-		return false
-	}
-	// logicAnd (default)
-	for _, m := range r.matchers {
-		if !m.Match(ctx) {
-			return false
+	} else {
+		// logicAnd (default)
+		result = true
+		for _, m := range r.matchers {
+			if !m.Match(ctx) {
+				result = false
+				break
+			}
 		}
 	}
-	return true
+	if r.negate {
+		return !result
+	}
+	return result
 }
 
 // ---------------------------------------------------------------------------
@@ -66,6 +77,7 @@ func (r *compiledRule) Match(ctx *MatchContext) bool {
 type RuleChainEntry struct {
 	Match  RuleMatch
 	Logic  string // "and" (default) | "or"
+	Negate bool   // invert the match result
 	Action string
 }
 
@@ -77,6 +89,8 @@ type RuleMatch struct {
 	GeoSite       []string
 	IPCIDR        []string
 	GeoIP         []string
+	Port          []string
+	SrcIP         []string
 	Process       []string
 	Protocol      []string
 	NetworkType   []string
@@ -385,6 +399,20 @@ func CompileRuleChain(entries []RuleChainEntry, geoIP *GeoIPDB, geoSite *GeoSite
 		if len(m.GeoIP) > 0 {
 			matchers = append(matchers, newGeoIPMatcher(m.GeoIP, geoIP))
 		}
+		if len(m.Port) > 0 {
+			portMatcher, err := newPortMatcher(m.Port)
+			if err != nil {
+				return nil, fmt.Errorf("rule_chain[%d]: %w", i, err)
+			}
+			matchers = append(matchers, portMatcher)
+		}
+		if len(m.SrcIP) > 0 {
+			srcIPMatcher, err := newSrcIPMatcher(m.SrcIP)
+			if err != nil {
+				return nil, fmt.Errorf("rule_chain[%d]: %w", i, err)
+			}
+			matchers = append(matchers, srcIPMatcher)
+		}
 		if len(m.Process) > 0 {
 			matchers = append(matchers, newProcessMatcher(m.Process))
 		}
@@ -413,6 +441,7 @@ func CompileRuleChain(entries []RuleChainEntry, geoIP *GeoIPDB, geoSite *GeoSite
 		rules = append(rules, compiledRule{
 			matchers: matchers,
 			logic:    logic,
+			negate:   entry.Negate,
 			action:   action,
 		})
 	}

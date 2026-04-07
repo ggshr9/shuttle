@@ -327,7 +327,8 @@ func (r *Router) GeoSiteDB() *GeoSiteDB {
 }
 
 // Match performs full routing decision for a connection.
-func (r *Router) Match(domain string, ip net.IP, process string, protocol string) Action {
+// port is the destination port (0 if unknown); srcIP is the client source IP (nil if unknown).
+func (r *Router) Match(domain string, ip net.IP, process string, protocol string, port uint16, srcIP net.IP) Action {
 	r.mu.RLock()
 
 	// Phase 1: Ordered rule chain (evaluated first, highest priority).
@@ -335,6 +336,8 @@ func (r *Router) Match(domain string, ip net.IP, process string, protocol string
 		ctx := &MatchContext{
 			Domain:      domain,
 			IP:          ip,
+			Port:        port,
+			SrcIP:       srcIP,
 			Process:     process,
 			Protocol:    protocol,
 			NetworkType: r.networkType,

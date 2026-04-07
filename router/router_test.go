@@ -401,31 +401,31 @@ func TestRouterMatchPriority(t *testing.T) {
 	}, ActionProxy)
 
 	// Protocol takes highest priority.
-	got := r.Match("example.com", net.ParseIP("10.1.2.3"), "chrome", "bittorrent")
+	got := r.Match("example.com", net.ParseIP("10.1.2.3"), "chrome", "bittorrent", 0, nil)
 	if got != ActionReject {
 		t.Errorf("Match with protocol = %q, want %q", got, ActionReject)
 	}
 
 	// Process is next when protocol does not match a non-default action.
-	got = r.Match("example.com", net.ParseIP("10.1.2.3"), "chrome", "")
+	got = r.Match("example.com", net.ParseIP("10.1.2.3"), "chrome", "", 0, nil)
 	if got != ActionDirect {
 		t.Errorf("Match with process = %q, want %q", got, ActionDirect)
 	}
 
 	// Domain is next.
-	got = r.Match("example.com", net.ParseIP("10.1.2.3"), "", "")
+	got = r.Match("example.com", net.ParseIP("10.1.2.3"), "", "", 0, nil)
 	if got != ActionReject {
 		t.Errorf("Match with domain = %q, want %q", got, ActionReject)
 	}
 
 	// IP is next.
-	got = r.Match("", net.ParseIP("10.1.2.3"), "", "")
+	got = r.Match("", net.ParseIP("10.1.2.3"), "", "", 0, nil)
 	if got != ActionDirect {
 		t.Errorf("Match with IP = %q, want %q", got, ActionDirect)
 	}
 
 	// Default fallback.
-	got = r.Match("", nil, "", "")
+	got = r.Match("", nil, "", "", 0, nil)
 	if got != ActionProxy {
 		t.Errorf("Match default = %q, want %q", got, ActionProxy)
 	}
@@ -434,7 +434,7 @@ func TestRouterMatchPriority(t *testing.T) {
 func TestRouterDefaultActionFallback(t *testing.T) {
 	// Default action should be used when nothing matches.
 	r := newTestRouter(nil, ActionDirect)
-	got := r.Match("anything.com", net.ParseIP("1.2.3.4"), "someproc", "someproto")
+	got := r.Match("anything.com", net.ParseIP("1.2.3.4"), "someproc", "someproto", 0, nil)
 	if got != ActionDirect {
 		t.Errorf("Match with all defaults = %q, want %q", got, ActionDirect)
 	}
@@ -443,7 +443,7 @@ func TestRouterDefaultActionFallback(t *testing.T) {
 func TestRouterDefaultActionEmpty(t *testing.T) {
 	// Empty default action should default to "proxy".
 	r := newTestRouter(nil, "")
-	got := r.Match("", nil, "", "")
+	got := r.Match("", nil, "", "", 0, nil)
 	if got != ActionProxy {
 		t.Errorf("Match with empty default = %q, want %q", got, ActionProxy)
 	}
@@ -531,21 +531,21 @@ func TestRouterNetworkTypeRuleDomainMatch(t *testing.T) {
 	}, ActionProxy)
 
 	// Without setting network type, the network rule should not match.
-	got := r.Match("example.com", nil, "", "")
+	got := r.Match("example.com", nil, "", "", 0, nil)
 	if got != ActionProxy {
 		t.Errorf("Match without network type = %q, want %q", got, ActionProxy)
 	}
 
 	// Set network type to wifi — now it should match.
 	r.SetNetworkType("wifi")
-	got = r.Match("example.com", nil, "", "")
+	got = r.Match("example.com", nil, "", "", 0, nil)
 	if got != ActionDirect {
 		t.Errorf("Match with wifi = %q, want %q", got, ActionDirect)
 	}
 
 	// Set network type to cellular — should not match the wifi rule.
 	r.SetNetworkType("cellular")
-	got = r.Match("example.com", nil, "", "")
+	got = r.Match("example.com", nil, "", "", 0, nil)
 	if got != ActionProxy {
 		t.Errorf("Match with cellular = %q, want %q", got, ActionProxy)
 	}
@@ -557,14 +557,14 @@ func TestRouterNetworkTypeRuleIPMatch(t *testing.T) {
 	}, ActionProxy)
 
 	// Without network type, should fall through to default.
-	got := r.Match("", net.ParseIP("10.1.2.3"), "", "")
+	got := r.Match("", net.ParseIP("10.1.2.3"), "", "", 0, nil)
 	if got != ActionProxy {
 		t.Errorf("Match IP without network type = %q, want %q", got, ActionProxy)
 	}
 
 	// Set to cellular — should match.
 	r.SetNetworkType("cellular")
-	got = r.Match("", net.ParseIP("10.1.2.3"), "", "")
+	got = r.Match("", net.ParseIP("10.1.2.3"), "", "", 0, nil)
 	if got != ActionDirect {
 		t.Errorf("Match IP with cellular = %q, want %q", got, ActionDirect)
 	}
@@ -576,13 +576,13 @@ func TestRouterNetworkTypeRuleProcessMatch(t *testing.T) {
 	}, ActionProxy)
 
 	r.SetNetworkType("ethernet")
-	got := r.Match("", nil, "chrome", "")
+	got := r.Match("", nil, "chrome", "", 0, nil)
 	if got != ActionReject {
 		t.Errorf("Match process with ethernet = %q, want %q", got, ActionReject)
 	}
 
 	r.SetNetworkType("wifi")
-	got = r.Match("", nil, "chrome", "")
+	got = r.Match("", nil, "chrome", "", 0, nil)
 	if got != ActionProxy {
 		t.Errorf("Match process with wifi = %q, want %q", got, ActionProxy)
 	}
@@ -594,13 +594,13 @@ func TestRouterNetworkTypeRuleProtocolMatch(t *testing.T) {
 	}, ActionProxy)
 
 	r.SetNetworkType("cellular")
-	got := r.Match("", nil, "", "bittorrent")
+	got := r.Match("", nil, "", "bittorrent", 0, nil)
 	if got != ActionReject {
 		t.Errorf("Match protocol with cellular = %q, want %q", got, ActionReject)
 	}
 
 	r.SetNetworkType("wifi")
-	got = r.Match("", nil, "", "bittorrent")
+	got = r.Match("", nil, "", "bittorrent", 0, nil)
 	if got != ActionProxy {
 		t.Errorf("Match protocol with wifi = %q, want %q", got, ActionProxy)
 	}
@@ -628,14 +628,14 @@ func TestRouterNetworkTypePriorityOverRegular(t *testing.T) {
 
 	// When on cellular, the network-type rule should win.
 	r.SetNetworkType("cellular")
-	got := r.Match("example.com", nil, "", "")
+	got := r.Match("example.com", nil, "", "", 0, nil)
 	if got != ActionReject {
 		t.Errorf("Match with network-type rule on cellular = %q, want %q", got, ActionReject)
 	}
 
 	// When on wifi, the regular rule should apply.
 	r.SetNetworkType("wifi")
-	got = r.Match("example.com", nil, "", "")
+	got = r.Match("example.com", nil, "", "", 0, nil)
 	if got != ActionDirect {
 		t.Errorf("Match with regular rule on wifi = %q, want %q", got, ActionDirect)
 	}
@@ -648,17 +648,17 @@ func TestRouterNetworkTypeWildcardDomain(t *testing.T) {
 
 	r.SetNetworkType("wifi")
 
-	got := r.Match("sub.example.com", nil, "", "")
+	got := r.Match("sub.example.com", nil, "", "", 0, nil)
 	if got != ActionDirect {
 		t.Errorf("Match wildcard subdomain with wifi = %q, want %q", got, ActionDirect)
 	}
 
-	got = r.Match("example.com", nil, "", "")
+	got = r.Match("example.com", nil, "", "", 0, nil)
 	if got != ActionDirect {
 		t.Errorf("Match bare domain with wifi = %q, want %q", got, ActionDirect)
 	}
 
-	got = r.Match("other.com", nil, "", "")
+	got = r.Match("other.com", nil, "", "", 0, nil)
 	if got != ActionProxy {
 		t.Errorf("Match non-matching domain with wifi = %q, want %q", got, ActionProxy)
 	}
@@ -680,7 +680,7 @@ func BenchmarkRouterMatchWithNetworkType(b *testing.B) {
 	ip := net.ParseIP("10.1.2.3")
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_ = r.Match("example.com", ip, "", "")
+		_ = r.Match("example.com", ip, "", "", 0, nil)
 	}
 }
 

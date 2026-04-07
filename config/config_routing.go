@@ -12,7 +12,8 @@ type RoutingConfig struct {
 // RuleChainEntry defines a single rule in the ordered rule chain.
 type RuleChainEntry struct {
 	Match  RuleMatch `yaml:"match" json:"match"`
-	Logic  string    `yaml:"logic,omitempty" json:"logic,omitempty"` // "and" (default) | "or"
+	Logic  string    `yaml:"logic,omitempty" json:"logic,omitempty"`   // "and" (default) | "or"
+	Negate bool      `yaml:"negate,omitempty" json:"negate,omitempty"` // invert the match result
 	Action string    `yaml:"action" json:"action"`
 }
 

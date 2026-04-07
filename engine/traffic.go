@@ -80,7 +80,7 @@ func (tm *TrafficManager) CreateDialer(
 		}
 
 		procName := proxy.ProcessFromContext(dialCtx)
-		action := rt.Match(host, ip, procName, "")
+		action := rt.Match(host, ip, procName, "", 0, nil)
 
 		switch action {
 		case router.ActionDirect:

@@ -171,6 +171,7 @@ func (e *Engine) buildRouter(cfg *config.ClientConfig, ruleProviders map[string]
 				RuleProvider:  entry.Match.RuleProvider,
 			},
 			Logic:  entry.Logic,
+			Negate: entry.Negate,
 			Action: entry.Action,
 		})
 	}
