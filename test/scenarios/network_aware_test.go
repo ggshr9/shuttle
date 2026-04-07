@@ -39,11 +39,11 @@ func TestNetworkTypeRoutingSwitch(t *testing.T) {
 
 	// --- No network type set: network-type rules should not match ---
 	t.Run("no_network_type", func(t *testing.T) {
-		got := r.Match("youtube.com", nil, "", "")
+		got := r.Match("youtube.com", nil, "", "", 0, nil)
 		if got != router.ActionProxy {
 			t.Errorf("Match(youtube.com) without network type = %q, want %q", got, router.ActionProxy)
 		}
-		got = r.Match("localhost.internal", nil, "", "")
+		got = r.Match("localhost.internal", nil, "", "", 0, nil)
 		if got != router.ActionDirect {
 			t.Errorf("Match(localhost.internal) without network type = %q, want %q", got, router.ActionDirect)
 		}
@@ -64,7 +64,7 @@ func TestNetworkTypeRoutingSwitch(t *testing.T) {
 			{"localhost.internal", router.ActionDirect}, // regular rule still works
 		}
 		for _, tc := range cases {
-			got := r.Match(tc.domain, nil, "", "")
+			got := r.Match(tc.domain, nil, "", "", 0, nil)
 			if got != tc.want {
 				t.Errorf("WiFi Match(%q) = %q, want %q", tc.domain, got, tc.want)
 			}
@@ -86,7 +86,7 @@ func TestNetworkTypeRoutingSwitch(t *testing.T) {
 			{"localhost.internal", router.ActionDirect},   // regular rule still works
 		}
 		for _, tc := range cases {
-			got := r.Match(tc.domain, nil, "", "")
+			got := r.Match(tc.domain, nil, "", "", 0, nil)
 			if got != tc.want {
 				t.Errorf("Cellular Match(%q) = %q, want %q", tc.domain, got, tc.want)
 			}
@@ -96,7 +96,7 @@ func TestNetworkTypeRoutingSwitch(t *testing.T) {
 	// --- Switch back to WiFi ---
 	t.Run("switch_back_to_wifi", func(t *testing.T) {
 		r.SetNetworkType("wifi")
-		got := r.Match("youtube.com", nil, "", "")
+		got := r.Match("youtube.com", nil, "", "", 0, nil)
 		if got != router.ActionDirect {
 			t.Errorf("After switch back to WiFi, Match(youtube.com) = %q, want %q", got, router.ActionDirect)
 		}
@@ -105,7 +105,7 @@ func TestNetworkTypeRoutingSwitch(t *testing.T) {
 	// --- Clear network type ---
 	t.Run("clear_network_type", func(t *testing.T) {
 		r.SetNetworkType("")
-		got := r.Match("youtube.com", nil, "", "")
+		got := r.Match("youtube.com", nil, "", "", 0, nil)
 		if got != router.ActionProxy {
 			t.Errorf("After clearing network type, Match(youtube.com) = %q, want %q", got, router.ActionProxy)
 		}
@@ -157,7 +157,7 @@ func TestNetworkTypeWithVnetHandoff(t *testing.T) {
 	// Helper: dial and echo through vnet, checking router decision.
 	dialAndVerify := func(domain string, expectAction router.Action) {
 		t.Helper()
-		action := rtr.Match(domain, nil, "", "")
+		action := rtr.Match(domain, nil, "", "", 0, nil)
 		if action != expectAction {
 			t.Fatalf("router Match(%q) = %q, want %q", domain, action, expectAction)
 		}
@@ -244,11 +244,11 @@ func TestNetworkTypePriorityOverRegularRules(t *testing.T) {
 
 	// Without network type: regular rules apply.
 	t.Run("no_network_type_uses_regular", func(t *testing.T) {
-		got := r.Match("example.com", nil, "", "")
+		got := r.Match("example.com", nil, "", "", 0, nil)
 		if got != router.ActionDirect {
 			t.Errorf("Match(example.com) without net type = %q, want %q", got, router.ActionDirect)
 		}
-		got = r.Match("secure.example.com", nil, "", "")
+		got = r.Match("secure.example.com", nil, "", "", 0, nil)
 		if got != router.ActionDirect {
 			t.Errorf("Match(secure.example.com) without net type = %q, want %q", got, router.ActionDirect)
 		}
@@ -257,11 +257,11 @@ func TestNetworkTypePriorityOverRegularRules(t *testing.T) {
 	// Cellular: network-type rules override regular rules.
 	t.Run("cellular_overrides_regular", func(t *testing.T) {
 		r.SetNetworkType("cellular")
-		got := r.Match("example.com", nil, "", "")
+		got := r.Match("example.com", nil, "", "", 0, nil)
 		if got != router.ActionProxy {
 			t.Errorf("Match(example.com) on cellular = %q, want %q (should override direct)", got, router.ActionProxy)
 		}
-		got = r.Match("secure.example.com", nil, "", "")
+		got = r.Match("secure.example.com", nil, "", "", 0, nil)
 		if got != router.ActionReject {
 			t.Errorf("Match(secure.example.com) on cellular = %q, want %q (should override direct)", got, router.ActionReject)
 		}
@@ -270,11 +270,11 @@ func TestNetworkTypePriorityOverRegularRules(t *testing.T) {
 	// WiFi: no wifi-specific rule, so regular rules apply.
 	t.Run("wifi_falls_through_to_regular", func(t *testing.T) {
 		r.SetNetworkType("wifi")
-		got := r.Match("example.com", nil, "", "")
+		got := r.Match("example.com", nil, "", "", 0, nil)
 		if got != router.ActionDirect {
 			t.Errorf("Match(example.com) on wifi = %q, want %q (regular rule)", got, router.ActionDirect)
 		}
-		got = r.Match("secure.example.com", nil, "", "")
+		got = r.Match("secure.example.com", nil, "", "", 0, nil)
 		if got != router.ActionDirect {
 			t.Errorf("Match(secure.example.com) on wifi = %q, want %q (regular rule)", got, router.ActionDirect)
 		}
@@ -283,7 +283,7 @@ func TestNetworkTypePriorityOverRegularRules(t *testing.T) {
 	// Ethernet: also no ethernet-specific rule, regular rules apply.
 	t.Run("ethernet_falls_through_to_regular", func(t *testing.T) {
 		r.SetNetworkType("ethernet")
-		got := r.Match("example.com", nil, "", "")
+		got := r.Match("example.com", nil, "", "", 0, nil)
 		if got != router.ActionDirect {
 			t.Errorf("Match(example.com) on ethernet = %q, want %q (regular rule)", got, router.ActionDirect)
 		}
@@ -300,14 +300,14 @@ func TestNetworkTypePriorityOverRegularRules(t *testing.T) {
 		}, nil, nil, nil)
 
 		// No network type: regular rule.
-		got := rIP.Match("", net.ParseIP("10.1.2.3"), "", "")
+		got := rIP.Match("", net.ParseIP("10.1.2.3"), "", "", 0, nil)
 		if got != router.ActionDirect {
 			t.Errorf("Match IP without net type = %q, want %q", got, router.ActionDirect)
 		}
 
 		// Cellular: network-type rule overrides.
 		rIP.SetNetworkType("cellular")
-		got = rIP.Match("", net.ParseIP("10.1.2.3"), "", "")
+		got = rIP.Match("", net.ParseIP("10.1.2.3"), "", "", 0, nil)
 		if got != router.ActionReject {
 			t.Errorf("Match IP on cellular = %q, want %q", got, router.ActionReject)
 		}
@@ -324,13 +324,13 @@ func TestNetworkTypePriorityOverRegularRules(t *testing.T) {
 		}, nil, nil, nil)
 
 		rProc.SetNetworkType("cellular")
-		got := rProc.Match("", nil, "chrome", "")
+		got := rProc.Match("", nil, "chrome", "", 0, nil)
 		if got != router.ActionReject {
 			t.Errorf("Match process on cellular = %q, want %q", got, router.ActionReject)
 		}
 
 		rProc.SetNetworkType("wifi")
-		got = rProc.Match("", nil, "chrome", "")
+		got = rProc.Match("", nil, "chrome", "", 0, nil)
 		if got != router.ActionDirect {
 			t.Errorf("Match process on wifi = %q, want %q (regular rule)", got, router.ActionDirect)
 		}
@@ -465,7 +465,7 @@ func TestClassifyInterfaceAndRouterIntegration(t *testing.T) {
 		t.Run(tt.ifaceName, func(t *testing.T) {
 			nt := netmon.ClassifyInterface(tt.ifaceName)
 			r.SetNetworkType(nt.String())
-			got := r.Match("video.example.com", nil, "", "")
+			got := r.Match("video.example.com", nil, "", "", 0, nil)
 			if got != tt.wantAction {
 				t.Errorf("interface %q (type=%v): Match(video.example.com) = %q, want %q",
 					tt.ifaceName, nt, got, tt.wantAction)
@@ -497,28 +497,28 @@ func TestNetworkTypeMultipleRuleTypes(t *testing.T) {
 	// WiFi: domain, IP, and process rules match.
 	r.SetNetworkType("wifi")
 
-	if got := r.Match("example.com", nil, "", ""); got != router.ActionDirect {
+	if got := r.Match("example.com", nil, "", "", 0, nil); got != router.ActionDirect {
 		t.Errorf("WiFi domain match = %q, want direct", got)
 	}
-	if got := r.Match("", net.ParseIP("192.168.1.1"), "", ""); got != router.ActionDirect {
+	if got := r.Match("", net.ParseIP("192.168.1.1"), "", "", 0, nil); got != router.ActionDirect {
 		t.Errorf("WiFi IP match = %q, want direct", got)
 	}
-	if got := r.Match("", nil, "firefox", ""); got != router.ActionDirect {
+	if got := r.Match("", nil, "firefox", "", 0, nil); got != router.ActionDirect {
 		t.Errorf("WiFi process match = %q, want direct", got)
 	}
 	// Cellular-only protocol rule should NOT match on WiFi.
-	if got := r.Match("", nil, "", "bittorrent"); got != router.ActionProxy {
+	if got := r.Match("", nil, "", "bittorrent", 0, nil); got != router.ActionProxy {
 		t.Errorf("WiFi bittorrent (cellular rule) = %q, want proxy (default)", got)
 	}
 
 	// Cellular: only protocol rule matches.
 	r.SetNetworkType("cellular")
 
-	if got := r.Match("", nil, "", "bittorrent"); got != router.ActionReject {
+	if got := r.Match("", nil, "", "bittorrent", 0, nil); got != router.ActionReject {
 		t.Errorf("Cellular bittorrent = %q, want reject", got)
 	}
 	// WiFi-only domain rule should NOT match on cellular.
-	if got := r.Match("example.com", nil, "", ""); got != router.ActionProxy {
+	if got := r.Match("example.com", nil, "", "", 0, nil); got != router.ActionProxy {
 		t.Errorf("Cellular domain (wifi rule) = %q, want proxy (default)", got)
 	}
 }

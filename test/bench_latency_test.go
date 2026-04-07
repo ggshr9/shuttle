@@ -194,7 +194,7 @@ func BenchmarkRouterMatchWithGeoIP(b *testing.B) {
 		ip := net.ParseIP("10.100.100.1")
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			rt.Match("google.com", ip, "chrome", "")
+			rt.Match("google.com", ip, "chrome", "", 0, nil)
 		}
 	})
 }
