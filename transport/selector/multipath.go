@@ -54,33 +54,48 @@ func (pm *PathMetrics) GetConn() transport.Connection {
 
 // MultipathPool manages persistent connections across all available transports.
 type MultipathPool struct {
-	paths      []*PathMetrics
-	serverAddr string
-	scheduler  StreamScheduler
-	mu         sync.RWMutex
-	ctx        context.Context
-	cancel     context.CancelFunc
-	logger     *slog.Logger
+	paths                []*PathMetrics
+	serverAddr           string
+	scheduler            StreamScheduler
+	pathFailureThreshold int64
+	healthCheckInterval  time.Duration
+	mu                   sync.RWMutex
+	ctx                  context.Context
+	cancel               context.CancelFunc
+	logger               *slog.Logger
 }
 
 // NewMultipathPool creates a pool that dials all transports and starts health monitoring.
+// pathFailureThreshold is the number of consecutive failures before a path is reconnected (0 = default 3).
+// healthCheckInterval is how often to check paths (0 = default 10s).
 func NewMultipathPool(
 	ctx context.Context,
 	transports []transport.ClientTransport,
 	serverAddr string,
 	scheduler StreamScheduler,
+	pathFailureThreshold int,
+	healthCheckInterval time.Duration,
 	logger *slog.Logger,
 ) *MultipathPool {
 	if logger == nil {
 		logger = slog.Default()
 	}
+	threshold := int64(pathFailureThreshold)
+	if threshold <= 0 {
+		threshold = 3
+	}
+	if healthCheckInterval <= 0 {
+		healthCheckInterval = 10 * time.Second
+	}
 	poolCtx, cancel := context.WithCancel(ctx)
 	pool := &MultipathPool{
-		serverAddr: serverAddr,
-		scheduler:  scheduler,
-		ctx:        poolCtx,
-		cancel:     cancel,
-		logger:     logger,
+		serverAddr:           serverAddr,
+		scheduler:            scheduler,
+		pathFailureThreshold: threshold,
+		healthCheckInterval:  healthCheckInterval,
+		ctx:                  poolCtx,
+		cancel:               cancel,
+		logger:               logger,
 	}
 
 	for _, t := range transports {
@@ -101,6 +116,8 @@ func NewMultipathPool(
 		pool.paths = append(pool.paths, pm)
 	}
 
+	// Propagate the failure threshold to the scheduler so filterEligible uses it.
+	pool.scheduler.SetFailureThreshold(pool.pathFailureThreshold)
 	go pool.healthLoop()
 	return pool
 }
@@ -175,7 +192,7 @@ func (p *MultipathPool) Close() error {
 
 // healthLoop periodically checks paths and reconnects failed ones.
 func (p *MultipathPool) healthLoop() {
-	ticker := time.NewTicker(10 * time.Second)
+	ticker := time.NewTicker(p.healthCheckInterval)
 	defer ticker.Stop()
 	for {
 		select {
@@ -194,7 +211,7 @@ func (p *MultipathPool) checkPaths() {
 
 	for _, pm := range paths {
 		failures := atomic.LoadInt64(&pm.Failures)
-		if failures >= 3 {
+		if failures >= p.pathFailureThreshold {
 			// Close stale connection and try to reconnect.
 			pm.mu.Lock()
 			if pm.Conn != nil {
@@ -261,7 +278,7 @@ func (mc *multipathConn) openStreamFallback(ctx context.Context, failed *PathMet
 		if pm == failed {
 			continue
 		}
-		if !pm.IsAvailable() || atomic.LoadInt64(&pm.Failures) >= 3 {
+		if !pm.IsAvailable() || atomic.LoadInt64(&pm.Failures) >= mc.pool.pathFailureThreshold {
 			continue
 		}
 

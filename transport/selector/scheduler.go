@@ -8,32 +8,41 @@ import (
 // StreamScheduler selects the best path for the next stream.
 type StreamScheduler interface {
 	Pick(paths []*PathMetrics) *PathMetrics
+	// SetFailureThreshold configures the consecutive-failure limit used when
+	// filtering eligible paths (0 = keep current/default).
+	SetFailureThreshold(threshold int64)
 }
 
 // NewWeightedLatencyScheduler returns a scheduler that distributes streams
 // proportional to inverse latency. Lower latency paths receive more streams.
 func NewWeightedLatencyScheduler() StreamScheduler {
-	return &weightedLatencyScheduler{}
+	return &weightedLatencyScheduler{failureThreshold: 3}
 }
 
 // NewMinLatencyScheduler returns a scheduler that always picks the path
 // with the lowest latency.
 func NewMinLatencyScheduler() StreamScheduler {
-	return &minLatencyScheduler{}
+	return &minLatencyScheduler{failureThreshold: 3}
 }
 
 // NewLoadBalanceScheduler returns a scheduler that picks the path with the
 // fewest active streams.
 func NewLoadBalanceScheduler() StreamScheduler {
-	return &loadBalanceScheduler{}
+	return &loadBalanceScheduler{failureThreshold: 3}
 }
 
 // weightedLatencyScheduler distributes streams proportional to inverse latency.
 // Lower latency paths receive more streams.
-type weightedLatencyScheduler struct{}
+type weightedLatencyScheduler struct{ failureThreshold int64 }
+
+func (s *weightedLatencyScheduler) SetFailureThreshold(threshold int64) {
+	if threshold > 0 {
+		s.failureThreshold = threshold
+	}
+}
 
 func (s *weightedLatencyScheduler) Pick(paths []*PathMetrics) *PathMetrics {
-	eligible := filterEligible(paths)
+	eligible := filterEligible(paths, s.failureThreshold)
 	if len(eligible) == 0 {
 		return nil
 	}
@@ -66,10 +75,16 @@ func (s *weightedLatencyScheduler) Pick(paths []*PathMetrics) *PathMetrics {
 }
 
 // minLatencyScheduler always picks the path with the lowest latency.
-type minLatencyScheduler struct{}
+type minLatencyScheduler struct{ failureThreshold int64 }
+
+func (s *minLatencyScheduler) SetFailureThreshold(threshold int64) {
+	if threshold > 0 {
+		s.failureThreshold = threshold
+	}
+}
 
 func (s *minLatencyScheduler) Pick(paths []*PathMetrics) *PathMetrics {
-	eligible := filterEligible(paths)
+	eligible := filterEligible(paths, s.failureThreshold)
 	if len(eligible) == 0 {
 		return nil
 	}
@@ -83,10 +98,16 @@ func (s *minLatencyScheduler) Pick(paths []*PathMetrics) *PathMetrics {
 }
 
 // loadBalanceScheduler picks the path with the fewest active streams.
-type loadBalanceScheduler struct{}
+type loadBalanceScheduler struct{ failureThreshold int64 }
+
+func (s *loadBalanceScheduler) SetFailureThreshold(threshold int64) {
+	if threshold > 0 {
+		s.failureThreshold = threshold
+	}
+}
 
 func (s *loadBalanceScheduler) Pick(paths []*PathMetrics) *PathMetrics {
-	eligible := filterEligible(paths)
+	eligible := filterEligible(paths, s.failureThreshold)
 	if len(eligible) == 0 {
 		return nil
 	}
@@ -103,11 +124,14 @@ func (s *loadBalanceScheduler) Pick(paths []*PathMetrics) *PathMetrics {
 }
 
 // filterEligible returns paths that are available, have a connection, and
-// have fewer than 3 consecutive failures.
-func filterEligible(paths []*PathMetrics) []*PathMetrics {
+// have fewer than threshold consecutive failures.
+func filterEligible(paths []*PathMetrics, threshold int64) []*PathMetrics {
+	if threshold <= 0 {
+		threshold = 3
+	}
 	var out []*PathMetrics
 	for _, p := range paths {
-		if p.IsAvailable() && p.GetConn() != nil && atomic.LoadInt64(&p.Failures) < 3 {
+		if p.IsAvailable() && p.GetConn() != nil && atomic.LoadInt64(&p.Failures) < threshold {
 			out = append(out, p)
 		}
 	}

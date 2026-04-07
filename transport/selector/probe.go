@@ -8,20 +8,24 @@ import (
 )
 
 // Probe tests a transport's availability and performance.
-func Probe(ctx context.Context, t transport.ClientTransport) *ProbeResult {
+// timeout controls how long the probe dial may take; 0 uses the default of 5s.
+func Probe(ctx context.Context, t transport.ClientTransport, timeout time.Duration) *ProbeResult {
+	if timeout <= 0 {
+		timeout = 5 * time.Second
+	}
 	result := &ProbeResult{
 		Transport: t,
 		LastCheck: time.Now(),
 	}
 
-	probeCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	probeCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
 	start := time.Now()
 	conn, err := t.Dial(probeCtx, "")
 	if err != nil {
 		result.Available = false
-		result.Latency = 5 * time.Second
+		result.Latency = timeout
 		result.Loss = 1.0
 		return result
 	}

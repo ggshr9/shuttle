@@ -23,21 +23,24 @@ const (
 
 // Selector manages multiple transports and selects the best one.
 type Selector struct {
-	transports        []transport.ClientTransport
-	active            transport.ClientTransport
-	strategy          Strategy
-	probes            map[string]*ProbeResult
-	migrator          *Migrator
-	multipathPool     *MultipathPool
-	connPool          *ConnPool
-	serverAddr        string
-	multipathSchedule string
-	warmUpConns       int
-	poolMaxIdle       int
-	poolIdleTTL       time.Duration
-	probeIntervalDur  time.Duration
-	mu                sync.RWMutex
-	logger            *slog.Logger
+	transports           []transport.ClientTransport
+	active               transport.ClientTransport
+	strategy             Strategy
+	probes               map[string]*ProbeResult
+	migrator             *Migrator
+	multipathPool        *MultipathPool
+	connPool             *ConnPool
+	serverAddr           string
+	multipathSchedule    string
+	warmUpConns          int
+	poolMaxIdle          int
+	poolIdleTTL          time.Duration
+	probeIntervalDur     time.Duration
+	probeTimeout         time.Duration
+	pathFailureThreshold int
+	healthCheckInterval  time.Duration
+	mu                   sync.RWMutex
+	logger               *slog.Logger
 }
 
 // ProbeResult stores health check results for a transport.
@@ -51,14 +54,17 @@ type ProbeResult struct {
 
 // Config configures the transport selector.
 type Config struct {
-	Strategy          Strategy
-	ProbeInterval     time.Duration
-	MultipathSchedule string        // "weighted" (default), "min-latency", "load-balance"
-	ServerAddr        string        // needed by multipath pool to dial persistent connections
-	WarmUpConns       int           // pre-dial N connections on startup (0 = disabled)
-	PoolMaxIdle       int           // max idle connections per transport (0 = default 4)
-	PoolIdleTTL       time.Duration // idle connection TTL (0 = default 60s)
-	DrainTimeout      time.Duration // max time to wait for streams to finish before force-closing (0 = default 30s)
+	Strategy             Strategy
+	ProbeInterval        time.Duration
+	ProbeTimeout         time.Duration // timeout for each probe dial (0 = default 5s)
+	PathFailureThreshold int           // consecutive failures before a path is considered down (0 = default 3)
+	HealthCheckInterval  time.Duration // interval for multipath health checks (0 = default 10s)
+	MultipathSchedule    string        // "weighted" (default), "min-latency", "load-balance"
+	ServerAddr           string        // needed by multipath pool to dial persistent connections
+	WarmUpConns          int           // pre-dial N connections on startup (0 = disabled)
+	PoolMaxIdle          int           // max idle connections per transport (0 = default 4)
+	PoolIdleTTL          time.Duration // idle connection TTL (0 = default 60s)
+	DrainTimeout         time.Duration // max time to wait for streams to finish before force-closing (0 = default 30s)
 }
 
 // New creates a new transport selector.
@@ -72,17 +78,32 @@ func New(transports []transport.ClientTransport, cfg *Config, logger *slog.Logge
 	if logger == nil {
 		logger = slog.Default()
 	}
+	probeTimeout := cfg.ProbeTimeout
+	if probeTimeout <= 0 {
+		probeTimeout = 5 * time.Second
+	}
+	pathFailureThreshold := cfg.PathFailureThreshold
+	if pathFailureThreshold <= 0 {
+		pathFailureThreshold = 3
+	}
+	healthCheckInterval := cfg.HealthCheckInterval
+	if healthCheckInterval <= 0 {
+		healthCheckInterval = 10 * time.Second
+	}
 	s := &Selector{
-		transports:        transports,
-		strategy:          cfg.Strategy,
-		probes:            make(map[string]*ProbeResult),
-		serverAddr:        cfg.ServerAddr,
-		multipathSchedule: cfg.MultipathSchedule,
-		warmUpConns:       cfg.WarmUpConns,
-		poolMaxIdle:       cfg.PoolMaxIdle,
-		poolIdleTTL:       cfg.PoolIdleTTL,
-		probeIntervalDur:  cfg.ProbeInterval,
-		logger:            logger,
+		transports:           transports,
+		strategy:             cfg.Strategy,
+		probes:               make(map[string]*ProbeResult),
+		serverAddr:           cfg.ServerAddr,
+		multipathSchedule:    cfg.MultipathSchedule,
+		warmUpConns:          cfg.WarmUpConns,
+		poolMaxIdle:          cfg.PoolMaxIdle,
+		poolIdleTTL:          cfg.PoolIdleTTL,
+		probeIntervalDur:     cfg.ProbeInterval,
+		probeTimeout:         probeTimeout,
+		pathFailureThreshold: pathFailureThreshold,
+		healthCheckInterval:  healthCheckInterval,
+		logger:               logger,
 	}
 	s.migrator = NewMigrator(logger, MigratorConfig{DrainTimeout: cfg.DrainTimeout})
 	for _, t := range transports {
@@ -100,7 +121,7 @@ func New(transports []transport.ClientTransport, cfg *Config, logger *slog.Logge
 func (s *Selector) Start(ctx context.Context) {
 	if s.strategy == StrategyMultipath {
 		sched := newScheduler(s.multipathSchedule)
-		pool := NewMultipathPool(ctx, s.transports, s.serverAddr, sched, s.logger)
+		pool := NewMultipathPool(ctx, s.transports, s.serverAddr, sched, s.pathFailureThreshold, s.healthCheckInterval, s.logger)
 		s.mu.Lock()
 		s.multipathPool = pool
 		s.mu.Unlock()
@@ -164,9 +185,10 @@ func (s *Selector) probeAllParallel(ctx context.Context) {
 	}
 	results := make(chan keyedResult, len(transports))
 
+	probeTimeout := s.probeTimeout
 	for _, t := range transports {
 		go func(t transport.ClientTransport) {
-			results <- keyedResult{typ: t.Type(), probe: Probe(ctx, t)}
+			results <- keyedResult{typ: t.Type(), probe: Probe(ctx, t, probeTimeout)}
 		}(t)
 	}
 
@@ -379,7 +401,7 @@ func (s *Selector) SetStrategy(ctx context.Context, strategy Strategy) error {
 	case old != StrategyMultipath && strategy == StrategyMultipath:
 		// Non-multipath → Multipath: create a new MultipathPool.
 		sched := newScheduler(s.multipathSchedule)
-		pool := NewMultipathPool(ctx, s.transports, s.serverAddr, sched, s.logger)
+		pool := NewMultipathPool(ctx, s.transports, s.serverAddr, sched, s.pathFailureThreshold, s.healthCheckInterval, s.logger)
 		s.multipathPool = pool
 		s.strategy = strategy
 		s.mu.Unlock()

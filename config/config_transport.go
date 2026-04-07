@@ -9,8 +9,9 @@ type YamuxConfig struct {
 
 // CongestionConfig configures congestion control.
 type CongestionConfig struct {
-	Mode       string `yaml:"mode" json:"mode"`               // "adaptive", "bbr", "brutal"
-	BrutalRate uint64 `yaml:"brutal_rate" json:"brutal_rate"` // bytes/sec for brutal mode (default 100MB/s)
+	Mode             string `yaml:"mode" json:"mode"`                               // "adaptive", "bbr", "brutal"
+	BrutalRate       uint64 `yaml:"brutal_rate" json:"brutal_rate"`                 // bytes/sec for brutal mode (default 100MB/s); kept for backward compatibility
+	BrutalTargetRate int64  `yaml:"brutal_target_rate" json:"brutal_target_rate"` // bytes/sec target rate for Brutal/Adaptive CC (overrides brutal_rate when set)
 }
 
 // TransportConfig configures available transports.
@@ -22,6 +23,9 @@ type TransportConfig struct {
 	PoolIdleTTL       string        `yaml:"pool_idle_ttl,omitempty" json:"pool_idle_ttl,omitempty"`     // idle connection TTL (default "60s")
 	KeepaliveInterval string        `yaml:"keepalive_interval,omitempty" json:"keepalive_interval,omitempty"` // transport keepalive interval (default "15s")
 	KeepaliveTimeout  string        `yaml:"keepalive_timeout,omitempty" json:"keepalive_timeout,omitempty"`   // keepalive response timeout (default "5s")
+	ProbeTimeout         string `yaml:"probe_timeout,omitempty" json:"probe_timeout,omitempty"`                   // probe dial timeout (default "5s")
+	PathFailureThreshold int    `yaml:"path_failure_threshold,omitempty" json:"path_failure_threshold,omitempty"` // consecutive failures before path is down (default 3)
+	HealthCheckInterval  string `yaml:"health_check_interval,omitempty" json:"health_check_interval,omitempty"`  // multipath health check interval (default "10s")
 	ProactiveMigration    bool   `yaml:"proactive_migration" json:"proactive_migration"`
 	MigrationProbeTimeout string `yaml:"migration_probe_timeout" json:"migration_probe_timeout"`
 	H3                H3Config      `yaml:"h3" json:"h3"`
