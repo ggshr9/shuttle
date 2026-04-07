@@ -76,6 +76,7 @@ func TestManagerRefresh(t *testing.T) {
 	defer ts.Close()
 
 	m := NewManager()
+	m.AllowPrivateNetworks = true // httptest uses 127.0.0.1
 	sub, _ := m.Add("Test", ts.URL)
 
 	// Refresh
@@ -99,6 +100,7 @@ func TestManagerRefreshError(t *testing.T) {
 	defer ts.Close()
 
 	m := NewManager()
+	m.AllowPrivateNetworks = true
 	sub, _ := m.Add("Test", ts.URL)
 
 	refreshed, err := m.Refresh(context.Background(), sub.ID)
@@ -270,6 +272,7 @@ func TestAutoRefreshCallsRefreshAll(t *testing.T) {
 	defer ts.Close()
 
 	m := NewManager()
+	m.AllowPrivateNetworks = true
 	_, _ = m.Add("Sub1", ts.URL)
 	_, _ = m.Add("Sub2", ts.URL)
 

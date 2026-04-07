@@ -33,6 +33,10 @@ type Manager struct {
 	subscriptions map[string]*Subscription
 	client        *http.Client
 
+	// AllowPrivateNetworks disables SSRF checks for private/loopback IPs.
+	// Used in sandbox/testing environments.
+	AllowPrivateNetworks bool
+
 	autoMu      sync.Mutex
 	autoCancel  context.CancelFunc
 	autoRunning bool
@@ -62,10 +66,12 @@ func (m *Manager) Add(name, url string) (*Subscription, error) {
 	}
 
 	// Block private/loopback/link-local literal IP hosts to prevent SSRF.
-	if parsed, err := urlpkg.Parse(url); err == nil {
-		if host := parsed.Hostname(); host != "" {
-			if ip := net.ParseIP(host); ip != nil && server.IsBlockedIP(ip) {
-				return nil, fmt.Errorf("invalid subscription URL: target address is not allowed")
+	if !m.AllowPrivateNetworks {
+		if parsed, err := urlpkg.Parse(url); err == nil {
+			if host := parsed.Hostname(); host != "" {
+				if ip := net.ParseIP(host); ip != nil && server.IsBlockedIP(ip) {
+					return nil, fmt.Errorf("invalid subscription URL: target address is not allowed")
+				}
 			}
 		}
 	}
