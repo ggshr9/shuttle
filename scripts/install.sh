@@ -8,7 +8,7 @@
 set -e
 
 REPO="ggshr9/shuttle"
-VERSION="v0.3.0"
+VERSION="v0.3.1"
 INSTALL_DIR="/usr/local/bin"
 
 # Detect OS and arch
