@@ -24,19 +24,22 @@ import (
 
 // buildCongestionControl creates the appropriate CC based on config.
 func (e *Engine) buildCongestionControl(cfg *config.ClientConfig) quic.CongestionControl {
+	// Resolve the effective Brutal target rate:
+	// BrutalTargetRate (int64) takes precedence when set; fall back to legacy BrutalRate.
+	effectiveBrutalRate := uint64(cfg.Congestion.BrutalTargetRate)
+	if effectiveBrutalRate == 0 {
+		effectiveBrutalRate = cfg.Congestion.BrutalRate
+	}
+
 	var cc congestion.CongestionController
 	switch cfg.Congestion.Mode {
 	case "brutal":
-		rate := cfg.Congestion.BrutalRate
-		if rate == 0 {
-			rate = 100 * 1024 * 1024
-		}
-		cc = congestion.NewBrutal(rate)
+		cc = congestion.NewBrutal(effectiveBrutalRate)
 	case "bbr":
 		cc = congestion.NewBBR(0)
 	default:
 		cc = congestion.NewAdaptive(&congestion.AdaptiveConfig{
-			BrutalRate: cfg.Congestion.BrutalRate,
+			BrutalRate: effectiveBrutalRate,
 		}, e.logger)
 	}
 	return congestion.NewQUICAdapter(cc)
