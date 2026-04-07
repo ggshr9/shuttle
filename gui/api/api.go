@@ -183,22 +183,21 @@ func setSystemProxy(cfg *config.ClientConfig) {
 
 // normalizeListenAddr converts listen addresses like ":1080" or "0.0.0.0:1080" to "127.0.0.1:1080"
 func normalizeListenAddr(addr string) string {
-	host, port, err := splitHostPort(addr)
+	host, port, err := net.SplitHostPort(addr)
 	if err != nil {
-		return addr
+		// Handle non-bracketed IPv6 like ":::1080" by trying with brackets.
+		if strings.Count(addr, ":") >= 2 {
+			lastColon := strings.LastIndex(addr, ":")
+			host, port, err = net.SplitHostPort("[" + addr[:lastColon] + "]" + addr[lastColon:])
+		}
+		if err != nil {
+			return addr
+		}
 	}
 	if host == "" || host == "0.0.0.0" || host == "::" {
 		host = "127.0.0.1"
 	}
 	return host + ":" + port
-}
-
-func splitHostPort(addr string) (host, port string, err error) {
-	idx := strings.LastIndex(addr, ":")
-	if idx < 0 {
-		return "", "", fmt.Errorf("no port in address")
-	}
-	return addr[:idx], addr[idx+1:], nil
 }
 
 // validateProbeURL checks that a probe URL is safe to request.

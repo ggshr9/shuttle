@@ -169,17 +169,39 @@ func groupToInfo(grp *OutboundGroup) GroupInfo {
 
 // ── Provider API methods ─────────────────────────────────────────────────────
 
+// refreshableProvider is the shared interface satisfied by both ProxyProvider and RuleProvider.
+type refreshableProvider interface {
+	Name() string
+	Refresh(ctx context.Context) error
+	UpdatedAt() time.Time
+	Error() error
+}
+
+// listProviders returns ProviderInfo for a slice of refreshable providers.
+func listProviders[T refreshableProvider](providers []T, toInfo func(T) ProviderInfo) []ProviderInfo {
+	out := make([]ProviderInfo, 0, len(providers))
+	for _, p := range providers {
+		out = append(out, toInfo(p))
+	}
+	return out
+}
+
+// refreshProvider finds and refreshes a named provider from the slice.
+func refreshProvider[T refreshableProvider](providers []T, kind, name string, ctx context.Context) error {
+	for _, p := range providers {
+		if p.Name() == name {
+			return p.Refresh(ctx)
+		}
+	}
+	return fmt.Errorf("%s provider %q not found", kind, name)
+}
+
 // ListProxyProviders returns info for all proxy providers.
 func (e *Engine) ListProxyProviders() []ProviderInfo {
 	e.mu.RLock()
 	providers := e.proxyProviders
 	e.mu.RUnlock()
-
-	out := make([]ProviderInfo, 0, len(providers))
-	for _, p := range providers {
-		out = append(out, proxyProviderToInfo(p))
-	}
-	return out
+	return listProviders(providers, proxyProviderToInfo)
 }
 
 // RefreshProxyProvider triggers a manual refresh of the named proxy provider.
@@ -187,13 +209,7 @@ func (e *Engine) RefreshProxyProvider(ctx context.Context, name string) error {
 	e.mu.RLock()
 	providers := e.proxyProviders
 	e.mu.RUnlock()
-
-	for _, p := range providers {
-		if p.Name() == name {
-			return p.Refresh(ctx)
-		}
-	}
-	return fmt.Errorf("proxy provider %q not found", name)
+	return refreshProvider(providers, "proxy", name, ctx)
 }
 
 // ListRuleProviders returns info for all rule providers.
@@ -201,12 +217,7 @@ func (e *Engine) ListRuleProviders() []ProviderInfo {
 	e.mu.RLock()
 	providers := e.ruleProviders
 	e.mu.RUnlock()
-
-	out := make([]ProviderInfo, 0, len(providers))
-	for _, p := range providers {
-		out = append(out, ruleProviderToInfo(p))
-	}
-	return out
+	return listProviders(providers, ruleProviderToInfo)
 }
 
 // RefreshRuleProvider triggers a manual refresh of the named rule provider.
@@ -214,13 +225,7 @@ func (e *Engine) RefreshRuleProvider(ctx context.Context, name string) error {
 	e.mu.RLock()
 	providers := e.ruleProviders
 	e.mu.RUnlock()
-
-	for _, p := range providers {
-		if p.Name() == name {
-			return p.Refresh(ctx)
-		}
-	}
-	return fmt.Errorf("rule provider %q not found", name)
+	return refreshProvider(providers, "rule", name, ctx)
 }
 
 // proxyProviderToInfo converts a ProxyProvider to ProviderInfo.

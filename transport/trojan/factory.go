@@ -7,7 +7,6 @@ import (
 	"net"
 
 	"github.com/shuttleX/shuttle/adapter"
-	"github.com/shuttleX/shuttle/config"
 	"github.com/shuttleX/shuttle/transport/shared"
 )
 
@@ -15,18 +14,11 @@ func init() {
 	adapter.Register(&factory{})
 }
 
-type factory struct{}
+type factory struct {
+	adapter.BaseFactory
+}
 
 func (f *factory) Type() string { return "trojan" }
-
-// Trojan doesn't use multiplexed transport — NewClient/NewServer return nil.
-func (f *factory) NewClient(_ *config.ClientConfig, _ adapter.FactoryOptions) (adapter.ClientTransport, error) {
-	return nil, nil
-}
-
-func (f *factory) NewServer(_ *config.ServerConfig, _ adapter.FactoryOptions) (adapter.ServerTransport, error) {
-	return nil, nil
-}
 
 // NewDialer implements adapter.DialerFactory.
 func (f *factory) NewDialer(cfg map[string]any, _ adapter.FactoryOptions) (adapter.Dialer, error) {

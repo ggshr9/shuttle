@@ -721,22 +721,20 @@ func TestWsReadLimitConstant(t *testing.T) {
 // Server buildICEServers tests
 // ---------------------------------------------------------------------------
 
-func TestServerBuildICEServersNoServers(t *testing.T) {
-	s := &Server{config: &ServerConfig{
+func TestBuildICEServersNoServers(t *testing.T) {
+	servers := buildICEServers(&ICEConfig{
 		STUNServers: []string{},
 		TURNServers: []string{},
-	}}
-	servers := s.buildICEServers()
+	})
 	if len(servers) != 0 {
 		t.Fatalf("expected 0 ICE servers, got %d", len(servers))
 	}
 }
 
-func TestServerBuildICEServersSTUNOnly(t *testing.T) {
-	s := &Server{config: &ServerConfig{
+func TestBuildICEServersSTUNOnly(t *testing.T) {
+	servers := buildICEServers(&ICEConfig{
 		STUNServers: []string{"stun:stun.example.com:3478"},
-	}}
-	servers := s.buildICEServers()
+	})
 	if len(servers) != 1 {
 		t.Fatalf("expected 1 ICE server, got %d", len(servers))
 	}
@@ -745,14 +743,13 @@ func TestServerBuildICEServersSTUNOnly(t *testing.T) {
 	}
 }
 
-func TestServerBuildICEServersTURNOnly(t *testing.T) {
-	s := &Server{config: &ServerConfig{
+func TestBuildICEServersTURNOnly(t *testing.T) {
+	servers := buildICEServers(&ICEConfig{
 		STUNServers: []string{},
 		TURNServers: []string{"turn:turn.example.com:3478"},
 		TURNUser:    "user",
 		TURNPass:    "pass",
-	}}
-	servers := s.buildICEServers()
+	})
 	if len(servers) != 1 {
 		t.Fatalf("expected 1 ICE server, got %d", len(servers))
 	}
@@ -761,14 +758,13 @@ func TestServerBuildICEServersTURNOnly(t *testing.T) {
 	}
 }
 
-func TestServerBuildICEServersSTUNAndTURN(t *testing.T) {
-	s := &Server{config: &ServerConfig{
+func TestBuildICEServersSTUNAndTURN(t *testing.T) {
+	servers := buildICEServers(&ICEConfig{
 		STUNServers: []string{"stun:s.example.com:3478"},
 		TURNServers: []string{"turn:t.example.com:3478"},
 		TURNUser:    "u",
 		TURNPass:    "p",
-	}}
-	servers := s.buildICEServers()
+	})
 	if len(servers) != 2 {
 		t.Fatalf("expected 2 ICE servers, got %d", len(servers))
 	}

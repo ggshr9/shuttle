@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/pion/ice/v4"
 	"github.com/pion/webrtc/v4"
 	ymux "github.com/shuttleX/shuttle/transport/mux/yamux"
 )
@@ -172,42 +171,21 @@ func (s *Server) awaitDataChannel(pc *webrtc.PeerConnection, dcCh <-chan datacha
 	}
 }
 
-// buildICEServers creates the ICE server configuration from server config.
-func (s *Server) buildICEServers() []webrtc.ICEServer {
-	var iceServers []webrtc.ICEServer
-	if len(s.config.STUNServers) > 0 {
-		iceServers = append(iceServers, webrtc.ICEServer{
-			URLs: s.config.STUNServers,
-		})
+// iceConfig returns the shared ICE configuration derived from ServerConfig.
+func (s *Server) iceConfig() *ICEConfig {
+	return &ICEConfig{
+		STUNServers:  s.config.STUNServers,
+		TURNServers:  s.config.TURNServers,
+		TURNUser:     s.config.TURNUser,
+		TURNPass:     s.config.TURNPass,
+		ICEPolicy:    s.config.ICEPolicy,
+		LoopbackOnly: s.config.LoopbackOnly,
 	}
-	if len(s.config.TURNServers) > 0 {
-		iceServers = append(iceServers, webrtc.ICEServer{
-			URLs:           s.config.TURNServers,
-			Username:       s.config.TURNUser,
-			Credential:     s.config.TURNPass,
-			CredentialType: webrtc.ICECredentialTypePassword,
-		})
-	}
-	return iceServers
 }
 
 // newPeerConnection creates a configured PeerConnection with detached DataChannels.
 func (s *Server) newPeerConnection() (*webrtc.PeerConnection, error) {
-	se := webrtc.SettingEngine{}
-	se.DetachDataChannels()
-	if s.config.LoopbackOnly {
-		se.SetICEMulticastDNSMode(ice.MulticastDNSModeDisabled)
-		_ = se.SetICEAddressRewriteRules(webrtc.ICEAddressRewriteRule{
-			External:        []string{"127.0.0.1"},
-			AsCandidateType: webrtc.ICECandidateTypeHost,
-		})
-		se.SetIncludeLoopbackCandidate(true)
-	}
-	api := webrtc.NewAPI(webrtc.WithSettingEngine(se))
-	return api.NewPeerConnection(webrtc.Configuration{
-		ICEServers:         s.buildICEServers(),
-		ICETransportPolicy: mapICEPolicy(s.config.ICEPolicy),
-	})
+	return newPeerConnectionFromConfig(s.iceConfig())
 }
 
 func writeSignalError(w http.ResponseWriter, msg string) {

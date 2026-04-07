@@ -12,7 +12,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/pion/ice/v4"
 	"github.com/pion/webrtc/v4"
 	"github.com/shuttleX/shuttle/transport"
 	ymux "github.com/shuttleX/shuttle/transport/mux/yamux"
@@ -58,39 +57,21 @@ func isWSSignalURL(url string) bool {
 	return strings.HasPrefix(url, "ws://") || strings.HasPrefix(url, "wss://")
 }
 
+// iceConfig returns the shared ICE configuration derived from ClientConfig.
+func (c *Client) iceConfig() *ICEConfig {
+	return &ICEConfig{
+		STUNServers:  c.config.STUNServers,
+		TURNServers:  c.config.TURNServers,
+		TURNUser:     c.config.TURNUser,
+		TURNPass:     c.config.TURNPass,
+		ICEPolicy:    c.config.ICEPolicy,
+		LoopbackOnly: c.config.LoopbackOnly,
+	}
+}
+
 // newPeerConnection creates a configured PeerConnection with detached DataChannels.
 func (c *Client) newPeerConnection() (*webrtc.PeerConnection, error) {
-	var iceServers []webrtc.ICEServer
-	if len(c.config.STUNServers) > 0 {
-		iceServers = append(iceServers, webrtc.ICEServer{
-			URLs: c.config.STUNServers,
-		})
-	}
-	if len(c.config.TURNServers) > 0 {
-		iceServers = append(iceServers, webrtc.ICEServer{
-			URLs:           c.config.TURNServers,
-			Username:       c.config.TURNUser,
-			Credential:     c.config.TURNPass,
-			CredentialType: webrtc.ICECredentialTypePassword,
-		})
-	}
-
-	se := webrtc.SettingEngine{}
-	se.DetachDataChannels()
-	if c.config.LoopbackOnly {
-		se.SetICEMulticastDNSMode(ice.MulticastDNSModeDisabled)
-		_ = se.SetICEAddressRewriteRules(webrtc.ICEAddressRewriteRule{
-			External:        []string{"127.0.0.1"},
-			AsCandidateType: webrtc.ICECandidateTypeHost,
-		})
-		se.SetIncludeLoopbackCandidate(true)
-	}
-
-	api := webrtc.NewAPI(webrtc.WithSettingEngine(se))
-	return api.NewPeerConnection(webrtc.Configuration{
-		ICEServers:         iceServers,
-		ICETransportPolicy: mapICEPolicy(c.config.ICEPolicy),
-	})
+	return newPeerConnectionFromConfig(c.iceConfig())
 }
 
 // createDataChannel creates a reliable, ordered DataChannel and returns channels

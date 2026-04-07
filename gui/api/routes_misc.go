@@ -17,6 +17,28 @@ import (
 	"github.com/shuttleX/shuttle/update"
 )
 
+// buildProbeTransport creates an *http.Transport for the given proxy mode ("socks5", "http", or "direct").
+// Returns nil and an error string if the mode is invalid.
+func buildProbeTransport(via string, cfg *config.ClientConfig) (*http.Transport, string) {
+	var transport *http.Transport
+	switch via {
+	case "socks5":
+		proxyAddr := normalizeListenAddr(cfg.Proxy.SOCKS5.Listen)
+		proxyURL, _ := url.Parse("socks5://" + proxyAddr)
+		transport = &http.Transport{Proxy: http.ProxyURL(proxyURL)}
+	case "http":
+		proxyAddr := normalizeListenAddr(cfg.Proxy.HTTP.Listen)
+		proxyURL, _ := url.Parse("http://" + proxyAddr)
+		transport = &http.Transport{Proxy: http.ProxyURL(proxyURL)}
+	case "direct":
+		transport = &http.Transport{}
+	default:
+		return nil, "via must be socks5, http, or direct"
+	}
+	transport.TLSHandshakeTimeout = 10 * time.Second
+	return transport, ""
+}
+
 func registerMiscRoutes(mux *http.ServeMux, eng *engine.Engine, subMgr *subscription.Manager, updateChecker *update.Checker) {
 	// Full backup - exports complete configuration including subscriptions
 	mux.HandleFunc("GET /api/backup", func(w http.ResponseWriter, r *http.Request) {
@@ -262,23 +284,11 @@ func registerMiscRoutes(mux *http.ServeMux, eng *engine.Engine, subMgr *subscrip
 		cfg := eng.Config()
 
 		// Build HTTP client with proxy
-		var transport *http.Transport
-		switch req.Via {
-		case "socks5":
-			proxyAddr := normalizeListenAddr(cfg.Proxy.SOCKS5.Listen)
-			proxyURL, _ := url.Parse("socks5://" + proxyAddr)
-			transport = &http.Transport{Proxy: http.ProxyURL(proxyURL)}
-		case "http":
-			proxyAddr := normalizeListenAddr(cfg.Proxy.HTTP.Listen)
-			proxyURL, _ := url.Parse("http://" + proxyAddr)
-			transport = &http.Transport{Proxy: http.ProxyURL(proxyURL)}
-		case "direct":
-			transport = &http.Transport{}
-		default:
-			writeError(w, http.StatusBadRequest, "via must be socks5, http, or direct")
+		transport, errMsg := buildProbeTransport(req.Via, &cfg)
+		if transport == nil {
+			writeError(w, http.StatusBadRequest, errMsg)
 			return
 		}
-		transport.TLSHandshakeTimeout = 10 * time.Second
 
 		client := &http.Client{
 			Transport: transport,
@@ -371,23 +381,11 @@ func registerMiscRoutes(mux *http.ServeMux, eng *engine.Engine, subMgr *subscrip
 				continue
 			}
 
-			var transport *http.Transport
-			switch t.Via {
-			case "socks5":
-				proxyAddr := normalizeListenAddr(cfg.Proxy.SOCKS5.Listen)
-				proxyURL, _ := url.Parse("socks5://" + proxyAddr)
-				transport = &http.Transport{Proxy: http.ProxyURL(proxyURL)}
-			case "http":
-				proxyAddr := normalizeListenAddr(cfg.Proxy.HTTP.Listen)
-				proxyURL, _ := url.Parse("http://" + proxyAddr)
-				transport = &http.Transport{Proxy: http.ProxyURL(proxyURL)}
-			case "direct":
-				transport = &http.Transport{}
-			default:
-				results = append(results, result{Name: t.Name, URL: t.URL, Via: t.Via, Error: "invalid via"})
+			transport, errMsg := buildProbeTransport(t.Via, &cfg)
+			if transport == nil {
+				results = append(results, result{Name: t.Name, URL: t.URL, Via: t.Via, Error: errMsg})
 				continue
 			}
-			transport.TLSHandshakeTimeout = 10 * time.Second
 
 			client := &http.Client{Transport: transport, Timeout: 15 * time.Second}
 			start := time.Now()
