@@ -4,6 +4,8 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"net/url"
+	"strconv"
 	"strings"
 
 	"gopkg.in/yaml.v3"
@@ -269,9 +271,9 @@ func parseSingboxOutbounds(data []byte) ([]ProxyNode, error) {
 	return nodes, nil
 }
 
-// parseURIList splits data by newlines and stores each non-empty line as a
-// ProxyNode with type "raw-uri" and Options["uri"] set to the line value.
-// Full URI parsing (extracting server, port, etc.) is deferred to Phase 2.
+// parseURIList splits data by newlines and parses each URI into a ProxyNode.
+// Known schemes (tuic://, hysteria2://, hy2://) are fully parsed; unknown
+// schemes fall back to raw-uri storage.
 func parseURIList(data []byte) ([]ProxyNode, error) {
 	lines := strings.Split(string(data), "\n")
 	nodes := make([]ProxyNode, 0, len(lines))
@@ -280,15 +282,83 @@ func parseURIList(data []byte) ([]ProxyNode, error) {
 		if line == "" {
 			continue
 		}
-		nodes = append(nodes, ProxyNode{
-			Type: "raw-uri",
-			Options: map[string]any{
-				"uri": line,
-			},
-		})
+		switch {
+		case strings.HasPrefix(line, "tuic://"):
+			node, err := parseTUICURI(line)
+			if err != nil {
+				// Fall back to raw-uri on parse failure.
+				nodes = append(nodes, ProxyNode{Type: "raw-uri", Options: map[string]any{"uri": line}})
+			} else {
+				nodes = append(nodes, node)
+			}
+		default:
+			nodes = append(nodes, ProxyNode{
+				Type: "raw-uri",
+				Options: map[string]any{
+					"uri": line,
+				},
+			})
+		}
 	}
 	if len(nodes) == 0 {
 		return nil, fmt.Errorf("no URI entries found")
 	}
 	return nodes, nil
+}
+
+// parseTUICURI parses a TUIC v5 URI into a ProxyNode.
+// Format: tuic://uuid:password@host:port?sni=...&alpn=...&congestion_control=...#name
+func parseTUICURI(raw string) (ProxyNode, error) {
+	u, err := url.Parse(raw)
+	if err != nil {
+		return ProxyNode{}, fmt.Errorf("parse tuic URI: %w", err)
+	}
+
+	if u.Scheme != "tuic" {
+		return ProxyNode{}, fmt.Errorf("unexpected scheme %q", u.Scheme)
+	}
+
+	uuid := u.User.Username()
+	password, _ := u.User.Password()
+
+	host := u.Hostname()
+	portStr := u.Port()
+	if host == "" || portStr == "" {
+		return ProxyNode{}, fmt.Errorf("tuic URI: missing host or port")
+	}
+
+	port, err := strconv.Atoi(portStr)
+	if err != nil {
+		return ProxyNode{}, fmt.Errorf("tuic URI: invalid port %q", portStr)
+	}
+
+	name := u.Fragment
+	if name == "" {
+		name = host + ":" + portStr
+	}
+
+	opts := map[string]any{
+		"uuid":     uuid,
+		"password": password,
+		"server":   host + ":" + portStr,
+	}
+
+	query := u.Query()
+	if sni := query.Get("sni"); sni != "" {
+		opts["sni"] = sni
+	}
+	if alpn := query.Get("alpn"); alpn != "" {
+		opts["alpn"] = strings.Split(alpn, ",")
+	}
+	if cc := query.Get("congestion_control"); cc != "" {
+		opts["congestion_control"] = cc
+	}
+
+	return ProxyNode{
+		Name:    name,
+		Type:    "tuic",
+		Server:  host,
+		Port:    port,
+		Options: opts,
+	}, nil
 }
