@@ -144,9 +144,10 @@ func (c *Client) Dial(ctx context.Context, addr string) (transport.Connection, e
 		// Mix PQ shared secret into connection by wrapping with HKDF-derived key.
 		// This ensures harvest-now-decrypt-later attacks require breaking BOTH
 		// X25519 AND the PQ exchange.
-		_ = pqSecret // TODO: mix into yamux session via HKDF once server-side is updated
-		// Full implementation requires server to perform the same HKDF derivation.
-		// For now, log that PQ exchange completed successfully.
+		raw, err = wrapConnWithPQ(raw, pqSecret)
+		if err != nil {
+			return nil, fmt.Errorf("pq wrap: %w", err)
+		}
 	}
 
 	// Step 3: yamux multiplexed session over the TLS connection

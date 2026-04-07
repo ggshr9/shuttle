@@ -211,7 +211,7 @@ func (s *Server) handleConn(ctx context.Context, raw net.Conn) {
 				return
 			}
 
-			_, ciphertext, pqErr := pq.Encapsulate(pqPubBytes)
+			pqSecret, ciphertext, pqErr := pq.Encapsulate(pqPubBytes)
 			if pqErr != nil {
 				s.logger.Error("pq encapsulate failed", "err", pqErr)
 				raw.Close()
@@ -220,6 +220,15 @@ func (s *Server) handleConn(ctx context.Context, raw net.Conn) {
 
 			if pqErr := writeFrame(raw, ciphertext); pqErr != nil {
 				s.logger.Error("pq ciphertext send failed", "err", pqErr)
+				raw.Close()
+				return
+			}
+
+			// Wrap the connection with HKDF-derived AEAD from the PQ shared secret.
+			var wrapErr error
+			raw, wrapErr = wrapConnWithPQ(raw, pqSecret)
+			if wrapErr != nil {
+				s.logger.Error("pq wrap failed", "err", wrapErr)
 				raw.Close()
 				return
 			}

@@ -84,15 +84,21 @@ func TestRealityPQHandshake(t *testing.T) {
 			errCh <- err
 			return
 		}
-		_ = serverPQSecret // In production, mixed into session keys
 
 		if err := writeFrame(serverConn, ciphertext); err != nil {
 			errCh <- err
 			return
 		}
 
+		// Wrap connection with PQ-derived AEAD (same as production path).
+		wrappedServer, err := wrapConnWithPQ(serverConn, serverPQSecret)
+		if err != nil {
+			errCh <- err
+			return
+		}
+
 		// yamux echo server
-		sess, err := yamux.Server(serverConn, yamux.DefaultConfig())
+		sess, err := yamux.Server(wrappedServer, yamux.DefaultConfig())
 		if err != nil {
 			errCh <- err
 			return
@@ -175,8 +181,14 @@ func TestRealityPQHandshake(t *testing.T) {
 		t.Fatal("PQ shared secret is empty")
 	}
 
+	// Wrap connection with PQ-derived AEAD (same as production path).
+	wrappedClient, err := wrapConnWithPQ(clientConn, clientPQSecret)
+	if err != nil {
+		t.Fatalf("pq wrap client: %v", err)
+	}
+
 	// yamux data exchange
-	sess, err := yamux.Client(clientConn, yamux.DefaultConfig())
+	sess, err := yamux.Client(wrappedClient, yamux.DefaultConfig())
 	if err != nil {
 		t.Fatalf("yamux client: %v", err)
 	}
