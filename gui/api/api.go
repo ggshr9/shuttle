@@ -63,6 +63,7 @@ func NewHandler(cfg HandlerConfig) http.Handler {
 	registerMeshRoutes(mux, cfg.Engine)
 	registerGroupRoutes(mux, cfg.Engine)
 	registerProviderRoutes(mux, cfg.Engine)
+	registerMigrateRoutes(mux)
 
 	var handler http.Handler = corsMiddleware(mux)
 	if cfg.AuthToken != "" {
