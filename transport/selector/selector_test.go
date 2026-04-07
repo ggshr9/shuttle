@@ -201,7 +201,7 @@ func TestStrategyConstants(t *testing.T) {
 
 func TestProbeAvailableTransport(t *testing.T) {
 	ft := &fakeTransport{typeName: "h3", conn: &fakeConn{}}
-	result := Probe(context.Background(), ft)
+	result := Probe(context.Background(), ft, 0)
 	if !result.Available {
 		t.Fatal("expected available transport")
 	}
@@ -346,7 +346,7 @@ func TestSelector_SetStrategyFromMultipath(t *testing.T) {
 
 func TestProbeUnavailableTransport(t *testing.T) {
 	ft := &fakeTransport{typeName: "h3", dialErr: errors.New("fail")}
-	result := Probe(context.Background(), ft)
+	result := Probe(context.Background(), ft, 0)
 	if result.Available {
 		t.Fatal("expected unavailable transport")
 	}

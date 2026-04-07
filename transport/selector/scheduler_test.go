@@ -24,7 +24,7 @@ func TestFilterEligibleBasic(t *testing.T) {
 	paths := makePaths(3, true)
 	paths[1].SetAvailable(false) // make one ineligible
 
-	eligible := filterEligible(paths)
+	eligible := filterEligible(paths, 3)
 	if len(eligible) != 2 {
 		t.Fatalf("expected 2 eligible, got %d", len(eligible))
 	}
@@ -34,7 +34,7 @@ func TestFilterEligibleExcludesHighFailures(t *testing.T) {
 	paths := makePaths(3, true)
 	atomic.StoreInt64(&paths[0].Failures, 3) // ≥ 3 failures
 
-	eligible := filterEligible(paths)
+	eligible := filterEligible(paths, 3)
 	if len(eligible) != 2 {
 		t.Fatalf("expected 2 eligible (excluding high failures), got %d", len(eligible))
 	}
@@ -44,7 +44,7 @@ func TestFilterEligibleExcludesNilConn(t *testing.T) {
 	paths := makePaths(3, true)
 	paths[2].Conn = nil
 
-	eligible := filterEligible(paths)
+	eligible := filterEligible(paths, 3)
 	if len(eligible) != 2 {
 		t.Fatalf("expected 2 eligible (excluding nil conn), got %d", len(eligible))
 	}
@@ -52,7 +52,7 @@ func TestFilterEligibleExcludesNilConn(t *testing.T) {
 
 func TestFilterEligibleNoneAvailable(t *testing.T) {
 	paths := makePaths(3, false)
-	eligible := filterEligible(paths)
+	eligible := filterEligible(paths, 3)
 	if len(eligible) != 0 {
 		t.Fatalf("expected 0 eligible, got %d", len(eligible))
 	}
