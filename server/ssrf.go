@@ -63,6 +63,12 @@ func IsBlockedTarget(target string) bool {
 	return false
 }
 
+// IsBlockedIP reports whether ip falls within any blocked range (private,
+// loopback, link-local, cloud-metadata, etc.). It is the exported counterpart
+// of the internal isBlockedIP helper and is intended for call sites outside
+// this package that have already resolved a literal IP address.
+func IsBlockedIP(ip net.IP) bool { return isBlockedIP(ip) }
+
 func isBlockedIP(ip net.IP) bool {
 	for _, n := range blockedCIDRs {
 		if n.Contains(ip) {

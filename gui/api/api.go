@@ -17,6 +17,7 @@ import (
 	"github.com/shuttleX/shuttle/config"
 	"github.com/shuttleX/shuttle/connlog"
 	"github.com/shuttleX/shuttle/engine"
+	"github.com/shuttleX/shuttle/server"
 	"github.com/shuttleX/shuttle/speedtest"
 	"github.com/shuttleX/shuttle/stats"
 	"github.com/shuttleX/shuttle/subscription"
@@ -216,19 +217,14 @@ func validateProbeURL(rawURL string) error {
 	if host == "" {
 		return fmt.Errorf("URL must have a hostname")
 	}
-	// Block localhost and link-local
-	ip := net.ParseIP(host)
-	if ip != nil {
-		if ip.IsLoopback() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() {
-			return fmt.Errorf("probing localhost/link-local addresses is not allowed")
-		}
-		// Block metadata endpoints (169.254.169.254, fd00::, etc.)
-		if ip.Equal(net.ParseIP("169.254.169.254")) {
-			return fmt.Errorf("probing cloud metadata endpoints is not allowed")
-		}
-	}
+	// Block localhost name before IP check to avoid DNS lookup.
 	if host == "localhost" {
 		return fmt.Errorf("probing localhost is not allowed")
+	}
+	// Block private, loopback, link-local, and cloud-metadata IP ranges.
+	ip := net.ParseIP(host)
+	if ip != nil && server.IsBlockedIP(ip) {
+		return fmt.Errorf("probing private/localhost/link-local addresses is not allowed")
 	}
 	return nil
 }

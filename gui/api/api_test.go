@@ -622,6 +622,34 @@ func TestValidateProbeURL(t *testing.T) {
 	}
 }
 
+func TestValidateProbeURL_PrivateIP(t *testing.T) {
+	blocked := []string{
+		"http://10.0.0.1/admin",
+		"http://172.16.0.1/",
+		"http://192.168.1.1/",
+		"http://169.254.169.254/latest/meta-data/",
+		"http://127.0.0.1:8080/",
+		"http://[::1]/",
+		"http://localhost/",
+	}
+	for _, u := range blocked {
+		if err := validateProbeURL(u); err == nil {
+			t.Errorf("expected error for blocked URL %q, got nil", u)
+		}
+	}
+
+	allowed := []string{
+		"https://www.google.com",
+		"http://8.8.8.8/",
+		"https://example.com:443/path",
+	}
+	for _, u := range allowed {
+		if err := validateProbeURL(u); err != nil {
+			t.Errorf("unexpected error for allowed URL %q: %v", u, err)
+		}
+	}
+}
+
 func TestAPIDeleteServers_EmptyAddr(t *testing.T) {
 	h, _, _ := newTestHandler()
 

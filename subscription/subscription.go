@@ -6,12 +6,15 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
+	urlpkg "net/url"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/shuttleX/shuttle/config"
+	"github.com/shuttleX/shuttle/server"
 )
 
 // Subscription represents a subscription source.
@@ -56,6 +59,15 @@ func (m *Manager) Add(name, url string) (*Subscription, error) {
 	// Validate URL scheme to prevent SSRF via file://, gopher://, etc.
 	if !strings.HasPrefix(url, "http://") && !strings.HasPrefix(url, "https://") {
 		return nil, fmt.Errorf("invalid subscription URL: must use http or https scheme")
+	}
+
+	// Block private/loopback/link-local literal IP hosts to prevent SSRF.
+	if parsed, err := urlpkg.Parse(url); err == nil {
+		if host := parsed.Hostname(); host != "" {
+			if ip := net.ParseIP(host); ip != nil && server.IsBlockedIP(ip) {
+				return nil, fmt.Errorf("invalid subscription URL: target address is not allowed")
+			}
+		}
 	}
 
 	m.mu.Lock()
