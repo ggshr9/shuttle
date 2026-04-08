@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"path/filepath"
 	"os/signal"
 	"syscall"
 
@@ -62,7 +63,7 @@ func main() {
 			cfg := config.DefaultClientConfig()
 			cfg.Server.Addr = *serverAddr
 			cfg.Server.Password = *password
-			tmpPath := "/tmp/shuttle-quick.yaml"
+			tmpPath := filepath.Join(os.TempDir(), "shuttle-quick.yaml")
 			if err := config.SaveClientConfig(tmpPath, cfg); err != nil {
 				fmt.Fprintf(os.Stderr, "Failed to create config: %v\n", err)
 				os.Exit(1)
