@@ -11,10 +11,12 @@ import (
 	"github.com/shuttleX/shuttle/config"
 	"github.com/shuttleX/shuttle/crypto"
 	"github.com/shuttleX/shuttle/engine"
+	"github.com/shuttleX/shuttle/update"
 )
 
-// version is set via ldflags at build time: -X main.version=<tag>
-var version = "0.1.0"
+// getVersion returns the current version, set via ldflags:
+//   -X github.com/shuttleX/shuttle/update.Version=v0.3.1
+func getVersion() string { return update.Version }
 
 func main() {
 	if len(os.Args) < 2 {
@@ -24,7 +26,7 @@ func main() {
 
 	switch os.Args[1] {
 	case "version", "-v", "--version":
-		fmt.Printf("shuttle v%s\n", version)
+		fmt.Printf("shuttle v%s\n", getVersion())
 	case "genkey":
 		genKey()
 	case "import":
@@ -104,7 +106,7 @@ func main() {
 }
 
 func printUsage() {
-	fmt.Fprintf(os.Stderr, "Shuttle v%s — Break the impossible triangle\n\n", version)
+	fmt.Fprintf(os.Stderr, "Shuttle v%s — Break the impossible triangle\n\n", getVersion())
 	fmt.Fprintf(os.Stderr, "Quick start:\n")
 	fmt.Fprintf(os.Stderr, "  shuttle run -s server:443 -p password   Connect to a server\n")
 	fmt.Fprintf(os.Stderr, "  shuttle import \"shuttle://...\"          Import from URI and run\n\n")

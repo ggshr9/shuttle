@@ -16,10 +16,12 @@ import (
 	"github.com/shuttleX/shuttle/internal/qrterm"
 	"github.com/shuttleX/shuttle/internal/sysopt"
 	"github.com/shuttleX/shuttle/server"
+	"github.com/shuttleX/shuttle/update"
 )
 
-// version is set via ldflags at build time: -X main.version=<tag>
-var version = "0.1.0"
+// getVersion returns the current version, set via ldflags:
+//   -X github.com/shuttleX/shuttle/update.Version=v0.3.1
+func getVersion() string { return update.Version }
 
 func main() {
 	if len(os.Args) < 2 {
@@ -29,7 +31,7 @@ func main() {
 
 	switch os.Args[1] {
 	case "version", "-v", "--version":
-		fmt.Printf("shuttled v%s\n", version)
+		fmt.Printf("shuttled v%s\n", getVersion())
 	case "genkey":
 		genKey()
 	case "init":
@@ -111,7 +113,7 @@ func main() {
 }
 
 func printUsage() {
-	fmt.Fprintf(os.Stderr, "Shuttled v%s — Shuttle Server\n\n", version)
+	fmt.Fprintf(os.Stderr, "Shuttled v%s — Shuttle Server\n\n", getVersion())
 	fmt.Fprintf(os.Stderr, "Quick start:\n")
 	fmt.Fprintf(os.Stderr, "  shuttled run -p yourpassword     One-line server (generates everything)\n\n")
 	fmt.Fprintf(os.Stderr, "Commands:\n")
@@ -392,7 +394,7 @@ func run(configPath string) {
 	logger := logutil.NewLogger(cfg.Log.Level, cfg.Log.Format)
 	slog.SetDefault(logger)
 
-	logger.Info("shuttled starting", "version", version)
+	logger.Info("shuttled starting", "version", getVersion())
 
 	// Apply system optimizations
 	sysopt.Apply(logger)
@@ -401,7 +403,7 @@ func run(configPath string) {
 	srv, err := server.New(server.Config{
 		ServerConfig: cfg,
 		ConfigPath:   configPath,
-		Version:      version,
+		Version:      getVersion(),
 		Logger:       logger,
 	})
 	if err != nil {
