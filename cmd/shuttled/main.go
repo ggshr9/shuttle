@@ -77,8 +77,9 @@ func main() {
 		configPath := runCmd.String("c", "", "path to config file (auto-detects or auto-init if empty)")
 		password := runCmd.String("p", "", "password (shortcut: auto-init + run in one step)")
 		listen := runCmd.String("l", "", "listen address (default :443)")
+		daemon := runCmd.Bool("d", false, "install as systemd service and start in background")
 		runCmd.Usage = func() {
-			fmt.Fprintf(os.Stderr, "Usage:\n  shuttled run -p yourpassword          One-step server (like Brook)\n  shuttled run -c config.yaml            Use existing config\n  shuttled run                           Auto-detect or auto-init\n\nFlags:\n")
+			fmt.Fprintf(os.Stderr, "Usage:\n  shuttled run -p yourpassword          One-step server\n  shuttled run -p password -d            Install as service + start\n  shuttled run -c config.yaml            Use existing config\n  shuttled run                           Auto-detect or auto-init\n\nFlags:\n")
 			runCmd.PrintDefaults()
 		}
 		_ = runCmd.Parse(os.Args[2:])
@@ -96,7 +97,17 @@ func main() {
 			printInitResult(result)
 			*configPath = result.ConfigPath
 		}
+		if *daemon {
+			installAndStartService(*configPath)
+			return
+		}
 		run(*configPath)
+	case "stop":
+		stopService()
+	case "status":
+		serviceStatus()
+	case "uninstall":
+		uninstallService()
 	case "completion":
 		if len(os.Args) < 3 {
 			fmt.Fprintf(os.Stderr, "Usage: shuttled completion <bash|zsh|fish>\n")
@@ -115,15 +126,19 @@ func main() {
 func printUsage() {
 	fmt.Fprintf(os.Stderr, "Shuttled v%s — Shuttle Server\n\n", getVersion())
 	fmt.Fprintf(os.Stderr, "Quick start:\n")
-	fmt.Fprintf(os.Stderr, "  shuttled run -p yourpassword     One-line server (generates everything)\n\n")
+	fmt.Fprintf(os.Stderr, "  sudo shuttled run -p password -d        Install as service + start\n")
+	fmt.Fprintf(os.Stderr, "  shuttled run -p password                Foreground mode\n\n")
 	fmt.Fprintf(os.Stderr, "Commands:\n")
-	fmt.Fprintf(os.Stderr, "  shuttled run [-c config.yaml]    Start the server\n")
-	fmt.Fprintf(os.Stderr, "  shuttled init                    Generate config without starting\n")
-	fmt.Fprintf(os.Stderr, "  shuttled share -c <config.yaml> --addr <domain:port>  Generate import URI\n")
-	fmt.Fprintf(os.Stderr, "  shuttled genkey                  Generate key pair\n")
-	fmt.Fprintf(os.Stderr, "  shuttled version                 Show version\n")
-	fmt.Fprintf(os.Stderr, "  shuttled completion <shell>      Shell completions\n")
-	fmt.Fprintf(os.Stderr, "  shuttled help                    Show this help\n")
+	fmt.Fprintf(os.Stderr, "  shuttled run [-c config.yaml]           Start the server\n")
+	fmt.Fprintf(os.Stderr, "  shuttled stop                           Stop the service\n")
+	fmt.Fprintf(os.Stderr, "  shuttled status                         Check service status\n")
+	fmt.Fprintf(os.Stderr, "  shuttled uninstall                      Remove the service\n")
+	fmt.Fprintf(os.Stderr, "  shuttled init                           Generate config only\n")
+	fmt.Fprintf(os.Stderr, "  shuttled share -c <config> --addr host  Generate import URI\n")
+	fmt.Fprintf(os.Stderr, "  shuttled genkey                         Generate key pair\n")
+	fmt.Fprintf(os.Stderr, "  shuttled version                        Show version\n")
+	fmt.Fprintf(os.Stderr, "  shuttled completion <shell>             Shell completions\n")
+	fmt.Fprintf(os.Stderr, "  shuttled help                           Show this help\n")
 }
 
 func printCompletion(shell string) {

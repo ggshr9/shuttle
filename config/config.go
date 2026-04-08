@@ -34,6 +34,7 @@ type ClientConfig struct {
 	Outbounds      []OutboundConfig      `yaml:"outbounds,omitempty" json:"outbounds,omitempty"`
 	ProxyProviders []ProxyProviderConfig `yaml:"proxy_providers,omitempty" json:"proxy_providers,omitempty"`
 	RuleProviders  []RuleProviderConfig  `yaml:"rule_providers,omitempty" json:"rule_providers,omitempty"`
+	AllowPrivateNetworks bool             `yaml:"allow_private_networks,omitempty" json:"allow_private_networks,omitempty"` // sandbox/testing only
 }
 
 // SubscriptionConfig represents a subscription source.

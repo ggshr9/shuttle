@@ -44,7 +44,13 @@ type HandlerConfig struct {
 // endpoints require Bearer token authentication.
 func NewHandler(cfg HandlerConfig) http.Handler {
 	if cfg.SubMgr == nil {
-		cfg.SubMgr = subscription.NewManager()
+		mgr := subscription.NewManager()
+		// Inherit AllowPrivateNetworks from engine config (for sandbox testing)
+		if cfg.Engine != nil {
+			c := cfg.Engine.Config()
+			mgr.AllowPrivateNetworks = c.AllowPrivateNetworks
+		}
+		cfg.SubMgr = mgr
 	}
 
 	mux := http.NewServeMux()

@@ -66,3 +66,5 @@ mesh:
 log:
   level: "debug"
   format: "text"
+
+allow_private_networks: true
