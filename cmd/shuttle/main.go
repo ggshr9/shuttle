@@ -51,25 +51,53 @@ func main() {
 	case "run":
 		runCmd := flag.NewFlagSet("run", flag.ExitOnError)
 		configPath := runCmd.String("c", "", "path to config file")
-		serverAddr := runCmd.String("s", "", "server address (shortcut: generate config from server+password)")
-		password := runCmd.String("p", "", "password (use with -s for quick connect)")
+		serverAddr := runCmd.String("s", "", "server address (use with -p)")
+		password := runCmd.String("p", "", "password (use with -s)")
+		importFlag := runCmd.String("u", "", "shuttle:// URI (from server)")
 		runCmd.Usage = func() {
-			fmt.Fprintf(os.Stderr, "Usage:\n  shuttle run -s server:443 -p password   Quick connect (like Brook)\n  shuttle run -c config.yaml              Use existing config\n\nFlags:\n")
+			fmt.Fprintf(os.Stderr, "Usage:\n")
+			fmt.Fprintf(os.Stderr, "  shuttle run -u \"shuttle://...\"           Import URI and connect (recommended)\n")
+			fmt.Fprintf(os.Stderr, "  shuttle run -s server:port -p password   Quick connect (H3 only)\n")
+			fmt.Fprintf(os.Stderr, "  shuttle run -c config.yaml              Use existing config\n\n")
+			fmt.Fprintf(os.Stderr, "Flags:\n")
 			runCmd.PrintDefaults()
 		}
 		_ = runCmd.Parse(os.Args[2:])
-		if *serverAddr != "" && *password != "" {
-			// Brook-style: quick connect without config file
+		tmpPath := filepath.Join(os.TempDir(), "shuttle-quick.yaml")
+		if *importFlag != "" {
+			// Best UX: import shuttle:// URI (includes all transport params)
+			result, err := config.ImportConfig(*importFlag)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Failed to import URI: %v\n", err)
+				os.Exit(1)
+			}
+			if len(result.Servers) == 0 {
+				fmt.Fprintf(os.Stderr, "No servers found in URI\n")
+				os.Exit(1)
+			}
+			cfg := config.DefaultClientConfig()
+			cfg.Server = result.Servers[0]
+			if result.MeshEnabled {
+				cfg.Mesh.Enabled = true
+			}
+			if err := config.SaveClientConfig(tmpPath, cfg); err != nil {
+				fmt.Fprintf(os.Stderr, "Failed to save config: %v\n", err)
+				os.Exit(1)
+			}
+			*configPath = tmpPath
+			fmt.Fprintf(os.Stderr, "Imported server: %s\n", cfg.Server.Addr)
+		} else if *serverAddr != "" && *password != "" {
+			// Quick connect: H3 only (Reality needs public_key from URI)
 			cfg := config.DefaultClientConfig()
 			cfg.Server.Addr = *serverAddr
 			cfg.Server.Password = *password
-			tmpPath := filepath.Join(os.TempDir(), "shuttle-quick.yaml")
+			cfg.Transport.Reality.Enabled = false
 			if err := config.SaveClientConfig(tmpPath, cfg); err != nil {
 				fmt.Fprintf(os.Stderr, "Failed to create config: %v\n", err)
 				os.Exit(1)
 			}
 			*configPath = tmpPath
-			fmt.Fprintf(os.Stderr, "Connecting to %s...\n", *serverAddr)
+			fmt.Fprintf(os.Stderr, "Connecting to %s (H3)...\n", *serverAddr)
 		}
 		if *configPath == "" {
 			runCmd.Usage()
@@ -109,8 +137,8 @@ func main() {
 func printUsage() {
 	fmt.Fprintf(os.Stderr, "Shuttle v%s — Break the impossible triangle\n\n", getVersion())
 	fmt.Fprintf(os.Stderr, "Quick start:\n")
-	fmt.Fprintf(os.Stderr, "  shuttle run -s server:443 -p password   Connect to a server\n")
-	fmt.Fprintf(os.Stderr, "  shuttle import \"shuttle://...\"          Import from URI and run\n\n")
+	fmt.Fprintf(os.Stderr, "  shuttle run -u \"shuttle://...\"           Import + connect (best)\n")
+	fmt.Fprintf(os.Stderr, "  shuttle run -s server:port -p password   Quick connect (H3 only)\n\n")
 	fmt.Fprintf(os.Stderr, "Commands:\n")
 	fmt.Fprintf(os.Stderr, "  shuttle run -c <config.yaml>            Start with config file\n")
 	fmt.Fprintf(os.Stderr, "  shuttle api -c <config.yaml>            Headless API server\n")
