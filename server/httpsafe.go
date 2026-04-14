@@ -97,7 +97,16 @@ func NewSafeHTTPClient(opts SafeHTTPClientOptions) *http.Client {
 }
 
 // SafeCheckRedirect returns an http.Client.CheckRedirect func that rejects
-// redirects whose target resolves into a blocked CIDR, and caps redirect depth.
+// redirects whose target resolves into a blocked CIDR, and caps redirect
+// depth.
+//
+// Policy note: redirects use a strict any-blocked policy — if any resolved IP
+// of the redirect target is in a blocked range, the redirect is rejected.
+// This differs from SafeDialContext, which uses a lenient all-blocked policy
+// (dial proceeds if at least one resolved IP is public). Redirects are a
+// higher-risk vector (attacker-controlled Location header), so strict is
+// appropriate. SafeDialContext stays lenient to tolerate CDNs with mixed
+// split-horizon DNS records.
 func SafeCheckRedirect(allowPrivate bool, maxRedirects int) func(req *http.Request, via []*http.Request) error {
 	if maxRedirects == 0 {
 		maxRedirects = 5

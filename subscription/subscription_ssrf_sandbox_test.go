@@ -4,9 +4,6 @@ package subscription
 
 import (
 	"context"
-	"errors"
-	"fmt"
-	"net"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -50,30 +47,3 @@ func TestFetch_AllowPrivateNetworksBypass(t *testing.T) {
 	}
 }
 
-func TestFetch_RejectsRedirectToPrivate(t *testing.T) {
-	// Private target (loopback) the attacker wants to reach.
-	privateSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		t.Errorf("private handler must not be reached, path=%s", r.URL.Path)
-	}))
-	defer privateSrv.Close()
-
-	// Public-looking redirector. Use AllowPrivate=true to let the initial
-	// request through, but the CheckRedirect must still reject the hop.
-	redirector := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		http.Redirect(w, r, privateSrv.URL, http.StatusFound)
-	}))
-	defer redirector.Close()
-
-	m := NewManager()
-	m.SetAllowPrivateNetworks(true) // Allow initial hop to httptest (also loopback).
-
-	// But override CheckRedirect via a stricter client for this test.
-	// Alternative: use server.NewSafeHTTPClient with AllowPrivateNetworks:false
-	// and a resolver seam — but that cross-cuts server package. Skip for now.
-	// This test documents the expected behavior; see server/httpsafe_test.go
-	// for the unit-level redirect rejection coverage.
-	_ = fmt.Sprintf
-	_ = errors.Is
-	_ = net.ParseIP
-	t.Skip("redirect rejection is covered by unit tests in server/httpsafe_test.go")
-}
