@@ -273,7 +273,7 @@ func (e *Engine) startInternal(ctx context.Context) error {
 	// Start subscription manager if subscriptions are configured.
 	if len(cfgSnap.Subscriptions) > 0 {
 		sm := subscription.NewManager()
-		sm.AllowPrivateNetworks = cfgSnap.AllowPrivateNetworks
+		sm.SetAllowPrivateNetworks(cfgSnap.AllowPrivateNetworks)
 		sm.LoadFromConfig(cfgSnap.Subscriptions)
 		sm.StartAutoRefresh(ctx, 24*time.Hour)
 		e.mu.Lock()
