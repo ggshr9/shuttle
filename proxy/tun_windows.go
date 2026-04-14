@@ -138,18 +138,18 @@ func (t *TUNServer) setupRoutes() error {
 		}
 		out, err := exec.Command("netsh", "interface", "ipv6", "add", "route",
 			ipv6Net.String(),
-			"interface="+t.config.DeviceName,
+			t.config.DeviceName,
 		).CombinedOutput()
 		if err != nil {
 			if !strings.Contains(strings.ToLower(string(out)), "already exists") {
 				return fmt.Errorf("netsh ipv6 add route: %s: %w", string(out), err)
 			}
 		}
-		t.logger.Info("routes configured", "ipv4_cidr", ipNet.String(), "ipv6_cidr", ipv6Net.String(), "dev", t.config.DeviceName)
+		t.logger.Info("routes configured", "cidr", ipNet.String(), "ipv6_cidr", ipv6Net.String(), "dev", t.config.DeviceName)
 		return nil
 	}
 
-	t.logger.Info("routes configured", "ipv4_cidr", ipNet.String(), "dev", t.config.DeviceName)
+	t.logger.Info("routes configured", "cidr", ipNet.String(), "dev", t.config.DeviceName)
 	return nil
 }
 
@@ -172,7 +172,7 @@ func (t *TUNServer) teardownRoutes() {
 		if _, ipv6Net, err := net.ParseCIDR(t.config.IPv6CIDR); err == nil && ipv6Net != nil {
 			exec.Command("netsh", "interface", "ipv6", "delete", "route",
 				ipv6Net.String(),
-				"interface="+t.config.DeviceName,
+				t.config.DeviceName,
 			).Run()
 		}
 	}
