@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -550,6 +551,41 @@ func TestSaveServerConfig(t *testing.T) {
 	}
 	if loaded.Listen != cfg.Listen {
 		t.Fatalf("Listen mismatch after round-trip")
+	}
+}
+
+func TestValidate_CoverReverseURL_BlocksAllShuttleCIDRs(t *testing.T) {
+	blocked := []string{
+		"http://127.0.0.1/",
+		"http://10.0.0.1/",
+		"http://172.16.0.1/",
+		"http://192.168.1.1/",
+		"http://169.254.169.254/", // link-local / cloud metadata
+		"http://0.0.0.0/",         // unspecified IPv4
+		"http://[::1]/",
+		"http://[::]/", // unspecified IPv6
+	}
+	for _, u := range blocked {
+		cfg := DefaultServerConfig()
+		cfg.Cover.Mode = "reverse"
+		cfg.Cover.ReverseURL = u
+		err := cfg.Validate()
+		if err == nil {
+			t.Errorf("%q: expected validation error, got nil", u)
+			continue
+		}
+		if !strings.Contains(err.Error(), "private") && !strings.Contains(err.Error(), "blocked") && !strings.Contains(err.Error(), "localhost") {
+			t.Errorf("%q: unexpected error: %v", u, err)
+		}
+	}
+}
+
+func TestValidate_CoverReverseURL_AllowsPublic(t *testing.T) {
+	cfg := DefaultServerConfig()
+	cfg.Cover.Mode = "reverse"
+	cfg.Cover.ReverseURL = "https://example.com/"
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("public URL should pass: %v", err)
 	}
 }
 
