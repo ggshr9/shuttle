@@ -329,8 +329,8 @@ func (c *ServerConfig) Validate() error {
 		if u, err := url.Parse(c.Cover.ReverseURL); err == nil {
 			if host := u.Hostname(); host != "" {
 				if ip := net.ParseIP(host); ip != nil {
-					if ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() {
-						return fmt.Errorf("cover.reverse_url must not point to a private or localhost address")
+					if ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() || ip.IsUnspecified() {
+						return fmt.Errorf("cover.reverse_url must not point to a private, localhost, or unspecified address")
 					}
 				}
 			}

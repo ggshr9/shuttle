@@ -11,6 +11,7 @@ import (
 	urlpkg "net/url"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/shuttleX/shuttle/config"
@@ -31,11 +32,11 @@ type Subscription struct {
 type Manager struct {
 	mu            sync.RWMutex
 	subscriptions map[string]*Subscription
-	client        *http.Client
+	client        atomic.Pointer[http.Client]
 
-	// AllowPrivateNetworks disables SSRF checks for private/loopback IPs.
-	// Used in sandbox/testing environments.
-	AllowPrivateNetworks bool
+	// allowPrivateNetworks disables SSRF checks for private/loopback IPs.
+	// Access via SetAllowPrivateNetworks so the HTTP client is rebuilt.
+	allowPrivateNetworks bool
 
 	autoMu      sync.Mutex
 	autoCancel  context.CancelFunc
@@ -44,18 +45,36 @@ type Manager struct {
 
 // NewManager creates a new subscription manager.
 func NewManager() *Manager {
-	return &Manager{
+	m := &Manager{
 		subscriptions: make(map[string]*Subscription),
-		client: &http.Client{
-			Timeout: 30 * time.Second,
-			CheckRedirect: func(req *http.Request, via []*http.Request) error {
-				if len(via) > 5 {
-					return fmt.Errorf("too many redirects (max 5)")
-				}
-				return nil
-			},
-		},
 	}
+	m.rebuildClient(false)
+	return m
+}
+
+// SetAllowPrivateNetworks toggles SSRF checks. Setting true is intended for
+// sandbox/testing environments only. Rebuilds the internal HTTP client.
+func (m *Manager) SetAllowPrivateNetworks(allow bool) {
+	m.mu.Lock()
+	m.allowPrivateNetworks = allow
+	m.mu.Unlock()
+	m.rebuildClient(allow)
+}
+
+// AllowPrivateNetworks reports whether SSRF checks are bypassed.
+func (m *Manager) AllowPrivateNetworks() bool {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.allowPrivateNetworks
+}
+
+func (m *Manager) rebuildClient(allow bool) {
+	c := server.NewSafeHTTPClient(server.SafeHTTPClientOptions{
+		Timeout:              30 * time.Second,
+		AllowPrivateNetworks: allow,
+		MaxRedirects:         5,
+	})
+	m.client.Store(c)
 }
 
 // Add adds a new subscription.
@@ -66,7 +85,9 @@ func (m *Manager) Add(name, url string) (*Subscription, error) {
 	}
 
 	// Block private/loopback/link-local literal IP hosts to prevent SSRF.
-	if !m.AllowPrivateNetworks {
+	// (Defense-in-depth: the SafeHTTPClient also blocks at dial time including
+	// for hostnames that resolve to private IPs.)
+	if !m.AllowPrivateNetworks() {
 		if parsed, err := urlpkg.Parse(url); err == nil {
 			if host := parsed.Hostname(); host != "" {
 				if ip := net.ParseIP(host); ip != nil && server.IsBlockedIP(ip) {
@@ -180,7 +201,7 @@ func (m *Manager) fetch(ctx context.Context, url string) ([]config.ServerEndpoin
 
 	req.Header.Set("User-Agent", "Shuttle/1.0")
 
-	resp, err := m.client.Do(req)
+	resp, err := m.client.Load().Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("fetch: %w", err)
 	}

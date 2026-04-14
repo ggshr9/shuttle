@@ -59,6 +59,7 @@ func TestProxyProvider_FetchAndFilter(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewProxyProvider: %v", err)
 	}
+	allowLoopback(p)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -105,6 +106,7 @@ func TestProxyProvider_NoFilter(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewProxyProvider: %v", err)
 	}
+	allowLoopback(p)
 
 	if err := p.Refresh(context.Background()); err != nil {
 		t.Fatalf("Refresh: %v", err)
@@ -226,6 +228,7 @@ func TestProxyProvider_StartStop(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewProxyProvider: %v", err)
 	}
+	allowLoopback(p)
 
 	ctx := context.Background()
 	p.Start(ctx)
