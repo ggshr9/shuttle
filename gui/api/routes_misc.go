@@ -13,6 +13,7 @@ import (
 	"github.com/shuttleX/shuttle/engine"
 	"github.com/shuttleX/shuttle/internal/procnet"
 	"github.com/shuttleX/shuttle/router/geodata"
+	"github.com/shuttleX/shuttle/server"
 	"github.com/shuttleX/shuttle/subscription"
 	"github.com/shuttleX/shuttle/update"
 )
@@ -31,7 +32,9 @@ func buildProbeTransport(via string, cfg *config.ClientConfig) (*http.Transport,
 		proxyURL, _ := url.Parse("http://" + proxyAddr)
 		transport = &http.Transport{Proxy: http.ProxyURL(proxyURL)}
 	case "direct":
-		transport = &http.Transport{}
+		transport = &http.Transport{
+			DialContext: server.SafeDialContext(false),
+		}
 	default:
 		return nil, "via must be socks5, http, or direct"
 	}
@@ -291,8 +294,9 @@ func registerMiscRoutes(mux *http.ServeMux, eng *engine.Engine, subMgr *subscrip
 		}
 
 		client := &http.Client{
-			Transport: transport,
-			Timeout:   15 * time.Second,
+			Transport:     transport,
+			Timeout:       15 * time.Second,
+			CheckRedirect: server.SafeCheckRedirect(false, 5),
 		}
 		defer client.CloseIdleConnections()
 
@@ -387,7 +391,11 @@ func registerMiscRoutes(mux *http.ServeMux, eng *engine.Engine, subMgr *subscrip
 				continue
 			}
 
-			client := &http.Client{Transport: transport, Timeout: 15 * time.Second}
+			client := &http.Client{
+				Transport:     transport,
+				Timeout:       15 * time.Second,
+				CheckRedirect: server.SafeCheckRedirect(false, 5),
+			}
 			start := time.Now()
 			probeReq, err := http.NewRequestWithContext(r.Context(), t.Method, t.URL, nil)
 			if err != nil {
