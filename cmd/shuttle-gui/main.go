@@ -135,6 +135,7 @@ func main() {
 
 	// Initialize subscription manager
 	subMgr := subscription.NewManager()
+	subMgr.SetAllowPrivateNetworks(cfg.AllowPrivateNetworks)
 	if len(cfg.Subscriptions) > 0 {
 		subMgr.LoadFromConfig(cfg.Subscriptions)
 	}

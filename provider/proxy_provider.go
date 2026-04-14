@@ -11,6 +11,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/shuttleX/shuttle/server"
 )
 
 // ProxyProviderConfig holds configuration for a ProxyProvider.
@@ -73,15 +75,10 @@ func NewProxyProvider(cfg ProxyProviderConfig) (*ProxyProvider, error) {
 		path:     cfg.Path,
 		interval: cfg.Interval,
 		filter:   filter,
-		client: &http.Client{
-			Timeout: 30 * time.Second,
-			CheckRedirect: func(req *http.Request, via []*http.Request) error {
-				if len(via) >= 5 {
-					return fmt.Errorf("too many redirects (max 5)")
-				}
-				return nil
-			},
-		},
+		client: server.NewSafeHTTPClient(server.SafeHTTPClientOptions{
+			Timeout:      30 * time.Second,
+			MaxRedirects: 5,
+		}),
 	}
 
 	// Load from cache if available

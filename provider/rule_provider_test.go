@@ -24,6 +24,7 @@ func TestRuleProvider_DomainBehavior(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewRuleProvider: %v", err)
 	}
+	allowLoopbackRule(p)
 
 	if err := p.Refresh(context.Background()); err != nil {
 		t.Fatalf("Refresh: %v", err)
@@ -69,6 +70,7 @@ func TestRuleProvider_IPCIDRBehavior(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewRuleProvider: %v", err)
 	}
+	allowLoopbackRule(p)
 
 	if err := p.Refresh(context.Background()); err != nil {
 		t.Fatalf("Refresh: %v", err)
@@ -113,6 +115,7 @@ func TestRuleProvider_ClassicalBehavior(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewRuleProvider: %v", err)
 	}
+	allowLoopbackRule(p)
 
 	if err := p.Refresh(context.Background()); err != nil {
 		t.Fatalf("Refresh: %v", err)
@@ -173,6 +176,7 @@ func TestRuleProvider_ClassicalBehavior_DomainExact(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewRuleProvider: %v", err)
 	}
+	allowLoopbackRule(p)
 	if err := p.Refresh(context.Background()); err != nil {
 		t.Fatalf("Refresh: %v", err)
 	}
@@ -202,6 +206,7 @@ func TestRuleProvider_ClassicalBehavior_IPv6CIDR(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewRuleProvider: %v", err)
 	}
+	allowLoopbackRule(p)
 	if err := p.Refresh(context.Background()); err != nil {
 		t.Fatalf("Refresh: %v", err)
 	}
@@ -271,6 +276,7 @@ func TestRuleProvider_Metadata(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewRuleProvider: %v", err)
 	}
+	allowLoopbackRule(p)
 
 	if p.Name() != "meta-test" {
 		t.Errorf("Name() = %q, want %q", p.Name(), "meta-test")
@@ -328,6 +334,7 @@ func TestRuleProvider_CommentsAndBlanks(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewRuleProvider: %v", err)
 	}
+	allowLoopbackRule(p)
 	if err := p.Refresh(context.Background()); err != nil {
 		t.Fatalf("Refresh: %v", err)
 	}
@@ -369,6 +376,7 @@ func TestRuleProvider_StartStop(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewRuleProvider: %v", err)
 	}
+	allowLoopbackRule(p)
 
 	ctx := context.Background()
 	p.Start(ctx)
