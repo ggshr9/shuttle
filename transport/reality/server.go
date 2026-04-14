@@ -20,6 +20,14 @@ import (
 	"golang.org/x/crypto/curve25519"
 )
 
+// noisePeerPub is the minimal Noise state interface needed by
+// detectAndHandlePQ/finishPQExchange for logging. Keeping this as an interface
+// instead of *shuttlecrypto.NoiseHandshake lets tests pass lightweight stubs
+// without running a real Noise handshake.
+type noisePeerPub interface {
+	PeerPublicKey() []byte
+}
+
 // ServerConfig holds configuration for a Reality server transport.
 type ServerConfig struct {
 	ListenAddr  string
@@ -218,7 +226,7 @@ func (s *Server) handleConn(ctx context.Context, raw net.Conn) {
 //
 // Returns the net.Conn that subsequent yamux setup should use, or an error
 // if the connection must be closed.
-func (s *Server) detectAndHandlePQ(raw net.Conn, hs *shuttlecrypto.NoiseHandshake) (net.Conn, error) {
+func (s *Server) detectAndHandlePQ(raw net.Conn, hs noisePeerPub) (net.Conn, error) {
 	raw.SetReadDeadline(time.Now().Add(5 * time.Second))
 
 	// Peek 3 bytes to distinguish yamux (classical client) from PQ frame.
@@ -260,7 +268,7 @@ func (s *Server) detectAndHandlePQ(raw net.Conn, hs *shuttlecrypto.NoiseHandshak
 // finishPQExchange completes the PQ handshake after detection has confirmed
 // the client is sending a PQ frame. peek contains the 3 already-read bytes
 // (2-byte length prefix + 1 byte of payload).
-func (s *Server) finishPQExchange(raw net.Conn, hs *shuttlecrypto.NoiseHandshake, peek []byte) (net.Conn, error) {
+func (s *Server) finishPQExchange(raw net.Conn, hs noisePeerPub, peek []byte) (net.Conn, error) {
 	defer raw.SetReadDeadline(time.Time{})
 
 	payloadLen := int(binary.BigEndian.Uint16(peek[:2]))
