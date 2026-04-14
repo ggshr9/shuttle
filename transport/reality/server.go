@@ -3,6 +3,7 @@ package reality
 import (
 	"context"
 	"crypto/tls"
+	"encoding/binary"
 	"encoding/hex"
 	"fmt"
 	"io"
@@ -219,16 +220,64 @@ func (s *Server) handleConn(ctx context.Context, raw net.Conn) {
 // if the connection must be closed.
 func (s *Server) detectAndHandlePQ(raw net.Conn, hs *shuttlecrypto.NoiseHandshake) (net.Conn, error) {
 	raw.SetReadDeadline(time.Now().Add(5 * time.Second))
+
+	// Peek 3 bytes to distinguish yamux (classical client) from PQ frame.
+	//
+	// Detection:
+	//   peek[0] == 0x00  → yamux v0 header (classical client). Replay peek
+	//                      into a peekConn and let yamux consume it.
+	//   peek[2] == 0x02  → PQ frame: peek[0:2] is the 2-byte big-endian
+	//                      length prefix, peek[2] is HandshakeVersionHybridPQ.
+	//                      Read the rest of the payload and run the exchange.
+	//   otherwise        → garbage. Close.
+	//
+	// The heuristic is unambiguous because the PQ payload is > 255 bytes
+	// (enforced by pqPayloadMinSize in pq_compat.go), so the length prefix's
+	// high byte is always non-zero for real PQ frames; and yamux v0 guarantees
+	// the first byte is 0x00 (yamux protocol version).
+	peek := make([]byte, 3)
+	if _, err := io.ReadFull(raw, peek); err != nil {
+		raw.SetReadDeadline(time.Time{})
+		return nil, fmt.Errorf("pq peek read: %w", err)
+	}
+
+	switch {
+	case peek[0] == 0x00:
+		raw.SetReadDeadline(time.Time{})
+		s.logger.Debug("reality pq-server accepting classical client",
+			"peer", fmt.Sprintf("%x", hs.PeerPublicKey()))
+		return &peekConn{Conn: raw, prefix: append([]byte(nil), peek...)}, nil
+
+	case peek[2] == shuttlecrypto.HandshakeVersionHybridPQ:
+		return s.finishPQExchange(raw, hs, peek)
+
+	default:
+		raw.SetReadDeadline(time.Time{})
+		return nil, fmt.Errorf("pq detect: unexpected prefix %x", peek)
+	}
+}
+
+// finishPQExchange completes the PQ handshake after detection has confirmed
+// the client is sending a PQ frame. peek contains the 3 already-read bytes
+// (2-byte length prefix + 1 byte of payload).
+func (s *Server) finishPQExchange(raw net.Conn, hs *shuttlecrypto.NoiseHandshake, peek []byte) (net.Conn, error) {
 	defer raw.SetReadDeadline(time.Time{})
 
-	pqFrame, err := readFrame(raw)
-	if err != nil {
-		return nil, fmt.Errorf("pq frame read: %w", err)
+	payloadLen := int(binary.BigEndian.Uint16(peek[:2]))
+	if payloadLen < 1 || payloadLen > 64*1024 {
+		return nil, fmt.Errorf("pq frame length out of range: %d", payloadLen)
+	}
+	// We have peek[2] as the first payload byte (version 0x02).
+	// Read the remaining payloadLen-1 bytes.
+	rest := make([]byte, payloadLen-1)
+	if _, err := io.ReadFull(raw, rest); err != nil {
+		return nil, fmt.Errorf("pq payload read: %w", err)
 	}
 
-	if len(pqFrame) == 0 || pqFrame[0] != shuttlecrypto.HandshakeVersionHybridPQ {
-		return nil, fmt.Errorf("pq enabled but client sent classical frame")
-	}
+	// Reconstruct full payload: [version byte, pqPubKey...].
+	pqFrame := make([]byte, 0, payloadLen)
+	pqFrame = append(pqFrame, peek[2])
+	pqFrame = append(pqFrame, rest...)
 
 	pqPubBytes := pqFrame[1:]
 	pq, err := shuttlecrypto.NewPQHandshake()
