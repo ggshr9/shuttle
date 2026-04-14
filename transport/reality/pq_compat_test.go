@@ -7,6 +7,8 @@ import (
 	"net"
 	"testing"
 	"time"
+
+	shuttlecrypto "github.com/shuttleX/shuttle/crypto"
 )
 
 // stubPeerPub satisfies the noisePeerPub interface for tests without
@@ -71,5 +73,96 @@ func TestDetectAndHandlePQ_ClassicalClient(t *testing.T) {
 	}
 	if !bytes.Equal(got, yamuxPrefix) {
 		t.Fatalf("replayed bytes mismatch: got %x want %x", got, yamuxPrefix)
+	}
+}
+
+func TestDetectAndHandlePQ_PQClient(t *testing.T) {
+	srv := newTestPQServer(t)
+	clientConn, serverConn := net.Pipe()
+	defer clientConn.Close()
+	defer serverConn.Close()
+
+	// Simulate a PQ client: generate a PQ handshake, send the framed
+	// pubkey, and expect ciphertext back.
+	clientPQ, err := shuttlecrypto.NewPQHandshake()
+	if err != nil {
+		t.Fatalf("client pq init: %v", err)
+	}
+
+	// Build the wire frame: [2-byte length BE][version byte 0x02][pqPub]
+	pqPub := clientPQ.PublicKeyBytes()
+	payload := make([]byte, 0, 1+len(pqPub))
+	payload = append(payload, shuttlecrypto.HandshakeVersionHybridPQ)
+	payload = append(payload, pqPub...)
+
+	frame := make([]byte, 2+len(payload))
+	frame[0] = byte(len(payload) >> 8)
+	frame[1] = byte(len(payload) & 0xff)
+	copy(frame[2:], payload)
+
+	// Write PQ frame in a goroutine so server-side read can proceed.
+	go func() {
+		clientConn.Write(frame)
+	}()
+
+	// Also prepare to read ciphertext (written by server) in another goroutine.
+	ctCh := make(chan []byte, 1)
+	errCh := make(chan error, 1)
+	go func() {
+		// Read the length-prefixed ciphertext frame.
+		header := make([]byte, 2)
+		if _, err := io.ReadFull(clientConn, header); err != nil {
+			errCh <- err
+			return
+		}
+		ctLen := int(header[0])<<8 | int(header[1])
+		ct := make([]byte, ctLen)
+		if _, err := io.ReadFull(clientConn, ct); err != nil {
+			errCh <- err
+			return
+		}
+		ctCh <- ct
+	}()
+
+	next, err := srv.detectAndHandlePQ(serverConn, stubPeerPub{})
+	if err != nil {
+		t.Fatalf("detectAndHandlePQ pq: %v", err)
+	}
+	if next == nil {
+		t.Fatal("expected wrapped conn, got nil")
+	}
+
+	// Fetch ciphertext from client side.
+	var ct []byte
+	select {
+	case ct = <-ctCh:
+	case e := <-errCh:
+		t.Fatalf("client read ciphertext: %v", e)
+	case <-time.After(2 * time.Second):
+		t.Fatal("timeout waiting for ciphertext")
+	}
+
+	clientSecret, err := clientPQ.Decapsulate(ct)
+	if err != nil {
+		t.Fatalf("client decap: %v", err)
+	}
+	clientWrapped, err := wrapConnWithPQ(clientConn, clientSecret)
+	if err != nil {
+		t.Fatalf("client wrapConnWithPQ: %v", err)
+	}
+
+	// Round-trip a short message through the AEAD tunnel.
+	msg := []byte("hello-pq")
+	go func() {
+		clientWrapped.Write(msg)
+	}()
+
+	got := make([]byte, len(msg))
+	next.SetReadDeadline(time.Now().Add(2 * time.Second))
+	if _, err := io.ReadFull(next, got); err != nil {
+		t.Fatalf("server read pq payload: %v", err)
+	}
+	if !bytes.Equal(got, msg) {
+		t.Fatalf("pq round trip: got %q want %q", got, msg)
 	}
 }
