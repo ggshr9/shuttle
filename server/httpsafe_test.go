@@ -27,14 +27,18 @@ func TestSafeDialContext_BlocksLiteralPrivate(t *testing.T) {
 
 func TestSafeDialContext_AllowPrivateBypass(t *testing.T) {
 	// With AllowPrivate=true, loopback should be attempted. We don't bind a
-	// listener, so we expect a connection-refused error, NOT ErrBlockedTarget.
+	// listener, so we expect a network-level dial error, NOT ErrBlockedTarget.
 	dial := SafeDialContext(true)
 	_, err := dial(context.Background(), "tcp", "127.0.0.1:1") // port 1 unlikely to be bound
 	if errors.Is(err, ErrBlockedTarget) {
-		t.Errorf("AllowPrivate should bypass SSRF check, got ErrBlockedTarget")
+		t.Fatalf("AllowPrivate should bypass SSRF check, got ErrBlockedTarget")
 	}
-	// err may be non-nil (connection refused) — that's fine.
-	_ = err
+	if err != nil {
+		// Acceptable: a network-level error (connection refused, unreachable, etc.).
+		// Unacceptable: any shape of error that doesn't originate from the dialer.
+		var opErr *net.OpError
+		if !errors.As(err, &opErr) {
+			t.Fatalf("AllowPrivate non-nil error should be *net.OpError, got %T: %v", err, err)
+		}
+	}
 }
-
-var _ = net.IPv4 // keep import
