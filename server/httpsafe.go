@@ -119,8 +119,14 @@ func SafeCheckRedirect(allowPrivate bool, maxRedirects int) func(req *http.Reque
 			}
 			return nil
 		}
-		if IsBlockedTarget(host) {
-			return fmt.Errorf("%w: redirect to %s", ErrBlockedTarget, host)
+		ips, err := lookupIPAddr(req.Context(), host)
+		if err != nil {
+			return fmt.Errorf("%w: resolve redirect target %q: %v", ErrBlockedTarget, host, err)
+		}
+		for _, ipa := range ips {
+			if isBlockedIP(ipa.IP) {
+				return fmt.Errorf("%w: redirect to %s (%s)", ErrBlockedTarget, host, ipa.IP.String())
+			}
 		}
 		return nil
 	}

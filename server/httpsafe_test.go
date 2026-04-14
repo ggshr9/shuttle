@@ -4,8 +4,61 @@ import (
 	"context"
 	"errors"
 	"net"
+	"net/http"
+	"net/url"
+	"strings"
 	"testing"
 )
+
+func mustParseURL(t *testing.T, raw string) *url.URL {
+	t.Helper()
+	u, err := url.Parse(raw)
+	if err != nil {
+		t.Fatalf("parse %q: %v", raw, err)
+	}
+	return u
+}
+
+func TestSafeCheckRedirect_RejectsPrivateLiteral(t *testing.T) {
+	check := SafeCheckRedirect(false, 5)
+	req := &http.Request{URL: mustParseURL(t, "http://169.254.169.254/meta-data")}
+	err := check(req, nil)
+	if !errors.Is(err, ErrBlockedTarget) {
+		t.Fatalf("expected ErrBlockedTarget, got %v", err)
+	}
+}
+
+func TestSafeCheckRedirect_RejectsHostnameResolvingToPrivate(t *testing.T) {
+	restore := setLookupIPAddr(func(ctx context.Context, host string) ([]net.IPAddr, error) {
+		return []net.IPAddr{{IP: net.ParseIP("127.0.0.1")}}, nil
+	})
+	defer restore()
+
+	check := SafeCheckRedirect(false, 5)
+	req := &http.Request{URL: mustParseURL(t, "http://rebind.test/")}
+	err := check(req, nil)
+	if !errors.Is(err, ErrBlockedTarget) {
+		t.Fatalf("expected ErrBlockedTarget for rebinding, got %v", err)
+	}
+}
+
+func TestSafeCheckRedirect_MaxRedirects(t *testing.T) {
+	check := SafeCheckRedirect(true, 3)
+	req := &http.Request{URL: mustParseURL(t, "http://127.0.0.1/")}
+	via := make([]*http.Request, 3)
+	err := check(req, via)
+	if err == nil || !strings.Contains(err.Error(), "too many redirects") {
+		t.Fatalf("expected too many redirects error, got %v", err)
+	}
+}
+
+func TestSafeCheckRedirect_AllowPrivateBypass(t *testing.T) {
+	check := SafeCheckRedirect(true, 5)
+	req := &http.Request{URL: mustParseURL(t, "http://127.0.0.1/")}
+	if err := check(req, nil); err != nil {
+		t.Fatalf("AllowPrivate should pass, got %v", err)
+	}
+}
 
 func TestSafeDialContext_BlocksLiteralLoopback(t *testing.T) {
 	dial := SafeDialContext(false)
