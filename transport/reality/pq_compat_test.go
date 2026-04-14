@@ -166,3 +166,20 @@ func TestDetectAndHandlePQ_PQClient(t *testing.T) {
 		t.Fatalf("pq round trip: got %q want %q", got, msg)
 	}
 }
+
+func TestDetectAndHandlePQ_GarbageRejected(t *testing.T) {
+	srv := newTestPQServer(t)
+	clientConn, serverConn := net.Pipe()
+	defer clientConn.Close()
+	defer serverConn.Close()
+
+	// Prefix that is neither yamux (peek[0]==0) nor PQ (peek[2]==0x02).
+	go func() {
+		clientConn.Write([]byte{0x04, 0xC1, 0xFF, 0x00, 0x00})
+	}()
+
+	_, err := srv.detectAndHandlePQ(serverConn, stubPeerPub{})
+	if err == nil {
+		t.Fatal("expected error for garbage prefix, got nil")
+	}
+}
