@@ -11,6 +11,7 @@ import (
 	urlpkg "net/url"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/shuttleX/shuttle/config"
@@ -31,7 +32,7 @@ type Subscription struct {
 type Manager struct {
 	mu            sync.RWMutex
 	subscriptions map[string]*Subscription
-	client        *http.Client
+	client        atomic.Pointer[http.Client]
 
 	// allowPrivateNetworks disables SSRF checks for private/loopback IPs.
 	// Access via SetAllowPrivateNetworks so the HTTP client is rebuilt.
@@ -47,7 +48,7 @@ func NewManager() *Manager {
 	m := &Manager{
 		subscriptions: make(map[string]*Subscription),
 	}
-	m.rebuildClient()
+	m.rebuildClient(false)
 	return m
 }
 
@@ -57,7 +58,7 @@ func (m *Manager) SetAllowPrivateNetworks(allow bool) {
 	m.mu.Lock()
 	m.allowPrivateNetworks = allow
 	m.mu.Unlock()
-	m.rebuildClient()
+	m.rebuildClient(allow)
 }
 
 // AllowPrivateNetworks reports whether SSRF checks are bypassed.
@@ -67,18 +68,13 @@ func (m *Manager) AllowPrivateNetworks() bool {
 	return m.allowPrivateNetworks
 }
 
-func (m *Manager) rebuildClient() {
-	m.mu.Lock()
-	allow := m.allowPrivateNetworks
-	m.mu.Unlock()
+func (m *Manager) rebuildClient(allow bool) {
 	c := server.NewSafeHTTPClient(server.SafeHTTPClientOptions{
 		Timeout:              30 * time.Second,
 		AllowPrivateNetworks: allow,
 		MaxRedirects:         5,
 	})
-	m.mu.Lock()
-	m.client = c
-	m.mu.Unlock()
+	m.client.Store(c)
 }
 
 // Add adds a new subscription.
@@ -205,7 +201,7 @@ func (m *Manager) fetch(ctx context.Context, url string) ([]config.ServerEndpoin
 
 	req.Header.Set("User-Agent", "Shuttle/1.0")
 
-	resp, err := m.client.Do(req)
+	resp, err := m.client.Load().Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("fetch: %w", err)
 	}
