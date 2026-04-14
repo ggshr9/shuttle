@@ -48,7 +48,7 @@ func NewHandler(cfg HandlerConfig) http.Handler {
 		// Inherit AllowPrivateNetworks from engine config (for sandbox testing)
 		if cfg.Engine != nil {
 			c := cfg.Engine.Config()
-			mgr.AllowPrivateNetworks = c.AllowPrivateNetworks
+			mgr.SetAllowPrivateNetworks(c.AllowPrivateNetworks)
 		}
 		cfg.SubMgr = mgr
 	}
