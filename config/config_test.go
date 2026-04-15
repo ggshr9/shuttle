@@ -553,6 +553,116 @@ func TestSaveServerConfig(t *testing.T) {
 	}
 }
 
+func TestValidate_DurationBounds(t *testing.T) {
+	cases := []struct {
+		name    string
+		setup   func(c *ClientConfig)
+		wantErr bool
+	}{
+		// short group
+		{"keepalive-timeout-valid", func(c *ClientConfig) { c.Transport.KeepaliveTimeout = "5s" }, false},
+		{"keepalive-timeout-too-small", func(c *ClientConfig) { c.Transport.KeepaliveTimeout = "1ns" }, true},
+		{"keepalive-timeout-too-large", func(c *ClientConfig) { c.Transport.KeepaliveTimeout = "99h" }, true},
+		{"probe-timeout-valid", func(c *ClientConfig) { c.Transport.ProbeTimeout = "5s" }, false},
+		{"probe-timeout-too-small", func(c *ClientConfig) { c.Transport.ProbeTimeout = "1ms" }, true},
+		// medium group
+		{"keepalive-interval-valid", func(c *ClientConfig) { c.Transport.KeepaliveInterval = "15s" }, false},
+		{"keepalive-interval-too-small", func(c *ClientConfig) { c.Transport.KeepaliveInterval = "1ns" }, true},
+		{"keepalive-interval-too-large", func(c *ClientConfig) { c.Transport.KeepaliveInterval = "99h" }, true},
+		{"retry-initial-backoff-valid", func(c *ClientConfig) { c.Retry.InitialBackoff = "1s" }, false},
+		{"retry-initial-backoff-too-small", func(c *ClientConfig) { c.Retry.InitialBackoff = "1ms" }, true},
+		{"retry-maxbackoff-at-1h", func(c *ClientConfig) { c.Retry.MaxBackoff = "1h" }, false},
+		{"retry-maxbackoff-above-1h", func(c *ClientConfig) { c.Retry.MaxBackoff = "2h" }, true},
+		{"hole-punch-timeout-valid", func(c *ClientConfig) { c.Mesh.P2P.HolePunchTimeout = "10s" }, false},
+		{"hole-punch-timeout-too-large", func(c *ClientConfig) { c.Mesh.P2P.HolePunchTimeout = "5m" }, true},
+		// long group
+		{"pool-idle-ttl-valid", func(c *ClientConfig) { c.Transport.PoolIdleTTL = "60s" }, false},
+		{"pool-idle-ttl-too-small", func(c *ClientConfig) { c.Transport.PoolIdleTTL = "1s" }, true},
+		{"pool-idle-ttl-too-large", func(c *ClientConfig) { c.Transport.PoolIdleTTL = "200h" }, true},
+		{"geodata-update-valid", func(c *ClientConfig) { c.Routing.GeoData.UpdateInterval = "24h" }, false},
+		{"geodata-update-too-small", func(c *ClientConfig) { c.Routing.GeoData.UpdateInterval = "100ms" }, true},
+		{"proxy-provider-interval-valid", func(c *ClientConfig) {
+			c.ProxyProviders = []ProxyProviderConfig{{Name: "x", URL: "http://a", Interval: "1h"}}
+		}, false},
+		{"proxy-provider-interval-too-small", func(c *ClientConfig) {
+			c.ProxyProviders = []ProxyProviderConfig{{Name: "x", URL: "http://a", Interval: "1s"}}
+		}, true},
+		{"rule-provider-interval-too-large", func(c *ClientConfig) {
+			c.RuleProviders = []RuleProviderConfig{{Name: "x", URL: "http://a", Interval: "9999h"}}
+		}, true},
+		// obfs group (0 allowed)
+		{"obfs-min-delay-zero-valid", func(c *ClientConfig) { c.Obfs.MinDelay = "0s" }, false},
+		{"obfs-min-delay-valid", func(c *ClientConfig) {
+			c.Obfs.MinDelay = "100ms"
+			c.Obfs.MaxDelay = "200ms"
+		}, false},
+		{"obfs-min-delay-too-large", func(c *ClientConfig) { c.Obfs.MinDelay = "10s" }, true},
+		{"obfs-max-delay-too-large", func(c *ClientConfig) { c.Obfs.MaxDelay = "1m" }, true},
+		{"obfs-min-greater-than-max", func(c *ClientConfig) {
+			c.Obfs.MinDelay = "3s"
+			c.Obfs.MaxDelay = "1s"
+		}, true},
+		{"proxy-provider-healthcheck-interval-too-small", func(c *ClientConfig) {
+			c.ProxyProviders = []ProxyProviderConfig{{
+				Name: "x", URL: "http://a",
+				HealthCheck: &HealthCheckConfig{Interval: "1ns"},
+			}}
+		}, true},
+		{"proxy-provider-healthcheck-timeout-too-large", func(c *ClientConfig) {
+			c.ProxyProviders = []ProxyProviderConfig{{
+				Name: "x", URL: "http://a",
+				HealthCheck: &HealthCheckConfig{Timeout: "5m"},
+			}}
+		}, true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			c := DefaultClientConfig()
+			c.Transport.Reality.Enabled = false
+			c.Transport.WebRTC.Enabled = false
+			tc.setup(c)
+			err := c.Validate()
+			if (err != nil) != tc.wantErr {
+				t.Errorf("Validate: err=%v wantErr=%v", err, tc.wantErr)
+			}
+		})
+	}
+}
+
+func TestValidate_ServerDurationBounds(t *testing.T) {
+	cases := []struct {
+		name    string
+		setup   func(c *ServerConfig)
+		wantErr bool
+	}{
+		{"drain-timeout-valid", func(c *ServerConfig) { c.DrainTimeout = "30s" }, false},
+		{"drain-timeout-too-small", func(c *ServerConfig) { c.DrainTimeout = "1ns" }, true},
+		{"drain-timeout-too-large", func(c *ServerConfig) { c.DrainTimeout = "5m" }, true},
+		{"cluster-interval-valid", func(c *ServerConfig) {
+			c.Cluster.Enabled = true
+			c.Cluster.NodeName = "n"
+			c.Cluster.Secret = "s"
+			c.Cluster.Interval = "30s"
+		}, false},
+		{"cluster-interval-too-small", func(c *ServerConfig) {
+			c.Cluster.Enabled = true
+			c.Cluster.NodeName = "n"
+			c.Cluster.Secret = "s"
+			c.Cluster.Interval = "1ms"
+		}, true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			c := DefaultServerConfig()
+			tc.setup(c)
+			err := c.Validate()
+			if (err != nil) != tc.wantErr {
+				t.Errorf("Validate: err=%v wantErr=%v", err, tc.wantErr)
+			}
+		})
+	}
+}
+
 func TestConfigVersionConstants(t *testing.T) {
 	if CurrentClientConfigVersion != 1 {
 		t.Fatalf("CurrentClientConfigVersion = %d", CurrentClientConfigVersion)
