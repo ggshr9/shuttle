@@ -36,6 +36,20 @@ func validateDuration(s, field string) error {
 	return nil
 }
 
+// validateBoundedDuration parses s as a Go duration and rejects values
+// outside [minD, maxD] (inclusive). field is the config path used in the
+// error message.
+func validateBoundedDuration(s, field string, minD, maxD time.Duration) error {
+	d, err := time.ParseDuration(s)
+	if err != nil {
+		return fmt.Errorf("invalid %s: %w", field, err)
+	}
+	if d < minD || d > maxD {
+		return fmt.Errorf("invalid %s: %s is out of range [%s, %s]", field, d, minD, maxD)
+	}
+	return nil
+}
+
 // validateCIDR checks that s is a valid CIDR notation.
 func validateCIDR(s, field string) error {
 	if _, _, err := net.ParseCIDR(s); err != nil {
@@ -72,12 +86,12 @@ func (c *ClientConfig) Validate() error {
 		return fmt.Errorf("invalid congestion.mode: %q", c.Congestion.Mode)
 	}
 	if c.Obfs.MaxDelay != "" {
-		if _, err := time.ParseDuration(c.Obfs.MaxDelay); err != nil {
-			return fmt.Errorf("invalid obfs.max_delay: %w", err)
+		if err := validateBoundedDuration(c.Obfs.MaxDelay, "obfs.max_delay", 0, 5*time.Second); err != nil {
+			return err
 		}
 	}
 	if c.Obfs.MinDelay != "" {
-		if err := validateDuration(c.Obfs.MinDelay, "obfs.min_delay"); err != nil {
+		if err := validateBoundedDuration(c.Obfs.MinDelay, "obfs.min_delay", 0, 5*time.Second); err != nil {
 			return err
 		}
 	}
@@ -103,29 +117,39 @@ func (c *ClientConfig) Validate() error {
 
 	// Transport duration validations
 	if c.Transport.PoolIdleTTL != "" {
-		if err := validateDuration(c.Transport.PoolIdleTTL, "transport.pool_idle_ttl"); err != nil {
+		if err := validateBoundedDuration(c.Transport.PoolIdleTTL, "transport.pool_idle_ttl", 10*time.Second, 168*time.Hour); err != nil {
 			return err
 		}
 	}
 	if c.Transport.KeepaliveInterval != "" {
-		if err := validateDuration(c.Transport.KeepaliveInterval, "transport.keepalive_interval"); err != nil {
+		if err := validateBoundedDuration(c.Transport.KeepaliveInterval, "transport.keepalive_interval", 1*time.Second, 10*time.Minute); err != nil {
 			return err
 		}
 	}
 	if c.Transport.KeepaliveTimeout != "" {
-		if err := validateDuration(c.Transport.KeepaliveTimeout, "transport.keepalive_timeout"); err != nil {
+		if err := validateBoundedDuration(c.Transport.KeepaliveTimeout, "transport.keepalive_timeout", 100*time.Millisecond, 60*time.Second); err != nil {
 			return err
 		}
 	}
 	if c.Transport.MigrationProbeTimeout != "" {
-		if err := validateDuration(c.Transport.MigrationProbeTimeout, "transport.migration_probe_timeout"); err != nil {
+		if err := validateBoundedDuration(c.Transport.MigrationProbeTimeout, "transport.migration_probe_timeout", 100*time.Millisecond, 60*time.Second); err != nil {
+			return err
+		}
+	}
+	if c.Transport.ProbeTimeout != "" {
+		if err := validateBoundedDuration(c.Transport.ProbeTimeout, "transport.probe_timeout", 100*time.Millisecond, 60*time.Second); err != nil {
+			return err
+		}
+	}
+	if c.Transport.HealthCheckInterval != "" {
+		if err := validateBoundedDuration(c.Transport.HealthCheckInterval, "transport.health_check_interval", 1*time.Second, 10*time.Minute); err != nil {
 			return err
 		}
 	}
 
 	// Multipath probe interval validation
 	if c.Transport.H3.Multipath.ProbeInterval != "" {
-		if err := validateDuration(c.Transport.H3.Multipath.ProbeInterval, "transport.h3.multipath.probe_interval"); err != nil {
+		if err := validateBoundedDuration(c.Transport.H3.Multipath.ProbeInterval, "transport.h3.multipath.probe_interval", 1*time.Second, 10*time.Minute); err != nil {
 			return err
 		}
 	}
@@ -135,13 +159,46 @@ func (c *ClientConfig) Validate() error {
 		return fmt.Errorf("retry.max_attempts must be >= 0")
 	}
 	if c.Retry.InitialBackoff != "" {
-		if err := validateDuration(c.Retry.InitialBackoff, "retry.initial_backoff"); err != nil {
+		if err := validateBoundedDuration(c.Retry.InitialBackoff, "retry.initial_backoff", 1*time.Second, 10*time.Minute); err != nil {
 			return err
 		}
 	}
 	if c.Retry.MaxBackoff != "" {
-		if err := validateDuration(c.Retry.MaxBackoff, "retry.max_backoff"); err != nil {
+		if err := validateBoundedDuration(c.Retry.MaxBackoff, "retry.max_backoff", 1*time.Second, 10*time.Minute); err != nil {
 			return err
+		}
+	}
+
+	// Mesh P2P duration validations
+	if c.Mesh.P2P.HolePunchTimeout != "" {
+		if err := validateBoundedDuration(c.Mesh.P2P.HolePunchTimeout, "mesh.p2p.hole_punch_timeout", 100*time.Millisecond, 60*time.Second); err != nil {
+			return err
+		}
+	}
+	if c.Mesh.P2P.DirectRetryInterval != "" {
+		if err := validateBoundedDuration(c.Mesh.P2P.DirectRetryInterval, "mesh.p2p.direct_retry_interval", 1*time.Second, 10*time.Minute); err != nil {
+			return err
+		}
+	}
+	if c.Mesh.P2P.KeepAliveInterval != "" {
+		if err := validateBoundedDuration(c.Mesh.P2P.KeepAliveInterval, "mesh.p2p.keep_alive_interval", 1*time.Second, 10*time.Minute); err != nil {
+			return err
+		}
+	}
+
+	// Proxy and Rule providers interval validation
+	for i, pp := range c.ProxyProviders {
+		if pp.Interval != "" {
+			if err := validateBoundedDuration(pp.Interval, fmt.Sprintf("proxy_providers[%d].interval", i), 10*time.Second, 168*time.Hour); err != nil {
+				return err
+			}
+		}
+	}
+	for i, rp := range c.RuleProviders {
+		if rp.Interval != "" {
+			if err := validateBoundedDuration(rp.Interval, fmt.Sprintf("rule_providers[%d].interval", i), 10*time.Second, 168*time.Hour); err != nil {
+				return err
+			}
 		}
 	}
 
@@ -179,7 +236,7 @@ func (c *ClientConfig) Validate() error {
 
 	// Routing.GeoData.UpdateInterval validation
 	if c.Routing.GeoData.UpdateInterval != "" {
-		if err := validateDuration(c.Routing.GeoData.UpdateInterval, "routing.geodata.update_interval"); err != nil {
+		if err := validateBoundedDuration(c.Routing.GeoData.UpdateInterval, "routing.geodata.update_interval", 10*time.Second, 168*time.Hour); err != nil {
 			return err
 		}
 	}
@@ -383,9 +440,16 @@ func (c *ServerConfig) Validate() error {
 			}
 		}
 		if c.Cluster.Interval != "" {
-			if _, err := time.ParseDuration(c.Cluster.Interval); err != nil {
-				return fmt.Errorf("invalid cluster.interval: %w", err)
+			if err := validateBoundedDuration(c.Cluster.Interval, "cluster.interval", 1*time.Second, 10*time.Minute); err != nil {
+				return err
 			}
+		}
+	}
+
+	// DrainTimeout validation
+	if c.DrainTimeout != "" {
+		if err := validateBoundedDuration(c.DrainTimeout, "drain_timeout", 100*time.Millisecond, 60*time.Second); err != nil {
+			return err
 		}
 	}
 	return nil
