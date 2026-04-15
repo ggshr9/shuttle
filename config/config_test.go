@@ -571,7 +571,8 @@ func TestValidate_DurationBounds(t *testing.T) {
 		{"keepalive-interval-too-large", func(c *ClientConfig) { c.Transport.KeepaliveInterval = "99h" }, true},
 		{"retry-initial-backoff-valid", func(c *ClientConfig) { c.Retry.InitialBackoff = "1s" }, false},
 		{"retry-initial-backoff-too-small", func(c *ClientConfig) { c.Retry.InitialBackoff = "1ms" }, true},
-		{"retry-max-backoff-too-large", func(c *ClientConfig) { c.Retry.MaxBackoff = "1h" }, true},
+		{"retry-maxbackoff-at-1h", func(c *ClientConfig) { c.Retry.MaxBackoff = "1h" }, false},
+		{"retry-maxbackoff-above-1h", func(c *ClientConfig) { c.Retry.MaxBackoff = "2h" }, true},
 		{"hole-punch-timeout-valid", func(c *ClientConfig) { c.Mesh.P2P.HolePunchTimeout = "10s" }, false},
 		{"hole-punch-timeout-too-large", func(c *ClientConfig) { c.Mesh.P2P.HolePunchTimeout = "5m" }, true},
 		// long group
@@ -591,9 +592,28 @@ func TestValidate_DurationBounds(t *testing.T) {
 		}, true},
 		// obfs group (0 allowed)
 		{"obfs-min-delay-zero-valid", func(c *ClientConfig) { c.Obfs.MinDelay = "0s" }, false},
-		{"obfs-min-delay-valid", func(c *ClientConfig) { c.Obfs.MinDelay = "100ms" }, false},
+		{"obfs-min-delay-valid", func(c *ClientConfig) {
+			c.Obfs.MinDelay = "100ms"
+			c.Obfs.MaxDelay = "200ms"
+		}, false},
 		{"obfs-min-delay-too-large", func(c *ClientConfig) { c.Obfs.MinDelay = "10s" }, true},
 		{"obfs-max-delay-too-large", func(c *ClientConfig) { c.Obfs.MaxDelay = "1m" }, true},
+		{"obfs-min-greater-than-max", func(c *ClientConfig) {
+			c.Obfs.MinDelay = "3s"
+			c.Obfs.MaxDelay = "1s"
+		}, true},
+		{"proxy-provider-healthcheck-interval-too-small", func(c *ClientConfig) {
+			c.ProxyProviders = []ProxyProviderConfig{{
+				Name: "x", URL: "http://a",
+				HealthCheck: &HealthCheckConfig{Interval: "1ns"},
+			}}
+		}, true},
+		{"proxy-provider-healthcheck-timeout-too-large", func(c *ClientConfig) {
+			c.ProxyProviders = []ProxyProviderConfig{{
+				Name: "x", URL: "http://a",
+				HealthCheck: &HealthCheckConfig{Timeout: "5m"},
+			}}
+		}, true},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
