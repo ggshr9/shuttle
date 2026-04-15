@@ -28,7 +28,9 @@ func validateURL(s, field string) error {
 	return nil
 }
 
-// validateDuration checks that s is a valid Go duration string.
+// validateDuration performs parse-only validation of a duration string.
+// Retained as a building block for potential future callers; current
+// validate paths use validateBoundedDuration for range-checked fields.
 func validateDuration(s, field string) error {
 	if _, err := time.ParseDuration(s); err != nil {
 		return fmt.Errorf("invalid %s: %w", field, err)
@@ -93,6 +95,13 @@ func (c *ClientConfig) Validate() error {
 	if c.Obfs.MinDelay != "" {
 		if err := validateBoundedDuration(c.Obfs.MinDelay, "obfs.min_delay", 0, 5*time.Second); err != nil {
 			return err
+		}
+	}
+	if c.Obfs.MinDelay != "" && c.Obfs.MaxDelay != "" {
+		minD, _ := time.ParseDuration(c.Obfs.MinDelay)
+		maxD, _ := time.ParseDuration(c.Obfs.MaxDelay)
+		if minD > maxD {
+			return fmt.Errorf("invalid obfs: min_delay (%s) must not exceed max_delay (%s)", minD, maxD)
 		}
 	}
 	for _, sr := range c.Mesh.SplitRoutes {
@@ -164,7 +173,7 @@ func (c *ClientConfig) Validate() error {
 		}
 	}
 	if c.Retry.MaxBackoff != "" {
-		if err := validateBoundedDuration(c.Retry.MaxBackoff, "retry.max_backoff", 1*time.Second, 10*time.Minute); err != nil {
+		if err := validateBoundedDuration(c.Retry.MaxBackoff, "retry.max_backoff", 1*time.Second, 1*time.Hour); err != nil {
 			return err
 		}
 	}
@@ -191,6 +200,22 @@ func (c *ClientConfig) Validate() error {
 		if pp.Interval != "" {
 			if err := validateBoundedDuration(pp.Interval, fmt.Sprintf("proxy_providers[%d].interval", i), 10*time.Second, 168*time.Hour); err != nil {
 				return err
+			}
+		}
+		if pp.HealthCheck != nil {
+			if pp.HealthCheck.Interval != "" {
+				if err := validateBoundedDuration(pp.HealthCheck.Interval,
+					fmt.Sprintf("proxy_providers[%d].health_check.interval", i),
+					1*time.Second, 10*time.Minute); err != nil {
+					return err
+				}
+			}
+			if pp.HealthCheck.Timeout != "" {
+				if err := validateBoundedDuration(pp.HealthCheck.Timeout,
+					fmt.Sprintf("proxy_providers[%d].health_check.timeout", i),
+					100*time.Millisecond, 60*time.Second); err != nil {
+					return err
+				}
 			}
 		}
 	}
