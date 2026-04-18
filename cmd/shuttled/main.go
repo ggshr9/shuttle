@@ -7,15 +7,18 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 	"time"
 
 	"github.com/shuttleX/shuttle/config"
 	"github.com/shuttleX/shuttle/crypto"
 	"github.com/shuttleX/shuttle/internal/logutil"
+	"github.com/shuttleX/shuttle/internal/paths"
 	"github.com/shuttleX/shuttle/internal/qrterm"
 	"github.com/shuttleX/shuttle/internal/sysopt"
 	"github.com/shuttleX/shuttle/server"
+	"github.com/shuttleX/shuttle/service"
 	"github.com/shuttleX/shuttle/update"
 )
 
@@ -98,16 +101,30 @@ func main() {
 			*configPath = result.ConfigPath
 		}
 		if *daemon {
-			installAndStartService(*configPath)
+			if *configPath == "" {
+				fmt.Fprintf(os.Stderr, "Daemon mode (-d) requires a config.\n")
+				fmt.Fprintf(os.Stderr, "Use -p <password> to auto-init, or -c <path> to point at an existing file.\n")
+				os.Exit(1)
+			}
+			if _, err := os.Stat(*configPath); err != nil {
+				fmt.Fprintf(os.Stderr, "Config not found at %s: %v\n", *configPath, err)
+				os.Exit(1)
+			}
+			installAndStart(*configPath)
 			return
 		}
 		run(*configPath)
 	case "stop":
-		stopService()
+		mustServiceCall(func(m service.Manager) error { return m.Stop() })
+		fmt.Println("Shuttle server stopped.")
+	case "restart":
+		mustServiceCall(func(m service.Manager) error { return m.Restart() })
+		fmt.Println("Shuttle server restarted.")
 	case "status":
-		serviceStatus()
+		printStatus()
 	case "uninstall":
-		uninstallService()
+		mustServiceCall(func(m service.Manager) error { return m.Uninstall(false) })
+		fmt.Println("Shuttle server service removed.")
 	case "completion":
 		if len(os.Args) < 3 {
 			fmt.Fprintf(os.Stderr, "Usage: shuttled completion <bash|zsh|fish>\n")
@@ -477,4 +494,69 @@ func run(configPath string) {
 		logger.Warn("received second signal, forcing immediate exit", "signal", sig)
 		os.Exit(1)
 	}()
+}
+
+// installAndStart installs a system-scope shuttled systemd service and starts it.
+func installAndStart(configPath string) {
+	bin, _ := os.Executable()
+	if resolved, err := filepath.EvalSymlinks(bin); err == nil {
+		bin = resolved
+	}
+	configPath, _ = filepath.Abs(configPath)
+
+	mgr, err := service.New("shuttled", service.ScopeSystem)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "service: %v\n", err)
+		os.Exit(1)
+	}
+	cfg := service.Config{
+		Name:        "shuttled",
+		DisplayName: "Shuttle Server",
+		Description: "Shuttle Server",
+		BinaryPath:  bin,
+		Args:        []string{"run", "-c", configPath},
+		Scope:       service.ScopeSystem,
+		Restart:     true,
+		RestartSec:  5,
+		LimitNOFILE: 65535,
+		LogDir:      paths.Resolve(paths.ScopeSystem).LogDir,
+	}
+	if err := mgr.Install(cfg); err != nil {
+		fmt.Fprintf(os.Stderr, "install: %v\n", err)
+		os.Exit(1)
+	}
+	if err := mgr.Start(); err != nil {
+		fmt.Fprintf(os.Stderr, "start: %v\n", err)
+		os.Exit(1)
+	}
+	fmt.Println("Shuttle server installed and started.")
+	fmt.Printf("  Config:  %s\n", configPath)
+	fmt.Printf("  Logs:    %s logs -f\n", filepath.Base(bin))
+	fmt.Printf("  Stop:    %s stop\n", filepath.Base(bin))
+}
+
+func mustServiceCall(fn func(service.Manager) error) {
+	mgr, err := service.New("shuttled", service.ScopeSystem)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "service: %v\n", err)
+		os.Exit(1)
+	}
+	if err := fn(mgr); err != nil {
+		fmt.Fprintf(os.Stderr, "%v\n", err)
+		os.Exit(1)
+	}
+}
+
+func printStatus() {
+	mgr, err := service.New("shuttled", service.ScopeSystem)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "service: %v\n", err)
+		os.Exit(1)
+	}
+	s, err := mgr.Status()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "%v\n", err)
+		os.Exit(1)
+	}
+	fmt.Println(s)
 }
