@@ -75,6 +75,18 @@ handles both tiers automatically and manages Docker lifecycle.
 
 **Mesh VPN** (`mesh/`): Hub-and-spoke relay, P2P NAT traversal via STUN/hole-punching.
 
+### Service Management
+- `service/` — cross-platform service manager (systemd / launchd / Windows SCM) via per-OS build-tag files (`service_linux.go`, `service_darwin.go`, `service_windows.go`, `service_unsupported.go`). Follows the same pattern as `autostart/`.
+- `internal/paths/` — per-OS config/log directory resolution (XDG on Linux, Library on macOS, ProgramData/AppData on Windows).
+- `internal/servicecli/` — shared subcommand handlers for both `shuttle` and `shuttled` (Install/Uninstall/Start/Stop/Restart/Status/Logs/Token).
+- CLI verbs (both binaries): `install | uninstall | start | stop | restart | status | logs | token`.
+- Default scopes: `shuttled` = system, `shuttle` = user.
+- Windows binaries detect SCM launch via `svc.IsWindowsService()` in `servicePreflight()` called at the top of `main()`.
+- **Web UI flag `--ui ADDR` semantics:**
+  - `shuttle` → writes `cfg.UI.{Listen, Token}`; `startUIServer` mounts `gui/api.NewHandler` on the address.
+  - `shuttled` → writes `cfg.Admin.{Enabled=true, Listen, Token}`; existing `server/admin` handler picks up automatically via `server.go`.
+- `<binary> token -c <config>` prints the current bearer token.
+
 ### Data Flow
 1. Client app connects via SOCKS5/HTTP/TUN
 2. Router determines proxy vs direct based on GeoIP/GeoSite rules
