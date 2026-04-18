@@ -30,6 +30,7 @@ type ClientConfig struct {
 	Obfs          ObfsConfig           `yaml:"obfs" json:"obfs"`
 	Yamux         YamuxConfig          `yaml:"yamux" json:"yamux"`
 	Log           LogConfig            `yaml:"log" json:"log"`
+	UI            UIConfig             `yaml:"ui,omitempty" json:"ui,omitempty"`
 	Inbounds       []InboundConfig       `yaml:"inbounds,omitempty" json:"inbounds,omitempty"`
 	Outbounds      []OutboundConfig      `yaml:"outbounds,omitempty" json:"outbounds,omitempty"`
 	ProxyProviders []ProxyProviderConfig `yaml:"proxy_providers,omitempty" json:"proxy_providers,omitempty"`
@@ -66,6 +67,12 @@ type LogConfig struct {
 	Level  string `yaml:"level" json:"level"`   // "debug", "info", "warn", "error"
 	Format string `yaml:"format" json:"format"` // "text" (default) or "json"
 	Output string `yaml:"output" json:"output"` // "stdout", "stderr", or file path
+}
+
+// UIConfig configures the embedded Web management UI.
+type UIConfig struct {
+	Listen string `yaml:"listen,omitempty" json:"listen,omitempty"` // e.g. ":9090"
+	Token  string `yaml:"token,omitempty" json:"token,omitempty"`   // 64-hex bearer
 }
 
 // LoadClientConfig loads client config from a YAML file.
