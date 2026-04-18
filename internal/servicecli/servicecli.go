@@ -41,7 +41,10 @@ func Install(opts Options, args []string) {
 
 	mgr := mustManager(opts.Name, scope)
 	svcArgs := []string{"run", "-c", abs}
-	if *ui != "" {
+	// For shuttled, ensureUIToken already writes Admin.{Enabled,Listen,Token}
+	// into the config file, so the service reads it automatically at startup.
+	// Only shuttle's run subcommand accepts --ui; shuttled's does not.
+	if *ui != "" && opts.Name != "shuttled" {
 		svcArgs = append(svcArgs, "--ui", *ui)
 	}
 
