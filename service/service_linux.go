@@ -46,13 +46,14 @@ func (m *linuxManager) Install(cfg Config) error {
 	if _, err := os.Stat(m.unitPath()); err == nil {
 		fmt.Fprintln(os.Stderr, "Detected existing unit; reinstalling...")
 		_, _ = m.systemctl("stop", m.name)
-		if out, err := m.systemctl("disable", m.name); err != nil {
-			return fmt.Errorf("disable existing: %s", string(out))
-		}
+		_, _ = m.systemctl("disable", m.name)
 		_ = os.Remove(m.unitPath())
 	}
 	if err := os.MkdirAll(filepath.Dir(m.unitPath()), 0755); err != nil {
-		return err
+		if os.IsPermission(err) {
+			return ErrPermission
+		}
+		return fmt.Errorf("mkdir %s: %w", filepath.Dir(m.unitPath()), err)
 	}
 	unit := renderSystemdUnit(cfg, m.scope)
 	if err := os.WriteFile(m.unitPath(), []byte(unit), 0644); err != nil {
@@ -123,7 +124,7 @@ func (m *linuxManager) Status() (Status, error) {
 }
 
 func (m *linuxManager) Logs(follow bool) error {
-	args := []string{}
+	args := []string{"--no-pager"}
 	if m.scope == ScopeUser {
 		args = append(args, "--user")
 	}
