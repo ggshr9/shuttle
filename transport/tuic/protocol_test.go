@@ -36,10 +36,8 @@ func TestParseUUID(t *testing.T) {
 			if got != tc.want {
 				t.Errorf("ParseUUID(%q): got %x, want %x", tc.input, got, tc.want)
 			}
-		} else {
-			if err == nil {
-				t.Errorf("ParseUUID(%q): expected error", tc.input)
-			}
+		} else if err == nil {
+			t.Errorf("ParseUUID(%q): expected error", tc.input)
 		}
 	}
 }

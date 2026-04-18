@@ -179,8 +179,8 @@ func (e *Engine) buildRouter(cfg *config.ClientConfig, ruleProviders map[string]
 		})
 	}
 
-	for _, rule := range cfg.Routing.Rules {
-		routerCfg.Rules = append(routerCfg.Rules, router.ConfigRuleToRouterRule(rule))
+	for i := range cfg.Routing.Rules {
+		routerCfg.Rules = append(routerCfg.Rules, router.ConfigRuleToRouterRule(cfg.Routing.Rules[i]))
 	}
 	e.logger.Debug("router built", "rules", len(routerCfg.Rules), "default_action", routerCfg.DefaultAction, "dns_prefetch", cfg.Routing.DNS.Prefetch)
 	rt := router.NewRouter(routerCfg, geoIPDB, geoSiteDB, e.logger)

@@ -57,7 +57,7 @@ func TestDialerFactory_ShadowsocksCipherNormalized(t *testing.T) {
 		Password: "test",
 		Options:  map[string]any{"cipher": "aes-256-gcm"},
 	}
-	raw := buildAdapterOptions(ep, "shadowsocks")
+	raw := buildAdapterOptions(&ep, "shadowsocks")
 
 	var got map[string]any
 	require.NoError(t, json.Unmarshal(raw, &got))
@@ -68,7 +68,7 @@ func TestDialerFactory_ShadowsocksCipherNormalized(t *testing.T) {
 	dialer, err := factory.NewDialer(got, adapter.FactoryOptions{})
 	require.NoError(t, err)
 	require.NotNil(t, dialer)
-	defer dialer.Close()
+	dialer.Close()
 }
 
 // TestDialerFactory_VLESSFromSubscriptionOptions verifies that the VLESS factory
@@ -114,7 +114,7 @@ func TestDialerFactory_VLESSPasswordNormalized(t *testing.T) {
 		Password: "550e8400-e29b-41d4-a716-446655440000",
 		SNI:      "example.com",
 	}
-	raw := buildAdapterOptions(ep, "vless")
+	raw := buildAdapterOptions(&ep, "vless")
 
 	var got map[string]any
 	require.NoError(t, json.Unmarshal(raw, &got))
@@ -125,7 +125,7 @@ func TestDialerFactory_VLESSPasswordNormalized(t *testing.T) {
 	dialer, err := factory.NewDialer(got, adapter.FactoryOptions{})
 	require.NoError(t, err)
 	require.NotNil(t, dialer)
-	defer dialer.Close()
+	dialer.Close()
 }
 
 // TestDialerFactory_TrojanFromSubscriptionOptions verifies that the Trojan factory

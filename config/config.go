@@ -183,27 +183,28 @@ func SaveServerConfig(path string, cfg *ServerConfig) error {
 
 // deepCopyServerEndpoint returns an independent copy of a ServerEndpoint,
 // including a fresh copy of the Options map.
-func deepCopyServerEndpoint(ep ServerEndpoint) ServerEndpoint {
+func deepCopyServerEndpoint(ep *ServerEndpoint) ServerEndpoint {
+	cp := *ep
 	if ep.Options != nil {
 		opts := make(map[string]any, len(ep.Options))
 		for k, v := range ep.Options {
 			opts[k] = v
 		}
-		ep.Options = opts
+		cp.Options = opts
 	}
-	return ep
+	return cp
 }
 
 // DeepCopy returns a fully independent copy of the config.
 func (c *ClientConfig) DeepCopy() *ClientConfig {
 	cp := *c
 	// Deep-copy the singular Server's Options map.
-	cp.Server = deepCopyServerEndpoint(c.Server)
+	cp.Server = deepCopyServerEndpoint(&c.Server)
 	// Copy slices that contain reference types
 	if c.Servers != nil {
 		cp.Servers = make([]ServerEndpoint, len(c.Servers))
-		for i, ep := range c.Servers {
-			cp.Servers[i] = deepCopyServerEndpoint(ep)
+		for i := range c.Servers {
+			cp.Servers[i] = deepCopyServerEndpoint(&c.Servers[i])
 		}
 	}
 	if c.Subscriptions != nil {

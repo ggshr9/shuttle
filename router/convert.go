@@ -4,7 +4,7 @@ import "github.com/shuttleX/shuttle/config"
 
 // ConfigRuleToRouterRule converts a config.RouteRule to a router.Rule.
 // This is the single authoritative conversion used by engine setup and GUI API handlers.
-func ConfigRuleToRouterRule(rule config.RouteRule) Rule {
+func ConfigRuleToRouterRule(rule config.RouteRule) Rule { //nolint:gocritic // hugeParam: exported API, callers pass by value
 	r := Rule{
 		Action:      Action(rule.Action),
 		NetworkType: rule.NetworkType,

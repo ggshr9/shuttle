@@ -211,8 +211,8 @@ func registerRoutingRoutes(mux *http.ServeMux, eng *engine.Engine) {
 			routerCfg := &router.RouterConfig{
 				DefaultAction: router.Action(cfg.Routing.Default),
 			}
-			for _, rule := range cfg.Routing.Rules {
-				routerCfg.Rules = append(routerCfg.Rules, router.ConfigRuleToRouterRule(rule))
+			for i := range cfg.Routing.Rules {
+				routerCfg.Rules = append(routerCfg.Rules, router.ConfigRuleToRouterRule(cfg.Routing.Rules[i]))
 			}
 			rt = router.NewRouter(routerCfg, nil, nil, nil)
 		}
@@ -226,8 +226,8 @@ func registerRoutingRoutes(mux *http.ServeMux, eng *engine.Engine) {
 
 		// Convert config rules to router rules
 		var rules []router.Rule
-		for _, rule := range cfg.Routing.Rules {
-			rules = append(rules, router.ConfigRuleToRouterRule(rule))
+		for i := range cfg.Routing.Rules {
+			rules = append(rules, router.ConfigRuleToRouterRule(cfg.Routing.Rules[i]))
 		}
 
 		// Use the engine's GeoSite DB if available

@@ -61,7 +61,7 @@ func ToOutboundConfigs(servers []config.ServerEndpoint) []config.OutboundConfig 
 
 		if adapterType, known := clashTypeToAdapterType[s.Type]; known {
 			outboundType = adapterType
-			opts = buildAdapterOptions(s, adapterType)
+			opts = buildAdapterOptions(&s, adapterType)
 		} else {
 			outboundType = "proxy"
 			raw, _ := json.Marshal(map[string]string{"server": s.Addr})
@@ -86,7 +86,7 @@ func ToOutboundConfigs(servers []config.ServerEndpoint) []config.OutboundConfig 
 // to the keys expected by each transport factory:
 //   - vless/vmess: Password is written as "uuid" (factories read cfg["uuid"])
 //   - shadowsocks: "cipher" (from Clash YAML) is renamed to "method" after merging
-func buildAdapterOptions(s config.ServerEndpoint, adapterType string) json.RawMessage {
+func buildAdapterOptions(s *config.ServerEndpoint, adapterType string) json.RawMessage {
 	m := make(map[string]any)
 
 	host, portStr, err := net.SplitHostPort(s.Addr)

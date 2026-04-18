@@ -632,11 +632,6 @@ func buildUDPPacketAddr(srcIP, dstIP netip.Addr, srcPort, dstPort uint16, payloa
 	return buildUDPPacketV6WithTOS(srcIP.As16(), dstIP.As16(), srcPort, dstPort, payload, tos)
 }
 
-// buildTCPPacket constructs a raw IPv4+TCP packet with optional TOS marking.
-func buildTCPPacket(srcIP, dstIP [4]byte, srcPort, dstPort uint16, seq, ack uint32, flags byte, payload []byte) []byte {
-	return buildTCPPacketWithTOS(srcIP, dstIP, srcPort, dstPort, seq, ack, flags, payload, 0)
-}
-
 // buildTCPPacketWithTOS constructs a raw IPv4+TCP packet with TOS/DSCP marking.
 func buildTCPPacketWithTOS(srcIP, dstIP [4]byte, srcPort, dstPort uint16, seq, ack uint32, flags byte, payload []byte, tos uint8) []byte {
 	tcpLen := 20 + len(payload)

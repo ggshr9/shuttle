@@ -271,11 +271,9 @@ func (r *DNSResolver) matchDomainPolicy(domain string) string {
 			if domain == base || strings.HasSuffix(domain, "."+base) {
 				return entry.Server
 			}
-		} else {
+		} else if domain == pattern {
 			// Exact match
-			if domain == pattern {
-				return entry.Server
-			}
+			return entry.Server
 		}
 	}
 	return ""

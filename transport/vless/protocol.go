@@ -44,8 +44,7 @@ func EncodeRequest(w io.Writer, h *RequestHeader) error {
 	if h.Flow != "" {
 		flowBytes := []byte(h.Flow)
 		// Protobuf field 1, wire type 2 (length-delimited): tag = (1 << 3) | 2 = 0x0a
-		addons = append(addons, 0x0a)
-		addons = append(addons, byte(len(flowBytes)))
+		addons = append(addons, 0x0a, byte(len(flowBytes)))
 		addons = append(addons, flowBytes...)
 	}
 
