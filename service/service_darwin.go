@@ -92,6 +92,15 @@ func (m *darwinManager) Uninstall(purge bool) error {
 }
 
 func (m *darwinManager) Start() error {
+	if _, err := os.Stat(m.plistPath()); os.IsNotExist(err) {
+		return ErrNotInstalled
+	}
+	// If the job is not loaded, bootstrap re-registers and starts it (RunAtLoad=true).
+	// If already loaded, bootstrap fails harmlessly and we fall through to kickstart.
+	if _, err := m.launchctl("bootstrap", m.domain(), m.plistPath()); err == nil {
+		return nil
+	}
+	// Already loaded — kickstart if stopped.
 	out, err := m.launchctl("kickstart", m.serviceTarget())
 	if err != nil {
 		return fmt.Errorf("kickstart: %s", string(out))
@@ -109,6 +118,14 @@ func (m *darwinManager) Stop() error {
 }
 
 func (m *darwinManager) Restart() error {
+	if _, err := os.Stat(m.plistPath()); os.IsNotExist(err) {
+		return ErrNotInstalled
+	}
+	// If the job is not loaded (e.g. after Stop), bootstrap re-registers and starts it.
+	if _, err := m.launchctl("bootstrap", m.domain(), m.plistPath()); err == nil {
+		return nil
+	}
+	// Already loaded — force-kick the running service.
 	out, err := m.launchctl("kickstart", "-k", m.serviceTarget())
 	if err != nil {
 		return fmt.Errorf("kickstart -k: %s", string(out))
