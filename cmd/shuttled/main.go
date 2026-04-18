@@ -27,6 +27,8 @@ import (
 func getVersion() string { return update.Version }
 
 func main() {
+	servicePreflight() // no-op on non-Windows; may not return on Windows service mode
+
 	if len(os.Args) < 2 {
 		printUsage()
 		os.Exit(1)
@@ -400,6 +402,39 @@ func share(configPath, addr, name string) {
 }
 
 func run(configPath string) {
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// Run in a goroutine so we can watch for signals concurrently.
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		runWithContext(ctx, configPath)
+	}()
+
+	// First signal: initiate graceful shutdown.
+	select {
+	case sig := <-sigCh:
+		slog.Default().Info("received signal, starting graceful shutdown", "signal", sig)
+		cancel()
+	case <-done:
+		return
+	}
+
+	// Wait for runWithContext to finish, but force exit on second signal.
+	go func() {
+		sig := <-sigCh
+		slog.Default().Warn("received second signal, forcing immediate exit", "signal", sig)
+		os.Exit(1)
+	}()
+
+	<-done
+}
+
+func runWithContext(ctx context.Context, configPath string) {
 	// Auto-detect or auto-init config
 	if configPath == "" {
 		configPath = config.FindDefaultConfig()
@@ -443,10 +478,6 @@ func run(configPath string) {
 		os.Exit(1)
 	}
 
-	// Context for the main server lifecycle
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
 	// Parse drain timeout from config (default 30s)
 	drainTimeout := 30 * time.Second
 	if cfg.DrainTimeout != "" {
@@ -465,35 +496,24 @@ func run(configPath string) {
 		logger.Info("shuttled stopped gracefully")
 	}()
 
-	sigCh := make(chan os.Signal, 1)
-	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+	// Use a child context so we can cancel on ctx done.
+	runCtx, runCancel := context.WithCancel(ctx)
+	defer runCancel()
 
 	// Start the server in a goroutine (Start blocks on accept loop)
 	errCh := make(chan error, 1)
 	go func() {
-		errCh <- srv.Start(ctx)
+		errCh <- srv.Start(runCtx)
 	}()
 
-	// Two-phase shutdown: first signal = graceful drain, second = immediate exit
 	select {
-	case sig := <-sigCh:
-		logger.Info("received signal, starting graceful shutdown", "signal", sig)
+	case <-ctx.Done():
+		logger.Info("context cancelled, starting graceful shutdown")
 	case err := <-errCh:
 		if err != nil {
 			logger.Error("server exited with error", "err", err)
-			return // defer will run shutdown
 		}
 	}
-
-	// Cancel context to stop accepting new connections
-	cancel()
-
-	// Start a goroutine that forces immediate shutdown on second signal
-	go func() {
-		sig := <-sigCh
-		logger.Warn("received second signal, forcing immediate exit", "signal", sig)
-		os.Exit(1)
-	}()
 }
 
 // installAndStart installs a system-scope shuttled systemd service and starts it.
