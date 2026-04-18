@@ -20,6 +20,7 @@ import (
 func getVersion() string { return update.Version }
 
 func main() {
+	servicePreflight()
 	if len(os.Args) < 2 {
 		printUsage()
 		os.Exit(1)
@@ -278,12 +279,6 @@ func importURI(uri, output string) {
 }
 
 func run(configPath string) {
-	cfg, err := config.LoadClientConfig(configPath)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to load config: %v\n", err)
-		os.Exit(1)
-	}
-
 	ctx, cancel := context.WithCancel(context.Background())
 
 	sigCh := make(chan os.Signal, 1)
@@ -293,9 +288,18 @@ func run(configPath string) {
 		cancel()
 	}()
 
+	runWithContext(ctx, configPath)
+}
+
+func runWithContext(ctx context.Context, configPath string) {
+	cfg, err := config.LoadClientConfig(configPath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to load config: %v\n", err)
+		os.Exit(1)
+	}
+
 	eng := engine.New(cfg)
 	if err := eng.Start(ctx); err != nil {
-		cancel()
 		fmt.Fprintf(os.Stderr, "Failed to start: %v\n", err)
 		os.Exit(1)
 	}
