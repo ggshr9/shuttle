@@ -4,6 +4,7 @@ package servicecli
 import (
 	"flag"
 	"fmt"
+	"net"
 	"os"
 	"path/filepath"
 
@@ -66,7 +67,7 @@ func Install(opts Options, args []string) {
 		if err != nil {
 			exit("ui token: %v", err)
 		}
-		uiURL = fmt.Sprintf("http://%s/?token=%s", *ui, tok)
+		uiURL = fmt.Sprintf("http://%s/?token=%s", displayHost(*ui), tok)
 	}
 
 	if err := mgr.Install(cfg); err != nil {
@@ -199,6 +200,20 @@ func toPathsScope(s service.Scope) paths.Scope {
 func exit(format string, args ...interface{}) {
 	fmt.Fprintf(os.Stderr, format+"\n", args...)
 	os.Exit(1)
+}
+
+// displayHost normalizes a listen address for user display by replacing empty
+// or wildcard hosts with 127.0.0.1. The service still binds on the original
+// address; this is for UI URL printing only.
+func displayHost(addr string) string {
+	host, port, err := net.SplitHostPort(addr)
+	if err != nil {
+		return addr
+	}
+	if host == "" || host == "0.0.0.0" || host == "::" {
+		host = "127.0.0.1"
+	}
+	return net.JoinHostPort(host, port)
 }
 
 type nopWriter struct{}

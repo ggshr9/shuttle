@@ -201,7 +201,7 @@ func printCompletion(shell string) {
     COMPREPLY=()
     cur="${COMP_WORDS[COMP_CWORD]}"
     prev="${COMP_WORDS[COMP_CWORD-1]}"
-    commands="run api import genkey version completion help"
+    commands="run api import install uninstall start stop restart status logs token genkey version completion help"
 
     if [ $COMP_CWORD -eq 1 ]; then
         COMPREPLY=( $(compgen -W "$commands" -- "$cur") )
@@ -234,6 +234,14 @@ _shuttle() {
         'run:Start the client'
         'api:Headless API server'
         'import:Import server config from URI'
+        'install:Install as user service'
+        'uninstall:Remove service'
+        'start:Start service'
+        'stop:Stop service'
+        'restart:Restart service'
+        'status:Show service status'
+        'logs:Show service logs'
+        'token:Print Web UI bearer token'
         'genkey:Generate key pair'
         'version:Show version'
         'completion:Generate shell completions'
@@ -280,6 +288,14 @@ complete -c shuttle -f
 complete -c shuttle -n '__fish_use_subcommand' -a 'run' -d 'Start the client'
 complete -c shuttle -n '__fish_use_subcommand' -a 'api' -d 'Headless API server'
 complete -c shuttle -n '__fish_use_subcommand' -a 'import' -d 'Import server config from URI'
+complete -c shuttle -n '__fish_use_subcommand' -a 'install' -d 'Install as user service'
+complete -c shuttle -n '__fish_use_subcommand' -a 'uninstall' -d 'Remove service'
+complete -c shuttle -n '__fish_use_subcommand' -a 'start' -d 'Start service'
+complete -c shuttle -n '__fish_use_subcommand' -a 'stop' -d 'Stop service'
+complete -c shuttle -n '__fish_use_subcommand' -a 'restart' -d 'Restart service'
+complete -c shuttle -n '__fish_use_subcommand' -a 'status' -d 'Show service status'
+complete -c shuttle -n '__fish_use_subcommand' -a 'logs' -d 'Show service logs'
+complete -c shuttle -n '__fish_use_subcommand' -a 'token' -d 'Print Web UI bearer token'
 complete -c shuttle -n '__fish_use_subcommand' -a 'genkey' -d 'Generate key pair'
 complete -c shuttle -n '__fish_use_subcommand' -a 'version' -d 'Show version'
 complete -c shuttle -n '__fish_use_subcommand' -a 'completion' -d 'Generate shell completions'
@@ -353,7 +369,7 @@ func runWithContext(ctx context.Context, configPath string) {
 		uiAddr = cfg.UI.Listen
 	}
 	if uiAddr != "" {
-		go startUIServer(uiAddr, cfg.UI.Token, eng)
+		go startUIServer(ctx, uiAddr, cfg.UI.Token, eng)
 	}
 
 	<-ctx.Done()
