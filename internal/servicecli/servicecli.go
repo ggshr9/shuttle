@@ -70,7 +70,7 @@ func Install(opts Options, args []string) {
 		uiURL = fmt.Sprintf("http://%s/?token=%s", displayHost(*ui), tok)
 	}
 
-	if err := mgr.Install(cfg); err != nil {
+	if err := mgr.Install(&cfg); err != nil {
 		exit("install: %v", err)
 	}
 	if err := mgr.Start(); err != nil {

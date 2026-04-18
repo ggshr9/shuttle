@@ -33,7 +33,7 @@ func TestWindowsSCMInstallUninstall(t *testing.T) {
 		Restart:     false,
 	}
 
-	if err := mgr.Install(cfg); err != nil {
+	if err := mgr.Install(&cfg); err != nil {
 		t.Fatalf("Install: %v", err)
 	}
 	s, err := mgr.Status()

@@ -8,7 +8,7 @@ import (
 
 // renderSystemdUnit returns the text of a systemd unit file for the given
 // config and scope.
-func renderSystemdUnit(cfg Config, scope Scope) string {
+func renderSystemdUnit(cfg *Config, scope Scope) string {
 	restart := "no"
 	if cfg.Restart {
 		restart = "always"
@@ -65,7 +65,7 @@ func sanitizeUnitValue(s string) string {
 
 // renderLaunchdPlist returns the text of a launchd property-list file for the
 // given service config. Log paths are derived from cfg.LogDir.
-func renderLaunchdPlist(cfg Config) string {
+func renderLaunchdPlist(cfg *Config) string {
 	var args strings.Builder
 	args.WriteString("\t\t<string>" + xmlEscape(cfg.BinaryPath) + "</string>\n")
 	for _, a := range cfg.Args {

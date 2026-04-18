@@ -47,7 +47,7 @@ func (m *darwinManager) launchctl(args ...string) ([]byte, error) {
 	return exec.Command("launchctl", args...).CombinedOutput()
 }
 
-func (m *darwinManager) Install(cfg Config) error {
+func (m *darwinManager) Install(cfg *Config) error {
 	if cfg.LogDir == "" {
 		cfg.LogDir = paths.Resolve(scopeToPaths(m.scope)).LogDir
 	}

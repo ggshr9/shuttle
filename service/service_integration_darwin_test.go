@@ -26,7 +26,7 @@ func TestLaunchdFullCycle(t *testing.T) {
 	}
 	_ = os.MkdirAll(cfg.LogDir, 0755)
 
-	if err := mgr.Install(cfg); err != nil {
+	if err := mgr.Install(&cfg); err != nil {
 		t.Fatalf("Install: %v", err)
 	}
 	if err := mgr.Start(); err != nil {

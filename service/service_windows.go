@@ -30,7 +30,7 @@ func (m *windowsManager) connect() (*mgr.Mgr, error) {
 	return scMgr, nil
 }
 
-func (m *windowsManager) Install(cfg Config) error {
+func (m *windowsManager) Install(cfg *Config) error {
 	scMgr, err := m.connect()
 	if err != nil {
 		return err

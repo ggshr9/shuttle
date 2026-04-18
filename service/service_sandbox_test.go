@@ -34,7 +34,7 @@ func TestSandboxSystemdFullCycle(t *testing.T) {
 	}
 	defer mgr.Uninstall(false)
 
-	if err := mgr.Install(cfg); err != nil {
+	if err := mgr.Install(&cfg); err != nil {
 		t.Fatalf("Install: %v", err)
 	}
 	if err := mgr.Start(); err != nil {

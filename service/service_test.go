@@ -32,7 +32,7 @@ func TestRenderSystemdUnit(t *testing.T) {
 		RestartSec:  5,
 		LimitNOFILE: 65535,
 	}
-	got := renderSystemdUnit(cfg, ScopeSystem)
+	got := renderSystemdUnit(&cfg, ScopeSystem)
 	mustContain(t, got, "Description=Shuttle Server")
 	mustContain(t, got, "ExecStart=/usr/local/bin/shuttled run -c /etc/shuttle/server.yaml")
 	mustContain(t, got, "Restart=always")
@@ -40,7 +40,7 @@ func TestRenderSystemdUnit(t *testing.T) {
 	mustContain(t, got, "LimitNOFILE=65535")
 	mustContain(t, got, "WantedBy=multi-user.target")
 
-	user := renderSystemdUnit(cfg, ScopeUser)
+	user := renderSystemdUnit(&cfg, ScopeUser)
 	mustContain(t, user, "WantedBy=default.target")
 }
 
@@ -52,7 +52,7 @@ func mustContain(t *testing.T, s, sub string) {
 }
 
 func TestRenderSystemdUnitRestartFalse(t *testing.T) {
-	got := renderSystemdUnit(Config{
+	got := renderSystemdUnit(&Config{
 		Name:        "shuttled",
 		Description: "Shuttle Server",
 		BinaryPath:  "/usr/local/bin/shuttled",
@@ -63,7 +63,7 @@ func TestRenderSystemdUnitRestartFalse(t *testing.T) {
 }
 
 func TestRenderSystemdUnitUserDirective(t *testing.T) {
-	got := renderSystemdUnit(Config{
+	got := renderSystemdUnit(&Config{
 		Name:        "shuttled",
 		Description: "Shuttle Server",
 		BinaryPath:  "/usr/local/bin/shuttled",
@@ -73,7 +73,7 @@ func TestRenderSystemdUnitUserDirective(t *testing.T) {
 	mustContain(t, got, "User=shuttle")
 
 	// ScopeUser must not emit User directive even if cfg.User is set.
-	userScope := renderSystemdUnit(Config{
+	userScope := renderSystemdUnit(&Config{
 		Name:        "shuttled",
 		Description: "Shuttle Server",
 		BinaryPath:  "/usr/local/bin/shuttled",
@@ -86,7 +86,7 @@ func TestRenderSystemdUnitUserDirective(t *testing.T) {
 }
 
 func TestRenderSystemdUnitArgsWithSpaces(t *testing.T) {
-	got := renderSystemdUnit(Config{
+	got := renderSystemdUnit(&Config{
 		Name:        "shuttled",
 		Description: "Shuttle Server",
 		BinaryPath:  "/usr/local/bin/shuttled",
@@ -97,7 +97,7 @@ func TestRenderSystemdUnitArgsWithSpaces(t *testing.T) {
 }
 
 func TestRenderSystemdUnitSanitizesNewlines(t *testing.T) {
-	got := renderSystemdUnit(Config{
+	got := renderSystemdUnit(&Config{
 		Name:        "shuttled",
 		Description: "Shuttle\nExecStart=/evil",
 		BinaryPath:  "/usr/local/bin/shuttled",
@@ -128,7 +128,7 @@ func TestRenderLaunchdPlist(t *testing.T) {
 		LogDir:      "/Library/Logs/Shuttle",
 		Restart:     true,
 	}
-	got := renderLaunchdPlist(cfg)
+	got := renderLaunchdPlist(&cfg)
 	mustContain(t, got, "<key>Label</key>\n\t<string>com.shuttle.shuttled</string>")
 	mustContain(t, got, "<key>KeepAlive</key>\n\t<true/>")
 	mustContain(t, got, "<key>RunAtLoad</key>\n\t<true/>")

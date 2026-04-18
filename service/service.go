@@ -59,7 +59,7 @@ type Config struct {
 
 // Manager performs service lifecycle operations on the current OS.
 type Manager interface {
-	Install(cfg Config) error
+	Install(cfg *Config) error
 	Uninstall(purge bool) error
 	Start() error
 	Stop() error

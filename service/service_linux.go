@@ -23,7 +23,7 @@ func newManager(name string, scope Scope) (Manager, error) {
 
 func (m *linuxManager) unitPath() string {
 	if m.scope == ScopeSystem {
-		return filepath.Join("/etc/systemd/system", m.name+".service")
+		return filepath.Join("/etc/systemd/system", m.name+".service") //nolint:gocritic
 	}
 	configHome := os.Getenv("XDG_CONFIG_HOME")
 	if configHome == "" {
@@ -42,7 +42,7 @@ func (m *linuxManager) systemctl(args ...string) ([]byte, error) {
 	return exec.Command("systemctl", full...).CombinedOutput()
 }
 
-func (m *linuxManager) Install(cfg Config) error {
+func (m *linuxManager) Install(cfg *Config) error {
 	if _, err := os.Stat(m.unitPath()); err == nil {
 		fmt.Fprintln(os.Stderr, "Detected existing unit; reinstalling...")
 		_, _ = m.systemctl("stop", m.name)
