@@ -2,8 +2,9 @@
 # Shuttle — one-line install and run
 # Usage:
 #   curl -fsSL https://raw.githubusercontent.com/ggshr9/shuttle/main/scripts/install.sh | bash
-#   shuttled run -p yourpassword                    # server
-#   shuttle import "shuttle://..." && shuttle run    # client
+#   sudo shuttled install -c <config> --ui :9090    # server (install systemd service)
+#   shuttle install -c config.yaml                  # client (install user service)
+#   <binary> status | stop | restart | logs -f | uninstall  # manage
 
 set -e
 
@@ -39,7 +40,14 @@ echo ""
 echo "Installed: $(shuttle version), $(shuttled version)"
 echo ""
 echo "Quick start:"
-echo "  Server:  shuttled run -p yourpassword"
-echo "  Client:  shuttle import \"shuttle://...\" && shuttle run"
+echo "  Server:"
+echo "    sudo shuttled install -c <config> --ui :9090"
+echo "    shuttled run -p yourpassword                  (foreground)"
+echo ""
+echo "  Client:"
+echo "    shuttle run -u \"shuttle://...\""
+echo "    shuttle install -c config.yaml                (run as user service)"
+echo ""
+echo "  Manage: <binary> status | stop | restart | logs -f | token -c <config> | uninstall"
 echo ""
 echo "That's it."
