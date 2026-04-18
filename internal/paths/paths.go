@@ -9,6 +9,18 @@ const (
 	ScopeUser
 )
 
+// String returns a human-readable name for the scope.
+func (s Scope) String() string {
+	switch s {
+	case ScopeSystem:
+		return "system"
+	case ScopeUser:
+		return "user"
+	default:
+		return "unknown"
+	}
+}
+
 // Paths groups filesystem locations used by Shuttle.
 type Paths struct {
 	ConfigDir string
