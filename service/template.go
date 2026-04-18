@@ -2,6 +2,7 @@ package service
 
 import (
 	"fmt"
+	"path/filepath"
 	"strings"
 )
 
@@ -60,4 +61,50 @@ func joinUnitArgs(args []string) string {
 // to prevent injection of additional directives.
 func sanitizeUnitValue(s string) string {
 	return strings.ReplaceAll(strings.ReplaceAll(s, "\r", " "), "\n", " ")
+}
+
+// renderLaunchdPlist returns the text of a launchd property-list file for the
+// given service config. Log paths are derived from cfg.LogDir.
+func renderLaunchdPlist(cfg Config) string {
+	var args strings.Builder
+	args.WriteString("\t\t<string>" + xmlEscape(cfg.BinaryPath) + "</string>\n")
+	for _, a := range cfg.Args {
+		args.WriteString("\t\t<string>" + xmlEscape(a) + "</string>\n")
+	}
+	keepAlive := "<false/>"
+	if cfg.Restart {
+		keepAlive = "<true/>"
+	}
+	logOut := filepath.Join(cfg.LogDir, cfg.Name+".log")
+	logErr := filepath.Join(cfg.LogDir, cfg.Name+".err.log")
+	return fmt.Sprintf(`<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>Label</key>
+	<string>com.shuttle.%s</string>
+	<key>ProgramArguments</key>
+	<array>
+%s	</array>
+	<key>RunAtLoad</key>
+	<true/>
+	<key>KeepAlive</key>
+	%s
+	<key>StandardOutPath</key>
+	<string>%s</string>
+	<key>StandardErrorPath</key>
+	<string>%s</string>
+</dict>
+</plist>
+`, cfg.Name, args.String(), keepAlive, xmlEscape(logOut), xmlEscape(logErr))
+}
+
+func xmlEscape(s string) string {
+	r := strings.NewReplacer(
+		"&", "&amp;",
+		"<", "&lt;",
+		">", "&gt;",
+		`"`, "&quot;",
+	)
+	return r.Replace(s)
 }

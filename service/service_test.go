@@ -118,3 +118,22 @@ func TestRenderSystemdUnitSanitizesNewlines(t *testing.T) {
 		t.Errorf("expected exactly one ExecStart= line, got %d:\n%s", execStartCount, got)
 	}
 }
+
+func TestRenderLaunchdPlist(t *testing.T) {
+	cfg := Config{
+		Name:        "shuttled",
+		Description: "Shuttle Server",
+		BinaryPath:  "/usr/local/bin/shuttled",
+		Args:        []string{"run", "-c", "/Library/Application Support/Shuttle/server.yaml"},
+		LogDir:      "/Library/Logs/Shuttle",
+		Restart:     true,
+	}
+	got := renderLaunchdPlist(cfg)
+	mustContain(t, got, "<key>Label</key>\n\t<string>com.shuttle.shuttled</string>")
+	mustContain(t, got, "<key>KeepAlive</key>\n\t<true/>")
+	mustContain(t, got, "<key>RunAtLoad</key>\n\t<true/>")
+	mustContain(t, got, "<string>/usr/local/bin/shuttled</string>")
+	mustContain(t, got, "<string>run</string>")
+	mustContain(t, got, "/Library/Logs/Shuttle/shuttled.log")
+	mustContain(t, got, "/Library/Logs/Shuttle/shuttled.err.log")
+}
