@@ -68,7 +68,9 @@ func (m *windowsManager) Install(cfg Config) error {
 			{Type: mgr.ServiceRestart, Delay: time.Duration(sec) * time.Second},
 			{Type: mgr.NoAction, Delay: 0},
 		}
-		_ = s.SetRecoveryActions(recover, 86400) // reset failure count after 24h
+		if err := s.SetRecoveryActions(recover, 86400); err != nil {
+			fmt.Fprintf(os.Stderr, "warning: could not configure auto-restart: %v\n", err)
+		}
 	}
 
 	if cfg.LogDir != "" {
@@ -134,7 +136,9 @@ func (m *windowsManager) Stop() error {
 }
 
 func (m *windowsManager) Restart() error {
-	_ = m.Stop()
+	if err := m.Stop(); err != nil && err != ErrNotInstalled {
+		return fmt.Errorf("restart: stop failed: %w", err)
+	}
 	time.Sleep(1 * time.Second)
 	return m.Start()
 }
