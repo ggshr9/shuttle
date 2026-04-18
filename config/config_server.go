@@ -19,7 +19,6 @@ type ServerConfig struct {
 	AllowPrivateNetworks bool         `yaml:"allow_private_networks,omitempty" json:"allow_private_networks,omitempty"` // disable SSRF protection (testing only)
 	Yamux        YamuxConfig          `yaml:"yamux" json:"yamux"`
 	Log          LogConfig            `yaml:"log" json:"log"`
-	UI           UIConfig             `yaml:"ui,omitempty" json:"ui,omitempty"`
 	Inbounds     []InboundConfig      `yaml:"inbounds,omitempty" json:"inbounds,omitempty"` // per-request protocol inbounds (SS, VLESS, Trojan)
 }
 
