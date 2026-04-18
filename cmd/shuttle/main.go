@@ -5,13 +5,15 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"path/filepath"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 
 	"github.com/shuttleX/shuttle/config"
 	"github.com/shuttleX/shuttle/crypto"
 	"github.com/shuttleX/shuttle/engine"
+	"github.com/shuttleX/shuttle/internal/servicecli"
+	"github.com/shuttleX/shuttle/service"
 	"github.com/shuttleX/shuttle/update"
 )
 
@@ -21,6 +23,13 @@ func getVersion() string { return update.Version }
 
 func main() {
 	servicePreflight()
+
+	shuttleOpts := servicecli.Options{
+		Name:         "shuttle",
+		DisplayName:  "Shuttle Client",
+		DefaultScope: service.ScopeUser,
+	}
+
 	if len(os.Args) < 2 {
 		printUsage()
 		os.Exit(1)
@@ -126,6 +135,20 @@ func main() {
 			os.Exit(1)
 		}
 		printCompletion(os.Args[2])
+	case "install":
+		servicecli.Install(shuttleOpts, os.Args[2:])
+	case "uninstall":
+		servicecli.Uninstall(shuttleOpts, os.Args[2:])
+	case "start":
+		servicecli.Start(shuttleOpts, os.Args[2:])
+	case "stop":
+		servicecli.Stop(shuttleOpts, os.Args[2:])
+	case "restart":
+		servicecli.Restart(shuttleOpts, os.Args[2:])
+	case "status":
+		servicecli.Status(shuttleOpts, os.Args[2:])
+	case "logs":
+		servicecli.Logs(shuttleOpts, os.Args[2:])
 	case "help", "-h", "--help":
 		printUsage()
 	default:
@@ -142,6 +165,13 @@ func printUsage() {
 	fmt.Fprintf(os.Stderr, "  shuttle run -s server:port -p password   Quick connect (H3 only)\n\n")
 	fmt.Fprintf(os.Stderr, "Commands:\n")
 	fmt.Fprintf(os.Stderr, "  shuttle run -c <config.yaml>            Start with config file\n")
+	fmt.Fprintf(os.Stderr, "  shuttle install -c <config.yaml>        Install as user service\n")
+	fmt.Fprintf(os.Stderr, "  shuttle uninstall                       Remove service\n")
+	fmt.Fprintf(os.Stderr, "  shuttle start                           Start service\n")
+	fmt.Fprintf(os.Stderr, "  shuttle stop                            Stop service\n")
+	fmt.Fprintf(os.Stderr, "  shuttle restart                         Restart service\n")
+	fmt.Fprintf(os.Stderr, "  shuttle status                          Show service status\n")
+	fmt.Fprintf(os.Stderr, "  shuttle logs [-f]                       Show service logs\n")
 	fmt.Fprintf(os.Stderr, "  shuttle api -c <config.yaml>            Headless API server\n")
 	fmt.Fprintf(os.Stderr, "  shuttle import <shuttle://...>          Import server config\n")
 	fmt.Fprintf(os.Stderr, "  shuttle genkey                          Generate key pair\n")
