@@ -7,7 +7,12 @@ import (
 	"testing"
 )
 
-func TestWindowsSCMFullCycle(t *testing.T) {
+// TestWindowsSCMInstallUninstall exercises Install/Status/Uninstall via the
+// Windows Service Control Manager. It intentionally skips Start/Stop because
+// driving those requires a binary that implements StartServiceCtrlDispatcher;
+// the broader lifecycle is covered by the Linux sandbox test which uses
+// systemd (which does not impose that constraint).
+func TestWindowsSCMInstallUninstall(t *testing.T) {
 	if os.Getenv("CI") == "" {
 		t.Skip("Windows service tests require CI administrator context")
 	}
@@ -31,16 +36,21 @@ func TestWindowsSCMFullCycle(t *testing.T) {
 	if err := mgr.Install(cfg); err != nil {
 		t.Fatalf("Install: %v", err)
 	}
-	if err := mgr.Start(); err != nil {
-		t.Fatalf("Start: %v", err)
+	s, err := mgr.Status()
+	if err != nil {
+		t.Fatalf("Status: %v", err)
 	}
-
-	s, _ := mgr.Status()
-	if s != StatusRunning && s != StatusStopped {
-		t.Errorf("Status after Start = %v, want Running/Stopped", s)
+	if s != StatusStopped && s != StatusRunning {
+		t.Errorf("Status after Install = %v, want Stopped or Running (not NotInstalled)", s)
 	}
-
-	if err := mgr.Stop(); err != nil {
-		t.Fatalf("Stop: %v", err)
+	if err := mgr.Uninstall(false); err != nil {
+		t.Fatalf("Uninstall: %v", err)
+	}
+	s, err = mgr.Status()
+	if err != nil {
+		t.Fatalf("Status after Uninstall: %v", err)
+	}
+	if s != StatusNotInstalled {
+		t.Errorf("Status after Uninstall = %v, want NotInstalled", s)
 	}
 }

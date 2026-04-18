@@ -65,6 +65,11 @@ func (h *winSvcHandler) Execute(args []string, r <-chan svc.ChangeRequest, chang
 				changes <- svc.Status{State: svc.Stopped}
 				return
 			}
+		case <-done:
+			// runWithContext returned unexpectedly (e.g., port bind failure).
+			// Report stopped so SCM does not show the service as healthy.
+			changes <- svc.Status{State: svc.Stopped}
+			return
 		}
 	}
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"log/slog"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -12,6 +13,7 @@ import (
 	"github.com/shuttleX/shuttle/config"
 	"github.com/shuttleX/shuttle/crypto"
 	"github.com/shuttleX/shuttle/engine"
+	"github.com/shuttleX/shuttle/gui/api"
 	"github.com/shuttleX/shuttle/internal/servicecli"
 	"github.com/shuttleX/shuttle/service"
 	"github.com/shuttleX/shuttle/update"
@@ -369,7 +371,24 @@ func runWithContext(ctx context.Context, configPath string) {
 		uiAddr = cfg.UI.Listen
 	}
 	if uiAddr != "" {
-		go startUIServer(ctx, uiAddr, cfg.UI.Token, eng)
+		if cfg.UI.Token == "" {
+			tok, err := api.GenerateAuthToken()
+			if err != nil {
+				slog.Error("generate UI token failed", "err", err)
+			} else {
+				cfg.UI.Token = tok
+				if err := config.SaveClientConfig(configPath, cfg); err != nil {
+					slog.Warn("could not persist UI token", "err", err)
+				} else {
+					slog.Info("UI token generated and persisted to config")
+				}
+			}
+		}
+		if cfg.UI.Token == "" {
+			slog.Error("refusing to start UI without auth token")
+		} else {
+			go startUIServer(ctx, uiAddr, cfg.UI.Token, eng)
+		}
 	}
 
 	<-ctx.Done()
