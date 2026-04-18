@@ -21,6 +21,11 @@ import (
 //   -X github.com/shuttleX/shuttle/update.Version=v0.3.1
 func getVersion() string { return update.Version }
 
+// runUIOverride holds the --ui flag value from the run subcommand so that
+// runWithContext (called both from CLI and from the Windows service handler)
+// can pick it up without changing the function signature.
+var runUIOverride string
+
 func main() {
 	servicePreflight()
 
@@ -64,6 +69,7 @@ func main() {
 		serverAddr := runCmd.String("s", "", "server address (use with -p)")
 		password := runCmd.String("p", "", "password (use with -s)")
 		importFlag := runCmd.String("u", "", "shuttle:// URI (from server)")
+		uiListen := runCmd.String("ui", "", "Web UI listen address (overrides config.ui.listen)")
 		runCmd.Usage = func() {
 			fmt.Fprintf(os.Stderr, "Usage:\n")
 			fmt.Fprintf(os.Stderr, "  shuttle run -u \"shuttle://...\"           Import URI and connect (recommended)\n")
@@ -73,6 +79,7 @@ func main() {
 			runCmd.PrintDefaults()
 		}
 		_ = runCmd.Parse(os.Args[2:])
+		runUIOverride = *uiListen
 		tmpPath := filepath.Join(os.TempDir(), "shuttle-quick.yaml")
 		if *importFlag != "" {
 			// Best UX: import shuttle:// URI (includes all transport params)
@@ -149,6 +156,11 @@ func main() {
 		servicecli.Status(shuttleOpts, os.Args[2:])
 	case "logs":
 		servicecli.Logs(shuttleOpts, os.Args[2:])
+	case "token":
+		tokenCmd := flag.NewFlagSet("token", flag.ExitOnError)
+		configPath := tokenCmd.String("c", "", "config file path (required)")
+		_ = tokenCmd.Parse(os.Args[2:])
+		servicecli.Token(*configPath, false)
 	case "help", "-h", "--help":
 		printUsage()
 	default:
@@ -172,6 +184,7 @@ func printUsage() {
 	fmt.Fprintf(os.Stderr, "  shuttle restart                         Restart service\n")
 	fmt.Fprintf(os.Stderr, "  shuttle status                          Show service status\n")
 	fmt.Fprintf(os.Stderr, "  shuttle logs [-f]                       Show service logs\n")
+	fmt.Fprintf(os.Stderr, "  shuttle token -c <config>               Print Web UI bearer token\n")
 	fmt.Fprintf(os.Stderr, "  shuttle api -c <config.yaml>            Headless API server\n")
 	fmt.Fprintf(os.Stderr, "  shuttle import <shuttle://...>          Import server config\n")
 	fmt.Fprintf(os.Stderr, "  shuttle genkey                          Generate key pair\n")
@@ -332,6 +345,15 @@ func runWithContext(ctx context.Context, configPath string) {
 	if err := eng.Start(ctx); err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to start: %v\n", err)
 		os.Exit(1)
+	}
+
+	// Start Web UI server if configured (--ui flag or config.ui.listen).
+	uiAddr := runUIOverride
+	if uiAddr == "" {
+		uiAddr = cfg.UI.Listen
+	}
+	if uiAddr != "" {
+		go startUIServer(uiAddr, cfg.UI.Token, eng)
 	}
 
 	<-ctx.Done()

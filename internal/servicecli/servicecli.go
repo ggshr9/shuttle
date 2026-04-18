@@ -57,6 +57,15 @@ func Install(opts Options, args []string) {
 		LimitNOFILE: 65535,
 		LogDir:      paths.Resolve(toPathsScope(scope)).LogDir,
 	}
+	var uiURL string
+	if *ui != "" {
+		tok, err := ensureUIToken(abs, *ui, opts.Name == "shuttled")
+		if err != nil {
+			exit("ui token: %v", err)
+		}
+		uiURL = fmt.Sprintf("http://%s/?token=%s", *ui, tok)
+	}
+
 	if err := mgr.Install(cfg); err != nil {
 		exit("install: %v", err)
 	}
@@ -65,6 +74,9 @@ func Install(opts Options, args []string) {
 	}
 	fmt.Printf("%s installed and started.\n  Config: %s\n  Stop:   %s stop\n  Logs:   %s logs -f\n",
 		opts.DisplayName, abs, opts.Name, opts.Name)
+	if uiURL != "" {
+		fmt.Printf("  Web UI: %s\n", uiURL)
+	}
 }
 
 // Uninstall runs the uninstall subcommand.

@@ -25,6 +25,11 @@ import (
 //   -X github.com/shuttleX/shuttle/update.Version=v0.3.1
 func getVersion() string { return update.Version }
 
+// runUIOverride holds the --ui flag value from the run subcommand so that
+// runWithContext (called both from CLI and from the Windows service handler)
+// can pick it up without changing the function signature.
+var runUIOverride string
+
 func main() {
 	servicePreflight() // no-op on non-Windows; may not return on Windows service mode
 
@@ -88,11 +93,13 @@ func main() {
 		password := runCmd.String("p", "", "password (shortcut: auto-init + run in one step)")
 		listen := runCmd.String("l", "", "listen address (default :443)")
 		daemon := runCmd.Bool("d", false, "install as systemd service and start in background")
+		uiListen := runCmd.String("ui", "", "Web UI listen address (overrides config.ui.listen)")
 		runCmd.Usage = func() {
 			fmt.Fprintf(os.Stderr, "Usage:\n  shuttled run -p yourpassword          One-step server\n  shuttled run -p password -d            Install as service + start\n  shuttled run -c config.yaml            Use existing config\n  shuttled run                           Auto-detect or auto-init\n\nFlags:\n")
 			runCmd.PrintDefaults()
 		}
 		_ = runCmd.Parse(os.Args[2:])
+		runUIOverride = *uiListen
 		if *password != "" {
 			// Brook-style: one command to init + run
 			opts := &config.InitOptions{Password: *password, Force: true}
@@ -135,6 +142,11 @@ func main() {
 		servicecli.Status(shuttledOpts, os.Args[2:])
 	case "logs":
 		servicecli.Logs(shuttledOpts, os.Args[2:])
+	case "token":
+		tokenCmd := flag.NewFlagSet("token", flag.ExitOnError)
+		configPath := tokenCmd.String("c", "", "config file path (required)")
+		_ = tokenCmd.Parse(os.Args[2:])
+		servicecli.Token(*configPath, true)
 	case "completion":
 		if len(os.Args) < 3 {
 			fmt.Fprintf(os.Stderr, "Usage: shuttled completion <bash|zsh|fish>\n")
@@ -164,6 +176,7 @@ func printUsage() {
 	fmt.Fprintf(os.Stderr, "  shuttled restart                        Restart service\n")
 	fmt.Fprintf(os.Stderr, "  shuttled status                         Show status\n")
 	fmt.Fprintf(os.Stderr, "  shuttled logs [-f]                      Show logs\n")
+	fmt.Fprintf(os.Stderr, "  shuttled token -c <config>              Print Web UI bearer token\n")
 	fmt.Fprintf(os.Stderr, "  shuttled init                           Generate config only\n")
 	fmt.Fprintf(os.Stderr, "  shuttled share -c <config> --addr host  Generate import URI\n")
 	fmt.Fprintf(os.Stderr, "  shuttled genkey                         Generate key pair\n")
@@ -511,6 +524,15 @@ func runWithContext(ctx context.Context, configPath string) {
 	// Use a child context so we can cancel on ctx done.
 	runCtx, runCancel := context.WithCancel(ctx)
 	defer runCancel()
+
+	// Start Web UI server if configured (--ui flag or config.ui.listen).
+	uiAddr := runUIOverride
+	if uiAddr == "" {
+		uiAddr = cfg.UI.Listen
+	}
+	if uiAddr != "" {
+		go startUIServer(uiAddr, cfg.UI.Token, nil)
+	}
 
 	// Start the server in a goroutine (Start blocks on accept loop)
 	errCh := make(chan error, 1)
