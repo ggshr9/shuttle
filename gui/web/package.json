@@ -10,6 +10,8 @@
     "build": "vite build",
     "preview": "vite preview",
     "check": "svelte-check --tsconfig ./tsconfig.json",
+    "test": "vitest run --passWithNoTests",
+    "test:watch": "vitest",
     "test:e2e": "playwright test"
   },
   "devDependencies": {
