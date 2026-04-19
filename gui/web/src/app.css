@@ -1,0 +1,5 @@
+/* Global CSS: tokens + resets only. Component styles stay inside components. */
+@import './ui/tokens.css';
+
+/* Minimal reset (non-invasive — does not conflict with existing App.svelte CSS) */
+*, *::before, *::after { box-sizing: border-box; }
