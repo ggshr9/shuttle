@@ -72,6 +72,14 @@ export function lazy<T>(loader: () => Promise<{ default: T }>): Lazy<T> {
   return async () => (await loader()).default
 }
 
+import type { Component } from 'svelte'
+
+export interface RouteDef {
+  path: string
+  component: Lazy<Component>
+  children?: RouteDef[]
+}
+
 // Test helper — re-read location.hash (also usable by production code to force
 // a sync after manually manipulating location).
 export function __resetRoute(): void {

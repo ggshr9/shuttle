@@ -1,0 +1,5 @@
+export { navigate, useRoute, useParams, matches, lazy } from './router.svelte'
+export type { Lazy } from './router.svelte'
+export { default as Router } from './RouterOutlet.svelte'
+export type { RouteDef } from './router.svelte'
+export { default as Link } from './Link.svelte'
