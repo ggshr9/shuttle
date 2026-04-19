@@ -40,3 +40,4 @@ test/cloud/pids/
 
 # Worktrees
 .worktrees/
+.superpowers/
