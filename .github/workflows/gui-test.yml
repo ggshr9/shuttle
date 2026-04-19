@@ -13,9 +13,47 @@ on:
   workflow_dispatch:
 
 jobs:
+  unit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: gui/web/package-lock.json
+
+      - name: Install dependencies
+        working-directory: gui/web
+        run: npm ci
+
+      # svelte-check is advisory until pre-existing legacy-page errors are
+      # cleared in later phases of the GUI refactor. New code must be clean;
+      # we inspect the log in review rather than fail the job.
+      - name: svelte-check (advisory)
+        working-directory: gui/web
+        run: npm run check
+        continue-on-error: true
+
+      - name: vitest
+        working-directory: gui/web
+        run: npm test
+
+      - name: i18n guard
+        working-directory: gui/web
+        run: ./scripts/check-i18n.sh
+
+      - name: Build
+        working-directory: gui/web
+        run: npm run build
+
   playwright:
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    needs: unit
 
     steps:
       - uses: actions/checkout@v4
