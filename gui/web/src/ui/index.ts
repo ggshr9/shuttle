@@ -1,0 +1,13 @@
+// Design system barrel. ALWAYS import from @/ui.
+// Tasks 34–40 append bits-ui wrapper exports below.
+export { default as Button } from './Button.svelte'
+export { default as Card } from './Card.svelte'
+export { default as Input } from './Input.svelte'
+export { default as Badge } from './Badge.svelte'
+export { default as Icon } from './Icon.svelte'
+export { default as StatRow } from './StatRow.svelte'
+export { default as Section } from './Section.svelte'
+export { default as Spinner } from './Spinner.svelte'
+export { default as Empty } from './Empty.svelte'
+export { default as ErrorBanner } from './ErrorBanner.svelte'
+export { default as AsyncBoundary } from './AsyncBoundary.svelte'

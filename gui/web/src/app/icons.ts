@@ -8,7 +8,7 @@ export interface IconPath {
   strokeWidth?: number  // default 1.5
 }
 
-export const icons = {
+export const icons: Record<string, IconPath> = {
   dashboard: {
     paths: [
       '<rect x="3" y="3" width="6" height="6" rx="1"/>',
@@ -73,6 +73,11 @@ export const icons = {
   plus:         { paths: ['<path d="M10 4v12M4 10h12"/>'] },
   trash:        { paths: ['<path d="M4 6h12M7 6V4h6v2M6 6l1 10h6l1-10"/>'] },
   info:         { paths: ['<circle cx="10" cy="10" r="7"/>', '<path d="M10 9v4M10 6v.01"/>'] },
-} satisfies Record<string, IconPath>
+}
 
-export type IconName = keyof typeof icons
+// Enumerate the keys we committed to the registry so consumers get autocomplete.
+export type IconName =
+  | 'dashboard' | 'servers' | 'subscriptions' | 'groups'
+  | 'routing' | 'mesh' | 'logs' | 'settings'
+  | 'check' | 'x' | 'chevronRight' | 'chevronLeft' | 'chevronDown'
+  | 'plus' | 'trash' | 'info'
