@@ -128,3 +128,39 @@ export function __resetRegistry(): void {
   registry.forEach(e => stopPolling(e))
   registry.clear()
 }
+
+// ─────────────────────────────────────────────────────────────
+// createStream — runes wrapper over lib/ws.ts
+// ─────────────────────────────────────────────────────────────
+
+import { connectWS } from './ws'
+
+export interface Stream<T> {
+  readonly data: T | undefined
+  readonly connected: boolean
+  close(): void
+}
+
+export function createStream<T>(
+  _key: string,     // reserved for future single-flight; currently ignored
+  path: string,
+  opts: { initial?: T } = {},
+): Stream<T> {
+  const state = $state<{ data: T | undefined; connected: boolean }>({
+    data: opts.initial,
+    connected: false,
+  })
+  const conn = connectWS<T>(path, (msg) => {
+    state.data = msg
+    state.connected = true
+  })
+  // Consumer must call .close() explicitly from their component's $effect
+  // cleanup: `$effect(() => () => stream.close())`. We do not register a
+  // $effect here because this factory may be called outside a component
+  // context (tests, module init).
+  return {
+    get data() { return state.data },
+    get connected() { return state.connected },
+    close: () => conn.close(),
+  }
+}
