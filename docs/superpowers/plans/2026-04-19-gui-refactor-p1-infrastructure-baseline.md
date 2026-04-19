@@ -47,3 +47,38 @@ Branch: `refactor/gui-v2` from `main` (commit `05a0487`)
 
 Total JS + CSS gzip delta ≤ **+30 KB** (bits-ui + testing-library runtime + ui/ primitives).
 If the delta exceeds that we stop and investigate tree-shaking — see Task 43.
+
+---
+
+## Post-P1 (2026-04-19)
+
+Run after all 44 tasks committed on `refactor/gui-v2`.
+
+### index.js
+- raw: 97,699 → **98,372** bytes (**+673 B**)
+- gzip: 34.94 → **35.38 KB** (**+0.44 KB**)
+
+### CSS / lazy chunks
+Unchanged — old pages still render the same code; `index.css` unchanged.
+
+### Why the delta is small
+P1 is **additive** — new `ui/`, `lib/`, `app/` files are written but not
+imported by any route yet. Only the top-level barrel imports
+(`app.css` → `tokens.css`) touch the production bundle. Tree-shaking
+removes bits-ui and the entire ui/ design system from prod because
+nothing references them yet.
+
+### UIPreview harness
+`src/__ui__/UIPreview.svelte` is gated by `import.meta.env.DEV` +
+`?ui=1` and imported dynamically. Vite confirms: **no UIPreview chunk
+is emitted in production**. The harness is reached only via
+`npm run dev` + `http://localhost:5173/?ui=1`.
+
+### Delta vs baseline
+- JS gzip delta: **+0.44 KB**
+- CSS gzip delta: **0 KB**
+- Total gzip delta: **+0.44 KB** ≪ +30 KB budget ✓
+
+The design system cost will materialize in P3+ when feature slices
+start importing `@/ui`. The budget remains **+30 KB** across all
+phases through P10.
