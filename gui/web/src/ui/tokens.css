@@ -1,0 +1,95 @@
+/* ============================================================
+ * Shuttle design tokens — Geist-inspired
+ * Convention: --shuttle-<scope>-<prop>
+ * ============================================================ */
+
+:root,
+[data-theme="dark"] {
+  /* Background */
+  --shuttle-bg-base: #0a0a0a;
+  --shuttle-bg-surface: #111113;
+  --shuttle-bg-subtle: #1a1a1c;
+
+  /* Foreground */
+  --shuttle-fg-primary: #ededed;
+  --shuttle-fg-secondary: #a1a1aa;
+  --shuttle-fg-muted: #52525b;
+
+  /* Border */
+  --shuttle-border: #27272a;
+  --shuttle-border-strong: #3f3f46;
+
+  /* Accent (inverse button) */
+  --shuttle-accent: #ededed;
+  --shuttle-accent-fg: #09090b;
+
+  /* Semantic state colors — used ONLY for state */
+  --shuttle-success: #22c55e;
+  --shuttle-warning: #eab308;
+  --shuttle-danger: #ef4444;
+  --shuttle-info: #3b82f6;
+}
+
+[data-theme="light"] {
+  --shuttle-bg-base: #fafafa;
+  --shuttle-bg-surface: #ffffff;
+  --shuttle-bg-subtle: #f4f4f5;
+
+  --shuttle-fg-primary: #09090b;
+  --shuttle-fg-secondary: #52525b;
+  --shuttle-fg-muted: #a1a1aa;
+
+  --shuttle-border: #e4e4e7;
+  --shuttle-border-strong: #d4d4d8;
+
+  --shuttle-accent: #09090b;
+  --shuttle-accent-fg: #fafafa;
+
+  --shuttle-success: #16a34a;
+  --shuttle-warning: #ca8a04;
+  --shuttle-danger: #dc2626;
+  --shuttle-info: #2563eb;
+}
+
+/* Typography */
+:root {
+  --shuttle-font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  --shuttle-font-mono: ui-monospace, 'SF Mono', 'Menlo', 'Consolas', monospace;
+
+  --shuttle-text-xs:  11px;
+  --shuttle-text-sm:  12px;
+  --shuttle-text-base: 14px;
+  --shuttle-text-lg:  16px;
+  --shuttle-text-xl:  20px;
+  --shuttle-text-2xl: 28px;
+
+  --shuttle-weight-regular: 400;
+  --shuttle-weight-medium: 500;
+  --shuttle-weight-semibold: 600;
+
+  --shuttle-tracking-tight: -0.02em;
+  --shuttle-tracking-normal: 0;
+
+  /* Spacing — 4px grid */
+  --shuttle-space-0: 0;
+  --shuttle-space-1: 4px;
+  --shuttle-space-2: 8px;
+  --shuttle-space-3: 12px;
+  --shuttle-space-4: 16px;
+  --shuttle-space-5: 24px;
+  --shuttle-space-6: 32px;
+  --shuttle-space-7: 48px;
+
+  /* Radius */
+  --shuttle-radius-sm: 4px;
+  --shuttle-radius-md: 8px;
+  --shuttle-radius-lg: 12px;
+
+  /* Shadow */
+  --shuttle-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.06);
+  --shuttle-shadow-md: 0 4px 12px rgba(0, 0, 0, 0.08);
+
+  /* Motion */
+  --shuttle-duration: 120ms;
+  --shuttle-easing: cubic-bezier(0.2, 0, 0, 1);
+}
