@@ -8,7 +8,12 @@
     "routing": "路由",
     "mesh": "Mesh 组网",
     "logs": "日志",
-    "settings": "设置"
+    "settings": "设置",
+    "section": {
+      "overview": "总览",
+      "network": "网络",
+      "system": "系统"
+    }
   },
   "dashboard": {
     "upload": "上传",

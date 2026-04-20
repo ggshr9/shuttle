@@ -8,7 +8,12 @@
     "routing": "Routing",
     "mesh": "Mesh",
     "logs": "Logs",
-    "settings": "Settings"
+    "settings": "Settings",
+    "section": {
+      "overview": "Overview",
+      "network": "Network",
+      "system": "System"
+    }
   },
   "dashboard": {
     "upload": "Upload",
