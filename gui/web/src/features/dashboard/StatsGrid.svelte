@@ -1,5 +1,6 @@
 <script lang="ts">
   import { Card } from '@/ui'
+  import { t } from '@/lib/i18n/index'
   import type { Status, TransportStats } from '@/lib/api/types'
 
   interface Props {
@@ -22,26 +23,26 @@
 
   const stats = $derived([
     {
-      label: 'RTT',
+      label: t('dashboard.stats.rtt'),
       value: connected ? `${(status as unknown as { rtt_ms?: number }).rtt_ms ?? '—'}` : '—',
       unit:  connected ? 'ms' : '',
       mono:  false,
     },
     {
-      label: 'Packet loss',
+      label: t('dashboard.stats.loss'),
       value: connected ? `${((status as unknown as { loss_rate?: number }).loss_rate ?? 0).toFixed(1)}` : '—',
       unit:  connected ? '%' : '',
       mono:  false,
     },
     {
-      label: 'Transfer',
+      label: t('dashboard.stats.transfer'),
       value: connected ? formatBytes((status.bytes_sent ?? 0) + (status.bytes_recv ?? 0)) : '—',
       unit:  '',
       mono:  false,
     },
     {
-      label: 'Transport',
-      value: connected ? (active?.transport ?? 'auto') : '—',
+      label: t('dashboard.transport'),
+      value: connected ? (active?.transport ?? t('dashboard.stats.auto')) : '—',
       unit:  '',
       mono:  true,
     },

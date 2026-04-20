@@ -4,15 +4,13 @@
   import { connect, disconnect } from '@/lib/api/endpoints'
   import { invalidate } from '@/lib/resource.svelte'
   import { toasts } from '@/lib/toaster.svelte'
+  import { t } from '@/lib/i18n/index'
   import type { Status } from '@/lib/api/types'
   import { useSpeedStream } from './resource.svelte'
 
   interface Props { status: Status }
   let { status }: Props = $props()
 
-  // Live bytes/sec from the /api/speed WebSocket. Shared with the rest of the
-  // dashboard — the stream registry dedupes by key, so we don't open a second
-  // socket.
   const stream = useSpeedStream()
 
   const connected = $derived(status.connected === true)
@@ -29,7 +27,6 @@
     return `${h}h ${m % 60}m`
   }
 
-  // bps here is bytes per second — the WS pushes instantaneous rates.
   function formatSpeed(bps: number): { value: string; unit: string } {
     if (bps >= 1e6) return { value: (bps / 1e6).toFixed(1), unit: 'MB/s' }
     if (bps >= 1e3) return { value: (bps / 1e3).toFixed(1), unit: 'KB/s' }
@@ -61,9 +58,9 @@
       <span class="dot" class:on={connected}></span>
       <span class="state">
         {#if connected}
-          Connected · <b>{serverLabel}</b> via {transportLabel}
+          {t('dashboard.hero.connected')} · <b>{serverLabel}</b> {t('dashboard.hero.via')} {transportLabel}
         {:else}
-          Disconnected
+          {t('dashboard.hero.disconnected')}
         {/if}
       </span>
       <span class="spacer"></span>
@@ -75,19 +72,19 @@
         <div class="big">
           {down.value}<span class="unit"> {down.unit}</span>
         </div>
-        <div class="label">Download</div>
+        <div class="label">{t('dashboard.download')}</div>
       </div>
       <div class="speed small">
         <div class="mid">{up.value}</div>
-        <div class="label">Upload {up.unit}</div>
+        <div class="label">{t('dashboard.upload')} {up.unit}</div>
       </div>
       <div class="spacer"></div>
       <div class="actions">
         <Button variant="primary" loading={busy} onclick={toggle}>
-          {connected ? 'Disconnect' : 'Connect'}
+          {connected ? t('dashboard.hero.disconnect') : t('dashboard.hero.connect')}
         </Button>
         <Button variant="ghost" onclick={() => navigate('/servers')}>
-          Switch server
+          {t('dashboard.hero.switchServer')}
         </Button>
       </div>
     </div>

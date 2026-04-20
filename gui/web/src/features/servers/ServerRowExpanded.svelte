@@ -1,5 +1,6 @@
 <script lang="ts">
   import { Input, Button, StatRow } from '@/ui'
+  import { t } from '@/lib/i18n/index'
   import { setActive, useSpeedtestResult, runSpeedtest } from './resource.svelte'
   import type { Server } from '@/lib/api/types'
 
@@ -29,22 +30,22 @@
 
 <div class="pane">
   <div class="fields">
-    <Input label="Name" bind:value={name} />
-    <Input label="Server address" value={server.addr} disabled />
-    <Input label="SNI" bind:value={sni} />
+    <Input label={t('servers.name')} bind:value={name} />
+    <Input label={t('servers.serverAddress')} value={server.addr} disabled />
+    <Input label={t('servers.sni')} bind:value={sni} />
   </div>
 
   <div class="side">
     {#if result}
-      <StatRow label="Latency" value={`${result.latency} ms`} mono />
-      <StatRow label="Available" value={result.available ? 'yes' : 'no'} />
+      <StatRow label={t('servers.columns.latency')} value={`${result.latency} ms`} mono />
+      <StatRow label={t('servers.available')} value={result.available ? t('common.yes') : t('common.no')} />
     {:else}
-      <p class="hint">Not yet tested.</p>
+      <p class="hint">{t('servers.notTested')}</p>
     {/if}
     <div class="actions">
-      <Button size="sm" variant="secondary" onclick={test}>Speed test</Button>
+      <Button size="sm" variant="secondary" onclick={test}>{t('servers.speedTest')}</Button>
       {#if !isActive}
-        <Button size="sm" variant="primary" onclick={makeActive}>Set as active</Button>
+        <Button size="sm" variant="primary" onclick={makeActive}>{t('servers.setAsActive')}</Button>
       {/if}
     </div>
   </div>

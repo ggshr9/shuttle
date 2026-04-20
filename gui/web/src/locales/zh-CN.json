@@ -45,7 +45,40 @@
     "virtualIP": "虚拟 IP",
     "network": "网络",
     "apiError": "无法连接到后端 API",
-    "connectionLost": "与后端的连接已断开 — 数据可能已过时"
+    "connectionLost": "与后端的连接已断开 — 数据可能已过时",
+    "hero": {
+      "connected": "已连接",
+      "disconnected": "已断开",
+      "via": "经由",
+      "connect": "连接",
+      "disconnect": "断开",
+      "switchServer": "切换服务器"
+    },
+    "stats": {
+      "rtt": "往返延迟",
+      "loss": "丢包率",
+      "transfer": "流量",
+      "auto": "自动"
+    },
+    "throughput": {
+      "title": "吞吐量",
+      "down": "下行",
+      "up": "上行",
+      "window": "最近 5 分钟",
+      "waiting": "等待样本中…"
+    },
+    "transportsPanel": {
+      "title": "活跃传输",
+      "count_one": "{n} 条传输",
+      "count_other": "{n} 条传输",
+      "emptyTitle": "暂无传输数据",
+      "emptyDesc": "连接后显示每条传输的细分。",
+      "state": {
+        "primary": "主",
+        "standby": "备",
+        "idle": "空闲"
+      }
+    }
   },
   "servers": {
     "activeServer": "当前服务器",
@@ -67,7 +100,54 @@
     "selecting": "选择中...",
     "sni": "SNI（可选）",
     "confirmDelete": "移除服务器",
-    "confirmDeleteMsg": "确定要移除此服务器吗？"
+    "confirmDeleteMsg": "确定要移除此服务器吗？",
+    "configured_one": "已配置 {n} 台",
+    "configured_other": "已配置 {n} 台",
+    "speedTest": "测速",
+    "setActive": "设为活跃",
+    "setAsActive": "设为活跃",
+    "available": "可用",
+    "notTested": "尚未测速。",
+    "selected": "已选 {n} 项",
+    "columns": {
+      "address": "地址",
+      "latency": "延迟",
+      "protocol": "协议"
+    },
+    "empty": {
+      "title": "暂无服务器",
+      "desc": "添加一台或导入订阅以开始使用。"
+    },
+    "dialog": {
+      "add": {
+        "desc": "填写服务器信息。地址和密码必填。",
+        "namePlaceholder": "sg-hk-02",
+        "addrPlaceholder": "example.com:443",
+        "sniLabel": "SNI(可选)",
+        "sniPlaceholder": "example.com"
+      },
+      "import": {
+        "title": "导入服务器",
+        "desc": "粘贴 Clash YAML、Base64 SIP-008 订阅或 shuttle:// URI。",
+        "placeholder": "shuttle://...  或  proxies:\\n  - name: ...  或  base64 SIP-008"
+      },
+      "delete": {
+        "titleOne": "删除服务器?",
+        "titleMany": "删除 {n} 台服务器?"
+      }
+    },
+    "toast": {
+      "added": "已添加 {name}",
+      "switched": "已切换到 {name}",
+      "deleted_one": "已删除 1 台",
+      "deleted_other": "已删除 {n} 台",
+      "deleteFailed": "删除 {addr} 失败:{msg}",
+      "tested_one": "已测速 1 台",
+      "tested_other": "已测速 {n} 台",
+      "autoSelected": "已自动选择 {name}({latency} ms)",
+      "imported": "已导入 {added}/{total} 台",
+      "importedNone": "无新服务器导入"
+    }
   },
   "import": {
     "title": "导入服务器",
@@ -284,7 +364,8 @@
   "app": {
     "connecting": "正在连接 Shuttle...",
     "retry": "重试",
-    "backendError": "后端不可达，请确认 Shuttle 正在运行。"
+    "backendError": "后端不可达，请确认 Shuttle 正在运行。",
+    "backendUnavailable": "后端服务不可用。"
   },
   "common": {
     "cancel": "取消",
@@ -294,7 +375,12 @@
     "error": "错误",
     "success": "成功",
     "timeout": "超时",
-    "more": "更多"
+    "more": "更多",
+    "close": "关闭",
+    "yes": "是",
+    "no": "否",
+    "cannotUndo": "此操作无法撤销。",
+    "retry": "重试"
   },
   "onboarding": {
     "welcome": "欢迎使用 Shuttle",

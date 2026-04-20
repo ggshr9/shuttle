@@ -12,6 +12,7 @@ import type {
   Server, ServersResponse, SpeedtestResult, AutoSelectResult, ImportResult,
 } from '@/lib/api/types'
 import { toasts } from '@/lib/toaster.svelte'
+import { t } from '@/lib/i18n/index'
 
 const LIST_KEY = 'servers.list'
 
@@ -29,7 +30,7 @@ export async function addServer(srv: Server): Promise<void> {
   try {
     await apiAddServer(srv)
     invalidate(LIST_KEY)
-    toasts.success(`Added ${srv.name || srv.addr}`)
+    toasts.success(t('servers.toast.added', { name: srv.name || srv.addr }))
   } catch (e) {
     toasts.error((e as Error).message)
     throw e
@@ -41,7 +42,7 @@ export async function setActive(srv: Server): Promise<void> {
     await apiSetActiveServer(srv)
     invalidate(LIST_KEY)
     invalidate('dashboard.status')
-    toasts.success(`Switched to ${srv.name || srv.addr}`)
+    toasts.success(t('servers.toast.switched', { name: srv.name || srv.addr }))
   } catch (e) {
     toasts.error((e as Error).message)
     throw e
@@ -59,15 +60,23 @@ export async function removeServer(addr: string): Promise<void> {
 }
 
 export async function removeMany(addrs: string[]): Promise<void> {
-  for (const a of addrs) {
+  let ok = 0
+  await Promise.allSettled(addrs.map(async (a) => {
     try {
       await apiDeleteServer(a)
+      ok++
     } catch (e) {
-      toasts.error(`Failed to delete ${a}: ${(e as Error).message}`)
+      toasts.error(t('servers.toast.deleteFailed', { addr: a, msg: (e as Error).message }))
     }
-  }
+  }))
   invalidate(LIST_KEY)
-  toasts.success(`Deleted ${addrs.length} ${addrs.length === 1 ? 'server' : 'servers'}`)
+  if (ok > 0) {
+    toasts.success(
+      ok === 1
+        ? t('servers.toast.deleted_one')
+        : t('servers.toast.deleted_other', { n: ok })
+    )
+  }
 }
 
 export async function autoSelect(): Promise<AutoSelectResult | null> {
@@ -75,7 +84,10 @@ export async function autoSelect(): Promise<AutoSelectResult | null> {
     const r = await apiAutoSelect()
     invalidate(LIST_KEY)
     invalidate('dashboard.status')
-    toasts.success(`Auto-selected ${r.server.name || r.server.addr} (${r.latency} ms)`)
+    toasts.success(t('servers.toast.autoSelected', {
+      name: r.server.name || r.server.addr,
+      latency: r.latency,
+    }))
     return r
   } catch (e) {
     toasts.error((e as Error).message)
@@ -90,9 +102,9 @@ export async function importServers(data: string): Promise<ImportResult | null> 
     if (r.error) {
       toasts.error(r.error)
     } else if (r.added > 0) {
-      toasts.success(`Imported ${r.added} of ${r.total} servers`)
+      toasts.success(t('servers.toast.imported', { added: r.added, total: r.total }))
     } else {
-      toasts.info('No new servers imported')
+      toasts.info(t('servers.toast.importedNone'))
     }
     return r
   } catch (e) {
@@ -117,7 +129,11 @@ export async function runSpeedtest(addrs: string[]): Promise<void> {
   try {
     const rs = await apiSpeedtest(addrs)
     for (const r of rs) results.map[r.server_addr] = r
-    toasts.success(`Tested ${rs.length} ${rs.length === 1 ? 'server' : 'servers'}`)
+    toasts.success(
+      rs.length === 1
+        ? t('servers.toast.tested_one')
+        : t('servers.toast.tested_other', { n: rs.length })
+    )
   } catch (e) {
     toasts.error((e as Error).message)
   }

@@ -1,16 +1,17 @@
 <script lang="ts">
   import { toasts, dismiss } from '@/lib/toaster.svelte'
   import { Icon } from '@/ui'
+  import { t } from '@/lib/i18n/index'
 </script>
 
 <div class="stack" role="status" aria-live="polite">
-  {#each toasts.items as t (t.id)}
-    <div class="toast {t.type}" role="alert">
+  {#each toasts.items as msg (msg.id)}
+    <div class="toast {msg.type}" role="alert">
       <span class="ico">
-        <Icon name={t.type === 'success' ? 'check' : t.type === 'error' ? 'x' : 'info'} size={14} />
+        <Icon name={msg.type === 'success' ? 'check' : msg.type === 'error' ? 'x' : 'info'} size={14} />
       </span>
-      <span class="msg">{t.message}</span>
-      <button class="close" onclick={() => dismiss(t.id)} aria-label="Close">
+      <span class="msg">{msg.message}</span>
+      <button class="close" onclick={() => dismiss(msg.id)} aria-label={t('common.close')}>
         <Icon name="x" size={12} />
       </button>
     </div>

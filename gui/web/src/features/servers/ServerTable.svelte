@@ -1,5 +1,6 @@
 <script lang="ts">
   import { Empty, Card } from '@/ui'
+  import { t } from '@/lib/i18n/index'
   import ServerRow from './ServerRow.svelte'
   import ServerRowExpanded from './ServerRowExpanded.svelte'
   import type { Server } from '@/lib/api/types'
@@ -40,8 +41,8 @@
   <Card>
     <Empty
       icon="servers"
-      title="No servers"
-      description="Add one or import a subscription to get started."
+      title={t('servers.empty.title')}
+      description={t('servers.empty.desc')}
     />
   </Card>
 {:else}
@@ -53,14 +54,14 @@
           checked={allSelected}
           indeterminate={someSelected}
           onchange={(e) => toggleAll((e.target as HTMLInputElement).checked)}
-          aria-label="Select all"
+          aria-label={t('servers.selected', { n: 0 })}
         />
       </span>
       <span></span>
-      <span>Name</span>
-      <span>Address</span>
-      <span class="lat">Latency</span>
-      <span>Protocol</span>
+      <span>{t('servers.name')}</span>
+      <span>{t('servers.columns.address')}</span>
+      <span class="lat">{t('servers.columns.latency')}</span>
+      <span>{t('servers.columns.protocol')}</span>
       <span></span>
     </div>
 

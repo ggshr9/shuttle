@@ -1,5 +1,6 @@
 <script lang="ts">
   import { Button, Icon, Badge } from '@/ui'
+  import { t } from '@/lib/i18n/index'
   import { useSpeedtestResult, setActive } from './resource.svelte'
   import type { Server } from '@/lib/api/types'
 
@@ -59,11 +60,11 @@
     </Button>
     {#if !isActive}
       <Button size="sm" variant="ghost" onclick={() => setActive(server)}>
-        <Icon name="check" size={14} title="Set active" />
+        <Icon name="check" size={14} title={t('servers.setActive')} />
       </Button>
     {/if}
     <Button size="sm" variant="ghost" onclick={onDelete}>
-      <Icon name="trash" size={14} title="Delete" />
+      <Icon name="trash" size={14} title={t('common.delete')} />
     </Button>
   </span>
 </div>

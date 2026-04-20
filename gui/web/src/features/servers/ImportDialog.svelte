@@ -1,5 +1,6 @@
 <script lang="ts">
   import { Dialog, Button } from '@/ui'
+  import { t } from '@/lib/i18n/index'
   import { importServers } from './resource.svelte'
 
   interface Props {
@@ -25,17 +26,17 @@
   }
 </script>
 
-<Dialog bind:open title="Import servers" description="Paste a Clash YAML, Base64 SIP-008 subscription, or shuttle:// URI.">
+<Dialog bind:open title={t('servers.dialog.import.title')} description={t('servers.dialog.import.desc')}>
   <textarea
     class="ta"
-    placeholder={'shuttle://...  or  proxies:\n  - name: ...  or  base64 SIP-008'}
+    placeholder={t('servers.dialog.import.placeholder')}
     bind:value={data}
   ></textarea>
 
   {#snippet actions()}
-    <Button variant="ghost" onclick={() => (open = false)}>Cancel</Button>
+    <Button variant="ghost" onclick={() => (open = false)}>{t('common.cancel')}</Button>
     <Button variant="primary" disabled={!data.trim()} loading={submitting} onclick={submit}>
-      Import
+      {t('servers.import')}
     </Button>
   {/snippet}
 </Dialog>

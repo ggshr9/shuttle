@@ -1,5 +1,6 @@
 <script lang="ts">
   import { Card } from '@/ui'
+  import { t } from '@/lib/i18n/index'
   import { useSpeedHistory } from './resource.svelte'
 
   const history = useSpeedHistory()
@@ -35,11 +36,11 @@
 
 <Card>
   <header>
-    <h3>Throughput</h3>
+    <h3>{t('dashboard.throughput.title')}</h3>
     <span class="legend">
-      <span class="dot fg"></span>Down
-      <span class="dot mu"></span>Up
-      <span class="hint">last 5 min</span>
+      <span class="dot fg"></span>{t('dashboard.throughput.down')}
+      <span class="dot mu"></span>{t('dashboard.throughput.up')}
+      <span class="hint">{t('dashboard.throughput.window')}</span>
     </span>
   </header>
   <svg viewBox={`0 0 ${VIEW_W} ${VIEW_H}`} preserveAspectRatio="none" width="100%" height={VIEW_H}>
@@ -52,7 +53,7 @@
     {/if}
   </svg>
   {#if history.down.length === 0}
-    <div class="empty">Waiting for samples…</div>
+    <div class="empty">{t('dashboard.throughput.waiting')}</div>
   {/if}
 </Card>
 

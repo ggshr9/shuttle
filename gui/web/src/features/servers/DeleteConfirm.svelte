@@ -1,5 +1,6 @@
 <script lang="ts">
   import { Dialog, Button } from '@/ui'
+  import { t } from '@/lib/i18n/index'
 
   interface Props {
     open: boolean
@@ -20,13 +21,16 @@
     }
   }
 
-  const title = $derived(count === 1 ? 'Delete server?' : `Delete ${count} servers?`)
-  const description = 'This cannot be undone.'
+  const title = $derived(
+    count === 1
+      ? t('servers.dialog.delete.titleOne')
+      : t('servers.dialog.delete.titleMany', { n: count })
+  )
 </script>
 
-<Dialog bind:open {title} {description}>
+<Dialog bind:open {title} description={t('common.cannotUndo')}>
   {#snippet actions()}
-    <Button variant="ghost" onclick={() => (open = false)}>Cancel</Button>
-    <Button variant="danger" loading={busy} onclick={confirm}>Delete</Button>
+    <Button variant="ghost" onclick={() => (open = false)}>{t('common.cancel')}</Button>
+    <Button variant="danger" loading={busy} onclick={confirm}>{t('common.delete')}</Button>
   {/snippet}
 </Dialog>

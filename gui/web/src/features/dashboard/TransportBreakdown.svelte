@@ -1,5 +1,6 @@
 <script lang="ts">
   import { Card, Badge, Empty } from '@/ui'
+  import { t } from '@/lib/i18n/index'
   import type { TransportStats } from '@/lib/api/types'
 
   interface Props { transports: TransportStats[] }
@@ -21,32 +22,39 @@
     return Math.max(0, Math.min(100, ((t.bytes_sent + t.bytes_recv) / total) * 100))
   }
 
-  function state(t: TransportStats): { label: string; variant: 'success' | 'neutral' } {
-    if (t.active_streams > 0) return { label: 'PRIMARY', variant: 'success' }
-    if (t.total_streams > 0)  return { label: 'STANDBY', variant: 'neutral' }
-    return { label: 'IDLE', variant: 'neutral' }
+  function stateOf(ts: TransportStats): { labelKey: string; variant: 'success' | 'neutral' } {
+    if (ts.active_streams > 0) return { labelKey: 'dashboard.transportsPanel.state.primary', variant: 'success' }
+    if (ts.total_streams > 0)  return { labelKey: 'dashboard.transportsPanel.state.standby', variant: 'neutral' }
+    return { labelKey: 'dashboard.transportsPanel.state.idle', variant: 'neutral' }
   }
+
+  const countLabel = $derived(
+    transports.length === 1
+      ? t('dashboard.transportsPanel.count_one',   { n: transports.length })
+      : t('dashboard.transportsPanel.count_other', { n: transports.length })
+  )
 </script>
 
 <Card>
   <header>
-    <h3>Active transports</h3>
-    <span class="count">
-      {transports.length} {transports.length === 1 ? 'transport' : 'transports'}
-    </span>
+    <h3>{t('dashboard.transportsPanel.title')}</h3>
+    <span class="count">{countLabel}</span>
   </header>
 
   {#if transports.length === 0}
-    <Empty title="No transport data" description="Connect to see per-transport breakdown." />
+    <Empty
+      title={t('dashboard.transportsPanel.emptyTitle')}
+      description={t('dashboard.transportsPanel.emptyDesc')}
+    />
   {:else}
     <ul>
-      {#each transports as t}
+      {#each transports as ts}
         <li>
-          <span class="name">{t.transport}</span>
-          <div class="bar"><div class="fill" style="width: {pct(t)}%"></div></div>
-          <span class="num">{fmtBytes(t)}</span>
-          <span class="num sm">{t.active_streams} / {t.total_streams}</span>
-          <Badge variant={state(t).variant}>{state(t).label}</Badge>
+          <span class="name">{ts.transport}</span>
+          <div class="bar"><div class="fill" style="width: {pct(ts)}%"></div></div>
+          <span class="num">{fmtBytes(ts)}</span>
+          <span class="num sm">{ts.active_streams} / {ts.total_streams}</span>
+          <Badge variant={stateOf(ts).variant}>{t(stateOf(ts).labelKey)}</Badge>
         </li>
       {/each}
     </ul>

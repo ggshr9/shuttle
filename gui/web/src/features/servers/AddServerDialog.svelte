@@ -1,5 +1,6 @@
 <script lang="ts">
   import { Dialog, Input, Button } from '@/ui'
+  import { t } from '@/lib/i18n/index'
   import { addServer } from './resource.svelte'
 
   interface Props {
@@ -33,18 +34,18 @@
   }
 </script>
 
-<Dialog bind:open title="Add server" description="Enter server details. Address and password are required.">
+<Dialog bind:open title={t('servers.addServer')} description={t('servers.dialog.add.desc')}>
   <div class="fields">
-    <Input label="Name" placeholder="sg-hk-02" bind:value={name} />
-    <Input label="Address" placeholder="example.com:443" bind:value={addr} />
-    <Input label="Password" type="password" bind:value={password} />
-    <Input label="SNI (optional)" placeholder="example.com" bind:value={sni} />
+    <Input label={t('servers.name')} placeholder={t('servers.dialog.add.namePlaceholder')} bind:value={name} />
+    <Input label={t('servers.columns.address')} placeholder={t('servers.dialog.add.addrPlaceholder')} bind:value={addr} />
+    <Input label={t('servers.password')} type="password" bind:value={password} />
+    <Input label={t('servers.dialog.add.sniLabel')} placeholder={t('servers.dialog.add.sniPlaceholder')} bind:value={sni} />
   </div>
 
   {#snippet actions()}
-    <Button variant="ghost" onclick={() => (open = false)}>Cancel</Button>
+    <Button variant="ghost" onclick={() => (open = false)}>{t('common.cancel')}</Button>
     <Button variant="primary" disabled={!canSubmit} loading={submitting} onclick={submit}>
-      Add
+      {t('servers.add')}
     </Button>
   {/snippet}
 </Dialog>

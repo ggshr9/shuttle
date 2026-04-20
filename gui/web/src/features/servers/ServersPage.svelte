@@ -1,5 +1,6 @@
 <script lang="ts">
   import { AsyncBoundary, Button, Icon, Section } from '@/ui'
+  import { t } from '@/lib/i18n/index'
   import { useServers, removeServer, removeMany, autoSelect, runSpeedtest } from './resource.svelte'
   import ServerTable from './ServerTable.svelte'
   import AddServerDialog from './AddServerDialog.svelte'
@@ -44,28 +45,32 @@
 </script>
 
 <Section
-  title="Servers"
-  description={res.data ? `${res.data.servers.length} configured` : undefined}
+  title={t('nav.servers')}
+  description={res.data ? (
+    res.data.servers.length === 1
+      ? t('servers.configured_one',   { n: res.data.servers.length })
+      : t('servers.configured_other', { n: res.data.servers.length })
+  ) : undefined}
 >
   {#snippet actions()}
-    <Button variant="ghost" onclick={testAll}>Test all</Button>
+    <Button variant="ghost" onclick={testAll}>{t('servers.testAll')}</Button>
     <Button variant="ghost" onclick={() => autoSelect()}>
-      <Icon name="check" size={14} /> Auto-select
+      <Icon name="check" size={14} /> {t('servers.autoSelect')}
     </Button>
     <Button variant="ghost" onclick={() => (importOpen = true)}>
-      Import
+      {t('servers.import')}
     </Button>
     <Button variant="primary" onclick={() => (addOpen = true)}>
-      <Icon name="plus" size={14} /> Add server
+      <Icon name="plus" size={14} /> {t('servers.addServer')}
     </Button>
   {/snippet}
 
   {#if selected.size > 0}
     <div class="sel-bar">
-      <span class="count">{selected.size} selected</span>
-      <Button size="sm" variant="secondary" onclick={testSelected}>Speed test</Button>
-      <Button size="sm" variant="danger"    onclick={openBatchDelete}>Delete</Button>
-      <Button size="sm" variant="ghost"     onclick={() => (selected = new Set())}>Cancel</Button>
+      <span class="count">{t('servers.selected', { n: selected.size })}</span>
+      <Button size="sm" variant="secondary" onclick={testSelected}>{t('servers.speedTest')}</Button>
+      <Button size="sm" variant="danger"    onclick={openBatchDelete}>{t('common.delete')}</Button>
+      <Button size="sm" variant="ghost"     onclick={() => (selected = new Set())}>{t('common.cancel')}</Button>
     </div>
   {/if}
 

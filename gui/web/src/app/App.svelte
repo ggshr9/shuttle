@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte'
   import { api } from '@/lib/api'
+  import { t } from '@/lib/i18n/index'
   import Onboarding from '@/lib/Onboarding.svelte'
   import Shell from './Shell.svelte'
   import Toaster from './Toaster.svelte'
@@ -40,8 +41,8 @@
 {:else}
   {#if apiError}
     <div class="api-error">
-      <span>Backend unavailable.</span>
-      <button onclick={() => location.reload()}>Retry</button>
+      <span>{t('app.backendUnavailable')}</span>
+      <button onclick={() => location.reload()}>{t('app.retry')}</button>
     </div>
   {/if}
   <Shell />

@@ -45,7 +45,40 @@
     "virtualIP": "Virtual IP",
     "network": "Network",
     "apiError": "Unable to reach the backend API",
-    "connectionLost": "Connection to backend lost — data may be stale"
+    "connectionLost": "Connection to backend lost — data may be stale",
+    "hero": {
+      "connected": "Connected",
+      "disconnected": "Disconnected",
+      "via": "via",
+      "connect": "Connect",
+      "disconnect": "Disconnect",
+      "switchServer": "Switch server"
+    },
+    "stats": {
+      "rtt": "RTT",
+      "loss": "Packet loss",
+      "transfer": "Transfer",
+      "auto": "auto"
+    },
+    "throughput": {
+      "title": "Throughput",
+      "down": "Down",
+      "up": "Up",
+      "window": "last 5 min",
+      "waiting": "Waiting for samples…"
+    },
+    "transportsPanel": {
+      "title": "Active transports",
+      "count_one": "{n} transport",
+      "count_other": "{n} transports",
+      "emptyTitle": "No transport data",
+      "emptyDesc": "Connect to see per-transport breakdown.",
+      "state": {
+        "primary": "PRIMARY",
+        "standby": "STANDBY",
+        "idle": "IDLE"
+      }
+    }
   },
   "servers": {
     "activeServer": "Active Server",
@@ -67,7 +100,54 @@
     "selecting": "Selecting...",
     "sni": "SNI (optional)",
     "confirmDelete": "Remove Server",
-    "confirmDeleteMsg": "Are you sure you want to remove this server?"
+    "confirmDeleteMsg": "Are you sure you want to remove this server?",
+    "configured_one": "{n} configured",
+    "configured_other": "{n} configured",
+    "speedTest": "Speed test",
+    "setActive": "Set active",
+    "setAsActive": "Set as active",
+    "available": "Available",
+    "notTested": "Not yet tested.",
+    "selected": "{n} selected",
+    "columns": {
+      "address": "Address",
+      "latency": "Latency",
+      "protocol": "Protocol"
+    },
+    "empty": {
+      "title": "No servers",
+      "desc": "Add one or import a subscription to get started."
+    },
+    "dialog": {
+      "add": {
+        "desc": "Enter server details. Address and password are required.",
+        "namePlaceholder": "sg-hk-02",
+        "addrPlaceholder": "example.com:443",
+        "sniLabel": "SNI (optional)",
+        "sniPlaceholder": "example.com"
+      },
+      "import": {
+        "title": "Import servers",
+        "desc": "Paste a Clash YAML, Base64 SIP-008 subscription, or shuttle:// URI.",
+        "placeholder": "shuttle://...  or  proxies:\\n  - name: ...  or  base64 SIP-008"
+      },
+      "delete": {
+        "titleOne": "Delete server?",
+        "titleMany": "Delete {n} servers?"
+      }
+    },
+    "toast": {
+      "added": "Added {name}",
+      "switched": "Switched to {name}",
+      "deleted_one": "Deleted 1 server",
+      "deleted_other": "Deleted {n} servers",
+      "deleteFailed": "Failed to delete {addr}: {msg}",
+      "tested_one": "Tested 1 server",
+      "tested_other": "Tested {n} servers",
+      "autoSelected": "Auto-selected {name} ({latency} ms)",
+      "imported": "Imported {added} of {total} servers",
+      "importedNone": "No new servers imported"
+    }
   },
   "import": {
     "title": "Import Servers",
@@ -284,7 +364,8 @@
   "app": {
     "connecting": "Connecting to Shuttle...",
     "retry": "Retry",
-    "backendError": "Backend unreachable. Check that Shuttle is running."
+    "backendError": "Backend unreachable. Check that Shuttle is running.",
+    "backendUnavailable": "Backend unavailable."
   },
   "common": {
     "cancel": "Cancel",
@@ -294,7 +375,12 @@
     "error": "Error",
     "success": "Success",
     "timeout": "timeout",
-    "more": "more"
+    "more": "more",
+    "close": "Close",
+    "yes": "yes",
+    "no": "no",
+    "cannotUndo": "This cannot be undone.",
+    "retry": "Retry"
   },
   "onboarding": {
     "welcome": "Welcome to Shuttle",
