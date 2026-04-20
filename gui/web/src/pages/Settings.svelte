@@ -16,12 +16,6 @@
   import SettingsDiagnostics from '../lib/settings/SettingsDiagnostics.svelte'
   import SettingsPerAppPicker from '../lib/settings/SettingsPerAppPicker.svelte'
 
-  interface Props {
-    onSwitchToSimple?: () => void
-  }
-
-  let { onSwitchToSimple }: Props = $props()
-
   let config = $state(null)
   let saving = $state(false)
   let msg = $state('')
@@ -254,13 +248,6 @@
 
   <SettingsDiagnostics onMessage={handleMessage} />
 
-  {#if onSwitchToSimple}
-    <div class="mode-section">
-      <button class="btn-simple-mode" onclick={onSwitchToSimple}>
-        {t('settings.switchToSimple')}
-      </button>
-    </div>
-  {/if}
 </div>
 {:else}
 <p class="loading-text">{t('common.loading')}</p>
@@ -304,27 +291,4 @@
   .msg-error { color: var(--accent-red); }
 
   .loading-text { color: var(--text-secondary); font-size: 14px; }
-
-  .mode-section {
-    margin-top: 32px;
-    padding-top: 24px;
-    border-top: 1px solid var(--border);
-  }
-
-  .btn-simple-mode {
-    background: none;
-    border: 1px solid var(--border);
-    color: var(--text-secondary);
-    border-radius: var(--radius-sm);
-    padding: 8px 16px;
-    cursor: pointer;
-    font-size: 13px;
-    font-family: inherit;
-    transition: border-color 0.15s, color 0.15s;
-  }
-
-  .btn-simple-mode:hover {
-    border-color: var(--border-light);
-    color: var(--text-primary);
-  }
 </style>
