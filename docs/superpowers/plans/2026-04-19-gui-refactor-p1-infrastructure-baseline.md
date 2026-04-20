@@ -82,3 +82,28 @@ is emitted in production**. The harness is reached only via
 The design system cost will materialize in P3+ when feature slices
 start importing `@/ui`. The budget remains **+30 KB** across all
 phases through P10.
+
+---
+
+## Post-P2 (2026-04-20)
+
+Run after the P2 app-shell commits on `refactor/gui-v2`.
+
+### index.js
+- raw: 98,372 → **93,684** bytes (**−4,688 B** vs P1)
+- gzip: 35.38 → **34.98 KB** (**−0.40 KB** vs P1)
+
+### Why it got smaller
+The legacy `src/App.svelte` (537 lines of tab-switching + SimpleMode
+dual-UI + inline SVG icons) was deleted and `pages/SimpleMode.svelte`
+(312 lines) removed. The new `app/App`+`Shell`+`Sidebar`+`Toaster`
+composition plus router wiring is collectively smaller than the single
+legacy root.
+
+bits-ui is still tree-shaken from prod — no feature route imports it
+yet. That cost will hit in P3+ as features start using `@/ui/Dialog`
+etc.
+
+### Delta vs original baseline (pre-P1)
+- JS gzip: 34.94 KB → **34.98 KB** (**+0.04 KB** total after P1+P2)
+- Budget remaining: ~29.96 KB for P3-P10 design-system integration.
