@@ -175,12 +175,40 @@
     "supportedFormats": "支持的格式：Shuttle JSON, SIP008, Base64",
     "servers": "{count} 个服务器",
     "updated": "更新时间：{date}",
-    "never": "从未更新",
-    "refresh": "刷新",
+    "never": "从未",
+    "refresh": "立即刷新",
     "refreshing": "刷新中...",
     "delete": "删除",
     "moreServers": "还有 {count} 个",
-    "error": "错误：{message}"
+    "error": "错误：{message}",
+    "count": "{n} 个订阅",
+    "empty": {
+      "title": "暂无订阅",
+      "desc": "添加一个订阅从远端列表自动导入服务器。"
+    },
+    "dialog": {
+      "add": {
+        "title": "添加订阅",
+        "desc": "粘贴订阅链接(Clash YAML、SIP-008 或 shuttle:// 列表)。"
+      }
+    },
+    "columns": {
+      "name": "名称",
+      "url": "链接",
+      "servers": "服务器",
+      "updated": "更新",
+      "format": "格式"
+    },
+    "justNow": "刚刚",
+    "minutesAgo": "{n} 分钟前",
+    "hoursAgo": "{n} 小时前",
+    "daysAgo": "{n} 天前",
+    "importedServers": "已导入的服务器",
+    "andMore": "……还有 {n} 个",
+    "toast": {
+      "added": "已添加 {name}",
+      "refreshed": "已刷新"
+    }
   },
   "routing": {
     "title": "路由规则",

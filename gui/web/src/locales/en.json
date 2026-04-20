@@ -175,12 +175,40 @@
     "supportedFormats": "Supported formats: Shuttle JSON, SIP008, Base64",
     "servers": "{count} servers",
     "updated": "Updated: {date}",
-    "never": "Never",
-    "refresh": "Refresh",
+    "never": "never",
+    "refresh": "Refresh now",
     "refreshing": "Refreshing...",
     "delete": "Delete",
     "moreServers": "+{count} more",
-    "error": "Error: {message}"
+    "error": "Error: {message}",
+    "count": "{n} sources",
+    "empty": {
+      "title": "No subscriptions",
+      "desc": "Add one to auto-import servers from a remote list."
+    },
+    "dialog": {
+      "add": {
+        "title": "Add subscription",
+        "desc": "Paste a subscription URL (Clash YAML, SIP-008, or shuttle:// list)."
+      }
+    },
+    "columns": {
+      "name": "Name",
+      "url": "URL",
+      "servers": "Servers",
+      "updated": "Updated",
+      "format": "Format"
+    },
+    "justNow": "just now",
+    "minutesAgo": "{n} min ago",
+    "hoursAgo": "{n} h ago",
+    "daysAgo": "{n} d ago",
+    "importedServers": "Imported servers",
+    "andMore": "… and {n} more",
+    "toast": {
+      "added": "Added {name}",
+      "refreshed": "Refreshed"
+    }
   },
   "routing": {
     "title": "Routing Rules",
