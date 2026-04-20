@@ -1,5 +1,6 @@
 import { lazy } from '@/lib/router'
 import type { Component } from 'svelte'
+import * as dashboard from '@/features/dashboard'
 
 export interface NavMeta {
   label: string
@@ -16,11 +17,7 @@ export interface AppRoute {
 }
 
 export const routes: AppRoute[] = [
-  {
-    path: '/',
-    component: lazy(() => import('@/pages/Dashboard.svelte')),
-    nav: { label: 'nav.dashboard', icon: 'dashboard', order: 10 },
-  },
+  dashboard.route,
   {
     path: '/servers',
     component: lazy(() => import('@/pages/Servers.svelte')),
