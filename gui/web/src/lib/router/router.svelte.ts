@@ -1,5 +1,7 @@
 // Minimal hash-based router for Shuttle GUI.
 
+import type { Component } from 'svelte'
+
 interface RouteState {
   path: string
   query: Record<string, string>
@@ -77,8 +79,6 @@ export type Lazy<T> = () => Promise<T>
 export function lazy<T>(loader: () => Promise<{ default: T }>): Lazy<T> {
   return async () => (await loader()).default
 }
-
-import type { Component } from 'svelte'
 
 export interface RouteDef {
   path: string

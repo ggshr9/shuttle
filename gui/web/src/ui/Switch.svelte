@@ -17,7 +17,11 @@
     id,
   }: Props = $props()
 
-  const switchId = id ?? `sw-${Math.random().toString(36).slice(2, 8)}`
+  // Stable fallback (computed once at mount); derived picks id when parent
+  // passes it, otherwise uses fallback. Reactive so an `id` prop change is
+  // respected.
+  const _fallbackId = `sw-${Math.random().toString(36).slice(2, 8)}`
+  const switchId = $derived(id ?? _fallbackId)
 </script>
 
 <div class="wrap">

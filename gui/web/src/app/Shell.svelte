@@ -3,16 +3,22 @@
   import Sidebar from './Sidebar.svelte'
   import { routes } from './routes'
 
-  let collapsed = $state(
-    typeof localStorage !== 'undefined' && localStorage.getItem('shuttle-sidebar-collapsed') === '1'
-  )
+  function readCollapsed(): boolean {
+    try {
+      return localStorage?.getItem?.('shuttle-sidebar-collapsed') === '1'
+    } catch {
+      return false
+    }
+  }
+
+  let collapsed = $state(readCollapsed())
 
   function toggleCollapsed() {
     collapsed = !collapsed
     try {
-      localStorage.setItem('shuttle-sidebar-collapsed', collapsed ? '1' : '0')
+      localStorage?.setItem?.('shuttle-sidebar-collapsed', collapsed ? '1' : '0')
     } catch {
-      // ignore
+      // ignore — sandboxed iframes / private-mode Safari / quota
     }
   }
 </script>

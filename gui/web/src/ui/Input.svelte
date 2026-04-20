@@ -27,7 +27,8 @@
     autocomplete,
   }: Props = $props()
 
-  const inputId = id ?? `in-${Math.random().toString(36).slice(2, 8)}`
+  const _fallbackId = `in-${Math.random().toString(36).slice(2, 8)}`
+  const inputId = $derived(id ?? _fallbackId)
 </script>
 
 <div class="field {cls}" class:has-error={!!error}>

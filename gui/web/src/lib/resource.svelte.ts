@@ -1,5 +1,11 @@
 // createResource — reactive server-state primitive for Svelte 5 runes.
-// Contract: resources with the same key share state, fetcher, and polling.
+//
+// Contract:
+//   Resources with the same key share state, fetcher, and polling behavior.
+//   The FIRST caller for a given key defines the fetcher + opts; subsequent
+//   callers with the same key subscribe to the existing entry. To change
+//   behavior, use a different key (or call `invalidate(key)` and let the
+//   first caller re-register after __resetRegistry in tests).
 //
 // NOTE: P1 does NOT auto-dispose when a component unmounts. Polling continues
 // until explicit `invalidate()` or process exit. This keeps createResource
@@ -8,11 +14,14 @@
 // polling accumulates measurably; for the current set of ≤10 resources it does
 // not.
 
+import { connectWS } from './ws'
+
 interface ResourceState<T> {
   data: T | undefined
   loading: boolean
   error: Error | null
   stale: boolean
+  hasLoaded: boolean      // distinguishes "fetcher returned undefined" from "never fetched"
 }
 
 interface Options<T> {
@@ -42,6 +51,7 @@ async function runFetch<T>(entry: Entry<T>): Promise<void> {
       entry.state.data = value
       entry.state.error = null
       entry.state.stale = false
+      entry.state.hasLoaded = true
     } catch (e) {
       entry.state.error = e instanceof Error ? e : new Error(String(e))
       entry.state.stale = true
@@ -91,19 +101,18 @@ export function createResource<T>(
       loading: false,
       error: null,
       stale: false,
+      hasLoaded: false,
     })
     entry = { state, fetcher, opts, refCount: 0, pollTimer: null, inflight: null }
     registry.set(key, entry as Entry<unknown>)
-  } else {
-    entry.fetcher = fetcher
-    entry.opts = opts
+    startPolling(entry)
   }
+  // Intentionally do NOT override fetcher/opts on subsequent calls.
+  // Same-key = same resource = same behavior. Later callers just subscribe.
   entry.refCount++
 
   // Kick an initial fetch if not yet populated
-  if (entry.state.data === undefined && !entry.inflight) void runFetch(entry)
-
-  startPolling(entry)
+  if (!entry.state.hasLoaded && !entry.inflight) void runFetch(entry)
 
   return {
     get data() { return entry!.state.data },
@@ -132,8 +141,6 @@ export function __resetRegistry(): void {
 // ─────────────────────────────────────────────────────────────
 // createStream — runes wrapper over lib/ws.ts
 // ─────────────────────────────────────────────────────────────
-
-import { connectWS } from './ws'
 
 export interface Stream<T> {
   readonly data: T | undefined
