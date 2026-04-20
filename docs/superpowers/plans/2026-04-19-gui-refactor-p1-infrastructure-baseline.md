@@ -164,3 +164,19 @@ duplicate it either.
 ### Svelte-check error count
 - Pre-P4: 300 errors
 - Post-P4: **264** errors (−36 from deleted legacy Servers.svelte)
+
+---
+
+## Post-P5 (2026-04-20)
+
+After Subscriptions + Groups feature commits on `refactor/gui-v2`.
+
+### Bundle (lazy chunks for the two new features)
+- `SubscriptionsPage-*.js`: **7.94 KB raw / ~2.5 KB gzip**
+- `GroupsPage-*.js`: **4.66 KB raw / ~1.5 KB gzip**
+
+Both chunks are smaller than legacy (`Subscriptions-*` was 6.29 / 2.42; `Groups-*` was 5.44 / 2.20) because they skip Chart.js and other legacy-only dependencies. Dialog code consolidated into the index chunk after bits-ui dedup between features.
+
+### Svelte-check error count
+- Pre-P5: 264 errors
+- Post-P5: **236** errors (−28 from deleted legacy Subscriptions.svelte + Groups.svelte)

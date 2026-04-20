@@ -73,3 +73,11 @@ test.describe('P4 servers', () => {
         await expect(page.locator('text=Enter server details')).toBeVisible({ timeout: 5000 });
     });
 });
+
+test.describe('P5 groups', () => {
+    test('groups URL renders page chrome', async ({ page }) => {
+        await page.goto('/#/groups');
+        await expect(page.locator('.sidebar')).toBeVisible();
+        await expect(page.locator('h3:has-text("Groups")').first()).toBeVisible({ timeout: 5000 });
+    });
+});
