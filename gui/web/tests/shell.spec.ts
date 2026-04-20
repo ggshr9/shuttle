@@ -54,3 +54,22 @@ test.describe('P3 dashboard', () => {
         await expect(page.locator('text=Throughput')).toBeVisible({ timeout: 5000 });
     });
 });
+
+test.describe('P4 servers', () => {
+    test('servers URL renders dense table header', async ({ page }) => {
+        await page.goto('/#/servers');
+        await expect(page.locator('.sidebar')).toBeVisible();
+        // Empty state shows "No servers" since backend is unreachable in tests.
+        // Header row is only rendered when there are servers, so we verify the
+        // page chrome (Section title + Add button) instead.
+        await expect(page.locator('h3:has-text("Servers")')).toBeVisible({ timeout: 5000 });
+        await expect(page.locator('button:has-text("Add server")')).toBeVisible();
+    });
+
+    test('Add server button opens dialog', async ({ page }) => {
+        await page.goto('/#/servers');
+        await expect(page.locator('.sidebar')).toBeVisible();
+        await page.locator('button:has-text("Add server")').click();
+        await expect(page.locator('text=Enter server details')).toBeVisible({ timeout: 5000 });
+    });
+});

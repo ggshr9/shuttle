@@ -135,3 +135,32 @@ Run after P3 dashboard feature commits on `refactor/gui-v2`.
 ### Svelte-check error count
 - Pre-P3 baseline: **359** errors
 - Post-P3: **300** errors (−59 — all from the 5 deleted legacy files)
+
+---
+
+## Post-P4 (2026-04-20)
+
+After P4 servers feature commits on `refactor/gui-v2`.
+
+### Bundle
+| Chunk | Pre-P4 | Post-P4 |
+|-------|--------|---------|
+| `index-*.js`           | 96.93 KB / 36.26 KB gzip | **107.05 KB / 39.59 KB gzip** |
+| `Servers-*.js` (lazy)  | 10.66 KB /  3.56 KB gzip | **61.69 KB / 19.81 KB gzip** (new ServersPage) |
+
+### Why ServersPage is much heavier than legacy Servers
+3 bits-ui Dialogs (Add / Import / DeleteConfirm) bring focus-trap, portal,
+and escape-handling code with them. Each Dialog wrapper is ~5-7 KB raw of
+bits-ui internals plus its own styling. Tree-shaking keeps Dialog out of
+the shell + Dashboard chunks (those don't open dialogs); Settings doesn't
+duplicate it either.
+
+### Cumulative delta vs original pre-P1 baseline
+- JS gzip total (index + visible chunks):
+  - pre-P1:   ~94.2 KB
+  - post-P4:  ~110.0 KB (≈ +15.8 KB cumulative)
+- Within +30 KB P1-P10 budget. Remaining: ~14 KB for P5-P10.
+
+### Svelte-check error count
+- Pre-P4: 300 errors
+- Post-P4: **264** errors (−36 from deleted legacy Servers.svelte)
