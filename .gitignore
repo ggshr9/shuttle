@@ -41,3 +41,8 @@ test/cloud/pids/
 # Worktrees
 .worktrees/
 .superpowers/
+
+# Local tool state (Claude Code, Playwright, etc.)
+.claude/
+gui/web/test-results/
+gui/web/playwright-report/
