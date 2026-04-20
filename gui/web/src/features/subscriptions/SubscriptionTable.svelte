@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { SvelteSet } from 'svelte/reactivity'
   import { Empty, Card } from '@/ui'
   import { t } from '@/lib/i18n/index'
   import SubscriptionRow from './SubscriptionRow.svelte'
@@ -11,7 +12,9 @@
   }
   let { items, onDelete }: Props = $props()
 
-  const expanded = $state<Set<string>>(new Set())
+  // SvelteSet tracks add/delete mutations; plain Set in $state would not
+  // trigger re-render on toggle.
+  const expanded = new SvelteSet<string>()
 
   function toggle(id: string) {
     if (expanded.has(id)) expanded.delete(id)

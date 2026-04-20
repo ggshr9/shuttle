@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { SvelteSet } from 'svelte/reactivity'
   import { Empty, Card } from '@/ui'
   import { t } from '@/lib/i18n/index'
   import ServerRow from './ServerRow.svelte'
@@ -15,7 +16,9 @@
 
   let { servers, activeAddr, selected, onSelectedChange, onDelete }: Props = $props()
 
-  const expanded = $state<Set<string>>(new Set())
+  // SvelteSet (from svelte/reactivity) tracks add/delete mutations natively;
+  // a plain $state<Set> would not trigger re-render on mutation.
+  const expanded = new SvelteSet<string>()
 
   function toggleSelect(addr: string, v: boolean) {
     const next = new Set(selected)

@@ -127,7 +127,13 @@ export function getAllResults(): Record<string, SpeedtestResult> {
 export async function runSpeedtest(addrs: string[]): Promise<void> {
   if (addrs.length === 0) return
   try {
-    const rs = await apiSpeedtest(addrs)
+    // The backend's POST /api/speedtest currently ignores the requested
+    // addrs and returns results for every configured server. Filter client-
+    // side so the toast count and stored results reflect the actual subset.
+    // (A server-side fix belongs in a separate PR.)
+    const wanted = new Set(addrs)
+    const all = await apiSpeedtest(addrs)
+    const rs = all.filter((r) => wanted.has(r.server_addr))
     for (const r of rs) results.map[r.server_addr] = r
     toasts.success(
       rs.length === 1

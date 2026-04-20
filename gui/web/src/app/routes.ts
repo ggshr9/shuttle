@@ -24,6 +24,7 @@ export const routes: AppRoute[] = [
   servers.route,
   subscriptions.route,
   groups.route,
+  groups.detailRoute,
   {
     path: '/routing',
     component: lazy(() => import('@/pages/Routing.svelte')),
