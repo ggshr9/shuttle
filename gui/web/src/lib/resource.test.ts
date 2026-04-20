@@ -1,9 +1,20 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { createResource, invalidate, __resetRegistry } from '@/lib/resource.svelte'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import {
+  createResource,
+  createStream,
+  invalidate,
+  __resetRegistry,
+  __resetStreams,
+} from '@/lib/resource.svelte'
 
 beforeEach(() => {
   __resetRegistry()
+  __resetStreams()
   vi.useRealTimers()
+})
+
+afterEach(() => {
+  __resetStreams()
 })
 
 describe('createResource', () => {
@@ -51,5 +62,55 @@ describe('createResource', () => {
     invalidate('test.invalidate')
     await vi.waitUntil(() => r.data !== first, { timeout: 500 })
     expect(fetcher).toHaveBeenCalledTimes(2)
+  })
+})
+
+describe('createStream', () => {
+  it('opens one WebSocket per key regardless of subscriber count', () => {
+    const spy = vi.fn()
+    // Count WebSocket constructor invocations by replacing the global.
+    const origWS = globalThis.WebSocket
+    globalThis.WebSocket = class {
+      onmessage: ((e: MessageEvent) => void) | null = null
+      onclose: (() => void) | null = null
+      onerror: (() => void) | null = null
+      constructor(..._args: unknown[]) { spy() }
+      close() {}
+    } as unknown as typeof WebSocket
+
+    try {
+      const a = createStream('stream.dedup', '/api/test')
+      const b = createStream('stream.dedup', '/api/test')
+      const c = createStream('stream.dedup', '/api/test')
+      expect(spy).toHaveBeenCalledTimes(1)
+      // All three subscribers see the same backing state.
+      expect(a.data).toBe(b.data)
+      expect(b.data).toBe(c.data)
+    } finally {
+      globalThis.WebSocket = origWS
+    }
+  })
+
+  it('closes the socket only when last subscriber closes', () => {
+    let closeCalls = 0
+    const origWS = globalThis.WebSocket
+    globalThis.WebSocket = class {
+      onmessage: ((e: MessageEvent) => void) | null = null
+      onclose: (() => void) | null = null
+      onerror: (() => void) | null = null
+      constructor(..._args: unknown[]) {}
+      close() { closeCalls++ }
+    } as unknown as typeof WebSocket
+
+    try {
+      const a = createStream('stream.refcount', '/api/test')
+      const b = createStream('stream.refcount', '/api/test')
+      a.close()
+      expect(closeCalls).toBe(0)     // b still subscribed
+      b.close()
+      expect(closeCalls).toBe(1)     // both gone → close
+    } finally {
+      globalThis.WebSocket = origWS
+    }
   })
 })

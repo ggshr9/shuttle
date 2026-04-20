@@ -46,14 +46,15 @@ const _history = $state<{ up: number[]; down: number[] }>({ up: [], down: [] })
 function ensureHistoryPump() {
   if (_historyInitialized) return
   _historyInitialized = true
-  // Drive the buffer from the same WS stream. We don't close it — history is
-  // an app-lifetime concern, not a component one.
-  useSpeedStream()
+  // Capture the stream exactly once. The registry in createStream dedupes by
+  // key so callers elsewhere (e.g. ConnectionHero) get the same backing state
+  // without opening a second WebSocket. We never call .close() here — history
+  // is an app-lifetime concern.
+  const stream = useSpeedStream()
   setInterval(() => {
-    const s = useSpeedStream()
-    if (!s.data) return
-    _history.up   = [..._history.up.slice(-(MAX_POINTS - 1)),   s.data.upload]
-    _history.down = [..._history.down.slice(-(MAX_POINTS - 1)), s.data.download]
+    if (!stream.data) return
+    _history.up   = [..._history.up.slice(-(MAX_POINTS - 1)),   stream.data.upload]
+    _history.down = [..._history.down.slice(-(MAX_POINTS - 1)), stream.data.download]
   }, 5000)
 }
 

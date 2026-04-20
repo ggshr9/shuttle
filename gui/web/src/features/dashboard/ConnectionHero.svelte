@@ -5,14 +5,20 @@
   import { invalidate } from '@/lib/resource.svelte'
   import { toasts } from '@/lib/toaster.svelte'
   import type { Status } from '@/lib/api/types'
+  import { useSpeedStream } from './resource.svelte'
 
   interface Props { status: Status }
   let { status }: Props = $props()
 
+  // Live bytes/sec from the /api/speed WebSocket. Shared with the rest of the
+  // dashboard — the stream registry dedupes by key, so we don't open a second
+  // socket.
+  const stream = useSpeedStream()
+
   const connected = $derived(status.connected === true)
   const serverLabel = $derived(status.server?.name || status.server?.addr || '—')
   const transportLabel = $derived(
-    (status as unknown as { transport?: string }).transport ?? 'auto'
+    (status as unknown as { transport?: string }).transport ?? '—'
   )
 
   function formatUptime(s: number): string {
@@ -23,6 +29,7 @@
     return `${h}h ${m % 60}m`
   }
 
+  // bps here is bytes per second — the WS pushes instantaneous rates.
   function formatSpeed(bps: number): { value: string; unit: string } {
     if (bps >= 1e6) return { value: (bps / 1e6).toFixed(1), unit: 'MB/s' }
     if (bps >= 1e3) return { value: (bps / 1e3).toFixed(1), unit: 'KB/s' }
@@ -30,8 +37,8 @@
   }
 
   const uptime = $derived(formatUptime(status.uptime ?? 0))
-  const down = $derived(formatSpeed(status.bytes_recv ?? 0))
-  const up   = $derived(formatSpeed(status.bytes_sent ?? 0))
+  const down = $derived(formatSpeed(stream.data?.download ?? 0))
+  const up   = $derived(formatSpeed(stream.data?.upload ?? 0))
 
   let busy = $state(false)
   async function toggle() {

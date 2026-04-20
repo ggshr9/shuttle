@@ -139,7 +139,11 @@ export function __resetRegistry(): void {
 }
 
 // ─────────────────────────────────────────────────────────────
-// createStream — runes wrapper over lib/ws.ts
+// createStream — runes wrapper over lib/ws.ts.
+// Same-key contract as createResource: first caller for a key opens
+// the WebSocket; subsequent callers share the same backing state.
+// Per-caller close() decrements a refcount and only tears down the
+// socket when the last subscriber leaves.
 // ─────────────────────────────────────────────────────────────
 
 export interface Stream<T> {
@@ -148,26 +152,49 @@ export interface Stream<T> {
   close(): void
 }
 
+interface StreamEntry<T> {
+  state: { data: T | undefined; connected: boolean }
+  conn: { close(): void }
+  refCount: number
+}
+
+const streamRegistry = new Map<string, StreamEntry<unknown>>()
+
 export function createStream<T>(
-  _key: string,     // reserved for future single-flight; currently ignored
+  key: string,
   path: string,
   opts: { initial?: T } = {},
 ): Stream<T> {
-  const state = $state<{ data: T | undefined; connected: boolean }>({
-    data: opts.initial,
-    connected: false,
-  })
-  const conn = connectWS<T>(path, (msg) => {
-    state.data = msg
-    state.connected = true
-  })
-  // Consumer must call .close() explicitly from their component's $effect
-  // cleanup: `$effect(() => () => stream.close())`. We do not register a
-  // $effect here because this factory may be called outside a component
-  // context (tests, module init).
-  return {
-    get data() { return state.data },
-    get connected() { return state.connected },
-    close: () => conn.close(),
+  let entry = streamRegistry.get(key) as StreamEntry<T> | undefined
+  if (!entry) {
+    const state = $state<{ data: T | undefined; connected: boolean }>({
+      data: opts.initial,
+      connected: false,
+    })
+    const conn = connectWS<T>(path, (msg) => {
+      state.data = msg
+      state.connected = true
+    })
+    entry = { state, conn, refCount: 0 }
+    streamRegistry.set(key, entry as StreamEntry<unknown>)
   }
+  entry.refCount++
+
+  return {
+    get data() { return entry!.state.data },
+    get connected() { return entry!.state.connected },
+    close: () => {
+      entry!.refCount--
+      if (entry!.refCount <= 0) {
+        entry!.conn.close()
+        streamRegistry.delete(key)
+      }
+    },
+  }
+}
+
+// Test helper — close every stream and clear the registry.
+export function __resetStreams(): void {
+  streamRegistry.forEach((e) => e.conn.close())
+  streamRegistry.clear()
 }
