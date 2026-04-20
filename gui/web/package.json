@@ -7,7 +7,7 @@
     "dev": "vite",
     "dev:sandbox": "vite --config vite.config.sandbox.js",
     "dev:sandbox-b": "SANDBOX_CLIENT=b vite --config vite.config.sandbox.js",
-    "build": "vite build",
+    "build": "vite build && node scripts/keep-embed-placeholder.mjs",
     "preview": "vite preview",
     "check": "svelte-check --tsconfig ./tsconfig.json",
     "test": "vitest run --passWithNoTests",
