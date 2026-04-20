@@ -1,5 +1,27 @@
 /* Global CSS: tokens + resets only. Component styles stay inside components. */
 @import './ui/tokens.css';
 
-/* Minimal reset (non-invasive — does not conflict with existing App.svelte CSS) */
+/* Minimal reset */
 *, *::before, *::after { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: var(--shuttle-font-sans);
+  background: var(--shuttle-bg-base);
+  color: var(--shuttle-fg-primary);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+:focus-visible {
+  outline: 2px solid var(--shuttle-accent);
+  outline-offset: 2px;
+}
+
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: var(--shuttle-border);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover { background: var(--shuttle-fg-muted); }
