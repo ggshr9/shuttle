@@ -3,6 +3,7 @@ import type { Component } from 'svelte'
 import * as dashboard from '@/features/dashboard'
 import * as servers from '@/features/servers'
 import * as subscriptions from '@/features/subscriptions'
+import * as groups from '@/features/groups'
 
 export interface NavMeta {
   label: string
@@ -22,11 +23,7 @@ export const routes: AppRoute[] = [
   dashboard.route,
   servers.route,
   subscriptions.route,
-  {
-    path: '/groups',
-    component: lazy(() => import('@/pages/Groups.svelte')),
-    nav: { label: 'nav.groups', icon: 'groups', order: 40 },
-  },
+  groups.route,
   {
     path: '/routing',
     component: lazy(() => import('@/pages/Routing.svelte')),

@@ -515,12 +515,30 @@
     "test": "Test",
     "testing": "Testing...",
     "testDone": "Test completed for {tag}",
-    "selected": "Active",
+    "selected": "Selected",
     "activeNode": "Active node",
     "selectDone": "{member} selected",
     "use": "Use",
-    "active": "Active",
-    "unreachable": "unreachable"
+    "active": "ACTIVE",
+    "unreachable": "unreachable",
+    "count": "{n} groups",
+    "members": "Members",
+    "strategy": "Strategy",
+    "qualityComingSoon": "quality history: coming soon",
+    "backToGroups": "Back",
+    "testAll": "Test all",
+    "pick": "Pick",
+    "failed": "failed",
+    "empty": {
+      "title": "No groups",
+      "desc": "Outbound groups are defined in your config file."
+    },
+    "newStub": "New group",
+    "newStubHint": "create via config; UI editing coming soon",
+    "toast": {
+      "tested": "Tested {n} members",
+      "selected": "Selected {name}"
+    }
   },
   "mesh": {
     "title": "Mesh VPN",
