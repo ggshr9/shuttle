@@ -107,3 +107,31 @@ etc.
 ### Delta vs original baseline (pre-P1)
 - JS gzip: 34.94 KB → **34.98 KB** (**+0.04 KB** total after P1+P2)
 - Budget remaining: ~29.96 KB for P3-P10 design-system integration.
+
+---
+
+## Post-P3 (2026-04-20)
+
+Run after P3 dashboard feature commits on `refactor/gui-v2`.
+
+### Bundle
+| Chunk | Pre-P3 | Post-P3 |
+|-------|--------|---------|
+| `index-*.js`          | 93.70 KB / 35.00 KB gzip | **96.93 KB / 36.26 KB gzip** |
+| `Dashboard-*.js` (lazy) | 28.80 KB / 9.43 KB gzip  | **9.82 KB / 3.86 KB gzip** |
+
+### Why the shift
+- `index-*.js` grew ~1.26 KB gzip — bits-ui Dialog / Badge / Card / AsyncBoundary now
+  ship with the shell because `app/App`→`Shell`→`Sidebar`→`ui/*` pulls them eagerly.
+- `Dashboard-*.js` shrank by **5.57 KB gzip** — the new feature slice is ~2/3 the size
+  of the legacy `pages/Dashboard.svelte` + its chart bundles.
+
+### Cumulative delta vs original pre-P1 baseline
+- JS gzip: 34.94 → **36.26 KB** total (**+1.32 KB** after P1+P2+P3)
+- Lazy Dashboard: 9.43 → **3.86 KB** (**−5.57 KB**)
+- Net: app is **smaller**, even though design-system code is now in the shell bundle.
+- Budget remaining: ~28.7 KB for P4-P10.
+
+### Svelte-check error count
+- Pre-P3 baseline: **359** errors
+- Post-P3: **300** errors (−59 — all from the 5 deleted legacy files)
