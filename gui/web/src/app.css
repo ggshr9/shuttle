@@ -1,6 +1,68 @@
 /* Global CSS: tokens + resets only. Component styles stay inside components. */
 @import './ui/tokens.css';
 
+/* ============================================================
+ * Legacy var compatibility layer.
+ *
+ * Deleting App.svelte in P2 took every `--bg-*`, `--text-*`,
+ * `--border*`, `--accent*`, `--btn-*`, `--overlay-bg`, `--shadow-*`,
+ * `--radius-*`, `--sidebar-*` declaration with it. The bridged legacy
+ * pages (Subscriptions / Groups / Routing / Mesh / Logs / Settings)
+ * still reference those names until P5-P9 migrate them to
+ * `--shuttle-*`. Map each legacy var to a Geist-palette equivalent so
+ * those pages keep visible colors/backgrounds/borders during the
+ * transition. Delete this block after P10 when no legacy pages remain.
+ * ============================================================ */
+:root,
+[data-theme="dark"] {
+  --bg-primary:  var(--shuttle-bg-base);
+  --bg-secondary: var(--shuttle-bg-surface);
+  --bg-tertiary:  var(--shuttle-bg-subtle);
+  --bg-surface:   var(--shuttle-bg-surface);
+  --bg-hover:     var(--shuttle-bg-subtle);
+  --bg-sidebar:   var(--shuttle-bg-base);
+
+  --text-primary:   var(--shuttle-fg-primary);
+  --text-secondary: var(--shuttle-fg-secondary);
+  --text-muted:     var(--shuttle-fg-muted);
+
+  --border:       var(--shuttle-border);
+  --border-light: var(--shuttle-border-strong);
+
+  --accent:          var(--shuttle-accent);
+  --accent-hover:    var(--shuttle-fg-primary);
+  --accent-subtle:   color-mix(in oklab, var(--shuttle-accent) 12%, transparent);
+  --accent-green:    var(--shuttle-success);
+  --accent-green-subtle: color-mix(in oklab, var(--shuttle-success) 12%, transparent);
+  --accent-purple:   var(--shuttle-info);
+  --accent-red:      var(--shuttle-danger);
+  --accent-red-subtle: color-mix(in oklab, var(--shuttle-danger) 10%, transparent);
+  --accent-yellow:   var(--shuttle-warning);
+  --accent-yellow-subtle: color-mix(in oklab, var(--shuttle-warning) 10%, transparent);
+
+  --btn-bg:       var(--shuttle-accent);
+  --btn-bg-hover: var(--shuttle-fg-primary);
+
+  --overlay-bg: rgba(0, 0, 0, 0.6);
+
+  --shadow-sm: var(--shuttle-shadow-sm);
+  --shadow-md: var(--shuttle-shadow-md);
+  --shadow-lg: var(--shuttle-shadow-md);
+
+  --radius-sm: var(--shuttle-radius-sm);
+  --radius-md: var(--shuttle-radius-md);
+  --radius-lg: var(--shuttle-radius-lg);
+  --radius-xl: var(--shuttle-radius-lg);
+
+  --sidebar-width: 220px;
+  --sidebar-collapsed: 60px;
+}
+
+[data-theme="light"] {
+  /* Light-mode overrides where the Geist palette differs meaningfully. */
+  --overlay-bg: rgba(0, 0, 0, 0.3);
+}
+
 /* Minimal reset */
 *, *::before, *::after { box-sizing: border-box; }
 

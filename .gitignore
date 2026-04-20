@@ -1,5 +1,12 @@
 # Build output
 dist/
+# Re-include gui/web/dist/ but keep its build output ignored — we track a
+# single .gitkeep so `//go:embed all:web/dist` has at least one file to
+# match on clean checkouts. Release builds regenerate real assets via
+# `npm run build` before `go build`.
+!gui/web/dist/
+gui/web/dist/*
+!gui/web/dist/.gitkeep
 *.exe
 *.aar
 *.xcframework
