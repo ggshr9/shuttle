@@ -53,6 +53,100 @@
 All colors / spacing / type come from `src/ui/tokens.css` — never hardcode hex or px.
 Convention: `--shuttle-<scope>-<prop>` (e.g. `--shuttle-bg-surface`, `--shuttle-space-4`).
 
+## Svelte 5 gotchas (things review has caught)
+
+These are Svelte 5 runes quirks that several reviews flagged as P2 bugs. Read
+once, save time later.
+
+1. **Reactive collections need `svelte/reactivity`, not `$state<Set>`**
+   ```ts
+   // ❌ mutation NOT tracked — .add / .delete won't re-render
+   const expanded = $state<Set<string>>(new Set())
+   expanded.add(id)
+
+   // ✅ SvelteSet tracks mutations
+   import { SvelteSet } from 'svelte/reactivity'
+   const expanded = new SvelteSet<string>()
+   expanded.add(id)
+   ```
+   Same applies to Map → use `SvelteMap`. A plain `$state({...})` object IS
+   tracked for property access; only collection mutations need the helpers.
+
+2. **Runes in non-component files need a `.svelte.ts` extension**
+   Files that call `$state` / `$derived` / `$effect` at top level must be named
+   `foo.svelte.ts` (not `foo.ts`). Imports go without the `.ts` suffix
+   (`import { x } from './foo.svelte'`).
+
+3. **Don't call `$effect` from a factory function if callers may use it
+   outside a component context** (e.g. tests, module init). We keep
+   `createResource` callable from tests by having consumers drive disposal
+   explicitly rather than registering `$effect` inside the factory.
+
+4. **Module-level `$state` + multiple runtime exports + sibling `.ts` file
+   with the same basename breaks exports.** Hit this in P1 with
+   `lib/toast.svelte.ts` coexisting with the legacy `lib/toast.ts` — the
+   build compiled the runes module as a Svelte *component* and collapsed
+   named exports to `default`. Workaround: pick a unique basename
+   (we renamed to `lib/toaster.svelte.ts`).
+
+5. **Pure functions stay pure — don't write state from `$derived`**
+   ```ts
+   // ❌ violates state_unsafe_mutation
+   const loader = $derived.by(() => {
+     for (const r of routes) {
+       if (matches(r.path)) { state.params = r.params; return r.component }  // writes inside derived
+     }
+   })
+
+   // ✅ pure match + sync params via $effect if needed
+   const result = $derived.by(() => findMatch(routes, state.path))
+   $effect(() => { if (result) state.params = result.params })
+   ```
+
+6. **Checkbox `indeterminate` is a DOM property, not an HTML attribute.**
+   Setting it declaratively via Svelte does nothing. Use `bind:this` + an
+   action (or a one-line `$effect` that sets `el.indeterminate = ...`).
+
+## Router gotchas
+
+1. **Every URL pattern must be registered explicitly** — `RouterOutlet` does
+   strict-length matchPath, no prefix / wildcard fallback. A detail route
+   like `/groups/:tag` must be a separate `AppRoute` entry (can share a
+   lazy component with the index route; set `nav.hidden: true` so it
+   doesn't show up in the sidebar).
+
+2. **`matchPath` is pure; `matches()` reads live state** — both safe inside
+   `$derived`. `useParams(pattern)` returns params without mutation.
+
+## Resource + Stream gotchas
+
+1. **Same-key means same instance** — `createResource('x', fetcher1)` +
+   `createResource('x', fetcher2)` keep the *first* fetcher; second caller
+   subscribes to the existing entry. To swap behavior, use a different key.
+
+2. **`createStream` dedupes by key with refcount close** — Same-key callers
+   share one WebSocket; each caller must `.close()` to decrement. The
+   socket drops only when the last subscriber closes.
+
+3. **Polling keeps running until the process exits** (P1 design choice). No
+   auto-dispose on component unmount. Call `invalidate(key)` or let the
+   registry grow; it's bounded by the finite set of resources the app
+   registers.
+
+## Build gotchas
+
+1. **`gui/web/dist/.gitkeep` must exist before `go build ./gui`** — the
+   `//go:embed all:web/dist` pattern requires at least one matching file.
+   Every `npm run build` wipes the placeholder (vite `emptyOutDir: true`),
+   so `scripts/keep-embed-placeholder.mjs` runs as a post-build hook to
+   restore it. Don't delete the script or the `.gitkeep`.
+
+2. **Release workflow runs `npm run build` before `go build`** — so
+   production binaries always embed fresh assets. Local developers running
+   `go build -tags desktop,production ./cmd/shuttle-gui` without a prior
+   `npm run build` will embed only the placeholder and get a blank GUI.
+   CLAUDE.md documents the local sequence.
+
 ## Related
 
 - Architecture spec: `docs/superpowers/specs/2026-04-19-gui-refactor-design.md`
