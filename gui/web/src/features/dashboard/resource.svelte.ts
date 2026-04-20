@@ -3,8 +3,15 @@ import { status as fetchStatus, getTransportStats } from '@/lib/api/endpoints'
 import type { Status, TransportStats } from '@/lib/api/types'
 
 // ── Status — 3s polling (primary source of truth) ────────────
+// Initial value represents a disconnected state so the UI can render before
+// the first fetch resolves and stays meaningful if the backend is unreachable.
+const INITIAL_STATUS: Status = { connected: false }
+
 export function useStatus(): Resource<Status> {
-  return createResource('dashboard.status', fetchStatus, { poll: 3000 })
+  return createResource('dashboard.status', fetchStatus, {
+    poll: 3000,
+    initial: INITIAL_STATUS,
+  })
 }
 
 // ── Transport stats — 5s polling, only while connected ───────

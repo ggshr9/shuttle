@@ -29,3 +29,28 @@ test.describe('P2 shell', () => {
         await expect(page).toHaveURL(/#\/logs$/);
     });
 });
+
+test.describe('P3 dashboard', () => {
+    test('root URL renders new Dashboard hero', async ({ page }) => {
+        await page.goto('/');
+        await expect(page.locator('.sidebar')).toBeVisible();
+        // New Dashboard always shows a hero card with either "Connected" or
+        // "Disconnected" state.
+        await expect(page.locator('text=/Connected|Disconnected/').first()).toBeVisible({ timeout: 5000 });
+    });
+
+    test('dashboard shows four stats cards', async ({ page }) => {
+        await page.goto('/');
+        await expect(page.locator('.sidebar')).toBeVisible();
+        await expect(page.locator('text=RTT')).toBeVisible({ timeout: 5000 });
+        await expect(page.locator('text=Packet loss')).toBeVisible();
+        await expect(page.locator('text=Transfer')).toBeVisible();
+        await expect(page.locator('text=Transport').first()).toBeVisible();
+    });
+
+    test('dashboard shows throughput sparkline', async ({ page }) => {
+        await page.goto('/');
+        await expect(page.locator('.sidebar')).toBeVisible();
+        await expect(page.locator('text=Throughput')).toBeVisible({ timeout: 5000 });
+    });
+});
