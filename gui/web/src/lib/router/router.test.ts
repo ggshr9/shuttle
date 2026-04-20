@@ -1,9 +1,9 @@
 import { describe, it, expect, beforeEach } from 'vitest'
-import { navigate, useRoute, matches, __resetRoute } from '@/lib/router/router.svelte'
+import { navigate, useRoute, matches, matchPath, useParams, __resetRoute } from '@/lib/router/router.svelte'
 
 beforeEach(() => {
-  __resetRoute()
   location.hash = ''
+  __resetRoute()
 })
 
 describe('router', () => {
@@ -14,7 +14,6 @@ describe('router', () => {
 
   it('navigate() updates path', async () => {
     navigate('/servers')
-    // hashchange is async in jsdom
     await new Promise(r => setTimeout(r, 0))
     const r = useRoute()
     expect(r.path).toBe('/servers')
@@ -24,7 +23,6 @@ describe('router', () => {
   it('reads current hash on init', () => {
     location.hash = '#/settings/mesh'
     __resetRoute()
-    // __resetRoute clears state but init reads location.hash
     const r = useRoute()
     expect(r.path).toBe('/settings/mesh')
   })
@@ -36,12 +34,18 @@ describe('router', () => {
     expect(matches('/groups')).toBe(false)
   })
 
-  it('matches path with param', async () => {
+  it('matches path with param via useParams(pattern)', async () => {
     navigate('/groups/42')
     await new Promise(r => setTimeout(r, 0))
     expect(matches('/groups/:id')).toBe(true)
-    const r = useRoute()
-    expect(r.params.id).toBe('42')
+    const params = useParams<{ id: string }>('/groups/:id')
+    expect(params.id).toBe('42')
+  })
+
+  it('matchPath is pure — returns params without mutating state', () => {
+    const result = matchPath('/users/7/posts/42', '/users/:uid/posts/:pid')
+    expect(result).toEqual({ uid: '7', pid: '42' })
+    expect(matchPath('/a', '/b')).toBeNull()
   })
 
   it('unknown path stays on it (no 404)', async () => {

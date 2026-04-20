@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { useRoute, matches, type Lazy, type RouteDef } from './router.svelte'
+  import { useRoute, matchPath, type Lazy, type RouteDef } from './router.svelte'
   import type { Component } from 'svelte'
 
   interface Props {
@@ -10,22 +10,21 @@
   let { routes, fallback }: Props = $props()
   const route = useRoute()
 
-  function findMatch(defs: RouteDef[], prefix = ''): Lazy<Component> | null {
+  function findMatch(path: string, defs: RouteDef[], prefix = ''): Lazy<Component> | null {
     for (const d of defs) {
       const fullPath = (prefix + '/' + d.path).replace(/\/+/g, '/')
-      if (matches(fullPath)) return d.component
+      if (matchPath(path, fullPath)) return d.component
       if (d.children) {
-        const child = findMatch(d.children, fullPath)
+        const child = findMatch(path, d.children, fullPath)
         if (child) return child
       }
     }
     return null
   }
 
-  // Track current path to retrigger route resolution
   const loader = $derived.by<Lazy<Component> | null>(() => {
-    void route.path
-    return findMatch(routes) ?? fallback ?? null
+    const p = route.path
+    return findMatch(p, routes) ?? fallback ?? null
   })
 </script>
 

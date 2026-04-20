@@ -2,11 +2,10 @@
 
 interface RouteState {
   path: string
-  params: Record<string, string>
   query: Record<string, string>
 }
 
-const state = $state<RouteState>({ path: '/', params: {}, query: {} })
+const state = $state<RouteState>({ path: '/', query: {} })
 
 function parseHash(hash: string): { path: string; query: Record<string, string> } {
   let raw = hash.startsWith('#') ? hash.slice(1) : hash
@@ -23,7 +22,6 @@ function update() {
   const { path, query } = parseHash(location.hash)
   state.path = path
   state.query = query
-  state.params = {} // re-derived by matches()
 }
 
 if (typeof window !== 'undefined') {
@@ -45,26 +43,34 @@ export function useRoute(): Readonly<RouteState> {
   return state
 }
 
-export function useParams<T extends Record<string, string>>(): T {
-  return state.params as T
-}
-
-// Returns true + populates params if pattern matches current state.path.
-export function matches(pattern: string): boolean {
+// Pure pattern match — returns params record if the pattern matches the path,
+// null otherwise. No side effects, safe to call from within $derived.
+export function matchPath(path: string, pattern: string): Record<string, string> | null {
   const patternParts = pattern.split('/').filter(Boolean)
-  const pathParts = state.path.split('/').filter(Boolean)
-  if (patternParts.length !== pathParts.length) return false
+  const pathParts = path.split('/').filter(Boolean)
+  if (patternParts.length !== pathParts.length) return null
   const params: Record<string, string> = {}
   for (let i = 0; i < patternParts.length; i++) {
     const p = patternParts[i]
     if (p.startsWith(':')) {
       params[p.slice(1)] = pathParts[i]
     } else if (p !== pathParts[i]) {
-      return false
+      return null
     }
   }
-  state.params = params
-  return true
+  return params
+}
+
+// Convenience against the live state. Boolean-only — does NOT expose params.
+// Use `useParams(pattern)` when a component needs the extracted params.
+export function matches(pattern: string): boolean {
+  return matchPath(state.path, pattern) !== null
+}
+
+// Returns params for the current path under the given pattern, or an empty
+// object if the path doesn't match. Safe inside $derived.
+export function useParams<T extends Record<string, string>>(pattern: string): T {
+  return (matchPath(state.path, pattern) ?? {}) as T
 }
 
 export type Lazy<T> = () => Promise<T>
@@ -80,8 +86,7 @@ export interface RouteDef {
   children?: RouteDef[]
 }
 
-// Test helper — re-read location.hash (also usable by production code to force
-// a sync after manually manipulating location).
+// Test helper — re-read location.hash
 export function __resetRoute(): void {
   update()
 }
