@@ -433,7 +433,25 @@
     "downloadDiagnostics": "下载诊断包",
     "diagnosticsDesc": "收集系统信息、脱敏配置、连接状态和运行时数据，打包为 ZIP 文件用于调试。",
     "downloading": "下载中...",
-    "switchToSimple": "切换到简单模式"
+    "switchToSimple": "切换到简单模式",
+    "saved": "已保存",
+    "discard": "放弃",
+    "save": "保存",
+    "unsavedChanges": "你有未保存的更改",
+    "general": "通用",
+    "nav": {
+      "general": "通用",
+      "proxy": "代理",
+      "mesh": "Mesh",
+      "routing": "路由",
+      "dns": "DNS",
+      "logging": "日志",
+      "qos": "服务质量",
+      "backup": "备份",
+      "update": "更新",
+      "advanced": "高级"
+    },
+    "comingNext": "此分区正在迁移中，下一次提交完成。"
   },
   "app": {
     "connecting": "正在连接 Shuttle...",

@@ -433,7 +433,25 @@
     "downloadDiagnostics": "Download Diagnostics Bundle",
     "diagnosticsDesc": "Collect system info, redacted config, connection state, and runtime data into a ZIP file for debugging.",
     "downloading": "Downloading...",
-    "switchToSimple": "Switch to Simple Mode"
+    "switchToSimple": "Switch to Simple Mode",
+    "saved": "Saved",
+    "discard": "Discard",
+    "save": "Save",
+    "unsavedChanges": "You have unsaved changes",
+    "general": "General",
+    "nav": {
+      "general": "General",
+      "proxy": "Proxy",
+      "mesh": "Mesh",
+      "routing": "Routing",
+      "dns": "DNS",
+      "logging": "Logging",
+      "qos": "QoS",
+      "backup": "Backup",
+      "update": "Update",
+      "advanced": "Advanced"
+    },
+    "comingNext": "This section is being migrated in a follow-up commit."
   },
   "app": {
     "connecting": "Connecting to Shuttle...",

@@ -32,10 +32,47 @@ export interface Config {
   server?: Server
   servers?: Server[]
   proxy: {
-    system_proxy?: {
+    socks5?: { enabled: boolean; listen?: string }
+    http?:   { enabled: boolean; listen?: string }
+    tun?: {
       enabled: boolean
+      device_name?: string
+      per_app_mode?: '' | 'allow' | 'deny'
+      app_list?: string[]
+    }
+    allow_lan?: boolean
+    system_proxy?: { enabled: boolean }
+  }
+  mesh?: { enabled: boolean; p2p_enabled?: boolean }
+  log?:  { level?: 'debug' | 'info' | 'warn' | 'error' }
+  dns?: {
+    remote?: string
+    domestic?: string
+    cache?: boolean
+    prefetch?: boolean
+  }
+  routing?: {
+    default?: 'proxy' | 'direct' | 'reject'
+    rules?: unknown[]
+    geodata?: {
+      enabled?: boolean
+      auto_update?: boolean
     }
   }
+  qos?: {
+    enabled?: boolean
+    rules?: QosRule[]
+  }
+  subscriptions?: unknown[]
+}
+
+export interface QosRule {
+  name?: string
+  priority: number
+  protocol?: string
+  domains?: string[]
+  ports?: string[]
+  process?: string
 }
 
 export interface ConfigValidation {

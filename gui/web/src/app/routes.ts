@@ -1,4 +1,3 @@
-import { lazy } from '@/lib/router'
 import type { Component } from 'svelte'
 import * as dashboard from '@/features/dashboard'
 import * as servers from '@/features/servers'
@@ -7,6 +6,7 @@ import * as groups from '@/features/groups'
 import * as routing from '@/features/routing'
 import * as mesh from '@/features/mesh'
 import * as logs from '@/features/logs'
+import * as settings from '@/features/settings'
 
 export interface NavMeta {
   label: string
@@ -31,9 +31,5 @@ export const routes: AppRoute[] = [
   routing.route,
   mesh.route,
   logs.route,
-  {
-    path: '/settings',
-    component: lazy(() => import('@/pages/Settings.svelte')),
-    nav: { label: 'nav.settings', icon: 'settings', order: 90 },
-  },
+  settings.route,
 ]

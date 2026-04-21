@@ -73,6 +73,11 @@ export const icons: Record<string, IconPath> = {
   plus:         { paths: ['<path d="M10 4v12M4 10h12"/>'] },
   trash:        { paths: ['<path d="M4 6h12M7 6V4h6v2M6 6l1 10h6l1-10"/>'] },
   info:         { paths: ['<circle cx="10" cy="10" r="7"/>', '<path d="M10 9v4M10 6v.01"/>'] },
+  globe:        { paths: ['<circle cx="10" cy="10" r="7"/>', '<path d="M3 10h14M10 3a10 10 0 010 14M10 3a10 10 0 000 14"/>'] },
+  zap:          { paths: ['<path d="M11 3L4 12h5l-1 5 7-9h-5l1-5z"/>'] },
+  download:     { paths: ['<path d="M10 3v10M6 9l4 4 4-4M4 17h12"/>'] },
+  refresh:      { paths: ['<path d="M4 10a6 6 0 0110-4.5L16 7M16 10a6 6 0 01-10 4.5L4 13"/>', '<path d="M16 3v4h-4M4 17v-4h4"/>'] },
+  wrench:       { paths: ['<path d="M13 3a4 4 0 00-3 6.5L3 16l1 1 6.5-6.5A4 4 0 1013 3z"/>', '<circle cx="13" cy="7" r="1" fill="currentColor"/>'] },
 }
 
 // Enumerate the keys we committed to the registry so consumers get autocomplete.
@@ -81,3 +86,4 @@ export type IconName =
   | 'routing' | 'mesh' | 'logs' | 'settings'
   | 'check' | 'x' | 'chevronRight' | 'chevronLeft' | 'chevronDown'
   | 'plus' | 'trash' | 'info'
+  | 'globe' | 'zap' | 'download' | 'refresh' | 'wrench'
