@@ -142,12 +142,32 @@ once, save time later.
    restore it. Don't delete the script or the `.gitkeep`.
 
 2. **Release workflow runs `npm run build` before `go build`** — so
-   production binaries always embed fresh assets. Local developers running
-   `go build -tags desktop,production ./cmd/shuttle-gui` without a prior
-   `npm run build` will embed only the placeholder and get a blank GUI.
-   CLAUDE.md documents the local sequence.
+   production binaries always embed fresh assets. A local developer who
+   builds `cmd/shuttle-gui` without running `npm run build` first will
+   *not* get a silent blank window: `cmd/shuttle-gui/main.go` calls
+   `fs.Stat(webFS, "index.html")` at startup and `log.Fatalf`s with a
+   pointer to the build step if the bundle is missing. CLAUDE.md
+   documents the full local sequence.
+
+## Settings shell (§7.8 pattern reference)
+
+`features/settings/` is the one slice that multiplexes several URLs into
+a single visual frame:
+
+- `SettingsPage` is registered as a `/settings` route with 10 `children`
+  in `features/settings/index.ts`; every sub-path maps to the same
+  component because persistent draft state lives in
+  `features/settings/config.svelte.ts`, not in the component.
+- The component dispatches on the last URL segment into one of 10
+  sub-page components (`sub/<Name>.svelte`).
+- `UnsavedBar.svelte` is sticky at the top of the content area and only
+  renders when `settings.isDirty`.
+
+When another feature needs sub-routing, copy this shape rather than
+registering individual top-level routes.
 
 ## Related
 
 - Architecture spec: `docs/superpowers/specs/2026-04-19-gui-refactor-design.md`
-- P1 plan: `docs/superpowers/plans/2026-04-19-gui-refactor-p1-infrastructure.md`
+- Phase plans: `docs/superpowers/plans/2026-04-*-gui-refactor-p*.md`
+- Post-phase bundle + error baselines: `docs/superpowers/plans/2026-04-19-gui-refactor-p1-infrastructure-baseline.md`
