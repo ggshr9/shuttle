@@ -1,12 +1,15 @@
 {
   "_name": "简体中文",
   "nav": {
+    "activity": "活动",
     "dashboard": "仪表板",
     "servers": "服务器",
     "subscriptions": "订阅",
+    "traffic": "流量",
     "groups": "出站组",
-    "routing": "路由",
     "mesh": "Mesh 组网",
+    "now": "此刻",
+    "routing": "路由",
     "logs": "日志",
     "settings": "设置",
     "section": {
