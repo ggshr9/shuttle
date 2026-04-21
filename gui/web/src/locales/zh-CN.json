@@ -220,7 +220,12 @@
     "save": "保存",
     "saveApply": "保存并应用",
     "saving": "保存中...",
-    "templates": "模板",
+    "templates": {
+      "title": "应用路由模板",
+      "desc": "这将用模板规则替换当前所有规则。",
+      "empty": "暂无可用模板。",
+      "apply": "应用"
+    },
     "routingTemplates": "路由模板",
     "templateHint": "选择模板以替换当前规则",
     "importRules": "导入规则",
@@ -240,10 +245,28 @@
     "typeIpCidr": "IP CIDR",
     "testUrl": "测试 URL",
     "testPlaceholder": "输入域名或 URL 进行测试...",
-    "test": "测试",
+    "test": {
+      "title": "测试 URL",
+      "placeholder": "https://example.com/some/path",
+      "test": "测试",
+      "matchedBy": "匹配规则:{rule} {detail}"
+    },
     "testing": "测试中...",
     "matchedBy": "匹配规则",
-    "importExport": "导入 / 导出",
+    "importExport": {
+      "title": "导入 / 导出规则",
+      "desc": "粘贴 JSON、拖放文件,或导出当前规则集。",
+      "open": "导入 / 导出",
+      "dropHint": "拖放 .json 文件到此处,或在下方粘贴 JSON。",
+      "pastePlaceholder": "{ \"rules\": [...], \"default\": \"proxy\" }",
+      "invalidFile": "无效 JSON — 需要包含 \"rules\" 数组的对象。",
+      "parsed": "已解析 {n} 条规则。",
+      "merge": "与现有规则合并",
+      "replace": "替换全部",
+      "import": "导入",
+      "export": "下载当前规则",
+      "exportHint": "JSON 格式,立即下载。"
+    },
     "import": "导入",
     "importing": "导入中...",
     "export": "导出",
@@ -256,7 +279,30 @@
     "exportSuccess": "规则已导出",
     "noRules": "没有可导出的规则",
     "confirmTemplate": "应用模板",
-    "confirmTemplateMsg": "这将替换所有现有路由规则。确定要继续吗？"
+    "confirmTemplateMsg": "这将替换所有现有路由规则。确定要继续吗？",
+    "count": "{n} 条规则",
+    "default": "默认行为",
+    "applyTemplate": "应用模板",
+    "action": {
+      "proxy": "代理",
+      "direct": "直连",
+      "reject": "拒绝"
+    },
+    "hitBar": {
+      "label": "规则分布",
+      "empty": "尚未定义规则"
+    },
+    "process": {
+      "title": "选择进程",
+      "desc": "选择一个正在运行的进程作为规则目标。",
+      "none": "没有找到有活动连接的进程。",
+      "pick": "使用"
+    },
+    "toast": {
+      "saved": "路由已保存",
+      "templateApplied": "模板已应用",
+      "imported": "已导入 {added}/{total} 条规则"
+    }
   },
   "logs": {
     "title": "日志",

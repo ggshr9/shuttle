@@ -220,7 +220,12 @@
     "save": "Save",
     "saveApply": "Save & Apply",
     "saving": "Saving...",
-    "templates": "Templates",
+    "templates": {
+      "title": "Apply routing template",
+      "desc": "This will replace the current rules with the template's ruleset.",
+      "empty": "No templates available.",
+      "apply": "Apply"
+    },
     "routingTemplates": "Routing Templates",
     "templateHint": "Choose a template to replace current rules",
     "importRules": "Import Rules",
@@ -240,10 +245,28 @@
     "typeIpCidr": "IP CIDR",
     "testUrl": "Test URL",
     "testPlaceholder": "Enter domain or URL to test...",
-    "test": "Test",
+    "test": {
+      "title": "Test URL",
+      "placeholder": "https://example.com/some/path",
+      "test": "Test",
+      "matchedBy": "matched by {rule} {detail}"
+    },
     "testing": "Testing...",
     "matchedBy": "Matched by",
-    "importExport": "Import / Export",
+    "importExport": {
+      "title": "Import / export rules",
+      "desc": "Paste JSON, drop a file, or export the current ruleset.",
+      "open": "Import / export",
+      "dropHint": "Drop a .json file here, or paste JSON below.",
+      "pastePlaceholder": "{ \"rules\": [...], \"default\": \"proxy\" }",
+      "invalidFile": "Invalid JSON — expected an object with a \"rules\" array.",
+      "parsed": "Parsed {n} rules.",
+      "merge": "Merge with existing",
+      "replace": "Replace all",
+      "import": "Import",
+      "export": "Download current rules",
+      "exportHint": "JSON, downloads immediately."
+    },
     "import": "Import",
     "importing": "Importing...",
     "export": "Export",
@@ -256,7 +279,30 @@
     "exportSuccess": "Rules exported",
     "noRules": "No rules to export",
     "confirmTemplate": "Apply Template",
-    "confirmTemplateMsg": "This will replace all existing routing rules. Are you sure?"
+    "confirmTemplateMsg": "This will replace all existing routing rules. Are you sure?",
+    "count": "{n} rules",
+    "default": "Default action",
+    "applyTemplate": "Apply template",
+    "action": {
+      "proxy": "Proxy",
+      "direct": "Direct",
+      "reject": "Reject"
+    },
+    "hitBar": {
+      "label": "Rule distribution",
+      "empty": "No rules defined"
+    },
+    "process": {
+      "title": "Pick a process",
+      "desc": "Choose a running process to use as a rule target.",
+      "none": "No processes with active connections.",
+      "pick": "Use"
+    },
+    "toast": {
+      "saved": "Routing saved",
+      "templateApplied": "Template applied",
+      "imported": "Imported {added} of {total} rules"
+    }
   },
   "logs": {
     "title": "Logs",
