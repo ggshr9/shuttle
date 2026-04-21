@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"io/fs"
 	"log"
 	"net/http"
@@ -164,9 +165,9 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to load web assets: %v", err)
 	}
-	if _, err := fs.Stat(webFS, "index.html"); err != nil {
-		log.Fatalf("Embedded GUI bundle is missing (no web/dist/index.html). " +
-			"Run `cd gui/web && npm install && npm run build` before `go build ./cmd/shuttle-gui`.")
+	if err := verifyWebBundle(webFS); err != nil {
+		log.Fatalf("Embedded GUI bundle is %v. "+
+			"Run `cd gui/web && npm install && npm run build` before `go build ./cmd/shuttle-gui`.", err)
 	}
 
 	// System tray: enabled on Windows/Linux, macOS uses native dock behavior
@@ -224,6 +225,22 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+}
+
+// verifyWebBundle confirms the embedded SPA has both index.html and at
+// least one hashed file in assets/. A bundle missing either half embeds
+// a broken page (a clean checkout ships only .gitkeep; a partial wipe
+// can leave index.html pointing at absent assets). Fail fast with a
+// single error the operator can act on.
+func verifyWebBundle(webFS fs.FS) error {
+	if _, err := fs.Stat(webFS, "index.html"); err != nil {
+		return fmt.Errorf("missing (no web/dist/index.html)")
+	}
+	entries, err := fs.ReadDir(webFS, "assets")
+	if err != nil || len(entries) == 0 {
+		return fmt.Errorf("incomplete (web/dist/assets is missing or empty)")
+	}
+	return nil
 }
 
 // recordEngineEvents subscribes to engine events and records stats and

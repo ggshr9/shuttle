@@ -54,12 +54,15 @@ class SettingsStore {
     this.pristine !== null && this.draft !== null && !equal(this.pristine, this.draft),
   )
 
-  #loaded = false
+  // In-flight promise dedups concurrent callers; cleared on settle so a
+  // transient failure can be retried by revisiting the page.
+  #inflight: Promise<void> | null = null
 
-  async ensureLoaded(): Promise<void> {
-    if (this.#loaded) return
-    this.#loaded = true
-    await this.load()
+  ensureLoaded(): Promise<void> {
+    if (this.pristine !== null) return Promise.resolve()
+    if (this.#inflight) return this.#inflight
+    this.#inflight = this.load().finally(() => { this.#inflight = null })
+    return this.#inflight
   }
 
   async load(): Promise<void> {
