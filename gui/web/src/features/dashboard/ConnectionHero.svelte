@@ -1,7 +1,7 @@
 <script lang="ts">
   import { Card, Button } from '@/ui'
   import { navigate } from '@/lib/router'
-  import { connect, disconnect } from '@/lib/api/endpoints'
+  import { platform } from '@/lib/platform'
   import { invalidate } from '@/lib/resource.svelte'
   import { toasts } from '@/lib/toaster.svelte'
   import { t } from '@/lib/i18n/index'
@@ -41,8 +41,8 @@
   async function toggle() {
     busy = true
     try {
-      if (connected) await disconnect()
-      else await connect()
+      if (connected) await platform.engineStop()
+      else await platform.engineStart()
       invalidate('dashboard.status')
     } catch (e) {
       toasts.error((e as Error).message)
