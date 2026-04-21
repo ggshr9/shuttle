@@ -10,11 +10,12 @@
   }
   let { server, isActive }: Props = $props()
 
-  // Local drafts. The backend currently has no dedicated updateServer endpoint
-  // so name/sni edits don't round-trip back until the user invokes
-  // "Set as active" (which sends the whole record). We keep the fields visible
-  // for familiarity; P5+ may add a direct update endpoint.
+  // Local drafts seeded from the prop at mount. ServerTable keys this row by
+  // server.addr so a different server always remounts — stale-capture doesn't
+  // apply here.
+  // svelte-ignore state_referenced_locally
   let name = $state(server.name ?? '')
+  // svelte-ignore state_referenced_locally
   let sni = $state(server.sni ?? '')
 
   const result = $derived(useSpeedtestResult(server.addr))
