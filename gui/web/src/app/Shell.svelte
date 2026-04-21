@@ -24,7 +24,7 @@
 </script>
 
 <div class="shell">
-  <Sidebar {routes} {collapsed} onToggleCollapsed={toggleCollapsed} />
+  <Sidebar {collapsed} onToggleCollapsed={toggleCollapsed} />
   <main>
     <Router {routes} />
   </main>

@@ -35,7 +35,7 @@
       <Router {routes} />
     </main>
   {:else}
-    <Sidebar {routes} />
+    <Sidebar />
     <main>
       <Router {routes} />
     </main>

@@ -3,30 +3,25 @@
   import { Icon, Button } from '@/ui'
   import { theme } from '@/lib/theme.svelte'
   import { t } from '@/lib/i18n/index'
-  import type { AppRoute } from './routes'
+  import { navBySection } from './nav'
   import type { IconName } from '@/app/icons'
 
   interface Props {
-    routes: AppRoute[]
     collapsed?: boolean
     onToggleCollapsed?: () => void
   }
 
-  let { routes, collapsed = false, onToggleCollapsed }: Props = $props()
+  let { collapsed = false, onToggleCollapsed }: Props = $props()
   const route = useRoute()
 
-  const sections = $derived.by(() => {
-    const visible = routes
-      .filter((r) => r.nav && !r.nav.hidden)
-      .sort((a, b) => (a.nav!.order ?? 999) - (b.nav!.order ?? 999))
-    return {
-      overview: visible.filter((r) => r.nav!.order < 20),
-      network:  visible.filter((r) => r.nav!.order >= 20 && r.nav!.order < 70),
-      system:   visible.filter((r) => r.nav!.order >= 70),
-    }
-  })
+  const sections = {
+    overview: navBySection('overview'),
+    network:  navBySection('network'),
+    system:   navBySection('system'),
+  }
 
   function isActive(path: string): boolean {
+    if (path === '/') return route.path === '/'
     return route.path === path || route.path.startsWith(path + '/')
   }
 </script>
@@ -37,14 +32,14 @@
     {#if !collapsed}<span class="name">Shuttle</span>{/if}
   </div>
 
-  {#snippet section(heading: string, items: AppRoute[])}
+  {#snippet section(heading: string, items: ReturnType<typeof navBySection>)}
     {#if items.length > 0}
       {#if !collapsed}<div class="heading">{heading}</div>{/if}
       <nav>
-        {#each items as r}
-          <Link to={r.path} class={'item ' + (isActive(r.path) ? 'on' : '')}>
-            <span class="ico"><Icon name={r.nav!.icon as IconName} size={16} /></span>
-            {#if !collapsed}<span>{t(r.nav!.label)}</span>{/if}
+        {#each items as item}
+          <Link to={item.path} class={'item ' + (isActive(item.path) ? 'on' : '')}>
+            <span class="ico"><Icon name={item.icon as IconName} size={16} /></span>
+            {#if !collapsed}<span>{t(item.label)}</span>{/if}
           </Link>
         {/each}
       </nav>
