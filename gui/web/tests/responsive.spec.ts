@@ -8,9 +8,16 @@ test.describe('responsive shell', () => {
     await expect(tabs).toBeVisible()
   })
 
+  test('tablet viewport shows Rail', async ({ page, viewport }) => {
+    const w = viewport?.width ?? 0
+    test.skip(w < 720 || w >= 1024, 'tablet project only')
+    await page.goto('/')
+    await expect(page.locator('aside.rail')).toBeVisible()
+  })
+
   test('desktop viewport shows Sidebar', async ({ page, viewport }) => {
     test.skip((viewport?.width ?? 0) < 1024, 'desktop project only')
     await page.goto('/')
-    await expect(page.locator('aside').first()).toBeVisible()
+    await expect(page.locator('aside.sidebar')).toBeVisible()
   })
 })

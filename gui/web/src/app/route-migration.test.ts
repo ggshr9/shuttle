@@ -38,4 +38,35 @@ describe('resolveLegacyRoute', () => {
       path: '/servers', query: { source: 'subscriptions', foo: 'bar' },
     })
   })
+
+  it('maps /groups → /servers?view=groups', () => {
+    expect(resolveLegacyRoute('/groups', {})).toEqual({
+      path: '/servers', query: { view: 'groups' },
+    })
+  })
+
+  // Deep-path prefix matches
+  it('maps /dashboard/* → / (drops tail)', () => {
+    expect(resolveLegacyRoute('/dashboard/stats', {})).toEqual({ path: '/', query: {} })
+  })
+  it('maps /routing/rules/:id → /traffic/rules/:id (preserves tail)', () => {
+    expect(resolveLegacyRoute('/routing/rules/xyz', {})).toEqual({
+      path: '/traffic/rules/xyz', query: {},
+    })
+  })
+  it('maps /logs/* → /activity?tab=logs (drops tail)', () => {
+    expect(resolveLegacyRoute('/logs/filter', {})).toEqual({
+      path: '/activity', query: { tab: 'logs' },
+    })
+  })
+
+  // Migration tag takes precedence over incoming query of the same key
+  it('migration tag wins when incoming query has conflicting key', () => {
+    expect(resolveLegacyRoute('/subscriptions', { source: 'manual' })).toEqual({
+      path: '/servers', query: { source: 'subscriptions' },
+    })
+    expect(resolveLegacyRoute('/logs', { tab: 'other' })).toEqual({
+      path: '/activity', query: { tab: 'logs' },
+    })
+  })
 })

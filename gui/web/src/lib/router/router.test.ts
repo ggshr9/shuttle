@@ -3,6 +3,7 @@ import { navigate, useRoute, matches, matchPath, useParams, __resetRoute } from 
 
 beforeEach(() => {
   location.hash = ''
+  localStorage.removeItem('shuttle-route-migration-seen')
   __resetRoute()
 })
 

@@ -1,3 +1,5 @@
+<script lang="ts"></script>
+
 <div class="stub">
   <h1>Traffic</h1>
   <p>Coming in Phase 3c.</p>

@@ -7,22 +7,32 @@ export function resolveLegacyRoute(
   path: string,
   query: Record<string, string>,
 ): Resolved | null {
-  if (path === '/dashboard')   return { path: '/',         query: { ...query } }
-  if (path === '/routing')     return { path: '/traffic',  query: { ...query } }
-  if (path === '/logs')        return { path: '/activity', query: { tab: 'logs', ...query } }
+  // Dashboard: no deep subpaths; collapse any /dashboard/* to /.
+  if (path === '/dashboard' || path.startsWith('/dashboard/')) {
+    return { path: '/', query: { ...query } }
+  }
+  // Routing → Traffic: preserve tail so /routing/rules/:id → /traffic/rules/:id.
+  if (path === '/routing') return { path: '/traffic', query: { ...query } }
+  if (path.startsWith('/routing/')) {
+    return { path: '/traffic' + path.slice('/routing'.length), query: { ...query } }
+  }
+  // Logs → Activity: Activity has no logs subroutes, so drop the tail and tag the tab.
+  if (path === '/logs' || path.startsWith('/logs/')) {
+    return { path: '/activity', query: { ...query, tab: 'logs' } }
+  }
   if (path === '/subscriptions') {
-    return { path: '/servers', query: { source: 'subscriptions', ...query } }
+    return { path: '/servers', query: { ...query, source: 'subscriptions' } }
   }
   if (path.startsWith('/subscriptions/')) {
     const id = path.slice('/subscriptions/'.length)
-    return { path: '/servers', query: { source: `subscription:${id}`, ...query } }
+    return { path: '/servers', query: { ...query, source: `subscription:${id}` } }
   }
   if (path === '/groups') {
-    return { path: '/servers', query: { view: 'groups', ...query } }
+    return { path: '/servers', query: { ...query, view: 'groups' } }
   }
   if (path.startsWith('/groups/')) {
     const id = path.slice('/groups/'.length)
-    return { path: '/servers', query: { group: id, ...query } }
+    return { path: '/servers', query: { ...query, group: id } }
   }
   return null
 }

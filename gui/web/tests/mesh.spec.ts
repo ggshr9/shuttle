@@ -1,7 +1,10 @@
 import { test, expect } from '@playwright/test';
 
 test.describe('P7 mesh', () => {
-    test.beforeEach(async ({ page }) => {
+    test.beforeEach(async ({ page, viewport }) => {
+        // Phase 2 swaps Sidebar for Rail/BottomTabs below 1024px. These tests
+        // assert `.sidebar` visibility; Phase 3 will rewrite them viewport-neutral.
+        test.skip((viewport?.width ?? 9999) < 1024, 'desktop only until Phase 3 rewrite');
         await page.goto('/#/mesh');
         await expect(page.locator('.sidebar')).toBeVisible();
     });
