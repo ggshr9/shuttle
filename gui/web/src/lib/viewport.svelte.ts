@@ -49,14 +49,12 @@ function apply(w: number) {
 
 if (typeof window !== 'undefined' && typeof ResizeObserver !== 'undefined') {
   let pending = false
-  const ro = new ResizeObserver((entries) => {
+  const ro = new ResizeObserver(() => {
     if (pending) return
     pending = true
     requestAnimationFrame(() => {
       pending = false
-      const e = entries[0]
-      const w = e?.contentRect?.width ?? window.innerWidth
-      apply(w)
+      apply(document.documentElement.getBoundingClientRect().width)
     })
   })
   ro.observe(document.documentElement)
