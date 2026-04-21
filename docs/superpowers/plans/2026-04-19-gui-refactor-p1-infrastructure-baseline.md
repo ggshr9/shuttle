@@ -180,3 +180,25 @@ Both chunks are smaller than legacy (`Subscriptions-*` was 6.29 / 2.42; `Groups-
 ### Svelte-check error count
 - Pre-P5: 264 errors
 - Post-P5: **236** errors (−28 from deleted legacy Subscriptions.svelte + Groups.svelte)
+
+---
+
+## Post-P6 (2026-04-21)
+
+After Routing feature commits on `refactor/gui-v2`.
+
+### Bundle
+- `index-*.js`: **115.67 KB raw / 42.21 KB gzip** (+1.85 KB raw / +0.43 KB gzip vs post-P5)
+- Routing chunk (lazy): part of ServersPage's chunk group due to shared bits-ui Dialog/Combobox — exact bytes depend on route loaded
+
+### Svelte-check error count
+- Pre-P6: 236 errors / 24 warnings
+- Post-P6: **196** errors / **11** warnings (−40 errors / −13 warnings) — legacy `lib/routing/*` had a lot of implicit `any` and a11y warnings
+
+### Legacy deletion totals
+- Cumulative legacy code deleted P3-P6: **6,993 lines**
+  - P3 Dashboard + charts: 1,859
+  - P4 Servers: 704
+  - P5 Subscriptions + Groups: 834
+  - P6 Routing + lib/routing: 1,349
+  - Plus p2 SimpleMode + legacy App.svelte: 2,247

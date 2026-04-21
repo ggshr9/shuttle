@@ -81,3 +81,12 @@ test.describe('P5 groups', () => {
         await expect(page.locator('h3:has-text("Groups")').first()).toBeVisible({ timeout: 5000 });
     });
 });
+
+test.describe('P6 routing', () => {
+    test('routing URL renders page chrome', async ({ page }) => {
+        await page.goto('/#/routing');
+        await expect(page.locator('.sidebar')).toBeVisible();
+        await expect(page.locator('h3:has-text("Routing")').first()).toBeVisible({ timeout: 5000 });
+        await expect(page.locator('button:has-text("Save")')).toBeVisible();
+    });
+});
