@@ -1,6 +1,6 @@
 // WebSocket connection utility
 
-import { getAuthToken } from './api'
+import { getAuthToken } from './api/client'
 
 export interface WSConnection {
   close(): void

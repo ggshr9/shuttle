@@ -514,7 +514,8 @@
       "enterServerAddress": "Please enter server address",
       "failedToAdd": "Failed to add server",
       "failedToComplete": "Failed to complete setup"
-    }
+    },
+    "next": "Next"
   },
   "speedtest": {
     "history": "Speed Test History",

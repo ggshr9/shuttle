@@ -1,10 +1,11 @@
 <script lang="ts">
-  import { onMount } from 'svelte'
-  import { api } from '@/lib/api'
+  import { onMount, type Component } from 'svelte'
+  import { getConfig } from '@/lib/api/endpoints'
   import { t } from '@/lib/i18n/index'
-  import Onboarding from '@/lib/Onboarding.svelte'
   import Shell from './Shell.svelte'
   import Toaster from './Toaster.svelte'
+
+  let Onboarding = $state<Component<{ onComplete: () => void }> | null>(null)
 
   let initialized = $state(false)
   let showOnboarding = $state(false)
@@ -12,10 +13,14 @@
 
   async function checkFirstRun() {
     try {
-      const cfg = await api.getConfig()
+      const cfg = await getConfig()
       const hasServers = !!(cfg.server?.addr || (cfg.servers && cfg.servers.length > 0))
       showOnboarding = !hasServers
       apiError = false
+      if (showOnboarding) {
+        const mod = await import('@/features/onboarding')
+        Onboarding = mod.Onboarding as Component<{ onComplete: () => void }>
+      }
     } catch {
       showOnboarding = false
       apiError = true
@@ -36,7 +41,7 @@
   <div class="center">
     <div class="spin" aria-label="Loading"></div>
   </div>
-{:else if showOnboarding}
+{:else if showOnboarding && Onboarding}
   <Onboarding onComplete={handleOnboardingComplete} />
 {:else}
   {#if apiError}

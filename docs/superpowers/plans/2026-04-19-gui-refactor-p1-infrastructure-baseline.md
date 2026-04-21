@@ -270,3 +270,55 @@ P9 shipped in two commits (P9a shell, P9b sub-pages).
 Unified on `<Field>` rows + `<Switch>` / `<Select>` primitives per §7.8.
 Singleton store (`settings`) tracks pristine vs draft JSON snapshot;
 `<UnsavedBar>` stickies to top when isDirty, wires Discard/Save.
+
+---
+
+## Post-P10 (2026-04-21)
+
+### Bundle
+- `index-*.js`: 43.15 → **39.54 KB gzip** (**−3.61 KB** vs P9)
+  - Onboarding moved to a lazy dynamic-import chunk (first-run only)
+  - `lib/api.ts` barrel deleted, lets Vite tree-shake unused endpoints
+  - Legacy `Toast.svelte` / `toast.ts` / `theme.ts` removed
+- Cumulative JS gzip delta vs original pre-P1 baseline: 34.94 → 39.54 (**+4.60 KB** end-state for the entire refactor against a +30 KB budget)
+
+### Svelte-check
+- Pre-P10: 8 errors / 3 warnings
+- Post-P10: **0 errors** / 2 warnings (both benign in ServerRowExpanded)
+
+### Legacy deletion (P10)
+- `lib/Onboarding.svelte` (674) → `features/onboarding/` (4-step wizard)
+- `lib/api.ts` (6) barrel — replaced by direct `@/lib/api/endpoints` imports
+- `lib/Toast.svelte` (129) + `lib/toast.ts` (57) — superseded by `toaster.svelte.ts`
+- `lib/theme.ts` (46) — superseded by `theme.svelte.ts`
+- `pages/` empty directory removed
+- Total P10: **912 lines**
+- **Cumulative P3-P10: 10,971 lines removed**
+
+### Final `src/` layout
+
+```
+src/
+  __ui__/        dev-only UI harness (gated on import.meta.env.DEV + ?ui=1)
+  app/           App, Shell, Sidebar, Toaster, routes.ts, icons.ts
+  app.css        entry stylesheet (imports ui/tokens.css)
+  features/      dashboard, servers, subscriptions, groups, routing, mesh,
+                 logs, settings, onboarding — each a feature slice
+  lib/           api/, i18n/, router/, resource + theme + toaster +
+                 ws + notify + shortcuts + flags
+  locales/       en.json, zh-CN.json
+  main.ts        entry
+  README.md      Svelte 5 gotchas captured during the migration
+  ui/            design system (21 primitives + tokens.css)
+```
+
+Matches spec §8 P10 exit criterion: `src/` = app / ui / lib / features /
+main.ts / app.css (plus dev-only __ui__ harness and locales).
+
+### Onboarding wizard (§7.9)
+- Fullscreen overlay with 480 px wizard card
+- 4 steps: Welcome → Add Server → Options → Connect
+- DotProgress ● ● ● ○ between header and content
+- Each step: big title + lede + single-column controls + footer with
+  `[Back] | [Next]` (or `[Skip] | [Next]` on step 1, `[Back] | [Connect]` on step 4)
+- Error banner inline; Esc closes wizard

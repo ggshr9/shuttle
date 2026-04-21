@@ -514,7 +514,8 @@
       "enterServerAddress": "请输入服务器地址",
       "failedToAdd": "添加服务器失败",
       "failedToComplete": "完成设置失败"
-    }
+    },
+    "next": "下一步"
   },
   "speedtest": {
     "history": "测速历史",

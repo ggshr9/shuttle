@@ -20,6 +20,7 @@ export interface ImportResult {
   servers?: Server[]
   errors?: string[]
   error?: string
+  mesh_enabled?: boolean
 }
 
 export interface AutoSelectResult {
