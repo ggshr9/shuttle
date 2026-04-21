@@ -1,6 +1,23 @@
 import { test, expect } from '@playwright/test';
 
 test.describe('P9 settings', () => {
+    // Stub /api/config so the settings store resolves instead of erroring out —
+    // CI has no backend reachable. Without this every test that asserts
+    // sub-page content falls into settings.error and never renders the form.
+    // Include one server so App.svelte skips the onboarding branch.
+    test.beforeEach(async ({ page }) => {
+        await page.route('**/api/config', (route) => {
+            route.fulfill({
+                status: 200,
+                contentType: 'application/json',
+                body: JSON.stringify({
+                    proxy: {},
+                    servers: [{ addr: 'test.example:443', name: 'test' }],
+                }),
+            });
+        });
+    });
+
     test('bare /#/settings redirects to /settings/general', async ({ page }) => {
         await page.goto('/#/settings');
         await expect(page.locator('.sidebar')).toBeVisible({ timeout: 5000 });
