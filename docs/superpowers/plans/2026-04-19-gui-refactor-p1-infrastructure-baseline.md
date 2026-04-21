@@ -202,3 +202,18 @@ After Routing feature commits on `refactor/gui-v2`.
   - P5 Subscriptions + Groups: 834
   - P6 Routing + lib/routing: 1,349
   - Plus p2 SimpleMode + legacy App.svelte: 2,247
+
+---
+
+## Post-P7 (2026-04-21)
+
+### Bundle
+- `index-*.js`: 116.64 KB raw / 42.54 KB gzip (+0.33 KB gzip vs post-P6 fix)
+
+### Svelte-check error count
+- Pre-P7: 196 errors / 11 warnings
+- Post-P7: **165** errors / 11 warnings (−31)
+
+### Legacy deletion (P7)
+- `pages/Mesh.svelte` (413) + `lib/MeshTopologyChart.svelte` (360) = 773 lines
+- **Cumulative P3-P7: 7,766 lines**

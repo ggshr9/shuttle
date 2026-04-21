@@ -1,17 +1,28 @@
 <script lang="ts">
   import { onMount } from 'svelte'
 
-  /** @type {{ virtual_ip: string, state: string, method: string, avg_rtt_ms: number }[]} */
-  let { peers = [], selfIP = '', hubIP = '' } = $props()
+  interface Peer {
+    virtual_ip: string
+    state: string
+    method?: string
+    avg_rtt_ms?: number
+  }
 
-  let canvas = $state(null)
+  interface Props {
+    peers?: Peer[]
+    selfIP?: string
+    hubIP?: string
+  }
+
+  let { peers = [], selfIP = '', hubIP = '' }: Props = $props()
+
+  let canvas = $state<HTMLCanvasElement | null>(null)
   let width = $state(400)
   let height = $state(300)
-  let hoveredNode = $state(null)
+  let hoveredNode = $state<any>(null)
   let mousePos = $state({ x: 0, y: 0 })
 
-  // Node positions
-  let nodePositions = $state({})
+  let nodePositions = $state<Record<string, any>>({})
 
   $effect(() => {
     if (canvas && peers) {
@@ -26,13 +37,9 @@
     const hubRadius = 80
     const peerRadius = 120
 
-    // Self node at center
     nodePositions.self = { x: centerX, y: centerY, type: 'self', ip: selfIP || 'You' }
-
-    // Hub node above self
     nodePositions.hub = { x: centerX, y: centerY - hubRadius, type: 'hub', ip: hubIP || 'Hub' }
 
-    // Peers in a circle around self
     const peerCount = peers.length
     peers.forEach((peer, i) => {
       const angle = (i / peerCount) * 2 * Math.PI - Math.PI / 2 + Math.PI / peerCount
@@ -40,8 +47,8 @@
         x: centerX + Math.cos(angle) * peerRadius,
         y: centerY + Math.sin(angle) * peerRadius,
         type: 'peer',
-        peer: peer,
-        ip: peer.virtual_ip
+        peer,
+        ip: peer.virtual_ip,
       }
     })
   }
@@ -49,53 +56,47 @@
   function draw() {
     if (!canvas) return
     const ctx = canvas.getContext('2d')
+    if (!ctx) return
     ctx.clearRect(0, 0, width, height)
 
-    // Draw connections first (behind nodes)
     drawConnections(ctx)
-
-    // Draw nodes
     drawNode(ctx, nodePositions.hub)
     drawNode(ctx, nodePositions.self)
-    peers.forEach((_, i) => {
-      drawNode(ctx, nodePositions[`peer_${i}`])
-    })
+    peers.forEach((_, i) => drawNode(ctx, nodePositions[`peer_${i}`]))
   }
 
-  function drawConnections(ctx) {
+  function drawConnections(ctx: CanvasRenderingContext2D) {
     const self = nodePositions.self
     const hub = nodePositions.hub
 
-    // Connection from self to hub (always exists)
     drawConnection(ctx, self, hub, 'relay', true)
 
-    // Connections from self to peers
     peers.forEach((peer, i) => {
       const peerNode = nodePositions[`peer_${i}`]
       const method = peer.method || 'relay'
       const connected = peer.state === 'connected'
 
       if (method === 'p2p' || method === 'direct') {
-        // Direct P2P connection
         drawConnection(ctx, self, peerNode, method, connected)
       } else {
-        // Relay through hub
         drawConnection(ctx, self, hub, 'relay', true, 0.5)
         drawConnection(ctx, hub, peerNode, 'relay', connected)
       }
     })
   }
 
-  function drawConnection(ctx, from, to, method, connected, alpha = 1) {
+  function drawConnection(
+    ctx: CanvasRenderingContext2D,
+    from: any, to: any, method: string, connected: boolean, alpha = 1,
+  ) {
     ctx.save()
     ctx.globalAlpha = alpha
 
-    // Line style based on method
     if (method === 'p2p' || method === 'direct') {
-      ctx.strokeStyle = connected ? '#34d399' : '#55566a'
+      ctx.strokeStyle = connected ? '#22c55e' : '#52525b'
       ctx.setLineDash([])
     } else {
-      ctx.strokeStyle = connected ? '#4f6df5' : '#55566a'
+      ctx.strokeStyle = connected ? '#3b82f6' : '#52525b'
       ctx.setLineDash([5, 5])
     }
 
@@ -107,39 +108,37 @@
     ctx.restore()
   }
 
-  function drawNode(ctx, node) {
+  function drawNode(ctx: CanvasRenderingContext2D, node: any) {
     if (!node) return
     const isHovered = hoveredNode === node
 
     ctx.save()
 
-    // Node circle
     ctx.beginPath()
     ctx.arc(node.x, node.y, isHovered ? 22 : 20, 0, 2 * Math.PI)
 
-    // Fill based on type
     if (node.type === 'self') {
-      ctx.fillStyle = '#4f6df5'
-      ctx.strokeStyle = '#3b57e0'
+      ctx.fillStyle = '#3b82f6'
+      ctx.strokeStyle = '#2563eb'
     } else if (node.type === 'hub') {
-      ctx.fillStyle = '#9394a5'
-      ctx.strokeStyle = '#55566a'
+      ctx.fillStyle = '#a1a1aa'
+      ctx.strokeStyle = '#52525b'
     } else {
       const peer = node.peer
       if (peer?.state === 'connected') {
         if (peer.method === 'p2p' || peer.method === 'direct') {
-          ctx.fillStyle = '#34d399'
-          ctx.strokeStyle = '#10b981'
+          ctx.fillStyle = '#22c55e'
+          ctx.strokeStyle = '#16a34a'
         } else {
-          ctx.fillStyle = '#4f6df5'
-          ctx.strokeStyle = '#3b57e0'
+          ctx.fillStyle = '#3b82f6'
+          ctx.strokeStyle = '#2563eb'
         }
       } else if (peer?.state === 'connecting') {
-        ctx.fillStyle = '#fbbf24'
-        ctx.strokeStyle = '#f59e0b'
+        ctx.fillStyle = '#eab308'
+        ctx.strokeStyle = '#ca8a04'
       } else {
-        ctx.fillStyle = '#353549'
-        ctx.strokeStyle = '#2a2a3d'
+        ctx.fillStyle = '#27272a'
+        ctx.strokeStyle = '#3f3f46'
       }
     }
 
@@ -147,7 +146,6 @@
     ctx.fill()
     ctx.stroke()
 
-    // Node icon
     ctx.fillStyle = '#fff'
     ctx.font = '12px system-ui'
     ctx.textAlign = 'center'
@@ -158,7 +156,6 @@
     } else if (node.type === 'hub') {
       ctx.fillText('Hub', node.x, node.y)
     } else {
-      // Peer - show method icon
       const peer = node.peer
       if (peer?.method === 'p2p' || peer?.method === 'direct') {
         ctx.fillText('P2P', node.x, node.y)
@@ -167,8 +164,7 @@
       }
     }
 
-    // Label below node
-    ctx.fillStyle = '#9394a5'
+    ctx.fillStyle = '#a1a1aa'
     ctx.font = '10px monospace'
     let label = node.ip
     if (node.peer?.avg_rtt_ms) {
@@ -179,15 +175,14 @@
     ctx.restore()
   }
 
-  function handleMouseMove(e) {
+  function handleMouseMove(e: MouseEvent) {
     if (!canvas) return
     const rect = canvas.getBoundingClientRect()
     const x = e.clientX - rect.left
     const y = e.clientY - rect.top
     mousePos = { x, y }
 
-    // Check if hovering over a node
-    let found = null
+    let found: any = null
     for (const key in nodePositions) {
       const node = nodePositions[key]
       if (node) {
@@ -257,7 +252,7 @@
   <div class="legend">
     <div class="legend-item">
       <span class="legend-line p2p"></span>
-      <span>P2P Direct</span>
+      <span>P2P</span>
     </div>
     <div class="legend-item">
       <span class="legend-line relay"></span>
@@ -269,10 +264,10 @@
 <style>
   .topology-container {
     position: relative;
-    background: var(--bg-secondary);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-lg);
-    padding: 8px;
+    background: var(--shuttle-bg-surface);
+    border: 1px solid var(--shuttle-border);
+    border-radius: var(--shuttle-radius-md);
+    padding: var(--shuttle-space-2);
   }
 
   canvas {
@@ -282,59 +277,49 @@
 
   .tooltip {
     position: absolute;
-    background: var(--bg-tertiary);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-sm);
-    padding: 8px 12px;
-    font-size: 11px;
+    background: var(--shuttle-bg-subtle);
+    border: 1px solid var(--shuttle-border);
+    border-radius: var(--shuttle-radius-sm);
+    padding: var(--shuttle-space-2) var(--shuttle-space-3);
+    font-size: var(--shuttle-text-xs);
     pointer-events: none;
     z-index: 10;
-    box-shadow: var(--shadow-lg);
+    box-shadow: var(--shuttle-shadow-md);
   }
 
   .tooltip-row {
     display: flex;
     justify-content: space-between;
-    gap: 12px;
+    gap: var(--shuttle-space-3);
     margin: 2px 0;
   }
 
-  .tooltip .label {
-    color: var(--text-secondary);
-  }
+  .tooltip .label { color: var(--shuttle-fg-secondary); }
 
   .tooltip .value {
-    color: var(--text-primary);
-    font-family: 'JetBrains Mono', monospace;
+    color: var(--shuttle-fg-primary);
+    font-family: var(--shuttle-font-mono);
   }
 
-  .tooltip .state-connected {
-    color: var(--accent-green);
-  }
-
-  .tooltip .state-connecting {
-    color: var(--accent-yellow);
-  }
-
-  .tooltip .state-disconnected {
-    color: var(--accent-red);
-  }
+  .tooltip .state-connected    { color: var(--shuttle-success); }
+  .tooltip .state-connecting   { color: var(--shuttle-warning); }
+  .tooltip .state-disconnected { color: var(--shuttle-danger); }
 
   .legend {
     display: flex;
     justify-content: center;
-    gap: 16px;
-    margin-top: 8px;
-    padding-top: 8px;
-    border-top: 1px solid var(--border);
+    gap: var(--shuttle-space-4);
+    margin-top: var(--shuttle-space-2);
+    padding-top: var(--shuttle-space-2);
+    border-top: 1px solid var(--shuttle-border);
   }
 
   .legend-item {
     display: flex;
     align-items: center;
-    gap: 6px;
-    font-size: 11px;
-    color: var(--text-secondary);
+    gap: var(--shuttle-space-1);
+    font-size: var(--shuttle-text-xs);
+    color: var(--shuttle-fg-secondary);
   }
 
   .legend-line {
@@ -343,16 +328,13 @@
     display: inline-block;
   }
 
-  .legend-line.p2p {
-    background: var(--accent-green);
-  }
+  .legend-line.p2p { background: var(--shuttle-success); }
 
   .legend-line.relay {
-    background: var(--accent);
     background: repeating-linear-gradient(
       90deg,
-      var(--accent) 0px,
-      var(--accent) 5px,
+      var(--shuttle-info) 0px,
+      var(--shuttle-info) 5px,
       transparent 5px,
       transparent 10px
     );

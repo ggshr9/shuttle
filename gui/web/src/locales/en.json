@@ -590,14 +590,17 @@
     "title": "Mesh VPN",
     "status": "Status",
     "enabled": "Enabled",
-    "disabled": "Disabled",
+    "disabled": {
+      "title": "Mesh is not enabled",
+      "desc": "Enable Mesh in Settings to join the overlay network."
+    },
     "notEnabled": "Mesh VPN is not enabled. Enable it in Settings.",
     "virtualIP": "Virtual IP",
     "cidr": "CIDR",
     "peers": "Peers",
     "peersTitle": "Peers",
     "noPeers": "No peers connected. Join a mesh network to see peers here.",
-    "topology": "Network Topology",
+    "topology": "Topology",
     "connect": "Connect",
     "connecting": "Connecting...",
     "connected": "Connected",
@@ -610,6 +613,25 @@
       "loss": "Packet Loss",
       "score": "Score",
       "action": "Action"
+    },
+    "count": "{n} peers",
+    "virtualIp": "Virtual IP",
+    "peerCount": "Peers",
+    "topologyTooltip": "Lines show active P2P links; dashed = relay fallback.",
+    "empty": {
+      "title": "No peers",
+      "desc": "Waiting for peer discovery… make sure at least one peer is online."
+    },
+    "columns": {
+      "vip": "VIP",
+      "state": "State",
+      "method": "Method",
+      "rtt": "RTT",
+      "loss": "Loss",
+      "score": "Score"
+    },
+    "toast": {
+      "connecting": "Connecting to {vip}…"
     }
   }
 }
