@@ -608,6 +608,12 @@
       "selected": "Selected {name}"
     }
   },
+  "now": {
+    "disconnected": "Disconnected",
+    "connecting": "Connecting…",
+    "connected": "Connected",
+    "switchServer": "Switch server"
+  },
   "mesh": {
     "title": "Mesh VPN",
     "status": "Status",

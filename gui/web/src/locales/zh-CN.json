@@ -608,6 +608,12 @@
       "selected": "已选用 {name}"
     }
   },
+  "now": {
+    "disconnected": "未连接",
+    "connecting": "连接中…",
+    "connected": "已连接",
+    "switchServer": "切换服务器"
+  },
   "mesh": {
     "title": "Mesh 组网",
     "status": "状态",
