@@ -7,6 +7,10 @@
   import { subNav, DEFAULT_SLUG } from './nav'
   import UnsavedBar from './UnsavedBar.svelte'
 
+  // Sub-pages are statically imported here so they ride the lazy
+  // SettingsPage chunk. Do NOT move these imports into nav.ts — that
+  // module is reachable from the eagerly-loaded route table and would
+  // pull every sub-page into the root bundle.
   import General  from './sub/General.svelte'
   import Proxy    from './sub/Proxy.svelte'
   import Mesh     from './sub/Mesh.svelte'
@@ -19,16 +23,8 @@
   import Advanced from './sub/Advanced.svelte'
 
   const pageMap: Record<string, Component> = {
-    general:  General,
-    proxy:    Proxy,
-    mesh:     Mesh,
-    routing:  Routing,
-    dns:      Dns,
-    logging:  Logging,
-    qos:      Qos,
-    backup:   Backup,
-    update:   Update,
-    advanced: Advanced,
+    general: General, proxy: Proxy, mesh: Mesh, routing: Routing, dns: Dns,
+    logging: Logging, qos: Qos, backup: Backup, update: Update, advanced: Advanced,
   }
 
   const route = useRoute()

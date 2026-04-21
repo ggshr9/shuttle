@@ -1,10 +1,11 @@
 <script lang="ts">
   import { onMount } from 'svelte'
-  import { Button, Badge } from '@/ui'
+  import { Badge, Button, Field } from '@/ui'
   import { t } from '@/lib/i18n/index'
   import { getVersion, checkUpdate } from '@/lib/api/endpoints'
   import type { UpdateInfo } from '@/lib/api/types'
-  import Field from '../Field.svelte'
+  import { formatBytes } from '@/lib/format'
+  import PageHeader from '../PageHeader.svelte'
 
   let version = $state('')
   let info = $state<UpdateInfo | null>(null)
@@ -21,15 +22,9 @@
     try { info = await checkUpdate(force) } catch { /* tolerate */ }
     finally { checking = false }
   }
-
-  function formatSize(b?: number): string {
-    if (!b) return ''
-    if (b < 1024 * 1024) return `${(b / 1024).toFixed(1)} KB`
-    return `${(b / 1024 / 1024).toFixed(1)} MB`
-  }
 </script>
 
-<h2>{t('settings.nav.update')}</h2>
+<PageHeader title={t('settings.nav.update')} />
 
 <Field label={t('settings.currentVersion')}>
   <code class="version">{version || '—'}</code>
@@ -54,7 +49,7 @@
       {/if}
       {#if info.download_url}
         <a class="btn-link primary" href={info.download_url}>
-          {t('settings.download')}{formatSize(info.asset_size) ? ` (${formatSize(info.asset_size)})` : ''}
+          {t('settings.download')}{info.asset_size ? ` (${formatBytes(info.asset_size)})` : ''}
         </a>
       {/if}
     </div>
@@ -73,12 +68,6 @@
 </Field>
 
 <style>
-  h2 {
-    margin: 0 0 var(--shuttle-space-4);
-    font-size: var(--shuttle-text-lg);
-    font-weight: var(--shuttle-weight-semibold);
-    color: var(--shuttle-fg-primary);
-  }
   .version {
     font-family: var(--shuttle-font-mono);
     font-size: var(--shuttle-text-sm);

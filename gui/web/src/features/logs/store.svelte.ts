@@ -149,11 +149,10 @@ class LogsStore {
   }
 
   #push(entry: LogEntry): void {
-    const next = this.entries.length >= BUFFER_CAP
-      ? this.entries.slice(-(BUFFER_CAP - 1))
-      : this.entries.slice()
-    next.push(entry)
-    this.entries = next
+    // Svelte 5 $state arrays are deep-reactive; mutating in place avoids
+    // an O(n) copy per WebSocket message on a busy stream.
+    this.entries.push(entry)
+    if (this.entries.length > BUFFER_CAP) this.entries.shift()
   }
 }
 

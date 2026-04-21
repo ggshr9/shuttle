@@ -1,12 +1,12 @@
 <script lang="ts">
   import { onMount } from 'svelte'
-  import { Button, Select, Switch } from '@/ui'
+  import { Button, Field, Select, Switch } from '@/ui'
   import { t } from '@/lib/i18n/index'
   import { getGeoDataStatus, updateGeoData } from '@/lib/api/endpoints'
   import type { GeoDataStatus } from '@/lib/api/types'
   import { toasts } from '@/lib/toaster.svelte'
   import { settings } from '../config.svelte'
-  import Field from '../Field.svelte'
+  import PageHeader from '../PageHeader.svelte'
 
   const routing = $derived(settings.draft?.routing)
   let geo = $state<GeoDataStatus | null>(null)
@@ -37,7 +37,7 @@
   }
 </script>
 
-<h2>{t('nav.routing')}</h2>
+<PageHeader title={t('nav.routing')} />
 
 {#if routing && routing.geodata}
   <Field label={t('routing.defaultAction')}>
@@ -84,12 +84,6 @@
 {/if}
 
 <style>
-  h2 {
-    margin: 0 0 var(--shuttle-space-4);
-    font-size: var(--shuttle-text-lg);
-    font-weight: var(--shuttle-weight-semibold);
-    color: var(--shuttle-fg-primary);
-  }
   h3 {
     margin: var(--shuttle-space-5) 0 var(--shuttle-space-3);
     font-size: var(--shuttle-text-sm);

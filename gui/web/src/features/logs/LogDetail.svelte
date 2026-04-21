@@ -1,28 +1,10 @@
 <script lang="ts">
   import { Icon, Badge } from '@/ui'
   import { t } from '@/lib/i18n/index'
+  import { formatBytes, formatDuration, formatTimestamp } from '@/lib/format'
   import { logsStore } from './store.svelte'
 
   const entry = $derived(logsStore.selected)
-
-  function fmtBytes(b: number | undefined): string {
-    if (!b) return '0 B'
-    if (b < 1024) return `${b} B`
-    if (b < 1024 * 1024) return `${(b / 1024).toFixed(1)} KB`
-    if (b < 1024 * 1024 * 1024) return `${(b / 1024 / 1024).toFixed(2)} MB`
-    return `${(b / 1024 / 1024 / 1024).toFixed(2)} GB`
-  }
-
-  function fmtDuration(ms: number | undefined): string {
-    if (!ms) return '0 ms'
-    if (ms < 1000) return `${ms} ms`
-    if (ms < 60000) return `${(ms / 1000).toFixed(2)} s`
-    return `${(ms / 60000).toFixed(2)} m`
-  }
-
-  function fmtTime(ms: number): string {
-    return new Date(ms).toLocaleString()
-  }
 </script>
 
 <section class="detail">
@@ -36,7 +18,7 @@
       <Badge variant={entry.level === 'error' ? 'danger' : entry.level === 'warn' ? 'warning' : 'neutral'}>
         {entry.level.toUpperCase()}
       </Badge>
-      <span class="time">{fmtTime(entry.time)}</span>
+      <span class="time">{formatTimestamp(entry.time)}</span>
     </header>
 
     <p class="msg">{entry.msg}</p>
@@ -56,11 +38,11 @@
         {/if}
         {#if d.state === 'closed'}
           <dt>{t('logs.duration')}</dt>
-          <dd>{fmtDuration(d.duration)}</dd>
+          <dd>{formatDuration(d.duration)}</dd>
           <dt>{t('logs.traffic')}</dt>
           <dd>
-            <span class="in">↓ {fmtBytes(d.bytesIn)}</span>
-            <span class="out">↑ {fmtBytes(d.bytesOut)}</span>
+            <span class="in">↓ {formatBytes(d.bytesIn)}</span>
+            <span class="out">↑ {formatBytes(d.bytesOut)}</span>
           </dd>
         {/if}
       </dl>

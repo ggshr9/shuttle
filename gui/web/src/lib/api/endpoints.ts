@@ -89,7 +89,8 @@ export const getMonthlyStats = (months = 6) =>
 
 // ── Backup / restore ─────────────────────────────────────────
 export const backupUrl = () => `${BASE}/api/backup`
-export const restore = (backup: unknown) => client.post<void>('/api/restore', backup)
+export const restore = (backup: unknown) =>
+  client.post<{ status: string; servers: number; subscriptions: number }>('/api/restore', backup)
 
 // ── Update / version ─────────────────────────────────────────
 export const checkUpdate = (force = false) => client.get<UpdateInfo>(`/api/update/check?force=${force}`)

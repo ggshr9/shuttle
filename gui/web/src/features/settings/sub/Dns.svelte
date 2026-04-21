@@ -1,8 +1,8 @@
 <script lang="ts">
-  import { Input, Select, Switch } from '@/ui'
+  import { Field, Input, Select, Switch } from '@/ui'
   import { t } from '@/lib/i18n/index'
   import { settings } from '../config.svelte'
-  import Field from '../Field.svelte'
+  import PageHeader from '../PageHeader.svelte'
 
   const dns = $derived(settings.draft?.routing?.dns)
 
@@ -12,7 +12,7 @@
   ]
 </script>
 
-<h2>{t('settings.dns')}</h2>
+<PageHeader title={t('settings.dns')} />
 
 {#if dns && dns.remote}
   <Field label={t('settings.domesticDns')}>
@@ -40,11 +40,3 @@
   </Field>
 {/if}
 
-<style>
-  h2 {
-    margin: 0 0 var(--shuttle-space-4);
-    font-size: var(--shuttle-text-lg);
-    font-weight: var(--shuttle-weight-semibold);
-    color: var(--shuttle-fg-primary);
-  }
-</style>

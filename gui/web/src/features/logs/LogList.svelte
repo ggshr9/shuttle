@@ -1,6 +1,7 @@
 <script lang="ts">
   import { untrack } from 'svelte'
   import { t } from '@/lib/i18n/index'
+  import { formatClock } from '@/lib/format'
   import { logsStore } from './store.svelte'
   import type { LogEntry } from './types'
 
@@ -36,26 +37,18 @@
     return { destroy: () => ro.disconnect() }
   }
 
-  // Auto-scroll on new entries when user has pinned to bottom.
+  // Auto-scroll on new entries when the user has pinned to bottom.
+  // Track only rows.length as the trigger; reading scrollTop/pinnedBottom inside
+  // would create a feedback loop when the onscroll handler updates them.
   $effect(() => {
-    const _len = rows.length
-    void _len
+    rows.length
     untrack(() => {
-      if (!container) return
-      if (logsStore.autoScroll && pinnedBottom) {
-        requestAnimationFrame(() => {
-          if (!container) return
-          container.scrollTop = container.scrollHeight
-        })
-      }
+      if (!container || !logsStore.autoScroll || !pinnedBottom) return
+      requestAnimationFrame(() => {
+        if (container) container.scrollTop = container.scrollHeight
+      })
     })
   })
-
-  function fmtTime(ms: number): string {
-    const d = new Date(ms)
-    const pad = (n: number) => String(n).padStart(2, '0')
-    return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
-  }
 
   function rowClass(entry: LogEntry): string {
     const parts = ['row', `lvl-${entry.level}`]
@@ -80,7 +73,7 @@
             style="height: {ROW_HEIGHT}px;"
             onclick={() => logsStore.select(entry.id)}
           >
-            <span class="time">{fmtTime(entry.time)}</span>
+            <span class="time">{formatClock(entry.time)}</span>
             <span class="level">{entry.level}</span>
             {#if entry.kind === 'conn-open'}
               <span class="arrow open">▶</span>

@@ -1,9 +1,9 @@
 <script lang="ts">
-  import { Button } from '@/ui'
+  import { Button, Field } from '@/ui'
   import { t } from '@/lib/i18n/index'
   import { exportConfig, downloadDiagnostics } from '@/lib/api/endpoints'
   import { toasts } from '@/lib/toaster.svelte'
-  import Field from '../Field.svelte'
+  import PageHeader from '../PageHeader.svelte'
 
   let downloadingDiag = $state(false)
 
@@ -15,7 +15,7 @@
   }
 </script>
 
-<h2>{t('settings.nav.advanced')}</h2>
+<PageHeader title={t('settings.nav.advanced')} />
 
 <h3>{t('settings.export')}</h3>
 
@@ -42,12 +42,6 @@
 </Field>
 
 <style>
-  h2 {
-    margin: 0 0 var(--shuttle-space-4);
-    font-size: var(--shuttle-text-lg);
-    font-weight: var(--shuttle-weight-semibold);
-    color: var(--shuttle-fg-primary);
-  }
   h3 {
     margin: var(--shuttle-space-5) 0 var(--shuttle-space-2);
     font-size: var(--shuttle-text-xs);

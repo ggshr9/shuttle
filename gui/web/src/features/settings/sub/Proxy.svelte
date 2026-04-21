@@ -1,11 +1,11 @@
 <script lang="ts">
   import { onMount } from 'svelte'
-  import { Button, Icon, Input, Select, Switch } from '@/ui'
+  import { Button, Field, Icon, Input, Select, Switch } from '@/ui'
   import { t } from '@/lib/i18n/index'
   import { getLanInfo } from '@/lib/api/endpoints'
   import type { LanInfo } from '@/lib/api/types'
   import { settings } from '../config.svelte'
-  import Field from '../Field.svelte'
+  import PageHeader from '../PageHeader.svelte'
 
   const proxy = $derived(settings.draft?.proxy)
 
@@ -40,7 +40,7 @@
   }
 </script>
 
-<h2>{t('settings.proxyListeners')}</h2>
+<PageHeader title={t('settings.proxyListeners')} />
 
 {#if proxy && proxy.socks5 && proxy.http && proxy.tun && proxy.system_proxy}
   <Field label="SOCKS5">
@@ -109,13 +109,6 @@
 {/if}
 
 <style>
-  h2 {
-    margin: 0 0 var(--shuttle-space-4);
-    font-size: var(--shuttle-text-lg);
-    font-weight: var(--shuttle-weight-semibold);
-    color: var(--shuttle-fg-primary);
-  }
-
   .per-app {
     padding: var(--shuttle-space-3) 0;
     border-bottom: 1px solid var(--shuttle-border);

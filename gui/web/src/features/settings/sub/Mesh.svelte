@@ -1,13 +1,13 @@
 <script lang="ts">
-  import { Switch } from '@/ui'
+  import { Field, Switch } from '@/ui'
   import { t } from '@/lib/i18n/index'
   import { settings } from '../config.svelte'
-  import Field from '../Field.svelte'
+  import PageHeader from '../PageHeader.svelte'
 
   const mesh = $derived(settings.draft?.mesh)
 </script>
 
-<h2>{t('settings.meshVPN')}</h2>
+<PageHeader title={t('settings.meshVPN')} />
 
 {#if mesh}
   <Field label={t('settings.meshEnabled')} hint={t('settings.meshEnabledHint')}>
@@ -21,11 +21,3 @@
   {/if}
 {/if}
 
-<style>
-  h2 {
-    margin: 0 0 var(--shuttle-space-4);
-    font-size: var(--shuttle-text-lg);
-    font-weight: var(--shuttle-weight-semibold);
-    color: var(--shuttle-fg-primary);
-  }
-</style>

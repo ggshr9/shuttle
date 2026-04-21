@@ -3,6 +3,7 @@
   import { t } from '@/lib/i18n/index'
   import { backupUrl, restore } from '@/lib/api/endpoints'
   import { toasts } from '@/lib/toaster.svelte'
+  import PageHeader from '../PageHeader.svelte'
 
   let restoring = $state(false)
   let fileInput: HTMLInputElement | null = $state(null)
@@ -14,8 +15,11 @@
     restoring = true
     try {
       const backup = JSON.parse(await file.text()) as unknown
-      await restore(backup)
-      toasts.success(t('settings.restored', { servers: 0, subscriptions: 0 }))
+      const res = await restore(backup)
+      toasts.success(t('settings.restored', {
+        servers: res.servers,
+        subscriptions: res.subscriptions,
+      }))
     } catch (err) {
       toasts.error(`${t('settings.restoreFailed')}: ${(err as Error).message}`)
     } finally {
@@ -25,7 +29,7 @@
   }
 </script>
 
-<h2>{t('settings.backup')}</h2>
+<PageHeader title={t('settings.backup')} />
 
 <p class="hint">{t('settings.backupHint')}</p>
 
@@ -50,12 +54,6 @@
 </div>
 
 <style>
-  h2 {
-    margin: 0 0 var(--shuttle-space-2);
-    font-size: var(--shuttle-text-lg);
-    font-weight: var(--shuttle-weight-semibold);
-    color: var(--shuttle-fg-primary);
-  }
   .hint {
     margin: 0 0 var(--shuttle-space-4);
     font-size: var(--shuttle-text-sm);

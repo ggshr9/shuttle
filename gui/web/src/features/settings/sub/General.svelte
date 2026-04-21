@@ -1,11 +1,11 @@
 <script lang="ts">
   import { onMount } from 'svelte'
-  import { Select, Switch } from '@/ui'
+  import { Field, Select, Switch } from '@/ui'
   import { t, getLocales, getLocale, setLocale } from '@/lib/i18n/index'
   import { theme } from '@/lib/theme.svelte'
   import { getAutostart, setAutostart } from '@/lib/api/endpoints'
   import { toasts } from '@/lib/toaster.svelte'
-  import Field from '../Field.svelte'
+  import PageHeader from '../PageHeader.svelte'
 
   let currentLocale = $state(getLocale())
   let autostart = $state(false)
@@ -43,7 +43,7 @@
   }
 </script>
 
-<h2>{t('settings.general')}</h2>
+<PageHeader title={t('settings.general')} />
 
 <Field label={t('settings.language')}>
   <Select value={currentLocale} options={localeOptions} onValueChange={onLocaleChange} />
@@ -63,11 +63,3 @@
   </Field>
 {/if}
 
-<style>
-  h2 {
-    margin: 0 0 var(--shuttle-space-4);
-    font-size: var(--shuttle-text-lg);
-    font-weight: var(--shuttle-weight-semibold);
-    color: var(--shuttle-fg-primary);
-  }
-</style>

@@ -149,7 +149,7 @@ once, save time later.
    pointer to the build step if the bundle is missing. CLAUDE.md
    documents the full local sequence.
 
-## Settings shell (§7.8 pattern reference)
+## Settings shell (multi-URL pattern)
 
 `features/settings/` is the one slice that multiplexes several URLs into
 a single visual frame:
