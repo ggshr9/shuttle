@@ -6,6 +6,7 @@ import * as subscriptions from '@/features/subscriptions'
 import * as groups from '@/features/groups'
 import * as routing from '@/features/routing'
 import * as mesh from '@/features/mesh'
+import * as logs from '@/features/logs'
 
 export interface NavMeta {
   label: string
@@ -29,11 +30,7 @@ export const routes: AppRoute[] = [
   groups.detailRoute,
   routing.route,
   mesh.route,
-  {
-    path: '/logs',
-    component: lazy(() => import('@/pages/Logs.svelte')),
-    nav: { label: 'nav.logs', icon: 'logs', order: 80 },
-  },
+  logs.route,
   {
     path: '/settings',
     component: lazy(() => import('@/pages/Settings.svelte')),

@@ -217,3 +217,19 @@ After Routing feature commits on `refactor/gui-v2`.
 ### Legacy deletion (P7)
 - `pages/Mesh.svelte` (413) + `lib/MeshTopologyChart.svelte` (360) = 773 lines
 - **Cumulative P3-P7: 7,766 lines**
+
+---
+
+## Post-P8 (2026-04-21)
+
+### Bundle
+- `index-*.js`: 116.78 KB raw / 42.62 KB gzip (+0.08 KB gzip vs post-P7 fix)
+- `LogsPage-*.js` (lazy): 18.71 KB raw / 6.79 KB gzip (vs legacy Logs-*.js 10.62 KB raw / 3.57 KB gzip; +3.22 KB gzip — absorbs Select/Switch/Badge/Input into the lazy chunk, plus the three-column feature-slice components; Dialog stays shared with other pages)
+
+### Svelte-check error count
+- Pre-P8: 145 errors / 11 warnings
+- Post-P8: **65** errors / 9 warnings (−80 — legacy Logs.svelte was untyped and pulled in tangled shapes)
+
+### Legacy deletion (P8)
+- `pages/Logs.svelte` (562) — replaced by `features/logs/` feature slice
+- **Cumulative P3-P8: 8,328 lines**
