@@ -20,10 +20,15 @@
   <div class="center"><Spinner size={20} /></div>
 {:else if resource.error && resource.data === undefined}
   <ErrorBanner message={resource.error.message} onretry={() => resource.refetch()} />
-{:else if resource.data !== undefined && isEmpty?.(resource.data)}
-  <Empty title={emptyTitle ?? 'Nothing here'} description={emptyDescription} />
 {:else if resource.data !== undefined}
-  {@render children(resource.data)}
+  {#if resource.error}
+    <ErrorBanner message={resource.error.message} onretry={() => resource.refetch()} />
+  {/if}
+  {#if isEmpty?.(resource.data)}
+    <Empty title={emptyTitle ?? 'Nothing here'} description={emptyDescription} />
+  {:else}
+    {@render children(resource.data)}
+  {/if}
 {/if}
 
 <style>

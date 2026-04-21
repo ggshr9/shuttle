@@ -14,7 +14,7 @@
   let sni = $state('')
   let submitting = $state(false)
 
-  const canSubmit = $derived(addr.trim().length > 0 && password.length > 0)
+  const canSubmit = $derived(addr.trim().length > 0)
 
   async function submit() {
     if (!canSubmit) return
@@ -23,7 +23,7 @@
       await addServer({
         name: name.trim() || undefined,
         addr: addr.trim(),
-        password,
+        password: password.length > 0 ? password : undefined,
         sni: sni.trim() || undefined,
       })
       name = ''; addr = ''; password = ''; sni = ''

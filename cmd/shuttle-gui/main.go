@@ -159,10 +159,14 @@ func main() {
 	// Wire stats recording and connlog: subscribe to engine events.
 	go recordEngineEvents(eng, statsStore, connStore)
 
-	// Embedded SPA assets
+	// Embedded SPA assets — fail fast if the bundle wasn't built before go build.
 	webFS, err := fs.Sub(gui.WebAssets, "web/dist")
 	if err != nil {
 		log.Fatalf("Failed to load web assets: %v", err)
+	}
+	if _, err := fs.Stat(webFS, "index.html"); err != nil {
+		log.Fatalf("Embedded GUI bundle is missing (no web/dist/index.html). " +
+			"Run `cd gui/web && npm install && npm run build` before `go build ./cmd/shuttle-gui`.")
 	}
 
 	// System tray: enabled on Windows/Linux, macOS uses native dock behavior
