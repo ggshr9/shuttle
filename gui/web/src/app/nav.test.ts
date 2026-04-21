@@ -19,4 +19,10 @@ describe('nav', () => {
     expect(sections.has('network')).toBe(true)
     expect(sections.has('system')).toBe(true)
   })
+  it('every nav path has a matching route', async () => {
+    const { routes } = await import('./routes')
+    const routePaths = routes.map(r => r.path)
+    const missing = nav.filter(n => !routePaths.includes(n.path))
+    expect(missing).toEqual([])
+  })
 })

@@ -1,11 +1,9 @@
 import type { Component } from 'svelte'
-import * as dashboard from '@/features/dashboard'
+import * as now from '@/features/now'
 import * as servers from '@/features/servers'
-import * as subscriptions from '@/features/subscriptions'
-import * as groups from '@/features/groups'
-import * as routing from '@/features/routing'
+import * as traffic from '@/features/traffic'
 import * as mesh from '@/features/mesh'
-import * as logs from '@/features/logs'
+import * as activity from '@/features/activity'
 import * as settings from '@/features/settings'
 
 export interface NavMeta {
@@ -14,7 +12,6 @@ export interface NavMeta {
   order: number
   hidden?: boolean
 }
-
 export interface AppRoute {
   path: string
   component: () => Promise<Component>
@@ -23,13 +20,10 @@ export interface AppRoute {
 }
 
 export const routes: AppRoute[] = [
-  dashboard.route,
+  now.route,
   servers.route,
-  subscriptions.route,
-  groups.route,
-  groups.detailRoute,
-  routing.route,
+  traffic.route,
   mesh.route,
-  logs.route,
+  activity.route,
   settings.route,
 ]
