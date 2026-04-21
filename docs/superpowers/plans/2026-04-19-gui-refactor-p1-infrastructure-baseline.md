@@ -233,3 +233,40 @@ After Routing feature commits on `refactor/gui-v2`.
 ### Legacy deletion (P8)
 - `pages/Logs.svelte` (562) — replaced by `features/logs/` feature slice
 - **Cumulative P3-P8: 8,328 lines**
+
+---
+
+## Post-P9 (2026-04-21)
+
+P9 shipped in two commits (P9a shell, P9b sub-pages).
+
+### Bundle
+- `index-*.js`: 42.62 → **43.15 KB gzip** (+0.53 KB total over P8; sub-nav + store + all new icons)
+- `SettingsPage-*.js`: 3.56 → **8.05 KB gzip** (+4.49 KB as placeholders converted to real sub-pages; still smaller than legacy 8.16 KB)
+
+### Svelte-check error count
+- Pre-P9:  65 errors / 11 warnings
+- Post-P9a: 24 errors / 9 warnings (−41; unused legacy lib/settings/*)
+- Post-P9b: **8** errors / 3 warnings (all in lib/Onboarding.svelte; P10 target)
+
+### Legacy deletion (P9)
+- `pages/Settings.svelte` (294) — replaced by `features/settings/` shell
+- `lib/settings/*` (1,437 lines across 12 files) — per-section replacements
+- Total P9: **1,731 lines removed**
+- **Cumulative P3-P9: 10,059 lines**
+
+### Sub-pages ported
+- General: language + theme + autostart
+- Proxy: SOCKS5/HTTP/TUN + per-app routing + LAN sharing + system proxy
+- Mesh: enable + p2p toggle
+- Routing: default + geodata enable / auto-update / manual refresh
+- DNS: domestic + remote server/via + cache/prefetch
+- Logging: log level
+- QoS: enable + rules with priority / ports editor
+- Backup: create + restore
+- Update: current version + update check + banner with changelog
+- Advanced: config export (JSON/URI) + diagnostics bundle
+
+Unified on `<Field>` rows + `<Switch>` / `<Select>` primitives per §7.8.
+Singleton store (`settings`) tracks pristine vs draft JSON snapshot;
+`<UnsavedBar>` stickies to top when isDirty, wires Discard/Save.

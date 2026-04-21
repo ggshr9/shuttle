@@ -26,9 +26,18 @@ function normalize(cfg: Config): Config {
 
   c.mesh   ??= { enabled: false, p2p_enabled: false }
   c.log    ??= { level: 'info' }
-  c.dns    ??= { remote: '', domestic: '', cache: true, prefetch: false }
-  c.routing ??= { default: 'proxy', rules: [], geodata: { enabled: true, auto_update: true } }
-  c.routing.geodata ??= { enabled: true, auto_update: true }
+  c.routing ??= { default: 'proxy', rules: [], dns: {}, geodata: {} }
+  c.routing.dns ??= {}
+  const dns = c.routing.dns
+  dns.domestic ??= ''
+  dns.remote   ??= { server: '', via: 'proxy' }
+  dns.remote.server ??= ''
+  dns.remote.via    ??= 'proxy'
+  dns.cache    ??= true
+  dns.prefetch ??= false
+  c.routing.geodata ??= {}
+  c.routing.geodata.enabled     ??= true
+  c.routing.geodata.auto_update ??= true
   c.qos    ??= { enabled: false, rules: [] }
   c.qos.rules ??= []
   return cfg

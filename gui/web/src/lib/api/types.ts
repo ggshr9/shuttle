@@ -45,15 +45,15 @@ export interface Config {
   }
   mesh?: { enabled: boolean; p2p_enabled?: boolean }
   log?:  { level?: 'debug' | 'info' | 'warn' | 'error' }
-  dns?: {
-    remote?: string
-    domestic?: string
-    cache?: boolean
-    prefetch?: boolean
-  }
   routing?: {
     default?: 'proxy' | 'direct' | 'reject'
     rules?: unknown[]
+    dns?: {
+      domestic?: string
+      remote?: { server?: string; via?: 'proxy' | 'direct' }
+      cache?: boolean
+      prefetch?: boolean
+    }
     geodata?: {
       enabled?: boolean
       auto_update?: boolean
@@ -66,12 +66,14 @@ export interface Config {
   subscriptions?: unknown[]
 }
 
+export type QosPriority = 'critical' | 'high' | 'normal' | 'bulk' | 'low'
+
 export interface QosRule {
   name?: string
-  priority: number
+  priority: QosPriority
   protocol?: string
   domains?: string[]
-  ports?: string[]
+  ports?: number[]
   process?: string
 }
 
@@ -177,9 +179,12 @@ export interface PeriodStats {
 // ── Updates / version ────────────────────────────────────────
 export interface UpdateInfo {
   available: boolean
-  version?: string
-  release_notes?: string
+  current_version?: string
+  latest_version?: string
+  release_url?: string
   download_url?: string
+  changelog?: string
+  asset_size?: number
 }
 
 export interface VersionInfo {
