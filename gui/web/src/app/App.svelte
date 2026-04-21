@@ -3,7 +3,11 @@
   import { getConfig } from '@/lib/api/endpoints'
   import { t } from '@/lib/i18n/index'
   import Shell from './Shell.svelte'
+  import AppShell from './AppShell.svelte'
   import Toaster from './Toaster.svelte'
+
+  // Escape hatch — `VITE_USE_LEGACY_SHELL=1 npm run dev` falls back to pre-refactor Shell.
+  const useLegacy = import.meta.env.VITE_USE_LEGACY_SHELL === '1'
 
   let Onboarding = $state<Component<{ onComplete: () => void }> | null>(null)
 
@@ -50,7 +54,11 @@
       <button onclick={() => location.reload()}>{t('app.retry')}</button>
     </div>
   {/if}
-  <Shell />
+  {#if useLegacy}
+    <Shell />
+  {:else}
+    <AppShell />
+  {/if}
 {/if}
 
 <style>
