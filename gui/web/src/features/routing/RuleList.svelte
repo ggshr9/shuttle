@@ -26,6 +26,7 @@
     if (r.geosite) return { ...r, _type: 'geosite', value: r.geosite }
     if (r.geoip)   return { ...r, _type: 'geoip',   value: r.geoip }
     if (r.process) return { ...r, _type: 'process', value: r.process }
+    if (r.ip_cidr) return { ...r, _type: 'ip_cidr', value: r.ip_cidr }
     if (r.domain)  return { ...r, _type: 'domain',  value: r.domain }
     return { ...r, _type: 'domain', value: '' }
   }
@@ -35,6 +36,7 @@
     if (u._type === 'geosite') return { ...base, geosite: u.value }
     if (u._type === 'geoip')   return { ...base, geoip:   u.value }
     if (u._type === 'process') return { ...base, process: u.value }
+    if (u._type === 'ip_cidr') return { ...base, ip_cidr: u.value }
     return { ...base, domain: u.value }
   }
 

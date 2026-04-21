@@ -19,10 +19,13 @@ import { t } from '@/lib/i18n/index'
 const RULES_KEY = 'routing.rules'
 
 export function useRules(): Resource<RoutingRules> {
-  return createResource(RULES_KEY, getRouting, {
-    poll: 30_000,
-    initial: { rules: [], default: 'proxy' },
-  })
+  // No `initial` — wait for the first real fetch before rendering, so draft
+  // initialization in RoutingPage sees actual rules, never the placeholder.
+  // (A placeholder caused silent rule wipes when the user hit Save before
+  // the first fetch landed.)
+  // No `poll` — rules rarely change outside the page and a live poll would
+  // compete with in-progress draft edits.
+  return createResource(RULES_KEY, getRouting)
 }
 
 export async function saveRules(rules: RoutingRules): Promise<void> {

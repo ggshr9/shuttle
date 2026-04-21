@@ -16,7 +16,10 @@
   let tplOpen = $state(false)
   let ioOpen = $state(false)
 
-  // Initialize draft from remote when it first arrives.
+  // Initialize draft from remote on first real fetch. After template or
+  // import mutations, callers set `draft = null` to force re-sync from the
+  // newly-refreshed remote state (otherwise Save would overwrite the
+  // freshly applied rules with the stale draft).
   $effect(() => {
     if (res.data && !draft) {
       draft = structuredClone(res.data)
@@ -40,11 +43,19 @@
   function onDefaultChange(v: string) {
     if (draft) draft = { ...draft, default: v }
   }
+
+  function resetDraft() {
+    draft = null    // Next $effect tick repopulates from res.data.
+  }
 </script>
 
 <Section
   title={t('nav.routing')}
-  description={res.data ? t('routing.count', { n: res.data.rules.length }) : undefined}
+  description={draft
+    ? t('routing.count', { n: draft.rules.length })
+    : res.data
+      ? t('routing.count', { n: res.data.rules.length })
+      : undefined}
 >
   {#snippet actions()}
     <Button variant="ghost" onclick={() => (tplOpen = true)}>{t('routing.applyTemplate')}</Button>
@@ -78,8 +89,8 @@
   </AsyncBoundary>
 </Section>
 
-<TemplateDialog bind:open={tplOpen} />
-<ImportExportDialog bind:open={ioOpen} />
+<TemplateDialog bind:open={tplOpen} onApplied={resetDraft} />
+<ImportExportDialog bind:open={ioOpen} onImported={resetDraft} />
 
 <style>
   .default-row {

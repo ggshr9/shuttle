@@ -6,8 +6,9 @@
 
   interface Props {
     open: boolean
+    onImported?: () => void
   }
-  let { open = $bindable(false) }: Props = $props()
+  let { open = $bindable(false), onImported }: Props = $props()
 
   let mode = $state<'merge' | 'replace'>('merge')
   let parsed = $state<RoutingRules | null>(null)
@@ -48,10 +49,13 @@
     if (!parsed) return
     submitting = true
     try {
-      await importRules(parsed, mode)
+      const r = await importRules(parsed, mode)
       textareaValue = ''
       parsed = null
-      open = false
+      if (r) {
+        onImported?.()
+        open = false
+      }
     } finally {
       submitting = false
     }

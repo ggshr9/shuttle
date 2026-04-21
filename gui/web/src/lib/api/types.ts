@@ -90,6 +90,7 @@ export interface RoutingRule {
   geoip?: string
   domain?: string
   process?: string
+  ip_cidr?: string
   action: string
 }
 
