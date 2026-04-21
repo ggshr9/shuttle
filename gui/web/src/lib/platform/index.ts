@@ -24,8 +24,14 @@ export function getPlatform(): Platform {
 }
 
 // Convenience: `platform` accessor — always returns the singleton.
+// Binds functions to the instance so `this` resolves correctly even when
+// consumers destructure or rebind (e.g. `const { engineStart } = platform`).
 export const platform = new Proxy({} as Platform, {
-  get(_t, prop) { return (getPlatform() as any)[prop] },
+  get(_t, prop) {
+    const instance = getPlatform()
+    const value = (instance as any)[prop]
+    return typeof value === 'function' ? value.bind(instance) : value
+  },
 })
 
 // Test helper
