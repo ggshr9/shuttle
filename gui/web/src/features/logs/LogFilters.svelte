@@ -48,14 +48,8 @@
   </section>
 
   <section class="toggles">
-    <label>
-      <Switch bind:checked={logsStore.showConnections} />
-      <span>{t('logs.showConnections')}</span>
-    </label>
-    <label>
-      <Switch bind:checked={logsStore.autoScroll} />
-      <span>{t('logs.autoScroll')}</span>
-    </label>
+    <Switch bind:checked={logsStore.showConnections} label={t('logs.showConnections')} />
+    <Switch bind:checked={logsStore.autoScroll}      label={t('logs.autoScroll')} />
   </section>
 </aside>
 
@@ -100,12 +94,4 @@
   .chip.warn.active  { color: var(--shuttle-warning); border-color: var(--shuttle-warning); }
   .chip.error.active { color: var(--shuttle-danger); border-color: var(--shuttle-danger); }
   .toggles { gap: var(--shuttle-space-3); }
-  .toggles label {
-    display: flex;
-    align-items: center;
-    gap: var(--shuttle-space-3);
-    font-size: var(--shuttle-text-sm);
-    color: var(--shuttle-fg-primary);
-    cursor: pointer;
-  }
 </style>
