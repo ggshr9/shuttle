@@ -35,10 +35,10 @@ describe('router', () => {
   })
 
   it('matches path with param via useParams(pattern)', async () => {
-    navigate('/groups/42')
+    navigate('/servers/42')
     await new Promise(r => setTimeout(r, 0))
-    expect(matches('/groups/:id')).toBe(true)
-    const params = useParams<{ id: string }>('/groups/:id')
+    expect(matches('/servers/:id')).toBe(true)
+    const params = useParams<{ id: string }>('/servers/:id')
     expect(params.id).toBe('42')
   })
 
@@ -52,5 +52,15 @@ describe('router', () => {
     navigate('/nonexistent')
     await new Promise(r => setTimeout(r, 0))
     expect(useRoute().path).toBe('/nonexistent')
+  })
+
+  it('redirects legacy /routing to /traffic', async () => {
+    localStorage.setItem('shuttle-route-migration-seen', '1')  // suppress toast
+    location.hash = '#/routing'
+    __resetRoute()
+    await new Promise(r => setTimeout(r, 0))
+    const r = useRoute()
+    expect(r.path).toBe('/traffic')
+    expect(location.hash).toBe('#/traffic')
   })
 })

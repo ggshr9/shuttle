@@ -1,6 +1,8 @@
 // Minimal hash-based router for Shuttle GUI.
 
 import type { Component } from 'svelte'
+import { resolveLegacyRoute, hasSeenMigrationToast, markMigrationToastSeen } from '@/app/route-migration'
+import { toasts } from '@/lib/toaster.svelte'
 
 interface RouteState {
   path: string
@@ -21,9 +23,22 @@ function parseHash(hash: string): { path: string; query: Record<string, string> 
 }
 
 function update() {
-  const { path, query } = parseHash(location.hash)
-  state.path = path
-  state.query = query
+  const parsed = parseHash(location.hash)
+  const legacy = resolveLegacyRoute(parsed.path, parsed.query)
+  if (legacy) {
+    const qs = new URLSearchParams(legacy.query).toString()
+    const newHash = '#' + legacy.path + (qs ? '?' + qs : '')
+    history.replaceState(null, '', newHash)
+    if (!hasSeenMigrationToast()) {
+      toasts.info(`This page moved — now at ${legacy.path}.`)
+      markMigrationToastSeen()
+    }
+    state.path = legacy.path
+    state.query = legacy.query
+    return
+  }
+  state.path = parsed.path
+  state.query = parsed.query
 }
 
 if (typeof window !== 'undefined') {
