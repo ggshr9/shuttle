@@ -7,6 +7,7 @@
   import DeleteConfirm from './DeleteConfirm.svelte'
   import SourceFilter from './SourceFilter.svelte'
   import SubscriptionBanner from './SubscriptionBanner.svelte'
+  import { matchesFilter as matchesFilterPure } from './filter'
   import { useRoute, navigate } from '@/lib/router'
   import type { Server, Subscription } from '@/lib/api/types'
 
@@ -47,28 +48,13 @@
     }
   }
 
-  // Build the set of addrs that belong to any subscription — used by the
-  // 'manual' and 'subscriptions' filters.
-  const subServerAddrs = $derived<Set<string>>(new Set(
-    (subsRes.data ?? []).flatMap((s) => s.servers ?? []).map((s) => s.addr)
-  ))
-
   function matchesFilter(srv: Server): boolean {
-    const f = currentFilter
-    if (f === 'all') return true
-    if (f === 'manual') return !subServerAddrs.has(srv.addr)
-    if (f === 'subscriptions') return subServerAddrs.has(srv.addr)
-    if (f.startsWith('subscription:')) {
-      const id = f.slice('subscription:'.length)
-      const sub = subsRes.data?.find((s) => s.id === id)
-      return !!sub?.servers?.some((s) => s.addr === srv.addr)
-    }
-    if (f.startsWith('group:')) {
-      const groupTag = f.slice('group:'.length)
-      const group = groupsRes.data?.find((g) => g.tag === groupTag)
-      return !!group?.members?.includes(srv.addr)
-    }
-    return true
+    return matchesFilterPure(
+      srv,
+      currentFilter,
+      subsRes.data ?? [],
+      groupsRes.data ?? [],
+    )
   }
 
   function openSingleDelete(addr: string) {
