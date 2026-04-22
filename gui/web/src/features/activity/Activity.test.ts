@@ -23,6 +23,9 @@ vi.mock('@/features/logs/store.svelte', () => ({
     showConnections: false,
     autoScroll: true,
     tags: {},
+    selected: null,        // LogDetail renders "Select a log entry" placeholder
+    selectedId: null,
+    select: () => {},
   },
 }))
 

@@ -7,6 +7,7 @@
   import { useTransportStats } from '@/features/dashboard/resource.svelte'
   import LogFilters from '@/features/logs/LogFilters.svelte'
   import LogList from '@/features/logs/LogList.svelte'
+  import LogDetail from '@/features/logs/LogDetail.svelte'
   import { logsStore } from '@/features/logs/store.svelte'
   import { platform } from '@/lib/platform'
   import { toasts } from '@/lib/toaster.svelte'
@@ -96,6 +97,7 @@
     <div class="logs-grid">
       <LogFilters />
       <LogList />
+      <LogDetail />
     </div>
   {/if}
 </Section>
@@ -134,7 +136,10 @@
 
   .logs-grid {
     display: grid;
-    grid-template-columns: 200px 1fr;
+    /* Desktop: filters | list | detail. Tablet (< 1024px): detail
+       moves below the list. Phone (< 720px): single column, filters
+       collapse to above the list. */
+    grid-template-columns: 200px 1fr 320px;
     height: calc(100vh - 260px);
     min-height: 420px;
     border: 1px solid var(--shuttle-border);
@@ -144,6 +149,18 @@
   }
   .logs-grid > :global(*) { min-width: 0; }
 
+  @media (max-width: 1024px) {
+    .logs-grid {
+      grid-template-columns: 200px 1fr;
+      grid-template-rows: auto auto;
+    }
+    .logs-grid > :global(:nth-child(3)) {
+      grid-column: 1 / -1;
+      max-height: 240px;
+      overflow-y: auto;
+      border-top: 1px solid var(--shuttle-border);
+    }
+  }
   @media (max-width: 720px) {
     .logs-grid {
       grid-template-columns: 1fr;
