@@ -1,5 +1,9 @@
 <script lang="ts">
-  interface Props {
+  import type { HTMLInputAttributes } from 'svelte/elements'
+
+  interface Props extends Omit<HTMLInputAttributes,
+    'value' | 'type' | 'class' | 'oninput' | 'onchange' | 'placeholder' | 'disabled' | 'id' | 'autocomplete'
+  > {
     value?: string
     placeholder?: string
     type?: 'text' | 'password' | 'email' | 'url' | 'number'
@@ -11,7 +15,6 @@
     class?: string
     id?: string
     autocomplete?: HTMLInputElement['autocomplete']
-    [key: string]: unknown
   }
 
   let {

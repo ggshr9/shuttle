@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { onMount } from 'svelte'
   import { useRoute, navigate } from '@/lib/router'
   import { Tabs, Section, Button, Input } from '@/ui'
   import { t } from '@/lib/i18n/index'
@@ -12,13 +11,19 @@
   import { platform } from '@/lib/platform'
   import { toasts } from '@/lib/toaster.svelte'
   import { errorMessage } from '@/lib/format'
+  import { formatLogEntries } from '@/lib/logFormatter'
 
   const route = useRoute()
   const tab = $derived(route.query.tab === 'logs' ? 'logs' : 'overview')
 
   const transports = useTransportStats()
 
-  onMount(() => logsStore.subscribe())
+  // Only hold an active log subscription while the Logs tab is visible.
+  // `logsStore.subscribe()` returns a cleanup function that decrements the
+  // ref-counted WebSocket; we run/tear-down per tab flip.
+  $effect(() => {
+    if (tab === 'logs') return logsStore.subscribe()
+  })
 
   function setTab(v: string) {
     const q = new URLSearchParams({ ...route.query })
@@ -30,26 +35,8 @@
 
   const hiddenCount = $derived(logsStore.entries.length - logsStore.filtered.length)
 
-  function formatLogsForShare(): string {
-    return logsStore.filtered.map((e) => {
-      const time = new Date(e.time).toISOString()
-      let s = `[${time}] [${e.level.toUpperCase()}] ${e.msg}`
-      if (e.details) {
-        s += `\n  target=${e.details.target}`
-        s += `\n  protocol=${e.details.protocol}`
-        s += `\n  rule=${e.details.rule}`
-        if (e.details.process)  s += `\n  process=${e.details.process}`
-        if (e.details.duration) s += `\n  duration_ms=${e.details.duration}`
-        if (e.details.bytesIn || e.details.bytesOut) {
-          s += `\n  bytes_in=${e.details.bytesIn ?? 0} bytes_out=${e.details.bytesOut ?? 0}`
-        }
-      }
-      return s
-    }).join('\n')
-  }
-
   async function shareLogs() {
-    const text = formatLogsForShare()
+    const text = formatLogEntries(logsStore.filtered)
     if (!text) return
     try {
       const r = await platform.share({ title: 'Shuttle logs', text })

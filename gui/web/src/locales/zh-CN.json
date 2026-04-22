@@ -218,6 +218,9 @@
   "routing": {
     "title": "路由规则",
     "defaultAction": "默认行为",
+    "fieldType": "类型",
+    "fieldValue": "值",
+    "fieldAction": "动作",
     "proxy": "代理",
     "direct": "直连",
     "reject": "拒绝",
@@ -541,16 +544,6 @@
     "days7": "7天",
     "days30": "30天",
     "days90": "90天"
-  },
-  "traffic": {
-    "title": "流量统计",
-    "daily": "每日",
-    "weekly": "每周",
-    "monthly": "每月",
-    "sent": "上传",
-    "received": "下载",
-    "total": "总计",
-    "noData": "暂无流量数据"
   },
   "multipath": {
     "title": "多路径",

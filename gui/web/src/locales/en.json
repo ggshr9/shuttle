@@ -218,6 +218,9 @@
   "routing": {
     "title": "Routing Rules",
     "defaultAction": "Default Action",
+    "fieldType": "Type",
+    "fieldValue": "Value",
+    "fieldAction": "Action",
     "proxy": "Proxy",
     "direct": "Direct",
     "reject": "Reject",
@@ -541,16 +544,6 @@
     "days7": "7d",
     "days30": "30d",
     "days90": "90d"
-  },
-  "traffic": {
-    "title": "Traffic Usage",
-    "daily": "Daily",
-    "weekly": "Weekly",
-    "monthly": "Monthly",
-    "sent": "Sent",
-    "received": "Received",
-    "total": "Total",
-    "noData": "No traffic data available"
   },
   "multipath": {
     "title": "Multipath",

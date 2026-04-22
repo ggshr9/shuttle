@@ -1,6 +1,7 @@
 <script lang="ts">
   import { Button, Select, Input, Combobox } from '@/ui'
   import { getGeositeCategories } from '@/lib/api/endpoints'
+  import { t } from '@/lib/i18n/index'
   import type { RoutingRule } from '@/lib/api/types'
 
   type RuleType = 'domain' | 'ip_cidr' | 'geoip' | 'geosite' | 'process'
@@ -36,19 +37,19 @@
     }
   })
 
-  const typeOptions = [
-    { value: 'domain',  label: 'Domain' },
-    { value: 'ip_cidr', label: 'IP / CIDR' },
-    { value: 'geoip',   label: 'GeoIP' },
-    { value: 'geosite', label: 'GeoSite' },
-    { value: 'process', label: 'Process' },
-  ] as const
+  const typeOptions = $derived([
+    { value: 'domain',  label: t('routing.typeDomain') },
+    { value: 'ip_cidr', label: t('routing.typeIpCidr') },
+    { value: 'geoip',   label: t('routing.typeGeoip') },
+    { value: 'geosite', label: t('routing.typeGeosite') },
+    { value: 'process', label: t('routing.typeProcess') },
+  ])
 
-  const actionOptions = [
-    { value: 'proxy',  label: 'Proxy' },
-    { value: 'direct', label: 'Direct' },
-    { value: 'reject', label: 'Reject' },
-  ] as const
+  const actionOptions = $derived([
+    { value: 'proxy',  label: t('routing.action.proxy') },
+    { value: 'direct', label: t('routing.action.direct') },
+    { value: 'reject', label: t('routing.action.reject') },
+  ])
 
   function placeholderFor(t: RuleType): string {
     switch (t) {
@@ -71,12 +72,12 @@
 
 <form class="form" onsubmit={(e) => { e.preventDefault(); save() }}>
   <label class="field">
-    <span>Type</span>
+    <span>{t('routing.fieldType')}</span>
     <Select value={type} options={typeOptions as unknown as { value: RuleType; label: string }[]} onValueChange={(v) => (type = v)} />
   </label>
 
   <label class="field">
-    <span>Value</span>
+    <span>{t('routing.fieldValue')}</span>
     {#if type === 'geosite'}
       <Combobox
         value={value}
@@ -90,13 +91,13 @@
   </label>
 
   <label class="field">
-    <span>Action</span>
+    <span>{t('routing.fieldAction')}</span>
     <Select value={action} options={actionOptions as unknown as { value: Action; label: string }[]} onValueChange={(v) => (action = v)} />
   </label>
 
   <div class="actions">
-    <Button variant="ghost" onclick={onCancel}>Cancel</Button>
-    <Button variant="primary" type="submit">Save</Button>
+    <Button variant="ghost" onclick={onCancel}>{t('common.cancel')}</Button>
+    <Button variant="primary" type="submit">{t('common.save')}</Button>
   </div>
 </form>
 
