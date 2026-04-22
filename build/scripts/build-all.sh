@@ -45,4 +45,33 @@ done
 
 echo ""
 echo "Build complete. Binaries in ${DIST_DIR}/"
+
+# Optional mobile builds. Gate behind --mobile flag / MOBILE=1 env var
+# so `build-all.sh` stays fast on non-mobile hosts.
+HAS_MOBILE_FLAG=0
+for arg in "$@"; do
+    [[ "$arg" == "--mobile" ]] && HAS_MOBILE_FLAG=1
+done
+if [[ "${MOBILE:-0}" == "1" || "$HAS_MOBILE_FLAG" == "1" ]]; then
+    echo ""
+    echo "Building mobile (--mobile)..."
+    SCRIPT_DIR="$(dirname "$0")"
+
+    # Android: attempted on any host with gomobile + Android SDK.
+    if command -v gomobile >/dev/null 2>&1; then
+        "$SCRIPT_DIR/build-android.sh" "$VERSION" || \
+            echo "  android build failed (non-fatal, see log above)"
+    else
+        echo "  skipping android: gomobile not installed"
+    fi
+
+    # iOS: macOS only.
+    if [[ "$(uname)" == "Darwin" ]]; then
+        "$SCRIPT_DIR/build-ios.sh" "$VERSION" || \
+            echo "  ios build failed (non-fatal, see log above)"
+    else
+        echo "  skipping ios: not macOS"
+    fi
+fi
+
 ls -lh "$DIST_DIR"
