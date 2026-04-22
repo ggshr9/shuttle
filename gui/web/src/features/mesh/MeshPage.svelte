@@ -1,17 +1,20 @@
 <script lang="ts">
-  import { onMount } from 'svelte'
-  import { AsyncBoundary, Card, Section, StatRow, Tabs, Spinner } from '@/ui'
+  import { AsyncBoundary, Card, Section, StatRow, Tabs, Spinner, ErrorBanner } from '@/ui'
   import { useRoute, navigate } from '@/lib/router'
   import { t } from '@/lib/i18n/index'
   import { useStatus, usePeers } from './resource.svelte'
   import PeerTable from './PeerTable.svelte'
   import type { Component } from 'svelte'
+  import type { MeshPeer } from '@/lib/api/types'
+
+  type TabId = 'peers' | 'topology'
+  type TopologyComponent = Component<{ peers: MeshPeer[]; selfIP?: string }>
 
   const statusRes = useStatus()
   const peersRes = usePeers()
 
   const route = useRoute()
-  const tab = $derived(route.query.tab === 'topology' ? 'topology' : 'peers')
+  const tab = $derived<TabId>(route.query.tab === 'topology' ? 'topology' : 'peers')
 
   function setTab(v: string) {
     const q = new URLSearchParams({ ...route.query })
@@ -23,13 +26,27 @@
 
   // Lazy-load TopologyChart only when the Topology tab is visited. Keeps the
   // initial Mesh bundle smaller for users who only want the peer list.
-  let TopologyChart = $state<Component<{ peers: unknown[]; selfIP?: string }> | null>(null)
+  let TopologyChart = $state<TopologyComponent | null>(null)
+  let topologyLoading = $state(false)
+  let topologyError = $state<string | null>(null)
+
+  function loadTopology() {
+    if (TopologyChart || topologyLoading) return
+    topologyLoading = true
+    topologyError = null
+    import('./TopologyChart.svelte')
+      .then((mod) => { TopologyChart = mod.default as TopologyComponent })
+      .catch((e: unknown) => {
+        // Chunk-load failures (version skew after deploy, transient network)
+        // surface as an explicit retry path rather than an infinite spinner.
+        topologyError = e instanceof Error ? e.message : 'Failed to load topology view'
+        console.error('Failed to load TopologyChart chunk:', e)
+      })
+      .finally(() => { topologyLoading = false })
+  }
+
   $effect(() => {
-    if (tab === 'topology' && !TopologyChart) {
-      import('./TopologyChart.svelte').then((mod) => {
-        TopologyChart = mod.default as Component<{ peers: unknown[]; selfIP?: string }>
-      }).catch(() => {})
-    }
+    if (tab === 'topology') loadTopology()
   })
 </script>
 
@@ -71,11 +88,21 @@
             {/snippet}
           </AsyncBoundary>
         {:else}
-          {#if TopologyChart}
-            <TopologyChart peers={peersRes.data ?? []} selfIP={status.virtual_ip} />
-          {:else}
-            <div class="loading"><Spinner size={18} /></div>
-          {/if}
+          <AsyncBoundary resource={peersRes}>
+            {#snippet children(peers)}
+              {#if topologyError}
+                <ErrorBanner
+                  message={topologyError}
+                  onretry={loadTopology}
+                  retryLabel={t('common.retry')}
+                />
+              {:else if TopologyChart}
+                <TopologyChart {peers} selfIP={status.virtual_ip} />
+              {:else}
+                <div class="loading"><Spinner size={18} /></div>
+              {/if}
+            {/snippet}
+          </AsyncBoundary>
         {/if}
       {/if}
     {/snippet}
