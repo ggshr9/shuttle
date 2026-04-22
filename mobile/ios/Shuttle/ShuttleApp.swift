@@ -288,14 +288,40 @@ class ViewController: UIViewController, WKNavigationDelegate, WKScriptMessageHan
     // MARK: - Phase 4 action handlers
 
     private func requestPermission(id: Int) {
-        NEVPNManager.shared().loadFromPreferences { [weak self] loadErr in
+        // iOS shows the "Shuttle would like to add VPN Configurations" prompt
+        // when NETunnelProviderManager.saveToPreferences is called on a manager
+        // with a valid protocolConfiguration. A bare NEVPNManager.shared()
+        // save fails with NEVPNErrorConfigurationInvalid because it has no
+        // protocol, so we go through the tunnel-provider path used by the
+        // rest of the app.
+        NETunnelProviderManager.loadAllFromPreferences { [weak self] managers, loadErr in
+            guard let self = self else { return }
             if let loadErr = loadErr {
-                self?.reject(id, loadErr.localizedDescription)
+                self.reject(id, loadErr.localizedDescription)
                 return
             }
-            NEVPNManager.shared().saveToPreferences { [weak self] saveErr in
+
+            let manager = managers?.first ?? NETunnelProviderManager()
+
+            // Ensure a minimal protocol is attached. When the user has already
+            // granted permission + configured the tunnel elsewhere, we keep
+            // the existing protocolConfiguration intact.
+            if manager.protocolConfiguration == nil {
+                let proto = NETunnelProviderProtocol()
+                proto.providerBundleIdentifier = "com.shuttle.app.extension"
+                proto.serverAddress = "Shuttle"
+                manager.protocolConfiguration = proto
+                manager.localizedDescription = "Shuttle VPN"
+            }
+            manager.isEnabled = true
+
+            manager.saveToPreferences { [weak self] saveErr in
                 if let saveErr = saveErr {
-                    self?.reject(id, saveErr.localizedDescription)
+                    // iOS NEVPNError.configurationReadWriteFailed / .permissionDenied
+                    // both surface as generic errors here. Treat any failure as
+                    // "denied" so the SPA toggles back off rather than hanging.
+                    self?.resolve(id, "\"denied\"")
+                    print("requestPermission save failed: \(saveErr)")
                 } else {
                     self?.resolve(id, "\"granted\"")
                 }

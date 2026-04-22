@@ -98,7 +98,7 @@
 
       <ServerChip
         serverName={s.server?.name ?? s.server?.addr ?? '—'}
-        transport={(s as unknown as { transport?: string }).transport ?? ''}
+        transport={s.transport ?? ''}
         state={ps}
         onClick={() => navigate('/servers')}
       />

@@ -90,6 +90,7 @@ export interface Status {
   uptime?: number
   bytes_sent?: number
   bytes_recv?: number
+  transport?: string   // active transport (H3 / Reality / CDN / …)
 }
 
 // ── Subscriptions ────────────────────────────────────────────

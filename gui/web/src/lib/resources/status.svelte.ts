@@ -47,9 +47,9 @@ function ensureHistoryPump() {
   if (_historyInitialized) return
   _historyInitialized = true
   // Capture the stream exactly once. The registry in createStream dedupes by
-  // key so callers elsewhere (e.g. ConnectionHero) get the same backing state
-  // without opening a second WebSocket. We never call .close() here — history
-  // is an app-lifetime concern.
+  // key so both Now and Activity share the same backing state without
+  // opening a second WebSocket. We never call .close() here — history is
+  // an app-lifetime concern.
   const stream = useSpeedStream()
   setInterval(() => {
     if (!stream.data) return

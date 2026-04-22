@@ -64,8 +64,14 @@ describe('AddSheet', () => {
   // Dialog portals content outside the render container, so queries
   // scan document.body via the helpers below.
 
-  function allInputs(): HTMLInputElement[] {
-    return Array.from(document.body.querySelectorAll('input')) as HTMLInputElement[]
+  // Dialog portals content outside the render container, so queries
+  // scan document.body. Prefer attribute-based lookups over positional
+  // index so reordering inputs in the template doesn't silently break
+  // the tests into asserting against the wrong field.
+  function findInput(selector: string): HTMLInputElement {
+    const el = document.body.querySelector<HTMLInputElement>(selector)
+    if (!el) throw new Error(`input matching "${selector}" not found`)
+    return el
   }
   function findButton(text: string): HTMLButtonElement {
     const btn = Array.from(document.body.querySelectorAll('button'))
@@ -76,11 +82,15 @@ describe('AddSheet', () => {
 
   it('Manual submit calls addServer with trimmed values', async () => {
     render(AddSheet, { props: { open: true } })
-    const inputs = allInputs()
-    // Manual tab renders in order: addr / password / name.
-    await fireEvent.input(inputs[0], { target: { value: '  example.com:443  ' } })
-    await fireEvent.input(inputs[1], { target: { value: 'secret' } })
-    await fireEvent.input(inputs[2], { target: { value: ' sg-01 ' } })
+    await fireEvent.input(findInput('input[placeholder="example.com:443"]'), {
+      target: { value: '  example.com:443  ' },
+    })
+    await fireEvent.input(findInput('input[type="password"]'), {
+      target: { value: 'secret' },
+    })
+    await fireEvent.input(findInput('input[placeholder="optional"]'), {
+      target: { value: ' sg-01 ' },
+    })
     await fireEvent.click(findButton('Add'))
     await Promise.resolve(); await Promise.resolve()
     expect(endpoints.addServer).toHaveBeenCalledWith({
@@ -112,8 +122,9 @@ describe('AddSheet', () => {
   it('Subscribe submit calls addSubscription with the URL', async () => {
     render(AddSheet, { props: { open: true } })
     await fireEvent.click(findButton('Subscribe'))
-    const input = allInputs()[0]
-    await fireEvent.input(input, { target: { value: 'https://example.com/feed' } })
+    await fireEvent.input(findInput('input[placeholder="https://…"]'), {
+      target: { value: 'https://example.com/feed' },
+    })
     await fireEvent.click(findButton('Add'))
     await Promise.resolve(); await Promise.resolve()
     expect(endpoints.addSubscription).toHaveBeenCalledWith('', 'https://example.com/feed')
@@ -122,8 +133,9 @@ describe('AddSheet', () => {
   it('surfaces error toast when API throws', async () => {
     endpoints.addServer.mockRejectedValue(new Error('rpc fail'))
     render(AddSheet, { props: { open: true } })
-    const inputs = allInputs()
-    await fireEvent.input(inputs[0], { target: { value: 'host:443' } })
+    await fireEvent.input(findInput('input[placeholder="example.com:443"]'), {
+      target: { value: 'host:443' },
+    })
     await fireEvent.click(findButton('Add'))
     await Promise.resolve(); await Promise.resolve()
     expect(toasts.error).toHaveBeenCalledWith('rpc fail')

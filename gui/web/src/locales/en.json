@@ -2,15 +2,11 @@
   "_name": "English",
   "nav": {
     "activity": "Activity",
-    "dashboard": "Dashboard",
     "servers": "Servers",
-    "subscriptions": "Subscriptions",
     "traffic": "Traffic",
-    "groups": "Groups",
     "mesh": "Mesh",
     "now": "Now",
     "routing": "Routing",
-    "logs": "Logs",
     "settings": "Settings",
     "section": {
       "overview": "Overview",
