@@ -50,7 +50,7 @@
 </script>
 
 <Section
-  title={t('nav.routing')}
+  title={t('nav.traffic')}
   description={draft
     ? t('routing.count', { n: draft.rules.length })
     : res.data
