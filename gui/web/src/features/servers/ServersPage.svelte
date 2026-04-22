@@ -3,8 +3,7 @@
   import { t } from '@/lib/i18n/index'
   import { useServers, removeServer, removeMany, autoSelect, runSpeedtest, useSubscriptions, useGroups } from './resource.svelte'
   import ServerTable from './ServerTable.svelte'
-  import AddServerDialog from './AddServerDialog.svelte'
-  import ImportDialog from './ImportDialog.svelte'
+  import AddSheet from './AddSheet.svelte'
   import DeleteConfirm from './DeleteConfirm.svelte'
   import SourceFilter from './SourceFilter.svelte'
   import SubscriptionBanner from './SubscriptionBanner.svelte'
@@ -17,7 +16,6 @@
 
   let selected = $state<Set<string>>(new Set())
   let addOpen = $state(false)
-  let importOpen = $state(false)
   let deleteOpen = $state(false)
   let pendingDelete = $state<string[]>([])
 
@@ -115,9 +113,6 @@
     <Button variant="ghost" onclick={() => autoSelect()}>
       <Icon name="check" size={14} /> {t('servers.autoSelect')}
     </Button>
-    <Button variant="ghost" onclick={() => (importOpen = true)}>
-      {t('servers.import')}
-    </Button>
     <Button variant="primary" onclick={() => (addOpen = true)}>
       <Icon name="plus" size={14} /> {t('servers.addServer')}
     </Button>
@@ -163,8 +158,7 @@
   </AsyncBoundary>
 </Section>
 
-<AddServerDialog bind:open={addOpen} />
-<ImportDialog bind:open={importOpen} />
+<AddSheet bind:open={addOpen} />
 <DeleteConfirm
   bind:open={deleteOpen}
   count={pendingDelete.length}
