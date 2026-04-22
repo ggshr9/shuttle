@@ -3,6 +3,8 @@ import type { AppRoute } from '@/app/routes'
 
 export const route: AppRoute = {
   path: '/traffic',
-  component: lazy(() => import('./Traffic.svelte')),
+  component: lazy(() => import('./RoutingPage.svelte')),
   nav: { label: 'nav.traffic', icon: 'traffic', order: 30 },
 }
+
+export { useRules } from './resource.svelte'
