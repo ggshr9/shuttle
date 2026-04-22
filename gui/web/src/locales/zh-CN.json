@@ -112,6 +112,8 @@
     "available": "可用",
     "notTested": "尚未测速。",
     "selected": "已选 {n} 项",
+    "sourceManual": "手动",
+    "sourceSubs": "订阅",
     "columns": {
       "address": "地址",
       "latency": "延迟",

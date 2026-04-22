@@ -112,6 +112,8 @@
     "available": "Available",
     "notTested": "Not yet tested.",
     "selected": "{n} selected",
+    "sourceManual": "Manual",
+    "sourceSubs": "Subscriptions",
     "columns": {
       "address": "Address",
       "latency": "Latency",

@@ -7,9 +7,12 @@ import {
   speedtest as apiSpeedtest,
   autoSelectServer as apiAutoSelect,
   importConfig as apiImport,
+  getSubscriptions,
+  getGroups,
 } from '@/lib/api/endpoints'
 import type {
   Server, ServersResponse, SpeedtestResult, AutoSelectResult, ImportResult,
+  Subscription, GroupInfo,
 } from '@/lib/api/types'
 import { toasts } from '@/lib/toaster.svelte'
 import { t } from '@/lib/i18n/index'
@@ -147,4 +150,13 @@ export async function runSpeedtest(addrs: string[]): Promise<void> {
 
 export function __resetResults(): void {
   results.map = {}
+}
+
+// ── Subscriptions + Groups ───────────────────────────────────
+export function useSubscriptions(): Resource<Subscription[]> {
+  return createResource('servers.subscriptions', () => getSubscriptions())
+}
+
+export function useGroups(): Resource<GroupInfo[]> {
+  return createResource('servers.groups', () => getGroups())
 }

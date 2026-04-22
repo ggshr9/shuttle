@@ -1,19 +1,77 @@
 <script lang="ts">
   import { AsyncBoundary, Button, Icon, Section } from '@/ui'
   import { t } from '@/lib/i18n/index'
-  import { useServers, removeServer, removeMany, autoSelect, runSpeedtest } from './resource.svelte'
+  import { useServers, removeServer, removeMany, autoSelect, runSpeedtest, useSubscriptions, useGroups } from './resource.svelte'
   import ServerTable from './ServerTable.svelte'
   import AddServerDialog from './AddServerDialog.svelte'
   import ImportDialog from './ImportDialog.svelte'
   import DeleteConfirm from './DeleteConfirm.svelte'
+  import SourceFilter from './SourceFilter.svelte'
+  import SubscriptionBanner from './SubscriptionBanner.svelte'
+  import { useRoute, navigate } from '@/lib/router'
+  import type { Server, Subscription } from '@/lib/api/types'
 
   const res = useServers()
+  const subsRes = useSubscriptions()
+  const groupsRes = useGroups()
 
   let selected = $state<Set<string>>(new Set())
   let addOpen = $state(false)
   let importOpen = $state(false)
   let deleteOpen = $state(false)
   let pendingDelete = $state<string[]>([])
+
+  const route = useRoute()
+
+  const currentFilter = $derived.by(() => {
+    if (route.query.source) return route.query.source
+    if (route.query.group) return `group:${route.query.group}`
+    return 'all'
+  })
+
+  const activeSubId = $derived(
+    currentFilter.startsWith('subscription:')
+      ? currentFilter.slice('subscription:'.length)
+      : null
+  )
+
+  const activeSub = $derived<Subscription | null>(
+    activeSubId ? (subsRes.data?.find((s) => s.id === activeSubId) ?? null) : null
+  )
+
+  function setFilter(v: string) {
+    if (v === 'all') {
+      navigate('/servers')
+    } else if (v.startsWith('group:')) {
+      navigate(`/servers?group=${v.slice('group:'.length)}`)
+    } else {
+      navigate(`/servers?source=${v}`)
+    }
+  }
+
+  // Build the set of addrs that belong to any subscription — used by the
+  // 'manual' and 'subscriptions' filters.
+  const subServerAddrs = $derived<Set<string>>(new Set(
+    (subsRes.data ?? []).flatMap((s) => s.servers ?? []).map((s) => s.addr)
+  ))
+
+  function matchesFilter(srv: Server): boolean {
+    const f = currentFilter
+    if (f === 'all') return true
+    if (f === 'manual') return !subServerAddrs.has(srv.addr)
+    if (f === 'subscriptions') return subServerAddrs.has(srv.addr)
+    if (f.startsWith('subscription:')) {
+      const id = f.slice('subscription:'.length)
+      const sub = subsRes.data?.find((s) => s.id === id)
+      return !!sub?.servers?.some((s) => s.addr === srv.addr)
+    }
+    if (f.startsWith('group:')) {
+      const groupTag = f.slice('group:'.length)
+      const group = groupsRes.data?.find((g) => g.tag === groupTag)
+      return !!group?.members?.includes(srv.addr)
+    }
+    return true
+  }
 
   function openSingleDelete(addr: string) {
     pendingDelete = [addr]
@@ -65,6 +123,24 @@
     </Button>
   {/snippet}
 
+  <SourceFilter
+    value={currentFilter}
+    sources={[
+      { id: 'manual', label: t('servers.sourceManual') },
+      { id: 'subscriptions', label: t('servers.sourceSubs') },
+      ...(subsRes.data ?? []).map((s) => ({
+        id: `subscription:${s.id}`,
+        label: s.name,
+      })),
+    ]}
+    groups={(groupsRes.data ?? []).map((g) => ({ id: g.tag, label: g.tag }))}
+    onChange={setFilter}
+  />
+
+  {#if activeSub}
+    <SubscriptionBanner sub={activeSub} />
+  {/if}
+
   {#if selected.size > 0}
     <div class="sel-bar">
       <span class="count">{t('servers.selected', { n: selected.size })}</span>
@@ -77,7 +153,7 @@
   <AsyncBoundary resource={res}>
     {#snippet children(list)}
       <ServerTable
-        servers={list.servers}
+        servers={list.servers.filter(matchesFilter)}
         activeAddr={list.active.addr}
         {selected}
         onSelectedChange={(s) => (selected = s)}
