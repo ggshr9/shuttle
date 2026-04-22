@@ -7,6 +7,8 @@
   import { useStatus, useSpeedStream } from '@/features/dashboard/resource.svelte'
   import { t } from '@/lib/i18n/index'
   import { AsyncBoundary } from '@/ui'
+  import { invalidate } from '@/lib/resource.svelte'
+  import { errorMessage } from '@/lib/format'
   import type { Status } from '@/lib/api/types'
 
   type PowerState = 'disconnected' | 'connecting' | 'connected'
@@ -26,6 +28,10 @@
       if (!connected) {
         if (platform.name === 'native') {
           const perm = await platform.requestVpnPermission()
+          // 'denied' halts the flow; 'granted' and 'unsupported' both fall
+          // through to engineStart. 'unsupported' means the native binary
+          // doesn't yet expose requestPermission — Phase 1's graceful-
+          // degradation contract (spec §7.5/§7.7) wants us to try REST.
           if (perm === 'denied') {
             toasts.error('VPN permission denied')
             busy = false
@@ -36,8 +42,9 @@
       } else {
         await platform.engineStop()
       }
+      invalidate('dashboard.status')
     } catch (e) {
-      toasts.error((e as Error).message)
+      toasts.error(errorMessage(e))
     } finally {
       busy = false
     }
@@ -72,7 +79,15 @@
         {/if}
       </div>
 
-      <PowerButton state={ps} onToggle={() => toggle(!!s.connected)} />
+      <PowerButton
+        state={ps}
+        labels={{
+          connect: t('now.connect'),
+          disconnect: t('now.disconnect'),
+          connecting: t('now.connecting'),
+        }}
+        onToggle={() => toggle(!!s.connected)}
+      />
 
       {#if ps === 'connected'}
         <div class="speeds">

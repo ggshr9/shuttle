@@ -10,12 +10,12 @@
 </script>
 
 <button class="chip" data-state={state} onclick={() => onClick?.()} aria-label="Change server">
-  <span class="dot"></span>
+  <span class="dot" aria-hidden="true"></span>
   <span class="text">
     {serverName}
-    {#if transport}<span class="transport">· {transport}</span>{/if}
+    {#if transport}<span class="transport" aria-hidden="true">· {transport}</span>{/if}
   </span>
-  <span class="caret">▾</span>
+  <span class="caret" aria-hidden="true">▾</span>
 </button>
 
 <style>

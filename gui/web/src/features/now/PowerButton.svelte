@@ -1,14 +1,26 @@
 <script lang="ts">
   import { Icon } from '@/ui'
   type State = 'disconnected' | 'connecting' | 'connected'
+  interface Labels {
+    connect: string      // announced when disconnected
+    disconnect: string   // announced when connected
+    connecting: string   // announced while transitioning
+  }
   interface Props {
     state: State
+    labels?: Labels      // keep English defaults; parent passes localized copy
     onToggle?: () => void
   }
-  let { state, onToggle }: Props = $props()
+  let {
+    state,
+    labels = { connect: 'Connect', disconnect: 'Disconnect', connecting: 'Connecting' },
+    onToggle,
+  }: Props = $props()
   const isConnected = $derived(state === 'connected')
   const isConnecting = $derived(state === 'connecting')
-  const label = $derived(isConnected ? 'Disconnect' : 'Connect')
+  const label = $derived(
+    isConnecting ? labels.connecting : isConnected ? labels.disconnect : labels.connect
+  )
 
   function handleClick() {
     if (isConnecting) return
@@ -26,6 +38,7 @@
   role="switch"
   aria-checked={isConnected}
   aria-label={label}
+  aria-busy={isConnecting}
   disabled={isConnecting}
   onclick={handleClick}
 >

@@ -612,7 +612,9 @@
     "disconnected": "Disconnected",
     "connecting": "Connecting…",
     "connected": "Connected",
-    "switchServer": "Switch server"
+    "switchServer": "Switch server",
+    "connect": "Connect",
+    "disconnect": "Disconnect"
   },
   "mesh": {
     "title": "Mesh VPN",

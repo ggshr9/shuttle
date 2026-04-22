@@ -31,4 +31,22 @@ describe('PowerButton', () => {
     await fireEvent.click(btn)
     expect(onToggle).toHaveBeenCalled()
   })
+
+  it('announces connecting state via aria-label + aria-busy', () => {
+    const { container } = render(PowerButton, { props: { state: 'connecting' } })
+    const btn = container.querySelector('[role="switch"]') as HTMLElement
+    expect(btn.getAttribute('aria-label')).toBe('Connecting')
+    expect(btn.getAttribute('aria-busy')).toBe('true')
+  })
+
+  it('uses provided labels prop for i18n', () => {
+    const { container } = render(PowerButton, {
+      props: {
+        state: 'connected',
+        labels: { connect: '连接', disconnect: '断开', connecting: '连接中' },
+      },
+    })
+    const btn = container.querySelector('[role="switch"]') as HTMLElement
+    expect(btn.getAttribute('aria-label')).toBe('断开')
+  })
 })

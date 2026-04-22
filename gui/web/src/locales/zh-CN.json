@@ -612,7 +612,9 @@
     "disconnected": "未连接",
     "connecting": "连接中…",
     "connected": "已连接",
-    "switchServer": "切换服务器"
+    "switchServer": "切换服务器",
+    "connect": "连接",
+    "disconnect": "断开"
   },
   "mesh": {
     "title": "Mesh 组网",

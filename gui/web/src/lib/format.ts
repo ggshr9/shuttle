@@ -29,3 +29,17 @@ export function formatDuration(ms: number | undefined): string {
   if (ms < 60000) return `${(ms / 1000).toFixed(2)} s`
   return `${(ms / 60000).toFixed(2)} m`
 }
+
+// Normalize any thrown value to a user-facing string. Bridges / fetch / plain
+// `throw 'msg'` sites can produce non-Error values; `(e as Error).message`
+// breaks silently on those. Use this wherever an arbitrary value lands in a
+// catch handler.
+export function errorMessage(e: unknown): string {
+  if (e instanceof Error) return e.message
+  if (typeof e === 'string') return e
+  if (e && typeof e === 'object' && 'message' in e) {
+    const m = (e as { message: unknown }).message
+    if (typeof m === 'string') return m
+  }
+  return String(e)
+}
