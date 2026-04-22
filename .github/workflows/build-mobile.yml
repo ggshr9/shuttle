@@ -1,0 +1,120 @@
+# Mobile build — Android APK + iOS xcarchive.
+#
+# Non-blocking on PRs during Phase 5 rollout: the Kotlin / Swift code
+# landed in Phase 4 has never been compiled. This workflow's first
+# successful run is the first validation that it compiles at all. Until
+# it's green consistently, failures are expected. Promote to required-
+# check once it's been stable for a few merge cycles.
+name: Build Mobile
+
+on:
+  pull_request:
+    paths:
+      - 'mobile/**'
+      - 'gui/web/**'
+      - 'build/scripts/build-android.sh'
+      - 'build/scripts/build-ios.sh'
+      - 'build/scripts/build-all.sh'
+      - '.github/workflows/build-mobile.yml'
+      - 'go.mod'
+      - 'go.sum'
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  GO_VERSION: '1.24'
+  NODE_VERSION: '22'
+
+jobs:
+  # ──────────────────────────────────────────────
+  # Android: gomobile bind → AAR → gradle assembleRelease
+  # ──────────────────────────────────────────────
+  android:
+    name: Android APK
+    runs-on: ubuntu-24.04
+    # First-pass tolerance — see workflow comment at top.
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: gui/web/package-lock.json
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Install gomobile
+        run: |
+          go install golang.org/x/mobile/cmd/gomobile@latest
+          gomobile init
+
+      - name: Build APK
+        env:
+          VERSION: ${{ github.ref_type == 'tag' && github.ref_name || github.sha }}
+        run: ./build/scripts/build-android.sh "$VERSION"
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: shuttle-android
+          path: |
+            dist/shuttle-android-*.apk
+            dist/shuttle-android-*.aab
+          if-no-files-found: warn
+          retention-days: 14
+
+  # ──────────────────────────────────────────────
+  # iOS: gomobile bind → xcframework → xcodebuild archive (unsigned)
+  # ──────────────────────────────────────────────
+  ios:
+    name: iOS xcarchive
+    runs-on: macos-14
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: gui/web/package-lock.json
+
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
+
+      - name: Install gomobile
+        run: |
+          go install golang.org/x/mobile/cmd/gomobile@latest
+          gomobile init
+
+      - name: Build xcarchive
+        env:
+          VERSION: ${{ github.ref_type == 'tag' && github.ref_name || github.sha }}
+        run: ./build/scripts/build-ios.sh "$VERSION"
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: shuttle-ios
+          path: dist/Shuttle-*.xcarchive
+          if-no-files-found: warn
+          retention-days: 14
