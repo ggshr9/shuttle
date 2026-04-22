@@ -4,7 +4,7 @@
   import { platform } from '@/lib/platform'
   import { toasts } from '@/lib/toaster.svelte'
   import { navigate } from '@/lib/router'
-  import { useStatus, useSpeedStream } from '@/features/dashboard/resource.svelte'
+  import { useStatus, useSpeedStream } from '@/lib/resources/status.svelte'
   import { t } from '@/lib/i18n/index'
   import { AsyncBoundary } from '@/ui'
   import { invalidate } from '@/lib/resource.svelte'

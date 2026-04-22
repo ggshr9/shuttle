@@ -18,7 +18,7 @@ const { platformMock, toastErrors } = vi.hoisted(() => ({
 
 vi.mock('@/lib/platform', () => ({ platform: platformMock }))
 
-vi.mock('@/features/dashboard/resource.svelte', () => ({
+vi.mock('@/lib/resources/status.svelte', () => ({
   useStatus: () => ({
     data: { connected: false, uptime: 0, server: null },
     loading: false,

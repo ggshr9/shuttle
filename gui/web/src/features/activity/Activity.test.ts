@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render } from '@testing-library/svelte'
 import { __resetRoute } from '@/lib/router/router.svelte'
 
-vi.mock('@/features/dashboard/resource.svelte', () => ({
+vi.mock('@/lib/resources/status.svelte', () => ({
   useTransportStats: () => ({ data: [] }),
   useSpeedStream: () => ({ data: { download: 0, upload: 0 } }),
   useSpeedHistory: () => ({ up: [], down: [] }),

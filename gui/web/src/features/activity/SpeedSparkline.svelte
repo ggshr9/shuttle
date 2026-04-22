@@ -1,7 +1,7 @@
 <script lang="ts">
   import { Card } from '@/ui'
   import { t } from '@/lib/i18n/index'
-  import { useSpeedHistory } from './resource.svelte'
+  import { useSpeedHistory } from '@/lib/resources/status.svelte'
 
   const history = useSpeedHistory()
 

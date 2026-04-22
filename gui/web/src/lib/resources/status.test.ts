@@ -3,7 +3,7 @@ import {
   useSpeedHistory,
   __pushHistorySample,
   __resetHistory,
-} from '@/features/dashboard/resource.svelte'
+} from '@/lib/resources/status.svelte'
 
 beforeEach(() => __resetHistory())
 
