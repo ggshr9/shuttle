@@ -663,6 +663,10 @@
       "loss": "Loss",
       "score": "Score"
     },
+    "tab": {
+      "peers": "Peers",
+      "topology": "Topology"
+    },
     "toast": {
       "connecting": "Connecting to {vip}…"
     }

@@ -663,6 +663,10 @@
       "loss": "丢包",
       "score": "质量"
     },
+    "tab": {
+      "peers": "对等节点",
+      "topology": "拓扑"
+    },
     "toast": {
       "connecting": "连接到 {vip}…"
     }
