@@ -462,7 +462,9 @@
     "overview": "概览",
     "logs": "日志",
     "throughput": "吞吐量",
-    "transports": "传输协议"
+    "transports": "传输协议",
+    "shareLogs": "分享",
+    "sharedLogs": "日志已复制 / 分享"
   },
   "app": {
     "connecting": "正在连接 Shuttle...",

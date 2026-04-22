@@ -9,6 +9,9 @@
   import LogFilters from '@/features/logs/LogFilters.svelte'
   import LogList from '@/features/logs/LogList.svelte'
   import { logsStore } from '@/features/logs/store.svelte'
+  import { platform } from '@/lib/platform'
+  import { toasts } from '@/lib/toaster.svelte'
+  import { errorMessage } from '@/lib/format'
 
   const route = useRoute()
   const tab = $derived(route.query.tab === 'logs' ? 'logs' : 'overview')
@@ -26,6 +29,42 @@
   }
 
   const hiddenCount = $derived(logsStore.entries.length - logsStore.filtered.length)
+
+  function formatLogsForShare(): string {
+    return logsStore.filtered.map((e) => {
+      const time = new Date(e.time).toISOString()
+      let s = `[${time}] [${e.level.toUpperCase()}] ${e.msg}`
+      if (e.details) {
+        s += `\n  target=${e.details.target}`
+        s += `\n  protocol=${e.details.protocol}`
+        s += `\n  rule=${e.details.rule}`
+        if (e.details.process)  s += `\n  process=${e.details.process}`
+        if (e.details.duration) s += `\n  duration_ms=${e.details.duration}`
+        if (e.details.bytesIn || e.details.bytesOut) {
+          s += `\n  bytes_in=${e.details.bytesIn ?? 0} bytes_out=${e.details.bytesOut ?? 0}`
+        }
+      }
+      return s
+    }).join('\n')
+  }
+
+  async function shareLogs() {
+    const text = formatLogsForShare()
+    if (!text) return
+    try {
+      const r = await platform.share({ title: 'Shuttle logs', text })
+      if (r === 'unsupported') {
+        // Final fallback — shouldn't normally hit since web runtime's share()
+        // already falls through to navigator.clipboard internally. But the
+        // clipboard may itself be unavailable (iframe sandbox, insecure ctx).
+        toasts.error('Share unavailable — clipboard access denied')
+        return
+      }
+      if (r === 'ok') toasts.success(t('activity.sharedLogs'))
+    } catch (e) {
+      toasts.error(errorMessage(e))
+    }
+  }
 </script>
 
 <Section title={t('nav.activity')}>
@@ -56,6 +95,9 @@
       </div>
       <Button variant="ghost" onclick={() => logsStore.clear()} disabled={logsStore.entries.length === 0}>
         {t('logs.clear')}
+      </Button>
+      <Button variant="ghost" onclick={shareLogs} disabled={logsStore.filtered.length === 0}>
+        {t('activity.shareLogs')}
       </Button>
       {#if hiddenCount > 0}
         <span class="count">

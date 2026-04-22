@@ -1,5 +1,14 @@
 import '@testing-library/jest-dom/vitest'
 
+// jsdom does not ship ResizeObserver — stub it for components that use it.
+if (typeof ResizeObserver === 'undefined') {
+  ;(globalThis as any).ResizeObserver = class ResizeObserver {
+    observe()    {}
+    unobserve()  {}
+    disconnect() {}
+  }
+}
+
 // Stub matchMedia for theme.svelte tests
 if (!window.matchMedia) {
   Object.defineProperty(window, 'matchMedia', {

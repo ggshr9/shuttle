@@ -462,7 +462,9 @@
     "overview": "Overview",
     "logs": "Logs",
     "throughput": "Throughput",
-    "transports": "Transports"
+    "transports": "Transports",
+    "shareLogs": "Share",
+    "sharedLogs": "Logs copied / shared"
   },
   "app": {
     "connecting": "Connecting to Shuttle...",

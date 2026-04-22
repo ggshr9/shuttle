@@ -1,5 +1,6 @@
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render } from '@testing-library/svelte'
+import { __resetRoute } from '@/lib/router/router.svelte'
 
 vi.mock('@/features/dashboard/resource.svelte', () => ({
   useTransportStats: () => ({ data: [] }),
@@ -15,15 +16,36 @@ vi.mock('@/features/logs/store.svelte', () => ({
     text: '',
     activeConnectionCount: 0,
     clear: () => {},
-    levels: { error: true, warn: true, info: true, debug: false },
+    levels: new Set(['error', 'warn', 'info']),
+    toggleLevel: () => {},
+    protocol: 'all',
+    action: 'all',
+    showConnections: false,
+    autoScroll: true,
     tags: {},
   },
 }))
 
 describe('Activity', () => {
+  beforeEach(() => {
+    location.hash = ''
+    __resetRoute()
+  })
+
   it('renders without crashing', async () => {
     const { default: Activity } = await import('./Activity.svelte')
     const { container } = render(Activity)
     expect(container.querySelector('h2, h3, h1')).toBeTruthy()
+  })
+
+  it('renders share button on logs tab', async () => {
+    location.hash = '#/activity?tab=logs'
+    __resetRoute()
+    const { default: Activity } = await import('./Activity.svelte')
+    const { container } = render(Activity)
+    const btn = Array.from(container.querySelectorAll('button')).find(
+      (b) => b.textContent?.includes('Share')
+    )
+    expect(btn).toBeTruthy()
   })
 })
