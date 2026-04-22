@@ -39,9 +39,9 @@ describe('resolveLegacyRoute', () => {
     })
   })
 
-  it('maps /groups → /servers?view=groups', () => {
+  it('maps /groups → /servers (no view tag — groups surface as chips)', () => {
     expect(resolveLegacyRoute('/groups', {})).toEqual({
-      path: '/servers', query: { view: 'groups' },
+      path: '/servers', query: {},
     })
   })
 

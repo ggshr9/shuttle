@@ -28,6 +28,12 @@
 
   const canScan = $derived(platform.name === 'native')
 
+  const dialogTitle = $derived(
+    method === 'subscribe' ? t('subscriptions.add') :
+    method === 'paste'     ? t('servers.dialog.import.title') :
+                             t('servers.addServer')
+  )
+
   function reset() {
     method = 'manual'
     addr = ''; password = ''; name = ''
@@ -35,7 +41,13 @@
     busy = false
   }
 
-  function close() { open = false; reset() }
+  function close() { open = false }
+
+  // Reset whenever the dialog closes, regardless of how (Cancel button,
+  // ESC, backdrop click). Prevents ghost text on reopen.
+  $effect(() => {
+    if (!open) reset()
+  })
 
   async function scan() {
     const r = await platform.scanQRCode()
@@ -76,7 +88,7 @@
   }
 </script>
 
-<Dialog bind:open title={t('servers.addServer')}>
+<Dialog bind:open title={dialogTitle}>
   <div class="sheet">
     <div class="tabs" role="tablist">
       <button

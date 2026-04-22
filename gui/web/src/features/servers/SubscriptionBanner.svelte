@@ -19,7 +19,7 @@
     busy = true
     try {
       await refreshSubscription(sub.id)
-      invalidate('subscriptions.list')
+      invalidate('servers.subscriptions')
       invalidate('servers.list')
       toasts.success('Subscription refreshed')
     } catch (e) {
@@ -32,7 +32,7 @@
     busy = true
     try {
       await deleteSubscription(sub.id)
-      invalidate('subscriptions.list')
+      invalidate('servers.subscriptions')
       invalidate('servers.list')
     } catch (e) {
       toasts.error(errorMessage(e))

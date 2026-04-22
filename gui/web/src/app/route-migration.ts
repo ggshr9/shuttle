@@ -27,8 +27,11 @@ export function resolveLegacyRoute(
     const id = path.slice('/subscriptions/'.length)
     return { path: '/servers', query: { ...query, source: `subscription:${id}` } }
   }
+  // /groups → /servers (no view=groups tag — groups-by layout isn't scoped;
+  // users land on the flat list where group chips in SourceFilter surface
+  // their groups.)
   if (path === '/groups') {
-    return { path: '/servers', query: { ...query, view: 'groups' } }
+    return { path: '/servers', query: { ...query } }
   }
   if (path.startsWith('/groups/')) {
     const id = path.slice('/groups/'.length)

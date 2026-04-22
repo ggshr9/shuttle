@@ -153,10 +153,12 @@ export function __resetResults(): void {
 }
 
 // ── Subscriptions + Groups ───────────────────────────────────
+// `initial: []` prevents a flash of "no servers" on cold-loading
+// /servers?source=subscription:<id> while the fetch resolves.
 export function useSubscriptions(): Resource<Subscription[]> {
-  return createResource('servers.subscriptions', () => getSubscriptions())
+  return createResource('servers.subscriptions', () => getSubscriptions(), { initial: [] })
 }
 
 export function useGroups(): Resource<GroupInfo[]> {
-  return createResource('servers.groups', () => getGroups())
+  return createResource('servers.groups', () => getGroups(), { initial: [] })
 }
