@@ -1,6 +1,6 @@
-// Shared plain-text formatter for log entries. Used by Activity page's
-// Share action and (until Task 3.7 deletes it) LogsPage's Export action.
-// Keeping a single source prevents the two call sites from drifting.
+// Shared plain-text formatter for log entries. Consumed by the Activity
+// page's Share action. Kept in lib/ so any future consumer (e.g. an
+// in-page Export-as-file action) picks up the same output shape.
 
 import type { LogEntry } from '@/features/logs/types'
 
