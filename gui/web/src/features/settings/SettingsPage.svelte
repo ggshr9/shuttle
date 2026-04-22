@@ -4,7 +4,8 @@
   import { Icon, Spinner } from '@/ui'
   import { t } from '@/lib/i18n/index'
   import { settings } from './config.svelte'
-  import { subNav, DEFAULT_SLUG } from './nav'
+  import { subNav, DEFAULT_SLUG, sectionOrder, entriesBySection } from './nav'
+  import type { SubNavSection } from './nav'
   import UnsavedBar from './UnsavedBar.svelte'
 
   // Sub-pages are statically imported here so they ride the lazy
@@ -45,14 +46,20 @@
 
 <div class="shell">
   <nav class="subnav" aria-label="Settings sections">
-    {#each subNav as entry (entry.slug)}
-      <Link
-        to={`/settings/${entry.slug}`}
-        class={'sub-item ' + (slug === entry.slug ? 'on' : '')}
-      >
-        <span class="ico"><Icon name={entry.icon} size={14} /></span>
-        <span>{t(entry.labelKey)}</span>
-      </Link>
+    {#each sectionOrder as section}
+      {@const entries = entriesBySection(section)}
+      {#if entries.length > 0}
+        <div class="section-head">{t(`settings.section.${section}`)}</div>
+        {#each entries as entry (entry.slug)}
+          <Link
+            to={`/settings/${entry.slug}`}
+            class={'sub-item ' + (slug === entry.slug ? 'on' : '')}
+          >
+            <span class="ico"><Icon name={entry.icon} size={14} /></span>
+            <span>{t(entry.labelKey)}</span>
+          </Link>
+        {/each}
+      {/if}
     {/each}
   </nav>
 
@@ -105,4 +112,38 @@
   }
   .center { display: flex; justify-content: center; padding: var(--shuttle-space-6); }
   .error { color: var(--shuttle-danger); font-size: var(--shuttle-text-sm); }
+
+  .section-head {
+    font-size: var(--shuttle-text-xs);
+    color: var(--shuttle-fg-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    padding: var(--shuttle-space-3) var(--shuttle-space-2) var(--shuttle-space-1);
+  }
+  .section-head:first-child { padding-top: 0; }
+
+  /* Below 720px, stack sidebar above content. The subnav becomes a
+     horizontally scrollable chip row so all entries stay reachable
+     without consuming vertical space. */
+  @media (max-width: 720px) {
+    .shell {
+      grid-template-columns: 1fr;
+      gap: var(--shuttle-space-4);
+    }
+    .subnav {
+      flex-direction: row;
+      overflow-x: auto;
+      border-right: none;
+      border-bottom: 1px solid var(--shuttle-border);
+      padding: 0 0 var(--shuttle-space-2);
+      gap: var(--shuttle-space-1);
+      scrollbar-width: none;
+    }
+    .subnav::-webkit-scrollbar { display: none; }
+    .section-head { display: none; }
+    :global(a.sub-item) {
+      flex-shrink: 0;
+      white-space: nowrap;
+    }
+  }
 </style>

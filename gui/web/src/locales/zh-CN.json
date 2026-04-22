@@ -459,6 +459,12 @@
       "update": "更新",
       "advanced": "高级"
     },
+    "section": {
+      "basics": "常规",
+      "network": "网络",
+      "diagnostics": "诊断",
+      "advanced": "高级"
+    },
     "comingNext": "此分区正在迁移中，下一次提交完成。"
   },
   "activity": {

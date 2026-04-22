@@ -459,6 +459,12 @@
       "update": "Update",
       "advanced": "Advanced"
     },
+    "section": {
+      "basics": "Basics",
+      "network": "Network",
+      "diagnostics": "Diagnostics",
+      "advanced": "Advanced"
+    },
     "comingNext": "This section is being migrated in a follow-up commit."
   },
   "activity": {
