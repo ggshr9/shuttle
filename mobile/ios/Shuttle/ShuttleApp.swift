@@ -1,6 +1,7 @@
 import UIKit
 import WebKit
 import NetworkExtension
+import AVFoundation
 
 /// Main view controller that hosts the Shuttle SPA via WKWebView.
 ///
@@ -46,21 +47,24 @@ class ViewController: UIViewController, WKNavigationDelegate, WKScriptMessageHan
                 window.ShuttleVPN = {
                     isRunning: function() {
                         return new Promise(function(resolve) {
-                            window.webkit.messageHandlers.shuttleNative.postMessage({action: 'isRunning'});
+                            window.webkit.messageHandlers.shuttleNative.postMessage(JSON.stringify({action:'isRunning'}));
                             window._vpnStatusCallback = resolve;
                         });
                     },
                     start: function() {
-                        window.webkit.messageHandlers.shuttleNative.postMessage({action: 'start'});
+                        window.webkit.messageHandlers.shuttleNative.postMessage(JSON.stringify({action:'start'}));
                     },
                     stop: function() {
-                        window.webkit.messageHandlers.shuttleNative.postMessage({action: 'stop'});
+                        window.webkit.messageHandlers.shuttleNative.postMessage(JSON.stringify({action:'stop'}));
                     },
                     getStatus: function() {
                         return new Promise(function(resolve) {
-                            window.webkit.messageHandlers.shuttleNative.postMessage({action: 'status'});
+                            window.webkit.messageHandlers.shuttleNative.postMessage(JSON.stringify({action:'status'}));
                             window._statusCallback = resolve;
                         });
+                    },
+                    invoke: function(msg) {
+                        window.webkit.messageHandlers.shuttleNative.postMessage(msg);
                     }
                 };
             """,
@@ -205,31 +209,169 @@ class ViewController: UIViewController, WKNavigationDelegate, WKScriptMessageHan
     // MARK: - WKScriptMessageHandler
 
     func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
-        guard let body = message.body as? [String: Any],
-              let action = body["action"] as? String else { return }
+        // Legacy Phase 1 path: body is already parsed by WebKit into a dict
+        // via `postMessage({action: '...'})`.
+        if let body = message.body as? [String: Any],
+           let action = body["action"] as? String {
+            handleLegacyAction(action)
+            return
+        }
 
+        // New Phase 4 path: body is a JSON string with {id, action, payload}
+        // posted via window.ShuttleVPN.invoke().
+        guard let body = message.body as? String,
+              let data = body.data(using: .utf8),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+        else { return }
+
+        // A JSON string with only {action: 'x'} (no id) is a legacy path that
+        // now funnels through invoke() for consistency with Android.
+        if json["id"] == nil {
+            if let action = json["action"] as? String {
+                handleLegacyAction(action)
+            }
+            return
+        }
+
+        guard let id = json["id"] as? Int,
+              let action = json["action"] as? String
+        else { return }
+
+        let payload = json["payload"] as? [String: Any]
+
+        switch action {
+        case "requestPermission":
+            requestPermission(id: id)
+        case "scanQR":
+            scanQR(id: id)
+        case "share":
+            share(id: id, payload: payload ?? [:])
+        case "openExternal":
+            if let url = payload?["url"] as? String {
+                openExternal(id: id, url: url)
+            } else {
+                reject(id, "no url")
+            }
+        case "subscribeStatus":
+            reject(id, "subscribeStatus not implemented yet")
+        default:
+            reject(id, "unknown action: \(action)")
+        }
+    }
+
+    private func handleLegacyAction(_ action: String) {
         switch action {
         case "isRunning":
             let running = VPNManager.shared.isConnected
-            webView.evaluateJavaScript("if(window._vpnStatusCallback) { window._vpnStatusCallback(\(running)); window._vpnStatusCallback = null; }", completionHandler: nil)
-
+            webView.evaluateJavaScript(
+                "if(window._vpnStatusCallback) { window._vpnStatusCallback(\(running)); window._vpnStatusCallback = null; }",
+                completionHandler: nil
+            )
         case "start":
             VPNManager.shared.connect { error in
-                if let error = error {
-                    print("VPN connect failed: \(error)")
-                }
+                if let error = error { print("VPN connect failed: \(error)") }
             }
-
         case "stop":
             VPNManager.shared.disconnect()
-
         case "status":
             let status = MobileStatus()
-            webView.evaluateJavaScript("if(window._statusCallback) { window._statusCallback('\(status.replacingOccurrences(of: "'", with: "\\'"))'); window._statusCallback = null; }", completionHandler: nil)
-
+            let escaped = status.replacingOccurrences(of: "'", with: "\\'")
+            webView.evaluateJavaScript(
+                "if(window._statusCallback) { window._statusCallback('\(escaped)'); window._statusCallback = null; }",
+                completionHandler: nil
+            )
         default:
             break
         }
+    }
+
+    // MARK: - Phase 4 action handlers
+
+    private func requestPermission(id: Int) {
+        NEVPNManager.shared().loadFromPreferences { [weak self] loadErr in
+            if let loadErr = loadErr {
+                self?.reject(id, loadErr.localizedDescription)
+                return
+            }
+            NEVPNManager.shared().saveToPreferences { [weak self] saveErr in
+                if let saveErr = saveErr {
+                    self?.reject(id, saveErr.localizedDescription)
+                } else {
+                    self?.resolve(id, "\"granted\"")
+                }
+            }
+        }
+    }
+
+    private func scanQR(id: Int) {
+        // Request camera permission, then present the scanner on the main queue.
+        AVCaptureDevice.requestAccess(for: .video) { [weak self] granted in
+            DispatchQueue.main.async {
+                guard granted else {
+                    self?.reject(id, "camera permission denied")
+                    return
+                }
+                let vc = QrScannerViewController { [weak self] code in
+                    if let code = code, !code.isEmpty {
+                        let escaped = code
+                            .replacingOccurrences(of: "\\", with: "\\\\")
+                            .replacingOccurrences(of: "\"", with: "\\\"")
+                        self?.resolve(id, "\"\(escaped)\"")
+                    } else {
+                        self?.reject(id, "qr scan cancelled")
+                    }
+                }
+                self?.present(vc, animated: true)
+            }
+        }
+    }
+
+    private func share(id: Int, payload: [String: Any]) {
+        var items: [Any] = []
+        if let url = payload["url"] as? String, let u = URL(string: url) { items.append(u) }
+        else if let text = payload["text"] as? String { items.append(text) }
+        else if let title = payload["title"] as? String { items.append(title) }
+        guard !items.isEmpty else { reject(id, "empty share payload"); return }
+
+        let vc = UIActivityViewController(activityItems: items, applicationActivities: nil)
+        vc.completionWithItemsHandler = { [weak self] _, completed, _, error in
+            if let error = error {
+                self?.reject(id, error.localizedDescription)
+            } else {
+                self?.resolve(id, completed ? "\"ok\"" : "\"cancelled\"")
+            }
+        }
+        present(vc, animated: true)
+    }
+
+    private func openExternal(id: Int, url: String) {
+        guard let u = URL(string: url) else {
+            reject(id, "invalid url")
+            return
+        }
+        UIApplication.shared.open(u, options: [:]) { [weak self] success in
+            if success { self?.resolve(id, "\"ok\"") }
+            else       { self?.reject(id, "open failed") }
+        }
+    }
+
+    /// Resolves a pending JS Promise. `jsonValue` must be valid JSON
+    /// (quoted string, number, bool, null, object, array).
+    private func resolve(_ id: Int, _ jsonValue: String) {
+        webView.evaluateJavaScript(
+            "window._shuttleResolve && window._shuttleResolve(\(id), \(jsonValue));",
+            completionHandler: nil
+        )
+    }
+
+    private func reject(_ id: Int, _ message: String) {
+        let escaped = message
+            .replacingOccurrences(of: "\\", with: "\\\\")
+            .replacingOccurrences(of: "\"", with: "\\\"")
+        webView.evaluateJavaScript(
+            "window._shuttleReject && window._shuttleReject(\(id), \"\(escaped)\");",
+            completionHandler: nil
+        )
     }
 
     deinit {
