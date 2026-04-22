@@ -458,6 +458,12 @@
     },
     "comingNext": "This section is being migrated in a follow-up commit."
   },
+  "activity": {
+    "overview": "Overview",
+    "logs": "Logs",
+    "throughput": "Throughput",
+    "transports": "Transports"
+  },
   "app": {
     "connecting": "Connecting to Shuttle...",
     "retry": "Retry",

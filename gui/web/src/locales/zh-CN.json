@@ -458,6 +458,12 @@
     },
     "comingNext": "此分区正在迁移中，下一次提交完成。"
   },
+  "activity": {
+    "overview": "概览",
+    "logs": "日志",
+    "throughput": "吞吐量",
+    "transports": "传输协议"
+  },
   "app": {
     "connecting": "正在连接 Shuttle...",
     "retry": "重试",
