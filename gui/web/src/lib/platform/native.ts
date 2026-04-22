@@ -1,8 +1,10 @@
 import type { Platform, PlatformName, CapResult, SharePayload } from './types'
 import type { Status } from '../api/types'
 import { connect, disconnect, status as getStatus } from '../api/endpoints'
+import { callBridge } from './shuttle-bridge'
 
 interface ShuttleBridge {
+  invoke?: (msg: string) => void
   start?: () => Promise<void> | void
   stop?: () => Promise<void> | void
   isRunning?: () => Promise<boolean> | boolean
@@ -15,12 +17,25 @@ interface ShuttleBridge {
 
 function bridge(): ShuttleBridge | null {
   if (typeof window === 'undefined') return null
-  return (window as any).ShuttleVPN ?? null
+  return (window as unknown as { ShuttleVPN?: ShuttleBridge }).ShuttleVPN ?? null
 }
 
 function hasMethod<K extends keyof ShuttleBridge>(k: K): boolean {
   const b = bridge()
   return !!b && typeof b[k] === 'function'
+}
+
+/**
+ * True when the bridge exposes *any* way to dispatch `action` — either via
+ * the unified `invoke(jsonMsg)` function (Phase 4 style) or as a direct
+ * per-method function (legacy Phase 1 style). callBridge() handles both
+ * styles internally; we check capability first to produce `'unsupported'`
+ * without triggering a failing Promise.
+ */
+function canDispatch(action: keyof ShuttleBridge): boolean {
+  const b = bridge()
+  if (!b) return false
+  return typeof b.invoke === 'function' || typeof b[action] === 'function'
 }
 
 export class NativePlatform implements Platform {
@@ -45,23 +60,23 @@ export class NativePlatform implements Platform {
   async engineStatus(): Promise<Status> { return getStatus() }
 
   async requestVpnPermission(): Promise<CapResult<'granted' | 'denied'>> {
-    if (!hasMethod('requestPermission')) return 'unsupported'
-    return await bridge()!.requestPermission!()
+    if (!canDispatch('requestPermission')) return 'unsupported'
+    return await callBridge<'granted' | 'denied'>('requestPermission')
   }
 
   async scanQRCode(): Promise<CapResult<string>> {
-    if (!hasMethod('scanQR')) return 'unsupported'
-    return await bridge()!.scanQR!()
+    if (!canDispatch('scanQR')) return 'unsupported'
+    return await callBridge<string>('scanQR')
   }
 
   async share(payload: SharePayload): Promise<CapResult<'ok' | 'cancelled'>> {
-    if (!hasMethod('share')) return 'unsupported'
-    return await bridge()!.share!(payload)
+    if (!canDispatch('share')) return 'unsupported'
+    return await callBridge<'ok' | 'cancelled'>('share', payload)
   }
 
   async openExternalUrl(url: string): Promise<CapResult<'ok'>> {
-    if (!hasMethod('openExternal')) return 'unsupported'
-    await bridge()!.openExternal!(url)
+    if (!canDispatch('openExternal')) return 'unsupported'
+    await callBridge<void>('openExternal', { url })
     return 'ok'
   }
 
