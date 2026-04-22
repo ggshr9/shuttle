@@ -11,6 +11,7 @@
     class?: string
     id?: string
     autocomplete?: HTMLInputElement['autocomplete']
+    [key: string]: unknown
   }
 
   let {
@@ -25,6 +26,7 @@
     class: cls = '',
     id,
     autocomplete,
+    ...rest
   }: Props = $props()
 
   const _fallbackId = `in-${Math.random().toString(36).slice(2, 8)}`
@@ -44,6 +46,7 @@
     {onchange}
     aria-invalid={!!error}
     aria-describedby={error ? `${inputId}-err` : undefined}
+    {...rest}
   />
   {#if error}<p id={`${inputId}-err`} class="err">{error}</p>{/if}
 </div>
