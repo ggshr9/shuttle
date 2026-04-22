@@ -150,9 +150,24 @@
     display: flex;
     gap: var(--shuttle-space-2);
     align-items: center;
+    flex-wrap: wrap;
   }
 
   .type-select { min-width: 100px; }
+
+  /* On phones the type/value/action trio can't fit in one row. Stack
+     fields full-width so each input gets a 44px+ touch target. */
+  @media (max-width: 480px) {
+    .rule > :global(*) {
+      flex: 1 1 100%;
+      min-width: 0;
+    }
+    .type-select,
+    .rule > select {
+      min-width: 0;
+    }
+    .process-field { flex-direction: column; align-items: stretch; }
+  }
 
   select {
     background: var(--shuttle-bg-surface);
