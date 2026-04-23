@@ -107,6 +107,36 @@ handles both tiers automatically and manages Docker lifecycle.
 - System tray: `gui/tray/` using fyne.io/systray
 - Communication: Random port REST API between Wails WebView and Go backend
 
+**Information architecture (post 2026-04-22 unification):** 6 top-level
+pages — `/` (Now), `/servers`, `/traffic`, `/mesh`, `/activity`,
+`/settings`. Subscriptions and Groups are filters on `/servers`; logs
+live on the `/activity?tab=logs` sub-tab. Legacy routes
+(`/dashboard`, `/subscriptions`, `/groups`, `/routing`, `/logs`)
+redirect client-side via `app/route-migration.ts` with a one-time toast.
+
+**Responsive shell:** `app/AppShell.svelte` renders one of three nav
+chrome components based on `lib/viewport.svelte` breakpoints —
+`BottomTabs` (<720px) / `Rail` (720–1024px) / `Sidebar` (≥1024px).
+All three read from `app/nav.ts`, the single source of truth.
+
+**Platform abstraction:** `lib/platform/` — `detect()` sniffs
+`window.go.main.App` → `window.ShuttleVPN` → falls back to web. SPA
+code calls `platform.engineStart/Stop/Status`,
+`platform.requestVpnPermission()`, `platform.scanQRCode()`,
+`platform.share()`, `platform.openExternalUrl()` — each Phase-4
+capability returns `'unsupported'` cleanly on runtimes that lack it.
+Dev-mode mock at `dev-bridge.ts` activates via `?mockbridge=1`.
+
+### Mobile builds
+- `build/scripts/build-android.sh [version]` — gomobile bind → AAR →
+  gradle assembleRelease → APK + AAB in `dist/`
+- `build/scripts/build-ios.sh [version]` — gomobile bind →
+  xcframework → xcodebuild archive → unsigned xcarchive in `dist/`
+  (macOS only)
+- `build/scripts/build-all.sh --mobile` wraps both (non-fatal when
+  SDK missing); CI runs them via `.github/workflows/build-mobile.yml`
+- Manual smoke checklist: `docs/mobile-smoke.md`
+
 ## Configuration
 
 Client and server configs are YAML. Key structures in `config/config.go`:
