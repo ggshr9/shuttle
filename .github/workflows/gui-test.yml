@@ -70,7 +70,9 @@ jobs:
 
       - name: Install Playwright browsers
         working-directory: gui/web
-        run: npx playwright install --with-deps chromium
+        # chromium: desktop + tablet viewport projects. webkit: phone project
+        # (iPhone 14 uses WebKit). Both required after the Phase 2 viewport matrix.
+        run: npx playwright install --with-deps chromium webkit
 
       - name: Run Playwright tests
         working-directory: gui/web
