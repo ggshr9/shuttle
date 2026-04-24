@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- INTERNET: required by the Go engine's outbound connections and the
+         WebView loading the embedded SPA.
+         FOREGROUND_SERVICE / _SPECIAL_USE: Android 14+ wants a typed
+         foreground-service declaration for long-running VPN sessions.
+         POST_NOTIFICATIONS: surface the persistent "VPN on" notification.
+         CAMERA: QR scanning (AddSheet → Scan QR → QrScanActivity). -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.CAMERA" />
+
+    <!-- Hardware capability — required by ZXing-backed QR scanner. Optional
+         so the app still installs on tablets / emulators without a camera;
+         the Scan QR button surfaces an "unsupported" toast in that case. -->
+    <uses-feature android:name="android.hardware.camera"
+                  android:required="false" />
+
+    <!-- Uses Android built-in resources so this manifest is self-sufficient
+         until a proper res/ tree is scaffolded with the real app icon +
+         theme. Designers can swap these later without changing structure. -->
+    <application
+        android:allowBackup="false"
+        android:icon="@android:drawable/sym_def_app_icon"
+        android:label="Shuttle"
+        android:theme="@android:style/Theme.DeviceDefault.Light.NoActionBar"
+        android:usesCleartextTraffic="false">
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:configChanges="keyboard|keyboardHidden|orientation|screenSize|uiMode">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <!-- shuttle:// URI scheme for server / subscription import. -->
+            <intent-filter android:autoVerify="false">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="shuttle" />
+            </intent-filter>
+        </activity>
+
+        <!-- QR scanner, launched from VpnBridge.scanQR via startActivityForResult. -->
+        <activity
+            android:name=".QrScanActivity"
+            android:exported="false"
+            android:screenOrientation="portrait" />
+
+        <!-- System-wide TUN VPN provider. Starts on demand from MainActivity
+             after the user accepts the VpnService.prepare() consent dialog. -->
+        <service
+            android:name=".ShuttleVpnService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse"
+            android:permission="android.permission.BIND_VPN_SERVICE">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="vpn" />
+            <intent-filter>
+                <action android:name="android.net.VpnService" />
+            </intent-filter>
+        </service>
+
+    </application>
+
+</manifest>
