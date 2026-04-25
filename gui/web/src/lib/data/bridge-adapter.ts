@@ -89,7 +89,9 @@ export class BridgeAdapter implements DataAdapter {
       }
     } catch (err) {
       if (err instanceof DOMException && err.name === 'AbortError') {
-        throw err   // Don't wrap as TransportError
+        // Propagate unwrapped so request()'s outer carve-out treats this
+        // as ok=true (user cancellation, not bridge failure).
+        throw err
       }
       throw new TransportError(err, err instanceof Error ? err.message : String(err))
     } finally {
