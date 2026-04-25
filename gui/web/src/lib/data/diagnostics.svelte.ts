@@ -89,6 +89,49 @@ export class Diagnostics {
     }
   }
 
+  reset(): void {
+    this.#requestsTotal = 0
+    this.#requestsErr = 0
+    this.#lastError = null
+    this.#rttSamples = []
+    this.#rttRevision++
+    this.#fallbacks = []
+    this.#fallbacksTotal = 0
+    try {
+      this.storage.removeItem(STORAGE_KEY)
+    } catch {
+      // ignore
+    }
+  }
+
+  static persistDirect(reason: string, storage: Storage = globalThis.localStorage): void {
+    try {
+      const raw = storage.getItem(STORAGE_KEY)
+      let entries: FallbackEntry[] = []
+      let total = 0
+      if (raw) {
+        try {
+          const parsed = JSON.parse(raw)
+          if (Array.isArray(parsed?.entries)) {
+            entries = parsed.entries.filter(
+              (e: unknown): e is FallbackEntry =>
+                !!e && typeof e === 'object'
+                && typeof (e as any).reason === 'string'
+                && typeof (e as any).at === 'number',
+            )
+          }
+          if (typeof parsed?.total === 'number' && parsed.total >= 0) total = parsed.total
+        } catch { /* corrupt — start fresh */ }
+      }
+      entries.push({ reason, at: Date.now() })
+      total++
+      if (entries.length > MAX_FALLBACKS) entries = entries.slice(-MAX_FALLBACKS)
+      storage.setItem(STORAGE_KEY, JSON.stringify({ entries, total }))
+    } catch {
+      // ignore — telemetry must never break callers
+    }
+  }
+
   private persist(): void {
     try {
       this.storage.setItem(STORAGE_KEY, JSON.stringify({

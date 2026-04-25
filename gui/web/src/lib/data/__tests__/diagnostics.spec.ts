@@ -197,3 +197,54 @@ describe('Diagnostics — fallback persistence', () => {
     expect(d.snapshot().fallbacksTotal).toBe(1)
   })
 })
+
+describe('Diagnostics — persistDirect (no instance)', () => {
+  it('writes a fallback entry without an instance', () => {
+    const s = makeStorage()
+    Diagnostics.persistDirect('early-fail', s)
+    const stored = JSON.parse(s.getItem('shuttle.diag.fallbacks')!)
+    expect(stored.entries).toHaveLength(1)
+    expect(stored.entries[0].reason).toBe('early-fail')
+    expect(stored.total).toBe(1)
+  })
+
+  it('appends to existing storage and a later instance hydrates correctly', () => {
+    const s = makeStorage()
+    Diagnostics.persistDirect('first', s)
+    Diagnostics.persistDirect('second', s)
+    const d = new Diagnostics(s)
+    const snap = d.snapshot()
+    expect(snap.fallbacksTotal).toBe(2)
+    expect(snap.fallbacks.map(e => e.reason)).toEqual(['first', 'second'])
+  })
+
+  it('persistDirect respects MAX_FALLBACKS cap', () => {
+    const s = makeStorage()
+    for (let i = 0; i < 15; i++) Diagnostics.persistDirect(`r${i}`, s)
+    const stored = JSON.parse(s.getItem('shuttle.diag.fallbacks')!)
+    expect(stored.entries).toHaveLength(10)
+    expect(stored.total).toBe(15)
+  })
+
+  it('persistDirect swallows setItem errors', () => {
+    const s: Storage = { ...makeStorage(), setItem: () => { throw new Error('full') } }
+    expect(() => Diagnostics.persistDirect('boom', s)).not.toThrow()
+  })
+})
+
+describe('Diagnostics — reset', () => {
+  it('clears in-memory + localStorage', () => {
+    const s = makeStorage()
+    const d = new Diagnostics(s)
+    d.recordRequest(20, false, 'err')
+    d.recordFallback('boom')
+    d.reset()
+    const snap = d.snapshot()
+    expect(snap.requestsTotal).toBe(0)
+    expect(snap.requestsErr).toBe(0)
+    expect(snap.lastError).toBeNull()
+    expect(snap.fallbacks).toEqual([])
+    expect(snap.fallbacksTotal).toBe(0)
+    expect(s.getItem('shuttle.diag.fallbacks')).toBeNull()
+  })
+})
