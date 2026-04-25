@@ -35,7 +35,8 @@ type HandlerConfig struct {
 	Stats        *stats.Storage
 	ConnLog      *connlog.Storage
 	SpeedHistory *speedtest.HistoryStorage
-	AuthToken    string // empty = no auth
+	Events       *EventQueue // optional; nil disables /api/events + /ws/events
+	AuthToken    string      // empty = no auth
 }
 
 // NewHandler creates the HTTP handler for the shuttle API.
@@ -70,6 +71,7 @@ func NewHandler(cfg HandlerConfig) http.Handler {
 	registerGroupRoutes(mux, cfg.Engine)
 	registerProviderRoutes(mux, cfg.Engine)
 	registerMigrateRoutes(mux)
+	registerEventsRoutes(mux, cfg.Events)
 
 	var handler http.Handler = corsMiddleware(mux)
 	if cfg.AuthToken != "" {
