@@ -111,3 +111,80 @@ describe('Diagnostics — RTT samples', () => {
     expect(s.rttP95).toBe(500)
   })
 })
+
+describe('Diagnostics — fallback persistence', () => {
+  it('recordFallback writes to localStorage and updates snapshot', () => {
+    const s = makeStorage()
+    const d = new Diagnostics(s)
+    d.recordFallback('timeout')
+    const snap = d.snapshot()
+    expect(snap.fallbacks).toHaveLength(1)
+    expect(snap.fallbacks[0].reason).toBe('timeout')
+    expect(snap.fallbacksTotal).toBe(1)
+    const stored = JSON.parse(s.getItem('shuttle.diag.fallbacks')!)
+    expect(stored.entries).toHaveLength(1)
+    expect(stored.total).toBe(1)
+  })
+
+  it('caps fallbacks list at MAX (10) but keeps total monotonic', () => {
+    const s = makeStorage()
+    const d = new Diagnostics(s)
+    for (let i = 0; i < 15; i++) d.recordFallback(`r${i}`)
+    const snap = d.snapshot()
+    expect(snap.fallbacks).toHaveLength(10)
+    expect(snap.fallbacks[0].reason).toBe('r5')   // oldest kept
+    expect(snap.fallbacks[9].reason).toBe('r14')  // newest
+    expect(snap.fallbacksTotal).toBe(15)
+  })
+
+  it('hydrates from valid localStorage on construction', () => {
+    const s = makeStorage()
+    s.setItem('shuttle.diag.fallbacks', JSON.stringify({
+      entries: [{ reason: 'old', at: 1000 }],
+      total: 7,
+    }))
+    const d = new Diagnostics(s)
+    const snap = d.snapshot()
+    expect(snap.fallbacks).toEqual([{ reason: 'old', at: 1000 }])
+    expect(snap.fallbacksTotal).toBe(7)
+  })
+
+  it('survives corrupt JSON gracefully (treats as empty)', () => {
+    const s = makeStorage()
+    s.setItem('shuttle.diag.fallbacks', 'not json {')
+    const d = new Diagnostics(s)
+    const snap = d.snapshot()
+    expect(snap.fallbacks).toEqual([])
+    expect(snap.fallbacksTotal).toBe(0)
+  })
+
+  it('drops malformed entries during hydrate', () => {
+    const s = makeStorage()
+    s.setItem('shuttle.diag.fallbacks', JSON.stringify({
+      entries: [
+        { reason: 'good', at: 100 },
+        { reason: 123 },                        // bad type
+        { at: 200 },                            // missing reason
+        null,                                   // null
+        { reason: 'also-good', at: 200 },
+      ],
+      total: 5,
+    }))
+    const d = new Diagnostics(s)
+    expect(d.snapshot().fallbacks).toEqual([
+      { reason: 'good', at: 100 },
+      { reason: 'also-good', at: 200 },
+    ])
+  })
+
+  it('swallows setItem errors (storage quota / disabled)', () => {
+    const s: Storage = {
+      ...makeStorage(),
+      setItem: () => { throw new Error('QuotaExceeded') },
+    }
+    const d = new Diagnostics(s)
+    expect(() => d.recordFallback('boom')).not.toThrow()
+    // in-memory state still updated
+    expect(d.snapshot().fallbacksTotal).toBe(1)
+  })
+})
