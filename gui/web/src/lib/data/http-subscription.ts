@@ -37,7 +37,8 @@ export class HttpSubscription<T> extends SubscriptionBase<T> {
       this.ws = null
       if (this.closed) return
       this.conn.report(this.topic, 'error')
-      // Reopen with backoff if subscribers still present.
+      // Reopen with fixed 2s retry (matches lib/ws.ts convention). Exponential
+      // backoff lives in BridgeSubscription per spec §5.5.
       if (this.subscribers.size > 0) {
         setTimeout(() => this.connect(), 2000)
       }
