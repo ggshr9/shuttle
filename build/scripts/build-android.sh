@@ -31,10 +31,14 @@ cp -R "$ROOT/gui/web/dist"/. "$ASSETS_WEB/"
 # 3. gomobile bind → shuttle.aar.
 LIBS_DIR="$ROOT/mobile/android/app/libs"
 mkdir -p "$LIBS_DIR"
+#    -checklinkname=0 — required by github.com/wlynxg/anet (transitive
+#    via pion). anet uses //go:linkname to access net.zoneCache; Go 1.23+
+#    enforces strict linkname rules unless this flag opts out. See anet
+#    README. Drop once anet ships a fix or a replacement is found.
 (cd "$ROOT" && gomobile bind \
     -target=android \
     -androidapi=24 \
-    -ldflags="-s -w -X main.version=${VERSION}" \
+    -ldflags="-s -w -checklinkname=0 -X main.version=${VERSION}" \
     -o "$LIBS_DIR/shuttle.aar" \
     ./mobile)
 

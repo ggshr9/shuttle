@@ -74,9 +74,14 @@ func spliceOne(srcFD, dstFD int, pipe *splicePair) (int64, error) {
 			remain := n
 			for remain > 0 {
 				written, werr := unix.Splice(pipe.r, nil, dstFD, nil, int(remain), unix.SPLICE_F_MOVE|unix.SPLICE_F_NONBLOCK)
+				// unix.Splice returns int on 32-bit Linux (arm, mipsle) and
+				// int64 elsewhere. `written` and `remain` share the same arch
+				// type (both come from Splice on the same arch) so subtraction
+				// is safe; the only mismatch is `total int64 += written` on
+				// 32-bit, which we widen explicitly.
 				if written > 0 {
 					remain -= written
-					total += written
+					total += int64(written) //nolint:unconvert // written is int on arm32; needed for portability
 				}
 				if werr != nil {
 					return total, werr
