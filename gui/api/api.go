@@ -57,6 +57,7 @@ func NewHandler(cfg HandlerConfig) http.Handler {
 	mux := http.NewServeMux()
 	updateChecker := update.NewChecker()
 
+	registerHealthzRoute(mux)
 	registerStatusRoutes(mux, cfg.Engine)
 	registerConfigRoutes(mux, cfg.Engine)
 	registerProxyRoutes(mux, cfg.Engine)
