@@ -44,15 +44,36 @@ func TestEventQueue_TailSince(t *testing.T) {
 	}
 }
 
-func TestEventQueue_GapWhenSinceTooOld(t *testing.T) {
-	q := NewEventQueue(2) // tiny ring
-	q.Push("a", nil)
-	q.Push("b", nil)
-	q.Push("c", nil) // a evicted
+func TestEventQueue_GapWhenEventsEvicted(t *testing.T) {
+	// Capacity 2: oldest two retained, anything older evicted.
+	q := NewEventQueue(2)
+	q.Push("a", nil) // cursor 1
+	q.Push("b", nil) // cursor 2
+	q.Push("c", nil) // cursor 3 — a evicted
+	q.Push("d", nil) // cursor 4 — b evicted
 
-	_, _, gap := q.Tail(1, 100) // since=1 means "after event #1", but a is gone
+	// Caller last saw cursor 1 (a). The next event they need is cursor 2 (b),
+	// but b has been evicted; oldest retained is c (cursor 3). Real gap.
+	_, _, gap := q.Tail(1, 100)
 	if !gap {
-		t.Fatal("expected gap=true when since predates ring buffer")
+		t.Fatal("expected gap=true when events between since+1 and oldest are evicted")
+	}
+}
+
+func TestEventQueue_NoGapWhenOnlyCursorEvicted(t *testing.T) {
+	// Capacity 2: cursor 1 (a) evicted but cursor 2 (b) — the caller's next
+	// expected event — is still in the window. No actual data loss.
+	q := NewEventQueue(2)
+	q.Push("a", nil) // cursor 1
+	q.Push("b", nil) // cursor 2
+	q.Push("c", nil) // cursor 3 — a evicted
+
+	events, _, gap := q.Tail(1, 100)
+	if gap {
+		t.Fatalf("expected gap=false when caller's next expected event is retained, got gap=true")
+	}
+	if len(events) != 2 || events[0].Type != "b" || events[1].Type != "c" {
+		t.Fatalf("events = %+v, want [b, c]", events)
 	}
 }
 

@@ -80,7 +80,10 @@ func (q *EventQueue) tailLocked(since int64, max int) ([]Event, int64, bool) {
 	}
 
 	oldestCursor := latest - int64(count) + 1
-	gap := since > 0 && since < oldestCursor
+	// gap: events the caller has not yet seen (anything from since+1 onward) have
+	// been evicted. If since+1 is still in the window, the caller has continuous
+	// data even though their reference cursor itself was evicted.
+	gap := since > 0 && since+1 < oldestCursor
 
 	startCursor := since + 1
 	if startCursor < oldestCursor {
