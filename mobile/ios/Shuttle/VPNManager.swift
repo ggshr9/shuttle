@@ -138,6 +138,44 @@ class VPNManager {
         }
     }
 
+    /// Send a binary envelope (e.g. encoded APIRequest from SharedBridge) to the
+    /// tunnel extension and return the response Data. Calls completion with nil
+    /// on no provider session, send-throw, or timeout. Used by APIBridge for
+    /// envelope IPC in iOS VPN mode.
+    func sendToExtension(_ data: Data, timeout: TimeInterval = 30, completion: @escaping (Data?) -> Void) {
+        guard let session = manager?.connection as? NETunnelProviderSession else {
+            completion(nil)
+            return
+        }
+
+        var responded = false
+        let lock = NSLock()
+        let respondOnce: (Data?) -> Void = { result in
+            lock.lock()
+            defer { lock.unlock() }
+            guard !responded else { return }
+            responded = true
+            completion(result)
+        }
+
+        let timeoutWork = DispatchWorkItem {
+            os_log("sendToExtension: timeout after %f s", log: self.log, type: .error, timeout)
+            respondOnce(nil)
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + timeout, execute: timeoutWork)
+
+        do {
+            try session.sendProviderMessage(data) { response in
+                timeoutWork.cancel()
+                respondOnce(response)
+            }
+        } catch {
+            timeoutWork.cancel()
+            os_log("sendToExtension: send threw: %{public}@", log: self.log, type: .error, error.localizedDescription)
+            respondOnce(nil)
+        }
+    }
+
     // MARK: - Private Methods
 
     private func setupObservers() {
