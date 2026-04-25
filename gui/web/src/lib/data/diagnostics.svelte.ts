@@ -43,6 +43,8 @@ export class Diagnostics {
   }
 
   recordFallback(reason: string): void {
+    // Always replaces #fallbacks (never mutates in-place) so callers holding
+    // a snapshot reference see a stable, frozen array.
     const entry: FallbackEntry = { reason, at: Date.now() }
     const next = [...this.#fallbacks, entry]
     this.#fallbacks = next.length > MAX_FALLBACKS ? next.slice(-MAX_FALLBACKS) : next

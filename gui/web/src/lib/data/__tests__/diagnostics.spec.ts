@@ -158,6 +158,15 @@ describe('Diagnostics — fallback persistence', () => {
     expect(snap.fallbacksTotal).toBe(0)
   })
 
+  it('loads total even when entries key is absent', () => {
+    const s = makeStorage()
+    s.setItem('shuttle.diag.fallbacks', JSON.stringify({ total: 5 }))
+    const d = new Diagnostics(s)
+    const snap = d.snapshot()
+    expect(snap.fallbacks).toEqual([])
+    expect(snap.fallbacksTotal).toBe(5)
+  })
+
   it('drops malformed entries during hydrate', () => {
     const s = makeStorage()
     s.setItem('shuttle.diag.fallbacks', JSON.stringify({
