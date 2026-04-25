@@ -296,3 +296,23 @@ describe.each(factories)('%s adapter conformance', (_name, factory) => {
     })
   })
 })
+
+describe.each(factories)('%s adapter — diagnostics conformance', (_label, factory) => {
+  it('reports identical counts after the same workload', async () => {
+    const a = await factory()
+    let callCount = 0
+    ;(globalThis as any).fetch = vi.fn(async () => {
+      callCount++
+      if (callCount === 1) return new Response('{}', { status: 200 })
+      if (callCount === 2) return new Response(JSON.stringify({ error: 'x' }), { status: 500 })
+      throw new TypeError('network down')
+    })
+    await a.request({ method: 'GET', path: '/a' }).catch(() => {})
+    await a.request({ method: 'GET', path: '/b' }).catch(() => {})
+    await a.request({ method: 'GET', path: '/c' }).catch(() => {})
+    const snap = a.diagnostics.snapshot()
+    expect(snap.requestsTotal).toBe(3)
+    expect(snap.requestsErr).toBe(2)
+    expect(snap.errorRate).toBeCloseTo(2 / 3, 3)
+  })
+})
