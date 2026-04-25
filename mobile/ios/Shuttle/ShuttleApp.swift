@@ -114,6 +114,15 @@ class ViewController: UIViewController, WKNavigationDelegate, WKScriptMessageHan
         }
         self.configData = configData
 
+        // FORCE_VPN_MODE — XCUITest hook that bypasses config-driven mode
+        // selection so testSPALoadsInVPNMode can exercise the VPN path on a
+        // fresh simulator without crafting a tun-enabled config.
+        if ProcessInfo.processInfo.environment["FORCE_VPN_MODE"] == "1" {
+            useVPN = true
+            setupVPN()
+            return
+        }
+
         // Check if VPN mode is enabled
         if let data = configData.data(using: .utf8),
            let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
