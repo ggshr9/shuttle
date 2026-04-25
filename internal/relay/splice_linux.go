@@ -81,7 +81,7 @@ func spliceOne(srcFD, dstFD int, pipe *splicePair) (int64, error) {
 				// 32-bit, which we widen explicitly.
 				if written > 0 {
 					remain -= written
-					total += int64(written)
+					total += int64(written) //nolint:unconvert // written is int on arm32; needed for portability
 				}
 				if werr != nil {
 					return total, werr
