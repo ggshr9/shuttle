@@ -47,7 +47,7 @@ DataAdapter (interface, lib/data/types.ts)
 ├─ connectionState            ← 已有 (per-topic ok/error)
 └─ diagnostics: Diagnostics   ← 新增（READ-ONLY snapshot 接口）
 
-Diagnostics (lib/data/diagnostics.ts, ~100 行)
+Diagnostics (lib/data/diagnostics.svelte.ts, ~100 行)
 ├─ recordRequest(durationMs, ok, errorReason?)   ← adapter 内部调
 ├─ recordFallback(reason)                        ← boot.ts 调，同步落 localStorage
 ├─ snapshot(): DiagnosticsSnapshot               ← UI 读（响应式：内部字段是 $state，UI 通过 $derived 自动跟踪）
@@ -70,7 +70,7 @@ UI 这一侧：
 
 ## 4. 组件细节
 
-### 4.1 `lib/data/diagnostics.ts`
+### 4.1 `lib/data/diagnostics.svelte.ts`
 
 完整签名：
 
@@ -223,28 +223,29 @@ function requestFallback(reason: string, adapter?: DataAdapter | null): void {
 
 样式继承 `--shuttle-*` token，PageHeader 与现有 sub-page 一致。
 
-i18n keys 全部在 `settings.diagnostics.*` 命名空间：
+i18n keys 全部在 `settings.diag.*` 命名空间（`settings.diagnostics` 已被现有 "下载诊断包" 字符串占用，不能复用）：
 
 ```
-settings.diagnostics.title
-settings.diagnostics.section.bridgeHealth
-settings.diagnostics.section.lastError
-settings.diagnostics.section.fallbackHistory
-settings.diagnostics.stat.requests
-settings.diagnostics.stat.errors
-settings.diagnostics.stat.errorRate
-settings.diagnostics.stat.rttP50
-settings.diagnostics.stat.rttP95
-settings.diagnostics.empty.noSamples
-settings.diagnostics.empty.noErrors
-settings.diagnostics.empty.noFallbacks
-settings.diagnostics.action.reset
-settings.diagnostics.action.confirmReset
-settings.diagnostics.relative.justNow
-settings.diagnostics.relative.minutesAgo
-settings.diagnostics.relative.hoursAgo
-settings.diagnostics.relative.daysAgo
+settings.diag.title
+settings.diag.section.bridgeHealth
+settings.diag.section.lastError
+settings.diag.section.fallbackHistory
+settings.diag.stat.requests
+settings.diag.stat.errors
+settings.diag.stat.errorRate
+settings.diag.stat.rttP50
+settings.diag.stat.rttP95
+settings.diag.empty.noSamples
+settings.diag.empty.noErrors
+settings.diag.empty.noFallbacks
+settings.diag.action.reset
+settings.diag.action.confirmReset
+settings.diag.relative.justNow
+settings.diag.nav                    // sub-page 导航 label
+settings.nav.diag                    // 与现有 settings.nav.* 平齐
 ```
+
+相对时间用 `Intl.RelativeTimeFormat`，无需多 i18n key（minutes/hours/days 由 `Intl` 处理 locale）。
 
 最少 zh-CN 和 en 两份（项目已有的两个语言）。`lastError.reason` 不翻译（`TransportError`/`ApiError` 的英文 message，给开发者排错用）。
 
