@@ -34,8 +34,8 @@ describe('Diagnostics.svelte', () => {
   it('renders empty states when no data', () => {
     setAdapter(fakeAdapter())
     render(Diagnostics)
-    expect(screen.getByText(/No errors recorded/i)).toBeInTheDocument()
-    expect(screen.getByText(/No fallback events/i)).toBeInTheDocument()
+    expect(screen.getByText(/No errors recorded/i)).toBeDefined()
+    expect(screen.getByText(/No fallback events/i)).toBeDefined()
   })
 
   it('shows — for RTT when fewer than 10 samples', () => {
@@ -52,7 +52,7 @@ describe('Diagnostics.svelte', () => {
     a.diagnostics.recordRequest(50, false, 'TransportError: timeout')
     setAdapter(a)
     render(Diagnostics)
-    expect(screen.getByText(/TransportError: timeout/)).toBeInTheDocument()
+    expect(screen.getByText(/TransportError: timeout/)).toBeDefined()
   })
 
   it('renders fallback list most-recent-first', () => {
