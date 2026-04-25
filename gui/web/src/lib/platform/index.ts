@@ -8,6 +8,7 @@ export type { Platform, PlatformName, CapResult, SharePayload } from './types'
 export function detect(): PlatformName {
   if (typeof window === 'undefined') return 'web'
   if ((window as any).go?.main?.App) return 'wails'
+  if ((window as any).ShuttleBridge) return 'native'  // iOS VPN mode bridge
   if ((window as any).ShuttleVPN) return 'native'
   return 'web'
 }
