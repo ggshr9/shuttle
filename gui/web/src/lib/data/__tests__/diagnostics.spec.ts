@@ -63,3 +63,42 @@ describe('Diagnostics — request counters', () => {
     expect(d.snapshot().lastError!.reason).toBe('unknown')
   })
 })
+
+describe('Diagnostics — RTT samples', () => {
+  it('returns null p50/p95 with fewer than 10 samples', () => {
+    const d = new Diagnostics(makeStorage())
+    for (let i = 0; i < 9; i++) d.recordRequest(10, true)
+    const s = d.snapshot()
+    expect(s.rttP50).toBeNull()
+    expect(s.rttP95).toBeNull()
+  })
+
+  it('returns sorted percentiles at exactly 10 samples', () => {
+    const d = new Diagnostics(makeStorage())
+    // values 1..10 → p50 ≈ 5 or 6, p95 ≈ 10
+    for (let v = 1; v <= 10; v++) d.recordRequest(v, true)
+    const s = d.snapshot()
+    expect(s.rttP50).toBeGreaterThanOrEqual(5)
+    expect(s.rttP50).toBeLessThanOrEqual(6)
+    expect(s.rttP95).toBe(10)
+  })
+
+  it('handles odd-sized window correctly', () => {
+    const d = new Diagnostics(makeStorage())
+    const vs = [10, 30, 20, 50, 40, 70, 60, 90, 80, 100, 110]   // 11 values
+    for (const v of vs) d.recordRequest(v, true)
+    const s = d.snapshot()
+    // sorted: 10,20,30,40,50,60,70,80,90,100,110 → p50 = index 5 = 60
+    expect(s.rttP50).toBe(60)
+  })
+
+  it('drops oldest sample when ring buffer exceeds 100', () => {
+    const d = new Diagnostics(makeStorage())
+    // First 100 are 1, next 100 are 1000 — after pushing 200, only 1000s remain
+    for (let i = 0; i < 100; i++) d.recordRequest(1, true)
+    for (let i = 0; i < 100; i++) d.recordRequest(1000, true)
+    const s = d.snapshot()
+    expect(s.rttP50).toBe(1000)
+    expect(s.rttP95).toBe(1000)
+  })
+})
