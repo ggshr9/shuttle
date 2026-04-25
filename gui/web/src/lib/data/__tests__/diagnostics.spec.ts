@@ -236,13 +236,18 @@ describe('Diagnostics — reset', () => {
   it('clears in-memory + localStorage', () => {
     const s = makeStorage()
     const d = new Diagnostics(s)
+    // Seed enough RTT samples that p50/p95 would be non-null pre-reset.
+    for (let i = 1; i <= 10; i++) d.recordRequest(i * 10, true)
     d.recordRequest(20, false, 'err')
     d.recordFallback('boom')
+    expect(d.snapshot().rttP50).not.toBeNull()
     d.reset()
     const snap = d.snapshot()
     expect(snap.requestsTotal).toBe(0)
     expect(snap.requestsErr).toBe(0)
     expect(snap.lastError).toBeNull()
+    expect(snap.rttP50).toBeNull()
+    expect(snap.rttP95).toBeNull()
     expect(snap.fallbacks).toEqual([])
     expect(snap.fallbacksTotal).toBe(0)
     expect(s.getItem('shuttle.diag.fallbacks')).toBeNull()
