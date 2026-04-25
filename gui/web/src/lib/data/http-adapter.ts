@@ -57,7 +57,8 @@ export class HttpAdapter implements DataAdapter {
     const linkResult = signal
       ? linkSignals(signal, ctrl.signal)
       : { signal: ctrl.signal, cleanup: () => {} }
-    const timer = setTimeout(() => ctrl.abort(), timeoutMs ?? this.defaultTimeoutMs)
+    let timedOut = false
+    const timer = setTimeout(() => { timedOut = true; ctrl.abort() }, timeoutMs ?? this.defaultTimeoutMs)
     try {
       const tok = this.authToken()
       const finalHeaders: Record<string, string> = {
@@ -72,6 +73,13 @@ export class HttpAdapter implements DataAdapter {
       try {
         res = await fetch(this.base + path, init)
       } catch (err) {
+        if (err instanceof DOMException && err.name === 'AbortError') {
+          // Internal timeout → record as error with reason='timeout'.
+          // External (caller-supplied) signal abort → pass through so outer
+          // wrapper's carve-out treats it as ok (user cancellation).
+          if (timedOut) throw new TransportError(err, 'timeout')
+          throw err
+        }
         throw new TransportError(err, err instanceof Error ? err.message : String(err))
       }
 
