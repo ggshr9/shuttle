@@ -22,6 +22,7 @@ export class Diagnostics {
   }
 
   recordRequest(_durationMs: number, ok: boolean, reason?: string): void {
+    // _durationMs is wired into the RTT ring buffer in Task 2.
     this.#requestsTotal++
     if (!ok) {
       this.#requestsErr++
