@@ -57,3 +57,40 @@ describe('HttpAdapter.request', () => {
     expect((init.headers as any)['Authorization']).toBe('Bearer sekret')
   })
 })
+
+describe('HttpAdapter — diagnostics integration', () => {
+  it('exposes a diagnostics instance', () => {
+    const a = new HttpAdapter()
+    expect(a.diagnostics).toBeDefined()
+    expect(a.diagnostics.snapshot().requestsTotal).toBe(0)
+  })
+
+  it('records a successful request', async () => {
+    mockFetch(() => new Response('{}', { status: 200, headers: { 'content-type': 'application/json' } }))
+    const a = new HttpAdapter()
+    await a.request({ method: 'GET', path: '/x' })
+    const snap = a.diagnostics.snapshot()
+    expect(snap.requestsTotal).toBe(1)
+    expect(snap.requestsErr).toBe(0)
+    expect(snap.lastError).toBeNull()
+  })
+
+  it('records an ApiError request with status in lastError', async () => {
+    mockFetch(() => new Response(JSON.stringify({ error: 'gone' }), { status: 404, headers: { 'content-type': 'application/json' } }))
+    const a = new HttpAdapter()
+    await expect(a.request({ method: 'GET', path: '/x' })).rejects.toBeInstanceOf(ApiError)
+    const snap = a.diagnostics.snapshot()
+    expect(snap.requestsTotal).toBe(1)
+    expect(snap.requestsErr).toBe(1)
+    expect(snap.lastError!.reason).toMatch(/gone|404/)
+  })
+
+  it('records a TransportError request with cause message in lastError', async () => {
+    mockFetch(() => Promise.reject(new TypeError('fetch failed')))
+    const a = new HttpAdapter()
+    await expect(a.request({ method: 'GET', path: '/x' })).rejects.toBeInstanceOf(TransportError)
+    const snap = a.diagnostics.snapshot()
+    expect(snap.requestsErr).toBe(1)
+    expect(snap.lastError!.reason).toMatch(/fetch failed/)
+  })
+})

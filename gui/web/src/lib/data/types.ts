@@ -1,5 +1,6 @@
 // gui/web/src/lib/data/types.ts
 import type { TopicKey, TopicValue, TopicMap } from './topics'
+import type { Diagnostics } from './diagnostics.svelte'
 
 export interface DataAdapter {
   request<T = unknown>(opts: RequestOptions): Promise<T>
@@ -8,6 +9,7 @@ export interface DataAdapter {
     opts?: SubscribeOptions<K>,
   ): Subscription<TopicValue<K>>
   readonly connectionState: ReadableValue<ConnectionState>
+  readonly diagnostics: Diagnostics
 }
 
 export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH'
