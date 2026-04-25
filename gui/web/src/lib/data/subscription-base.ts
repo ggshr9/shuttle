@@ -7,6 +7,8 @@ export abstract class SubscriptionBase<T> {
   protected lastHash: string | undefined
   protected cursor: string | number | undefined
   protected errorCount = 0
+  protected inFlight = false
+  private paused = false
 
   constructor(
     protected readonly topic: TopicKey,
@@ -51,10 +53,14 @@ export abstract class SubscriptionBase<T> {
   }
 
   pauseForHidden(): void {
+    if (this.paused) return
+    this.paused = true
     if (this.subscribers.size > 0) this.disconnect()
   }
 
   resumeFromHidden(): void {
+    if (!this.paused) return
+    this.paused = false
     if (this.subscribers.size > 0) this.connect()
   }
 }

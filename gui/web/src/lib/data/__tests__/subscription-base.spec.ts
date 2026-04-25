@@ -56,3 +56,31 @@ describe('SubscriptionBase ref counting', () => {
     expect(cb).not.toHaveBeenCalled()
   })
 })
+
+describe('SubscriptionBase hidden-tab pause/resume', () => {
+  it('pauseForHidden is idempotent', () => {
+    const s = new TestSub<number>('status', 'snapshot')
+    s.add(() => {})
+    s.pauseForHidden()
+    s.pauseForHidden()
+    expect(s.disconnectCount).toBe(1)
+  })
+
+  it('resumeFromHidden is idempotent', () => {
+    const s = new TestSub<number>('status', 'snapshot')
+    s.add(() => {})
+    s.pauseForHidden()
+    s.resumeFromHidden()
+    s.resumeFromHidden()
+    // Each pauseForHidden disconnects once; each resumeFromHidden connects once
+    // (plus the initial connect from add()). So connectCount is 2.
+    expect(s.connectCount).toBe(2)
+  })
+
+  it('resume without pause is no-op', () => {
+    const s = new TestSub<number>('status', 'snapshot')
+    s.add(() => {})
+    s.resumeFromHidden()  // never paused
+    expect(s.connectCount).toBe(1)  // just the initial connect from add()
+  })
+})
