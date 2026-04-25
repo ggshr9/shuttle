@@ -50,11 +50,8 @@ export class ApiError extends Error {
 }
 
 export class TransportError extends Error {
-  constructor(
-    public readonly cause: unknown,
-    message: string,
-  ) {
-    super(message)
+  constructor(cause: unknown, message: string) {
+    super(message, { cause })
     this.name = 'TransportError'
   }
 }
