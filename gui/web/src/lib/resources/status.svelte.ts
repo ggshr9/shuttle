@@ -1,6 +1,7 @@
 import { createResource, createStream, type Resource, type Stream } from '@/lib/resource.svelte'
 import { status as fetchStatus, getTransportStats } from '@/lib/api/endpoints'
 import type { Status, TransportStats } from '@/lib/api/types'
+import type { SpeedSample } from '@/lib/data/topics'
 
 // ── Status — 3s polling (primary source of truth) ────────────
 // Initial value represents a disconnected state so the UI can render before
@@ -28,7 +29,6 @@ export function useTransportStats(): Resource<TransportStats[]> {
 }
 
 // ── Speed stream — WebSocket push ────────────────────────────
-interface SpeedSample { upload: number; download: number }
 export function useSpeedStream(): Stream<SpeedSample> {
   return createStream<SpeedSample>(
     'dashboard.speed',

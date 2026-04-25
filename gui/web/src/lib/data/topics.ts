@@ -1,8 +1,8 @@
 // gui/web/src/lib/data/topics.ts
 
-// Domain types — these mirror existing types in lib/api/types.ts.
-// Import from there once the migration in Phase 2 lands; for now
-// keep loose typing to avoid circular imports during the build.
+// Domain types — Status and MeshPeer are imported from lib/api/types.
+// SpeedSample / LogLine / EngineEvent are owned by this module since they
+// describe the wire format of the corresponding subscription topics.
 import type { Status, MeshPeer } from '@/lib/api/types'
 
 export type SpeedSample = { upload: number; download: number }
@@ -16,12 +16,12 @@ export type EngineEvent = {
 
 export type TopicKind = 'snapshot' | 'stream'
 
-export interface TopicEntry {
-  wsPath: string
-  restPath: string
-  pollMs: number
-  kind: TopicKind
-  cursorParam?: string
+export type TopicEntry = {
+  readonly wsPath: string
+  readonly restPath: string
+  readonly pollMs: number
+  readonly kind: TopicKind
+  readonly cursorParam?: string
 }
 
 export type TopicMap = {
@@ -35,10 +35,10 @@ export type TopicMap = {
 export type TopicKey = keyof TopicMap
 export type TopicValue<K extends TopicKey> = TopicMap[K]['value']
 
-export const topicConfig: Record<TopicKey, TopicEntry> = {
-  status: { wsPath: '/ws/status', restPath: '/api/status', pollMs: 2000, kind: 'snapshot' },
-  speed:  { wsPath: '/ws/speed',  restPath: '/api/speed',  pollMs: 1000, kind: 'snapshot' },
-  mesh:   { wsPath: '/ws/mesh',   restPath: '/api/mesh/peers', pollMs: 3000, kind: 'snapshot' },
-  logs:   { wsPath: '/ws/logs',   restPath: '/api/logs',   pollMs: 1000, kind: 'stream', cursorParam: 'since' },
-  events: { wsPath: '/ws/events', restPath: '/api/events', pollMs: 1000, kind: 'stream', cursorParam: 'since' },
-}
+export const topicConfig = {
+  status:  { wsPath: '/ws/status',  restPath: '/api/status',     pollMs: 2000, kind: 'snapshot' },
+  speed:   { wsPath: '/ws/speed',   restPath: '/api/speed',      pollMs: 1000, kind: 'snapshot' },
+  mesh:    { wsPath: '/ws/mesh',    restPath: '/api/mesh/peers', pollMs: 3000, kind: 'snapshot' },
+  logs:    { wsPath: '/ws/logs',    restPath: '/api/logs',       pollMs: 1000, kind: 'stream', cursorParam: 'since' },
+  events:  { wsPath: '/ws/events',  restPath: '/api/events',     pollMs: 1000, kind: 'stream', cursorParam: 'since' },
+} as const satisfies Record<TopicKey, TopicEntry>
