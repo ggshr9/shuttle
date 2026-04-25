@@ -79,6 +79,13 @@ class LogsStore {
           kind: 'log',
         })
       })
+      // TODO(Phase 5): #connWS still uses connectWS direct to /api/connections.
+      // In iOS VPN mode the engine runs in the Network Extension and that path
+      // is unreachable from the WKWebView. Either add 'connections' to
+      // topicConfig and migrate to getAdapter().subscribe('connections'), or
+      // fold connection events into the 'events' topic (Phase 3). Without one
+      // of those fixes, the activity tab loses connection-event data in VPN
+      // mode.
       this.#connWS = connectWS<ConnEvent>('/api/connections', (ev) => {
         if (ev.conn_state === 'opened') {
           this.openConns.add(ev.conn_id)

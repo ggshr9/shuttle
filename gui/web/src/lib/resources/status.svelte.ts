@@ -47,6 +47,11 @@ export function useSpeedStream(): Stream<SpeedSample> {
 
   const sub = getAdapter().subscribe('speed')
   // App-lifetime subscription — never explicitly unsubscribed.
+  // TODO(Phase 5): if boot.ts ever swaps the adapter at runtime (e.g. bridge
+  // probe fail → fallback to HttpAdapter, or iOS proxy ↔ VPN mode toggle),
+  // the old adapter's HttpSubscription stays alive holding a WebSocket /
+  // poll timer. Resolve by adding `dispose()` to DataAdapter and calling it
+  // here on swap, or by requiring an app reload across adapter changes.
   sub.subscribe((msg) => {
     state.data = msg
     state.connected = true
