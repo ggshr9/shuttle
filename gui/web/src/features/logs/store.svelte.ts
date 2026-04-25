@@ -1,17 +1,13 @@
 import { SvelteSet } from 'svelte/reactivity'
 import { connectWS, type WSConnection } from '@/lib/ws'
+import { getAdapter } from '@/lib/data'
+import type { LogLine } from '@/lib/data/topics'
 import type {
   LogEntry, LogLevel, ConnDetails,
   ProtocolFilter, ActionFilter,
 } from './types'
 
 const BUFFER_CAP = 500
-
-interface LogEvent {
-  timestamp: string
-  level?: LogLevel
-  message?: string
-}
 
 interface ConnEvent {
   conn_id: string
@@ -66,19 +62,20 @@ class LogsStore {
 
   activeConnectionCount = $derived(this.openConns.size)
 
-  #logWS: WSConnection | null = null
+  #logUnsub: (() => void) | null = null
   #connWS: WSConnection | null = null
   #refCount = 0
 
   subscribe(): () => void {
     this.#refCount++
     if (this.#refCount === 1) {
-      this.#logWS = connectWS<LogEvent>('/api/logs', (ev) => {
+      const sub = getAdapter().subscribe('logs')
+      this.#logUnsub = sub.subscribe((line: LogLine) => {
         this.#push({
           id: crypto.randomUUID(),
-          time: Date.parse(ev.timestamp) || Date.now(),
-          level: ev.level || 'info',
-          msg: ev.message || '',
+          time: Date.parse(line.timestamp) || Date.now(),
+          level: (line.level as LogLevel | undefined) || 'info',
+          msg: line.message || '',
           kind: 'log',
         })
       })
@@ -126,9 +123,9 @@ class LogsStore {
     return () => {
       this.#refCount--
       if (this.#refCount === 0) {
-        this.#logWS?.close()
+        this.#logUnsub?.()
+        this.#logUnsub = null
         this.#connWS?.close()
-        this.#logWS = null
         this.#connWS = null
       }
     }

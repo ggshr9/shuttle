@@ -6,7 +6,15 @@
 import type { Status, MeshPeer } from '@/lib/api/types'
 
 export type SpeedSample = { upload: number; download: number }
-export type LogLine = { ts: string; level: string; msg: string; source?: string }
+// LogLine — wire format emitted by GET /ws/logs (and the future /api/logs?since=N
+// REST endpoint). LogLevel is intentionally `string` here to keep the data
+// module independent of feature-specific union types like LogLevel; the logs
+// store narrows on consumption.
+export type LogLine = {
+  timestamp: string
+  level?: string
+  message?: string
+}
 export type EngineEvent = {
   cursor: number
   type: string
