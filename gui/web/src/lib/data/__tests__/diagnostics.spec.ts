@@ -101,4 +101,13 @@ describe('Diagnostics — RTT samples', () => {
     expect(s.rttP50).toBe(1000)
     expect(s.rttP95).toBe(1000)
   })
+
+  it('includes failed-request duration in rtt samples', () => {
+    const d = new Diagnostics(makeStorage())
+    for (let i = 0; i < 9; i++) d.recordRequest(10, true)
+    d.recordRequest(500, false, 'err')
+    const s = d.snapshot()
+    expect(s.rttP50).not.toBeNull()
+    expect(s.rttP95).toBe(500)
+  })
 })

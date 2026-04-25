@@ -54,6 +54,8 @@ export class Diagnostics {
 
 function percentile(samples: number[], p: number): number | null {
   if (samples.length < MIN_RTT_SAMPLES) return null
+  // Uses upper-index variant: floor(p * N) instead of strict nearest-rank
+  // ceil(p * N) - 1. The 1-element difference is immaterial for RTT display.
   const sorted = [...samples].sort((a, b) => a - b)
   const idx = Math.min(sorted.length - 1, Math.floor(p * sorted.length))
   return sorted[idx]
