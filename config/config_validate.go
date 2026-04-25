@@ -28,16 +28,6 @@ func validateURL(s, field string) error {
 	return nil
 }
 
-// validateDuration performs parse-only validation of a duration string.
-// Retained as a building block for potential future callers; current
-// validate paths use validateBoundedDuration for range-checked fields.
-func validateDuration(s, field string) error {
-	if _, err := time.ParseDuration(s); err != nil {
-		return fmt.Errorf("invalid %s: %w", field, err)
-	}
-	return nil
-}
-
 // validateBoundedDuration parses s as a Go duration and rejects values
 // outside [minD, maxD] (inclusive). field is the config path used in the
 // error message.
