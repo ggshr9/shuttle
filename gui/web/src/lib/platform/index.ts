@@ -8,7 +8,10 @@ export type { Platform, PlatformName, CapResult, SharePayload } from './types'
 export function detect(): PlatformName {
   if (typeof window === 'undefined') return 'web'
   if ((window as any).go?.main?.App) return 'wails'
-  if ((window as any).ShuttleBridge) return 'native'  // iOS VPN mode bridge
+  // iOS VPN mode: data IPC bridge (Phase 5 — envelope send to extension).
+  // iOS proxy mode: legacy capability bridge (engineStart, scanQR, share, etc.).
+  // Both map to platform name 'native'; they may co-exist in VPN mode.
+  if ((window as any).ShuttleBridge) return 'native'
   if ((window as any).ShuttleVPN) return 'native'
   return 'web'
 }
