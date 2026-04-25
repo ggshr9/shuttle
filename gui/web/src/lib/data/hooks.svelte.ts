@@ -11,12 +11,12 @@ export function useSubscription<K extends TopicKey>(
   topic: K,
   opts?: SubscribeOptions<K>,
 ) {
-  let value = $state<TopicValue<K> | undefined>(undefined)
   const adapter = getAdapter()
-  const sub = adapter.subscribe(topic, opts)
-  // Initial replay of cached snapshot value, if any.
-  value = sub.current as TopicValue<K> | undefined
+  // Peek cached value synchronously — does NOT open transport (no .subscribe(cb) yet).
+  const initial = adapter.subscribe(topic, opts).current as TopicValue<K> | undefined
+  let value = $state<TopicValue<K> | undefined>(initial)
   $effect(() => {
+    const sub = adapter.subscribe(topic, opts)
     return sub.subscribe(v => { value = v as TopicValue<K> })
   })
   return {
