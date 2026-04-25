@@ -4,6 +4,8 @@ import (
 	"context"
 	"testing"
 	"time"
+
+	"github.com/shuttleX/shuttle/engine"
 )
 
 func TestEventQueue_PushTail(t *testing.T) {
@@ -108,5 +110,37 @@ func TestEventQueue_WaitReturnsImmediately_WhenAvailable(t *testing.T) {
 	}
 	if len(events) == 0 {
 		t.Fatal("expected immediate return")
+	}
+}
+
+// TestPumpEngineEvents_ForwardsEngineEvents verifies that pumpEngineEvents
+// relays engine events into the EventQueue. It uses a stopped engine and
+// EmitConnectionEvent (the only public emission path that doesn't require
+// the engine to be running) to trigger an event, then confirms it appears
+// in the queue.
+func TestPumpEngineEvents_ForwardsEngineEvents(t *testing.T) {
+	eng := newTestEngine()
+
+	q := NewEventQueue(8)
+	go pumpEngineEvents(eng, q)
+
+	// Give the goroutine a moment to subscribe before emitting.
+	time.Sleep(10 * time.Millisecond)
+
+	// EmitConnectionEvent is the only public emission path on a stopped engine.
+	eng.EmitConnectionEvent("conn-1", "opened", "example.com:443", "proxy", "tcp", "", 0, 0, 0)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	defer cancel()
+
+	events, _, _, err := q.Wait(ctx, 0)
+	if err != nil {
+		t.Fatalf("Wait err: %v", err)
+	}
+	if len(events) == 0 {
+		t.Fatal("expected at least one event forwarded from engine")
+	}
+	if events[0].Type != engine.EventConnection.String() {
+		t.Fatalf("expected event type %q, got %q", engine.EventConnection.String(), events[0].Type)
 	}
 }

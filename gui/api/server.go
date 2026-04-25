@@ -18,8 +18,27 @@ type Server struct {
 
 // NewServer creates an API server. If webFS is non-nil, it serves the SPA from it
 // with fallback to index.html for client-side routing.
+//
+// An EventQueue is created and wired to the engine event bus so that
+// /api/events and /ws/events have live data to serve.
 func NewServer(eng *engine.Engine, webFS fs.FS) *Server {
-	return NewServerWithHandler(eng, webFS, NewHandler(HandlerConfig{Engine: eng}))
+	q := NewEventQueue(1024)
+	if eng != nil {
+		go pumpEngineEvents(eng, q)
+	}
+	handler := NewHandler(HandlerConfig{Engine: eng, Events: q})
+	return NewServerWithHandler(eng, webFS, handler)
+}
+
+// pumpEngineEvents subscribes to the engine event bus and forwards every event
+// into the EventQueue. Runs until the engine subscriber channel closes
+// (engine shutdown).
+func pumpEngineEvents(eng *engine.Engine, q *EventQueue) {
+	ch := eng.Subscribe()
+	defer eng.Unsubscribe(ch)
+	for ev := range ch {
+		q.Push(ev.Type.String(), ev)
+	}
 }
 
 // NewServerWithHandler creates an API server using a pre-built API handler.
