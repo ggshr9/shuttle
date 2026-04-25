@@ -6,6 +6,7 @@ describe('detect', () => {
   beforeEach(() => {
     delete (window as any).go
     delete (window as any).ShuttleVPN
+    delete (window as any).ShuttleBridge
     __resetPlatform()
   })
 
@@ -18,6 +19,21 @@ describe('detect', () => {
 
   it('detects native when window.ShuttleVPN present', () => {
     (window as any).ShuttleVPN = {}
+    expect(detect()).toBe('native')
+  })
+
+  it('detects native when window.ShuttleBridge present (iOS VPN mode)', () => {
+    ;(window as any).ShuttleBridge = { send: () => {} }
+    expect(detect()).toBe('native')
+  })
+
+  it('returns native when both ShuttleBridge and ShuttleVPN present', () => {
+    // Both bridges may co-exist in iOS VPN mode (Phase 5):
+    //   ShuttleBridge — data IPC envelope to extension
+    //   ShuttleVPN    — main-app capability surface (camera, share, etc.)
+    // detect() returns the same platform name 'native' either way.
+    ;(window as any).ShuttleBridge = { send: () => {} }
+    ;(window as any).ShuttleVPN = {}
     expect(detect()).toBe('native')
   })
 

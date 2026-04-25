@@ -2,6 +2,8 @@ import UIKit
 import WebKit
 import NetworkExtension
 import AVFoundation
+import os.log
+import SharedBridge
 
 /// Main view controller that hosts the Shuttle SPA via WKWebView.
 ///
@@ -20,6 +22,8 @@ class ViewController: UIViewController, WKNavigationDelegate, WKScriptMessageHan
     private var apiAddr: String?
     private var useVPN = false
     private var configData: String?
+    private var apiBridge: APIBridge!
+    private var fallbackHandler: FallbackHandler!
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -39,6 +43,23 @@ class ViewController: UIViewController, WKNavigationDelegate, WKScriptMessageHan
     private func setupWebView() {
         let contentController = WKUserContentController()
         contentController.add(self, name: "shuttleNative")
+
+        // Register the APIBridge handler for envelope IPC. Used by JS-side
+        // BridgeAdapter when iOS VPN mode is active. Co-exists with the
+        // existing ShuttleVPN capability surface.
+        apiBridge = APIBridge(manager: VPNManager.shared)
+        contentController.add(apiBridge, name: "shuttleBridge")
+        let bridgeBootstrap = WKUserScript(
+            source: shuttleBridgeBootstrapJS,
+            injectionTime: .atDocumentStart,
+            forMainFrameOnly: true
+        )
+        contentController.addUserScript(bridgeBootstrap)
+
+        // Fallback safety net: SPA posts here when the bridge probe fails.
+        // Phase γ (Task 6.4) removes this once TestFlight is green.
+        fallbackHandler = FallbackHandler(inlineHTML: createVPNControlHTML())
+        contentController.add(fallbackHandler, name: "fallback")
 
         // Inject native bridge
         let bridgeScript = WKUserScript(
@@ -81,9 +102,22 @@ class ViewController: UIViewController, WKNavigationDelegate, WKScriptMessageHan
         webView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         webView.navigationDelegate = self
         view.addSubview(webView)
+        apiBridge.webView = webView
+        fallbackHandler.webView = webView
     }
 
     private func loadConfig() {
+        // FORCE_VPN_MODE — XCUITest hook checked BEFORE the config-loading
+        // guard so the test path works on simulators that don't ship a
+        // bundled config.json. Supply an empty stub so setupVPN has
+        // something to forward to the extension.
+        if ProcessInfo.processInfo.environment["FORCE_VPN_MODE"] == "1" {
+            self.configData = "{}"
+            useVPN = true
+            setupVPN()
+            return
+        }
+
         guard let configURL = Bundle.main.url(forResource: "config", withExtension: "json"),
               let configData = try? String(contentsOf: configURL) else {
             print("Failed to load config.json from bundle")
@@ -148,8 +182,19 @@ class ViewController: UIViewController, WKNavigationDelegate, WKScriptMessageHan
         if let apiAddr = apiAddr, let url = URL(string: "http://\(apiAddr)") {
             webView.load(URLRequest(url: url))
         } else if useVPN {
-            // For VPN mode, show a simple native UI or embedded HTML
-            webView.loadHTMLString(createVPNControlHTML(), baseURL: nil)
+            // VPN mode: load the bundled SPA. The build/scripts/build-ios.sh
+            // copies gui/web/dist/* into Shuttle/www/. SPA boot probes
+            // window.ShuttleBridge healthz; on failure it falls back via
+            // FallbackHandler (Task 5.5).
+            if let spaURL = Bundle.main.url(forResource: "index", withExtension: "html", subdirectory: "www") {
+                webView.loadFileURL(spaURL, allowingReadAccessTo: spaURL.deletingLastPathComponent())
+            } else {
+                // Bundle missing the SPA — keep the inline HTML as a last resort.
+                os_log("SPA bundle missing — falling back to inline HTML",
+                       log: OSLog(subsystem: "com.shuttle.app", category: "VC"),
+                       type: .error)
+                webView.loadHTMLString(createVPNControlHTML(), baseURL: nil)
+            }
         }
     }
 

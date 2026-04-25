@@ -1,6 +1,8 @@
-import { createResource, createStream, type Resource, type Stream } from '@/lib/resource.svelte'
+import { createResource, type Resource, type Stream } from '@/lib/resource.svelte'
 import { status as fetchStatus, getTransportStats } from '@/lib/api/endpoints'
 import type { Status, TransportStats } from '@/lib/api/types'
+import type { SpeedSample } from '@/lib/data/topics'
+import { getAdapter } from '@/lib/data'
 
 // ── Status — 3s polling (primary source of truth) ────────────
 // Initial value represents a disconnected state so the UI can render before
@@ -27,15 +29,44 @@ export function useTransportStats(): Resource<TransportStats[]> {
   )
 }
 
-// ── Speed stream — WebSocket push ────────────────────────────
-interface SpeedSample { upload: number; download: number }
+// ── Speed stream — adapter-driven (HttpAdapter via WS, BridgeAdapter via poll)
+//
+// App-singleton: the adapter caches one HttpSubscription per topic, and we
+// memoise the runes-state wrapper here so all callers share the same `data`
+// reactivity. Lifetime is app-scoped — there is no close() because Now and
+// SpeedSparkline are always potentially mounted.
+let _speedStream: Stream<SpeedSample> | null = null
+
 export function useSpeedStream(): Stream<SpeedSample> {
-  return createStream<SpeedSample>(
-    'dashboard.speed',
-    '/api/speed',
-    { initial: { upload: 0, download: 0 } },
-  )
+  if (_speedStream) return _speedStream
+
+  const state = $state<{ data: SpeedSample | undefined; connected: boolean }>({
+    data: { upload: 0, download: 0 },
+    connected: false,
+  })
+
+  const sub = getAdapter().subscribe('speed')
+  // App-lifetime subscription — never explicitly unsubscribed.
+  // TODO(Phase 5): if boot.ts ever swaps the adapter at runtime (e.g. bridge
+  // probe fail → fallback to HttpAdapter, or iOS proxy ↔ VPN mode toggle),
+  // the old adapter's HttpSubscription stays alive holding a WebSocket /
+  // poll timer. Resolve by adding `dispose()` to DataAdapter and calling it
+  // here on swap, or by requiring an app reload across adapter changes.
+  sub.subscribe((msg) => {
+    state.data = msg
+    state.connected = true
+  })
+
+  _speedStream = {
+    get data() { return state.data },
+    get connected() { return state.connected },
+    close() { /* singleton — no-op */ },
+  }
+  return _speedStream
 }
+
+// Test helper — clear the singleton between tests.
+export function __resetSpeedStream(): void { _speedStream = null }
 
 // ── Speed history — rolling 5 min × 5s cadence = 60 samples ──
 // Module-private state, shared across all callers (first-writer wins).
@@ -81,3 +112,6 @@ export function __resetHistory(): void {
   _history.up = []
   _history.down = []
 }
+
+// Test helper — reset the history-pump guard so ensureHistoryPump re-runs.
+export function __resetHistoryInitialized(): void { _historyInitialized = false }

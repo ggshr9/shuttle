@@ -1,11 +1,37 @@
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { setAdapter, __resetAdapter } from '@/lib/data'
+import { HttpAdapter } from '@/lib/data/http-adapter'
 import {
   useSpeedHistory,
   __pushHistorySample,
   __resetHistory,
+  __resetSpeedStream,
+  __resetHistoryInitialized,
 } from '@/lib/resources/status.svelte'
 
-beforeEach(() => __resetHistory())
+// Minimal WebSocket stub — HttpAdapter opens a WS for each topic but the
+// speed-history tests never push real data through it.
+class FakeWebSocket {
+  static instances: FakeWebSocket[] = []
+  readyState = 0
+  onopen?: () => void
+  onmessage?: (ev: { data: string }) => void
+  onclose?: () => void
+  onerror?: () => void
+  constructor(public url: string) { FakeWebSocket.instances.push(this) }
+  send(_: string) {}
+  close() { this.readyState = 3; this.onclose?.() }
+}
+
+beforeEach(() => {
+  FakeWebSocket.instances = []
+  ;(globalThis as any).WebSocket = FakeWebSocket
+  __resetAdapter()
+  __resetSpeedStream()
+  __resetHistoryInitialized()
+  __resetHistory()
+  setAdapter(new HttpAdapter())
+})
 
 describe('useSpeedHistory', () => {
   it('starts empty', () => {

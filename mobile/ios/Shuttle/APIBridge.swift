@@ -1,0 +1,131 @@
+import Foundation
+import WebKit
+import os.log
+import SharedBridge
+
+/// Closure type used to forward a serialised envelope to the Network Extension.
+/// Parameters: data (serialised APIRequest), timeout in seconds, completion with
+/// raw response bytes (nil = timeout / transport failure).
+typealias EnvelopeSender = (Data, TimeInterval, @escaping (Data?) -> Void) -> Void
+
+/// APIBridge wires JS-side `window.ShuttleBridge.send(envelope)` to native
+/// `VPNManager.sendToExtension`. Each message from JS carries a unique id;
+/// the response is sent back via `evaluateJavaScript("window.ShuttleBridge._complete(id, response)")`.
+///
+/// The `send` closure is injected at construction time so tests can supply a
+/// stub without subclassing VPNManager or constructing WKScriptMessage.
+final class APIBridge: NSObject, WKScriptMessageHandler {
+    weak var webView: WKWebView?
+    private let send: EnvelopeSender
+    private let log = OSLog(subsystem: "com.shuttle.app", category: "APIBridge")
+
+    init(send: @escaping EnvelopeSender) {
+        self.send = send
+        super.init()
+    }
+
+    /// Convenience initialiser that forwards to `manager.sendToExtension`.
+    convenience init(manager: VPNManager) {
+        self.init(send: { data, timeout, completion in
+            manager.sendToExtension(data, timeout: timeout, completion: completion)
+        })
+    }
+
+    func userContentController(_ ucc: WKUserContentController, didReceive msg: WKScriptMessage) {
+        guard let body = msg.body as? [String: Any],
+              let id = body["id"] as? Int,
+              let envelopeAny = body["envelope"] as? [String: Any] else {
+            os_log("APIBridge: malformed message", log: log, type: .error)
+            return
+        }
+        handle(id: id, envelopeAny: envelopeAny)
+    }
+
+    /// Testable seam: serialise `envelopeAny` and forward via the send closure.
+    /// Called by `userContentController(_:didReceive:)` after parsing, and
+    /// directly by unit tests to bypass WKScriptMessage construction.
+    internal func handle(id: Int, envelopeAny: [String: Any]) {
+        guard let envelopeData = try? JSONSerialization.data(withJSONObject: envelopeAny) else {
+            failJS(id: id, message: "envelope encode failed")
+            return
+        }
+
+        send(envelopeData, 30) { [weak self] response in
+            self?.completeJS(id: id, response: response)
+        }
+    }
+
+    private func completeJS(id: Int, response: Data?) {
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self, let webView = self.webView else { return }
+            if let data = response, let raw = String(data: data, encoding: .utf8) {
+                // U+2028 / U+2029 are valid JSON string contents but break JS
+                // source; substitute the \u-escaped form so evaluateJavaScript
+                // can parse the literal.
+                let json = APIBridge.escapeForJS(raw)
+                let js = "window.ShuttleBridge._complete(\(id), \(json))"
+                webView.evaluateJavaScript(js, completionHandler: nil)
+            } else {
+                self.failJS(id: id, message: "IPC timeout or no response")
+            }
+        }
+    }
+
+    private func failJS(id: Int, message: String) {
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self, let webView = self.webView else { return }
+            // Escape JS-source-breaking characters in the user-visible message.
+            // Newlines, quotes, backslashes, and the JS-only line terminators
+            // U+2028 / U+2029 all need escaping for evaluateJavaScript.
+            let safeMsg = message
+                .replacingOccurrences(of: "\\", with: "\\\\")
+                .replacingOccurrences(of: "'", with: "\\'")
+                .replacingOccurrences(of: "\n", with: "\\n")
+                .replacingOccurrences(of: "\u{2028}", with: "\\u2028")
+                .replacingOccurrences(of: "\u{2029}", with: "\\u2029")
+            let js = "window.ShuttleBridge._fail(\(id), '\(safeMsg)')"
+            webView.evaluateJavaScript(js, completionHandler: nil)
+        }
+    }
+
+    /// JSON allows U+2028/U+2029 raw inside string literals, but JavaScript
+    /// treats them as line terminators in source. Substitute the escape form
+    /// so a JSON document interpolated into a JS source string parses.
+    private static func escapeForJS(_ json: String) -> String {
+        json
+            .replacingOccurrences(of: "\u{2028}", with: "\\u2028")
+            .replacingOccurrences(of: "\u{2029}", with: "\\u2029")
+    }
+}
+
+/// JS injected at document start. Must match the BridgeTransport contract in
+/// gui/web/src/lib/data/bridge-transport.ts: window.ShuttleBridge.send(env)
+/// returns a Promise resolved by _complete or rejected by _fail with a
+/// matching id.
+let shuttleBridgeBootstrapJS: String = """
+window.ShuttleBridge = (() => {
+  const pending = new Map();
+  let nextId = 0;
+  return {
+    send(envelope) {
+      const id = ++nextId;
+      return new Promise((resolve, reject) => {
+        pending.set(id, { resolve, reject });
+        webkit.messageHandlers.shuttleBridge.postMessage({ id, envelope });
+      });
+    },
+    _complete(id, response) {
+      const p = pending.get(id);
+      if (!p) return;
+      pending.delete(id);
+      p.resolve(response);
+    },
+    _fail(id, message) {
+      const p = pending.get(id);
+      if (!p) return;
+      pending.delete(id);
+      p.reject(new Error(message));
+    },
+  };
+})();
+"""

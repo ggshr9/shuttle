@@ -85,15 +85,70 @@ version, and repro steps.
 - [ ] Legacy URL in the WebView (visit `#/dashboard`) → redirects to `#/`
       with a one-time toast; second visit is silent
 
+## iOS VPN mode (real device, TestFlight Phase β build)
+
+These items only exist in iOS VPN mode. On other runtimes the same
+interactions are exercised by the cross-cutting checklist above —
+unification means a tester reading this section should see no
+behavioural difference from desktop or Android, only different
+performance characteristics where polling stands in for WebSockets.
+
+Pre-requisites:
+- TestFlight build with bridge enabled (Phase β), real iPhone iOS 15+
+- Wi-Fi or cellular for the actual proxied traffic
+- `?bridge=auto` (default) — for debugging swap to `?bridge=0` to force
+  HTTP fallback or `?bridge=1` to force bridge install regardless of
+  probe outcome
+
+- [ ] First connect: system VPN-permission dialog appears, allow → SPA
+      first paint <3s
+- [ ] Now page Power button: Connect → Connected feedback within 2s
+      (matches Android VPN; perceptibly equivalent to desktop)
+- [ ] Servers page: list loads, QR scan import, edit name, delete —
+      identical flows to desktop / Android
+- [ ] Servers page with 500+ entries: pagination is smooth, no jank
+      (paginated requests stay under the 192 KB envelope cap)
+- [ ] Activity → Logs: new lines appear within 1s (poll cadence; user
+      should not perceive a difference from desktop's WS-pushed feed)
+- [ ] Activity → Logs continuous 5 min: no dropped lines, no duplicate
+      lines, scroll auto-follow stays in sync
+- [ ] Settings: change theme persists across cold-restart of the app
+- [ ] Background 30s → foreground: SPA recovers without white-screen,
+      connection-state dot returns to green within 3s
+- [ ] Background 5min → foreground: may show one-time "event stream
+      gap recovered" toast; servers/status data refreshes to current truth
+- [ ] Force-quit app while VPN is up → relaunch: SPA reloads, bridge
+      reconnects, no Connect/Disconnect toggle desync
+- [ ] Switch config from VPN → proxy mode → back to VPN: each transition
+      reloads the WebView smoothly, no stuck state
+- [ ] (Diagnostic only) `?bridge=0` URL — confirms inline-HTML fallback
+      still loads if needed for triage during Phase β
+
+### Phase γ acceptance gate (Task 6.4 — removes fallback HTML)
+
+Task 6.4 lands once these hold. The criteria are deliberately what we
+can actually measure — Shuttle is a privacy-sensitive VPN tool and does
+not phone home (spec §11.3 *不打远程上报*), so cohort metrics aren't
+available. Instead, gate on direct evidence:
+
+- [ ] iOS VPN-mode smoke checklist (the section above) passes on ≥3
+      developer TestFlight devices, run by ≥2 different testers
+- [ ] No bridge-failure crash reports in 7 days of TestFlight (Apple's
+      Crashes dashboard — opt-in but visible to the publisher)
+- [ ] No GitHub issues / Telegram / direct feedback reporting iOS VPN
+      regressions during the same 7-day window
+- [ ] On each test device, Settings → Diagnostics shows <1 fallback
+      trigger per 24 h (per-device counter, no aggregation needed —
+      see spec §11.3)
+- [ ] Manual perf check: a test device running for 24 h shows extension
+      memory <40 MB via Xcode Instruments / Console.app (spot-check, not
+      cohort)
+
 ## Known gaps
 
-- iOS VPN-mode full-SPA mode is not wired yet (Phase 4 left the inline
-  HTML fallback). VPN mode on iOS continues to show the simplified
-  Connect button rather than the full Svelte UI. The follow-up spec
-  covers the extension↔app IPC needed to bridge this.
 - `subscribeStatus` bridge action returns `unsupported` on both platforms
-  — status polling via REST is adequate for Phase 4; a native push path
-  is a later optimization.
+  — status polling via REST is adequate; a native push path is a later
+  optimization.
 - Navigation accessibility: chip-row `role="radio"` buttons on
   `SourceFilter` don't yet support arrow-key navigation — touch-only
   usable, keyboard users fall back to Tab focus.

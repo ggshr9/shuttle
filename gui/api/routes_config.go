@@ -3,6 +3,7 @@ package api
 import (
 	"encoding/json"
 	"net/http"
+	"strconv"
 
 	"github.com/shuttleX/shuttle/config"
 	"github.com/shuttleX/shuttle/engine"
@@ -46,9 +47,40 @@ func registerConfigRoutes(mux *http.ServeMux, eng *engine.Engine) {
 
 	mux.HandleFunc("GET /api/config/servers", func(w http.ResponseWriter, r *http.Request) {
 		cfg := eng.Config()
+		servers := cfg.Servers
+
+		// Optional pagination — preserves backward compatibility:
+		// without ?size, the full list is returned as before.
+		size, _ := strconv.Atoi(r.URL.Query().Get("size"))
+		page, _ := strconv.Atoi(r.URL.Query().Get("page"))
+		if size > 0 {
+			if size > 200 {
+				size = 200
+			}
+			if page < 0 {
+				page = 0
+			}
+			start := page * size
+			end := start + size
+			if start > len(servers) {
+				start = len(servers)
+			}
+			if end > len(servers) {
+				end = len(servers)
+			}
+			writeJSON(w, map[string]any{
+				"active":  cfg.Server,
+				"servers": servers[start:end],
+				"total":   len(servers),
+				"page":    page,
+				"size":    size,
+			})
+			return
+		}
+
 		writeJSON(w, map[string]any{
 			"active":  cfg.Server,
-			"servers": cfg.Servers,
+			"servers": servers,
 		})
 	})
 

@@ -1,5 +1,6 @@
 import NetworkExtension
 import os.log
+import SharedBridge
 
 /// PacketTunnelProvider implements the iOS Network Extension for VPN functionality.
 ///
@@ -84,7 +85,16 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     }
 
     override func handleAppMessage(_ messageData: Data, completionHandler: ((Data?) -> Void)?) {
-        // Handle messages from the main app (e.g., status queries, config updates)
+        // 1) New envelope path: APIRequest from BridgeAdapter / APIBridge.
+        if let req = try? JSONDecoder().decode(APIRequest.self, from: messageData) {
+            forwardToLocalAPI(req) { resp in
+                let data = (try? JSONEncoder().encode(resp)) ?? Data()
+                completionHandler?(data)
+            }
+            return
+        }
+
+        // 2) Legacy string-command path. Removed in Phase γ (Task 6.4).
         guard let message = String(data: messageData, encoding: .utf8) else {
             completionHandler?(nil)
             return
@@ -250,5 +260,70 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
                 self.packetFlow.writePackets([data], withProtocols: [proto])
             }
         }
+    }
+
+    /// Forward an APIRequest envelope to the in-extension Go engine HTTP
+    /// listener at 127.0.0.1:apiAddr and return an APIResponse.
+    private func forwardToLocalAPI(_ req: APIRequest, completion: @escaping (APIResponse) -> Void) {
+        guard let addr = apiAddr else {
+            completion(.engineNotReady())
+            return
+        }
+
+        // apiAddr from MobileStart may be "0.0.0.0:port" or "127.0.0.1:port".
+        // Always dial loopback regardless — the engine listens on all
+        // interfaces but extension talks to itself.
+        let port = addr.split(separator: ":").last.map(String.init) ?? ""
+        guard !port.isEmpty, let portNum = Int(port) else {
+            completion(.transportError("invalid apiAddr: \(addr)"))
+            return
+        }
+
+        var components = URLComponents()
+        components.scheme = "http"
+        components.host = "127.0.0.1"
+        components.port = portNum
+        // The path may already contain a query string (e.g. /api/events?since=5).
+        if let qIdx = req.path.firstIndex(of: "?") {
+            components.path = String(req.path[..<qIdx])
+            components.query = String(req.path[req.path.index(after: qIdx)...])
+        } else {
+            components.path = req.path
+        }
+        guard let url = components.url else {
+            completion(.transportError("invalid URL"))
+            return
+        }
+
+        var urlReq = URLRequest(url: url)
+        urlReq.httpMethod = req.method
+        for (k, v) in req.headers {
+            urlReq.setValue(v, forHTTPHeaderField: k)
+        }
+        if let b64 = req.body, let body = Data(base64Encoded: b64) {
+            urlReq.httpBody = body
+        }
+        urlReq.timeoutInterval = 25  // Spec §6.4 — leave 5s for IPC roundtrip within main app's 30s envelope timeout
+
+        URLSession.shared.dataTask(with: urlReq) { data, response, error in
+            if let error = error {
+                completion(.transportError("\(error)"))
+                return
+            }
+            guard let http = response as? HTTPURLResponse else {
+                completion(.transportError("non-http response"))
+                return
+            }
+            // Spec §6.4: enforce 192 KB response body cap to stay safely under
+            // the documented sendProviderMessage payload ceiling.
+            let bodyData = data ?? Data()
+            if bodyData.count > 192 * 1024 {
+                completion(APIResponse(status: -1, headers: [:], body: "", error: "response too large (\(bodyData.count) bytes, max 192KB)"))
+                return
+            }
+            let bodyB64 = bodyData.base64EncodedString()
+            let headers = (http.allHeaderFields as? [String: String]) ?? [:]
+            completion(APIResponse(status: http.statusCode, headers: headers, body: bodyB64, error: nil))
+        }.resume()
     }
 }
