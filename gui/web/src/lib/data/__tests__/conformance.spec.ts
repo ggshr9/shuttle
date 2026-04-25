@@ -97,20 +97,6 @@ describe.each(factories)('%s adapter conformance', (_name, factory) => {
     })
 
     it('honors AbortSignal', async () => {
-      if (_name === 'bridge') {
-        // BridgeAdapter tunnels requests through a native IPC envelope; the
-        // bridge protocol has no signal/cancellation channel. Verify the happy
-        // path still resolves cleanly (abort is a no-op, not a hang).
-        ;(globalThis as any).fetch = vi.fn(async () =>
-          new Response(JSON.stringify({ ok: true }), { status: 200, headers: { 'content-type': 'application/json' } }))
-        const ctl = new AbortController()
-        const p = adapter.request({ method: 'GET', path: '/x', signal: ctl.signal })
-        ctl.abort()
-        // Request should still resolve — bridge does not support cancellation.
-        await expect(p).resolves.toBeDefined()
-        return
-      }
-      // HTTP path — signal is forwarded to fetch; abort cancels the request.
       ;(globalThis as any).fetch = vi.fn(async (_: any, init: any) => {
         return new Promise<Response>((_resolve, reject) => {
           init.signal?.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')))

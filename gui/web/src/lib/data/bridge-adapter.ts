@@ -39,10 +39,34 @@ export class BridgeAdapter implements DataAdapter {
       body: opts.body !== undefined ? btoa(JSON.stringify(opts.body)) : undefined,
     }
 
+    // Pre-check for already-aborted signal — short-circuit before envelope IPC.
+    if (opts.signal?.aborted) {
+      throw new DOMException('Aborted', 'AbortError')
+    }
+
     let resp
     try {
-      resp = await this.transport.send(envelope)
+      if (opts.signal) {
+        // The native envelope can't be cancelled mid-flight, but we honor the
+        // contract by rejecting locally as soon as the signal aborts. The
+        // envelope completes natively and its response is discarded.
+        resp = await Promise.race([
+          this.transport.send(envelope),
+          new Promise<never>((_, reject) => {
+            opts.signal!.addEventListener(
+              'abort',
+              () => reject(new DOMException('Aborted', 'AbortError')),
+              { once: true },
+            )
+          }),
+        ])
+      } else {
+        resp = await this.transport.send(envelope)
+      }
     } catch (err) {
+      if (err instanceof DOMException && err.name === 'AbortError') {
+        throw err   // Don't wrap as TransportError
+      }
       throw new TransportError(err, err instanceof Error ? err.message : String(err))
     }
 
