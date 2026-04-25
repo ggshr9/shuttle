@@ -8,6 +8,7 @@ import {
   type DataAdapter, type RequestOptions, type SubscribeOptions, type Subscription,
 } from './types'
 import { safeJson } from './internal/json'
+import { Diagnostics } from './diagnostics.svelte'
 
 export interface BridgeAdapterOptions {
   authToken?: () => string
@@ -16,6 +17,7 @@ export interface BridgeAdapterOptions {
 
 export class BridgeAdapter implements DataAdapter {
   readonly connectionState = new ConnectionStateController()
+  readonly diagnostics = new Diagnostics()
   private readonly subs = new Map<TopicKey, BridgeSubscription<any>>()
   private readonly transport: BridgeTransport
   private readonly authToken: () => string
@@ -26,6 +28,28 @@ export class BridgeAdapter implements DataAdapter {
   }
 
   async request<T = unknown>(opts: RequestOptions): Promise<T> {
+    const t0 = (typeof performance !== 'undefined' ? performance : Date).now()
+    let ok = false
+    let reason: string | undefined
+    try {
+      const result = await this.#requestImpl<T>(opts)
+      ok = true
+      return result
+    } catch (err) {
+      if (err instanceof DOMException && err.name === 'AbortError') {
+        // user-initiated abort — count as request, not error
+        ok = true
+        throw err
+      }
+      reason = err instanceof Error ? err.message : String(err)
+      throw err
+    } finally {
+      const dt = (typeof performance !== 'undefined' ? performance : Date).now() - t0
+      this.diagnostics.recordRequest(dt, ok, reason)
+    }
+  }
+
+  async #requestImpl<T = unknown>(opts: RequestOptions): Promise<T> {
     const token = this.authToken()
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
