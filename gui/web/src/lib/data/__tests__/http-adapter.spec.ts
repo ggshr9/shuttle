@@ -2,11 +2,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { HttpAdapter } from '../http-adapter'
 import { ApiError, TransportError } from '../types'
 
-function mockFetch(impl: (req: Request) => Promise<Response> | Response) {
-  ;(globalThis as any).fetch = vi.fn(async (input: any, init?: any) => {
-    const req = new Request(input, init)
-    return impl(req)
-  })
+function mockFetch(impl: () => Promise<Response> | Response) {
+  ;(globalThis as any).fetch = vi.fn(() => Promise.resolve(impl()))
 }
 
 describe('HttpAdapter.request', () => {

@@ -21,7 +21,7 @@ export class HttpAdapter implements DataAdapter {
   private readonly defaultTimeoutMs: number
 
   constructor(opts: HttpAdapterOptions = {}) {
-    this.base = opts.base ?? (typeof window !== 'undefined' ? window.location.origin : '')
+    this.base = opts.base ?? ''
     this.authToken = opts.authToken ?? (() => (typeof window !== 'undefined' ? (window as any).__SHUTTLE_AUTH_TOKEN__ ?? '' : ''))
     this.defaultTimeoutMs = opts.defaultTimeoutMs ?? 10_000
   }
@@ -29,7 +29,9 @@ export class HttpAdapter implements DataAdapter {
   async request<T = unknown>(opts: RequestOptions): Promise<T> {
     const { method, path, body, headers, signal, timeoutMs } = opts
     const ctrl = new AbortController()
-    const linked = signal ? linkSignals(signal, ctrl.signal) : ctrl.signal
+    const linkResult = signal
+      ? linkSignals(signal, ctrl.signal)
+      : { signal: ctrl.signal, cleanup: () => {} }
     const timer = setTimeout(() => ctrl.abort(), timeoutMs ?? this.defaultTimeoutMs)
     try {
       const tok = this.authToken()
@@ -38,7 +40,7 @@ export class HttpAdapter implements DataAdapter {
         ...(headers ?? {}),
       }
       if (tok && !finalHeaders['Authorization']) finalHeaders['Authorization'] = `Bearer ${tok}`
-      const init: RequestInit = { method, headers: finalHeaders, signal: linked }
+      const init: RequestInit = { method, headers: finalHeaders, signal: linkResult.signal }
       if (body !== undefined) init.body = JSON.stringify(body)
 
       let res: Response
@@ -59,10 +61,13 @@ export class HttpAdapter implements DataAdapter {
       return parsed as T
     } finally {
       clearTimeout(timer)
+      linkResult.cleanup()
     }
   }
 
   subscribe<K extends TopicKey>(topic: K, _opts?: SubscribeOptions<K>): Subscription<TopicValue<K>> {
+    // _opts (cursor / pollInterval) is wired in BridgeSubscription (Task 4.2).
+    // HttpSubscription drives its own reconnect cadence and reads no cursor.
     let sub = this.subs.get(topic) as HttpSubscription<TopicValue<K>> | undefined
     if (!sub) {
       const cfg = topicConfig[topic]
@@ -76,17 +81,34 @@ export class HttpAdapter implements DataAdapter {
   }
 }
 
+// Parses JSON, falling back to the raw string on parse failure. On the
+// success (2xx) path callers consume the return as T; a raw-string return
+// would indicate a server contract violation (non-JSON body for a 2xx
+// response). On the error (4xx/5xx) path the ApiError extraction guards
+// against non-object parsed shapes, so the fallback is safe there.
 function safeJson(s: string): unknown {
   try { return JSON.parse(s) } catch { return s }
 }
 
-function linkSignals(a: AbortSignal, b: AbortSignal): AbortSignal {
+function linkSignals(a: AbortSignal, b: AbortSignal): { signal: AbortSignal; cleanup: () => void } {
   const ctrl = new AbortController()
+  if (a.aborted) {
+    ctrl.abort(a.reason)
+    return { signal: ctrl.signal, cleanup: () => {} }
+  }
+  if (b.aborted) {
+    ctrl.abort(b.reason)
+    return { signal: ctrl.signal, cleanup: () => {} }
+  }
   const onA = () => ctrl.abort(a.reason)
   const onB = () => ctrl.abort(b.reason)
-  if (a.aborted) ctrl.abort(a.reason)
-  if (b.aborted) ctrl.abort(b.reason)
   a.addEventListener('abort', onA, { once: true })
   b.addEventListener('abort', onB, { once: true })
-  return ctrl.signal
+  return {
+    signal: ctrl.signal,
+    cleanup: () => {
+      a.removeEventListener('abort', onA)
+      b.removeEventListener('abort', onB)
+    },
+  }
 }
