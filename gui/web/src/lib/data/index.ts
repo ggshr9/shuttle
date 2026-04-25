@@ -10,5 +10,10 @@ export function getAdapter(): DataAdapter {
   return _adapter
 }
 
+/** Returns null instead of throwing — for early-boot paths that may run before setAdapter. */
+export function tryGetAdapter(): DataAdapter | null {
+  return _adapter
+}
+
 /** Test-only helper. */
 export function __resetAdapter(): void { _adapter = null }
