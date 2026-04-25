@@ -3,17 +3,32 @@ import WebKit
 import os.log
 import SharedBridge
 
+/// Closure type used to forward a serialised envelope to the Network Extension.
+/// Parameters: data (serialised APIRequest), timeout in seconds, completion with
+/// raw response bytes (nil = timeout / transport failure).
+typealias EnvelopeSender = (Data, TimeInterval, @escaping (Data?) -> Void) -> Void
+
 /// APIBridge wires JS-side `window.ShuttleBridge.send(envelope)` to native
 /// `VPNManager.sendToExtension`. Each message from JS carries a unique id;
 /// the response is sent back via `evaluateJavaScript("window.ShuttleBridge._complete(id, response)")`.
+///
+/// The `send` closure is injected at construction time so tests can supply a
+/// stub without subclassing VPNManager or constructing WKScriptMessage.
 final class APIBridge: NSObject, WKScriptMessageHandler {
     weak var webView: WKWebView?
-    private let manager: VPNManager
+    private let send: EnvelopeSender
     private let log = OSLog(subsystem: "com.shuttle.app", category: "APIBridge")
 
-    init(manager: VPNManager) {
-        self.manager = manager
+    init(send: @escaping EnvelopeSender) {
+        self.send = send
         super.init()
+    }
+
+    /// Convenience initialiser that forwards to `manager.sendToExtension`.
+    convenience init(manager: VPNManager) {
+        self.init(send: { data, timeout, completion in
+            manager.sendToExtension(data, timeout: timeout, completion: completion)
+        })
     }
 
     func userContentController(_ ucc: WKUserContentController, didReceive msg: WKScriptMessage) {
@@ -23,13 +38,19 @@ final class APIBridge: NSObject, WKScriptMessageHandler {
             os_log("APIBridge: malformed message", log: log, type: .error)
             return
         }
+        handle(id: id, envelopeAny: envelopeAny)
+    }
 
+    /// Testable seam: serialise `envelopeAny` and forward via the send closure.
+    /// Called by `userContentController(_:didReceive:)` after parsing, and
+    /// directly by unit tests to bypass WKScriptMessage construction.
+    internal func handle(id: Int, envelopeAny: [String: Any]) {
         guard let envelopeData = try? JSONSerialization.data(withJSONObject: envelopeAny) else {
             failJS(id: id, message: "envelope encode failed")
             return
         }
 
-        manager.sendToExtension(envelopeData, timeout: 30) { [weak self] response in
+        send(envelopeData, 30) { [weak self] response in
             self?.completeJS(id: id, response: response)
         }
     }
