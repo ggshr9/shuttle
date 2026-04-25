@@ -41,17 +41,23 @@ export async function boot(): Promise<void> {
     ? new URLSearchParams(location.search).get('bridge')
     : null
 
+  // ?bridge=0 — force HTTP path even if bridge is present. Debug only.
   if (force === '0') {
     setAdapter(new HttpAdapter())
     return
   }
 
+  // Wait briefly for the user-script-injected window.ShuttleBridge to appear.
+  // The script is injected at document start so it should be there before any
+  // module code, but defensively allow a short window for race conditions.
   if (typeof window !== 'undefined' && !window.ShuttleBridge) {
     await new Promise((r) => setTimeout(r, 100))
   }
 
+  // No bridge present → not iOS VPN mode → install HttpAdapter.
   if (typeof window === 'undefined' || !window.ShuttleBridge) {
     if (force === '1') {
+      // Force flag asked for bridge but it's not there — signal fallback.
       requestFallback('ShuttleBridge missing under bridge=1 force flag')
       return
     }
@@ -59,6 +65,7 @@ export async function boot(): Promise<void> {
     return
   }
 
+  // Bridge present — probe healthz before installing.
   const bridge = new BridgeAdapter()
   try {
     await Promise.race([
@@ -68,14 +75,20 @@ export async function boot(): Promise<void> {
     setAdapter(bridge)
   } catch (err) {
     if (force === '1') {
+      // ?bridge=1 — install bridge anyway so the developer can reproduce
+      // the failing path without the SPA being torn down by FallbackHandler.
       setAdapter(bridge)
       return
     }
     const reason = String(err instanceof Error ? err.message : err)
     requestFallback(reason, bridge)   // bridge instance carries diagnostics
+    // Don't register the unhandledrejection listener — the WebView is about
+    // to be torn down by FallbackHandler.
     return
   }
 
+  // Tagged unhandled-rejection escape hatch — adapter code can throw with
+  // [bridge-fatal] in the message to force a fallback signal mid-session.
   window.addEventListener?.('unhandledrejection', (ev) => {
     if (typeof ev.reason === 'object' && ev.reason && String(ev.reason).includes('[bridge-fatal]')) {
       requestFallback(String(ev.reason), tryGetAdapter())

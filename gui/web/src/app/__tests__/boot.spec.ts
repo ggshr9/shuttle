@@ -95,11 +95,28 @@ describe('boot — fallback diagnostics recording', () => {
     const post = vi.fn()
     ;(window as any).webkit = { messageHandlers: { fallback: { postMessage: post } } }
 
+    let storedAtPostTime: string | null = null
+    post.mockImplementation(() => {
+      storedAtPostTime = localStorage.getItem('shuttle.diag.fallbacks')
+    })
+
     await boot()
     expect(post).toHaveBeenCalled()
-    const stored = localStorage.getItem('shuttle.diag.fallbacks')
-    expect(stored).toBeTruthy()
-    const parsed = JSON.parse(stored!)
+    expect(storedAtPostTime).toBeTruthy()
+    const parsed = JSON.parse(storedAtPostTime!)
     expect(parsed.total).toBeGreaterThanOrEqual(1)
+  })
+
+  it('does not register unhandledrejection listener when probe fails', async () => {
+    const post = vi.fn()
+    ;(window as any).webkit = { messageHandlers: { fallback: { postMessage: post } } }
+    ;(window as any).ShuttleBridge = { send: async () => { throw new Error('dead') } }
+    const addSpy = vi.spyOn(window, 'addEventListener')
+
+    await boot()
+
+    const listenerCalls = addSpy.mock.calls.filter(c => c[0] === 'unhandledrejection')
+    expect(listenerCalls).toHaveLength(0)
+    addSpy.mockRestore()
   })
 })
