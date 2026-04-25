@@ -74,9 +74,12 @@ func spliceOne(srcFD, dstFD int, pipe *splicePair) (int64, error) {
 			remain := n
 			for remain > 0 {
 				written, werr := unix.Splice(pipe.r, nil, dstFD, nil, int(remain), unix.SPLICE_F_MOVE|unix.SPLICE_F_NONBLOCK)
+				// unix.Splice returns int on 32-bit Linux (arm, mipsle) and
+				// int64 elsewhere. Wide-cast both ways for portability — the
+				// gomobile cross-compile to armeabi-v7a otherwise fails.
 				if written > 0 {
-					remain -= written
-					total += written
+					remain -= int(written)
+					total += int64(written)
 				}
 				if werr != nil {
 					return total, werr
