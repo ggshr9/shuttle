@@ -126,14 +126,23 @@ Pre-requisites:
 
 ### Phase γ acceptance gate (Task 6.4 — removes fallback HTML)
 
-Task 6.4 removes the inline-HTML safety net and the legacy string-
-command branch once all of the following hold for 72 h on TestFlight
-without bridge-failure reports:
+Task 6.4 lands once these hold. The criteria are deliberately what we
+can actually measure — Shuttle is a privacy-sensitive VPN tool and does
+not phone home (spec §11.3 *不打远程上报*), so cohort metrics aren't
+available. Instead, gate on direct evidence:
 
-- [ ] Bridge probe failure rate <0.1% across the active TestFlight cohort
-- [ ] Bridge RTT p95 <300 ms across 10+ device samples
-- [ ] Extension steady-state memory <40 MB after 24 h continuous run
-- [ ] No user-reported VPN-mode regressions
+- [ ] iOS VPN-mode smoke checklist (the section above) passes on ≥3
+      developer TestFlight devices, run by ≥2 different testers
+- [ ] No bridge-failure crash reports in 7 days of TestFlight (Apple's
+      Crashes dashboard — opt-in but visible to the publisher)
+- [ ] No GitHub issues / Telegram / direct feedback reporting iOS VPN
+      regressions during the same 7-day window
+- [ ] On each test device, Settings → Diagnostics shows <1 fallback
+      trigger per 24 h (per-device counter, no aggregation needed —
+      see spec §11.3)
+- [ ] Manual perf check: a test device running for 24 h shows extension
+      memory <40 MB via Xcode Instruments / Console.app (spot-check, not
+      cohort)
 
 ## Known gaps
 

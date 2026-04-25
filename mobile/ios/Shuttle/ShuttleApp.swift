@@ -107,21 +107,23 @@ class ViewController: UIViewController, WKNavigationDelegate, WKScriptMessageHan
     }
 
     private func loadConfig() {
+        // FORCE_VPN_MODE — XCUITest hook checked BEFORE the config-loading
+        // guard so the test path works on simulators that don't ship a
+        // bundled config.json. Supply an empty stub so setupVPN has
+        // something to forward to the extension.
+        if ProcessInfo.processInfo.environment["FORCE_VPN_MODE"] == "1" {
+            self.configData = "{}"
+            useVPN = true
+            setupVPN()
+            return
+        }
+
         guard let configURL = Bundle.main.url(forResource: "config", withExtension: "json"),
               let configData = try? String(contentsOf: configURL) else {
             print("Failed to load config.json from bundle")
             return
         }
         self.configData = configData
-
-        // FORCE_VPN_MODE — XCUITest hook that bypasses config-driven mode
-        // selection so testSPALoadsInVPNMode can exercise the VPN path on a
-        // fresh simulator without crafting a tun-enabled config.
-        if ProcessInfo.processInfo.environment["FORCE_VPN_MODE"] == "1" {
-            useVPN = true
-            setupVPN()
-            return
-        }
 
         // Check if VPN mode is enabled
         if let data = configData.data(using: .utf8),
