@@ -36,9 +36,10 @@ rm -rf "${WWW_DIR:?}"/*
 cp -R "$ROOT/gui/web/dist"/. "$WWW_DIR/"
 
 # 3. gomobile bind → Shuttle.xcframework.
+# -checklinkname=0 — see build-android.sh comment; anet linkname workaround.
 (cd "$ROOT" && gomobile bind \
     -target=ios,iossimulator \
-    -ldflags="-s -w -X main.version=${VERSION}" \
+    -ldflags="-s -w -checklinkname=0 -X main.version=${VERSION}" \
     -o "$ROOT/mobile/ios/Shuttle.xcframework" \
     ./mobile)
 
