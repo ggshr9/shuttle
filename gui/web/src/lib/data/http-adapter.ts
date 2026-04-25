@@ -6,6 +6,7 @@ import {
   ApiError, TransportError,
   type DataAdapter, type RequestOptions, type SubscribeOptions, type Subscription,
 } from './types'
+import { safeJson } from './internal/json'
 
 export interface HttpAdapterOptions {
   base?: string                    // URL base, default ''
@@ -79,15 +80,6 @@ export class HttpAdapter implements DataAdapter {
       subscribe: cb => sub!.add(cb),
     }
   }
-}
-
-// Parses JSON, falling back to the raw string on parse failure. On the
-// success (2xx) path callers consume the return as T; a raw-string return
-// would indicate a server contract violation (non-JSON body for a 2xx
-// response). On the error (4xx/5xx) path the ApiError extraction guards
-// against non-object parsed shapes, so the fallback is safe there.
-function safeJson(s: string): unknown {
-  try { return JSON.parse(s) } catch { return s }
 }
 
 function linkSignals(a: AbortSignal, b: AbortSignal): { signal: AbortSignal; cleanup: () => void } {

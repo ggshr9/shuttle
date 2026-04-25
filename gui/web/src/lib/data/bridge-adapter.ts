@@ -7,6 +7,7 @@ import {
   ApiError, TransportError,
   type DataAdapter, type RequestOptions, type SubscribeOptions, type Subscription,
 } from './types'
+import { safeJson } from './internal/json'
 
 export interface BridgeAdapterOptions {
   authToken?: () => string
@@ -45,6 +46,7 @@ export class BridgeAdapter implements DataAdapter {
     }
 
     let resp
+    let abortCleanup = () => {}
     try {
       if (opts.signal) {
         // The native envelope can't be cancelled mid-flight, but we honor the
@@ -53,11 +55,9 @@ export class BridgeAdapter implements DataAdapter {
         resp = await Promise.race([
           this.transport.send(envelope),
           new Promise<never>((_, reject) => {
-            opts.signal!.addEventListener(
-              'abort',
-              () => reject(new DOMException('Aborted', 'AbortError')),
-              { once: true },
-            )
+            const handler = () => reject(new DOMException('Aborted', 'AbortError'))
+            opts.signal!.addEventListener('abort', handler, { once: true })
+            abortCleanup = () => opts.signal!.removeEventListener('abort', handler)
           }),
         ])
       } else {
@@ -68,6 +68,8 @@ export class BridgeAdapter implements DataAdapter {
         throw err   // Don't wrap as TransportError
       }
       throw new TransportError(err, err instanceof Error ? err.message : String(err))
+    } finally {
+      abortCleanup()
     }
 
     if (resp.status === -1 || resp.error) {
@@ -102,12 +104,4 @@ export class BridgeAdapter implements DataAdapter {
       subscribe: cb => sub!.add(cb),
     }
   }
-}
-
-// Parses JSON, falling back to the raw string on parse failure. On the
-// success (2xx) path callers consume the return as T; a raw-string return
-// would indicate a server contract violation. On the error (4xx/5xx) path
-// the ApiError extraction guards against non-object parsed shapes.
-function safeJson(s: string): unknown {
-  try { return JSON.parse(s) } catch { return s }
 }

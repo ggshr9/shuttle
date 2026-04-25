@@ -68,6 +68,7 @@ describe.each(factories)('%s adapter conformance', (_name, factory) => {
   let adapter: DataAdapter
 
   beforeEach(async () => {
+    vi.useRealTimers()        // reset any leaked fake-timer state from a prior test failure
     FakeWS.reset()
     ;(globalThis as any).WebSocket = FakeWS
     adapter = await factory()
