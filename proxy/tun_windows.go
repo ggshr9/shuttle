@@ -107,7 +107,7 @@ func (t *TUNServer) setupRoutes() error {
 		return err
 	}
 
-	// Calculate gateway (local IP) - handle both IPv4 and IPv6
+	// Calculate IPv4 gateway (first host in the subnet)
 	localIP := make(net.IP, len(ipNet.IP))
 	copy(localIP, ipNet.IP)
 	localIP[len(localIP)-1]++
@@ -129,6 +129,26 @@ func (t *TUNServer) setupRoutes() error {
 		}
 	}
 
+	// Add IPv6 route if configured. Windows: on-link interface route via
+	// `netsh interface ipv6 add route <prefix> interface=<dev>`.
+	if t.config.IPv6CIDR != "" {
+		_, ipv6Net, err := net.ParseCIDR(t.config.IPv6CIDR)
+		if err != nil || ipv6Net == nil {
+			return fmt.Errorf("parse IPv6 CIDR %q: %w", t.config.IPv6CIDR, err)
+		}
+		out, err := exec.Command("netsh", "interface", "ipv6", "add", "route",
+			ipv6Net.String(),
+			t.config.DeviceName,
+		).CombinedOutput()
+		if err != nil {
+			if !strings.Contains(strings.ToLower(string(out)), "already exists") {
+				return fmt.Errorf("netsh ipv6 add route: %s: %w", string(out), err)
+			}
+		}
+		t.logger.Info("routes configured", "cidr", ipNet.String(), "ipv6_cidr", ipv6Net.String(), "dev", t.config.DeviceName)
+		return nil
+	}
+
 	t.logger.Info("routes configured", "cidr", ipNet.String(), "dev", t.config.DeviceName)
 	return nil
 }
@@ -146,6 +166,16 @@ func (t *TUNServer) teardownRoutes() {
 		ipNet.IP.String(),
 		"mask", mask.String(),
 	).Run()
+
+	// Delete IPv6 route if configured (best-effort).
+	if t.config.IPv6CIDR != "" {
+		if _, ipv6Net, err := net.ParseCIDR(t.config.IPv6CIDR); err == nil && ipv6Net != nil {
+			exec.Command("netsh", "interface", "ipv6", "delete", "route",
+				ipv6Net.String(),
+				t.config.DeviceName,
+			).Run()
+		}
+	}
 
 	// Close the WinTun device
 	winTunMu.Lock()
