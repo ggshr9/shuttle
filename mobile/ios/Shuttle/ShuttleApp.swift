@@ -23,6 +23,7 @@ class ViewController: UIViewController, WKNavigationDelegate, WKScriptMessageHan
     private var useVPN = false
     private var configData: String?
     private var apiBridge: APIBridge!
+    private var fallbackHandler: FallbackHandler!
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -54,6 +55,11 @@ class ViewController: UIViewController, WKNavigationDelegate, WKScriptMessageHan
             forMainFrameOnly: true
         )
         contentController.addUserScript(bridgeBootstrap)
+
+        // Fallback safety net: SPA posts here when the bridge probe fails.
+        // Phase γ (Task 6.4) removes this once TestFlight is green.
+        fallbackHandler = FallbackHandler(inlineHTML: createVPNControlHTML())
+        contentController.add(fallbackHandler, name: "fallback")
 
         // Inject native bridge
         let bridgeScript = WKUserScript(
@@ -97,6 +103,7 @@ class ViewController: UIViewController, WKNavigationDelegate, WKScriptMessageHan
         webView.navigationDelegate = self
         view.addSubview(webView)
         apiBridge.webView = webView
+        fallbackHandler.webView = webView
     }
 
     private func loadConfig() {
