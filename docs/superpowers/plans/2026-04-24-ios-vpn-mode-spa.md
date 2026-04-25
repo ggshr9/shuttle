@@ -165,12 +165,14 @@ export type EngineEvent = {
 
 export type TopicKind = 'snapshot' | 'stream'
 
-export interface TopicEntry {
-  wsPath: string
-  restPath: string
-  pollMs: number
-  kind: TopicKind
-  cursorParam?: string
+// `readonly` fields + `as const satisfies` on topicConfig together preserve
+// literal-type narrowing on `kind` and prevent runtime mutation of entries.
+export type TopicEntry = {
+  readonly wsPath: string
+  readonly restPath: string
+  readonly pollMs: number
+  readonly kind: TopicKind
+  readonly cursorParam?: string
 }
 
 export type TopicMap = {
@@ -184,13 +186,13 @@ export type TopicMap = {
 export type TopicKey = keyof TopicMap
 export type TopicValue<K extends TopicKey> = TopicMap[K]['value']
 
-export const topicConfig: Record<TopicKey, TopicEntry> = {
+export const topicConfig = {
   status: { wsPath: '/ws/status', restPath: '/api/status', pollMs: 2000, kind: 'snapshot' },
   speed:  { wsPath: '/ws/speed',  restPath: '/api/speed',  pollMs: 1000, kind: 'snapshot' },
   mesh:   { wsPath: '/ws/mesh',   restPath: '/api/mesh/peers', pollMs: 3000, kind: 'snapshot' },
   logs:   { wsPath: '/ws/logs',   restPath: '/api/logs',   pollMs: 1000, kind: 'stream', cursorParam: 'since' },
   events: { wsPath: '/ws/events', restPath: '/api/events', pollMs: 1000, kind: 'stream', cursorParam: 'since' },
-}
+} as const satisfies Record<TopicKey, TopicEntry>
 ```
 
 - [ ] **Step 4: Run test to verify it passes**
@@ -309,11 +311,12 @@ export class ApiError extends Error {
 }
 
 export class TransportError extends Error {
-  constructor(
-    public readonly cause: unknown,
-    message: string,
-  ) {
-    super(message)
+  // Forward `cause` through ES2022 Error.cause via the options bag instead of
+  // a public parameter property. The base Error constructor sets it as a
+  // non-enumerable own property, matching the standard idiom that crash
+  // reporters and structured-clone serialization expect.
+  constructor(cause: unknown, message: string) {
+    super(message, { cause })
     this.name = 'TransportError'
   }
 }
@@ -532,6 +535,33 @@ describe('SubscriptionBase ref counting', () => {
     expect(cb).not.toHaveBeenCalled()
   })
 })
+
+describe('SubscriptionBase hidden-tab pause/resume', () => {
+  it('pauseForHidden is idempotent', () => {
+    const s = new TestSub<number>('status', 'snapshot')
+    s.add(() => {})
+    s.pauseForHidden()
+    s.pauseForHidden()
+    expect(s.disconnectCount).toBe(1)
+  })
+
+  it('resumeFromHidden is idempotent', () => {
+    const s = new TestSub<number>('status', 'snapshot')
+    s.add(() => {})
+    s.pauseForHidden()
+    s.resumeFromHidden()
+    s.resumeFromHidden()
+    // Initial connect (from add) + one resume = 2 total connects
+    expect(s.connectCount).toBe(2)
+  })
+
+  it('resume without pause is no-op', () => {
+    const s = new TestSub<number>('status', 'snapshot')
+    s.add(() => {})
+    s.resumeFromHidden()
+    expect(s.connectCount).toBe(1)  // just the initial connect from add()
+  })
+})
 ```
 
 - [ ] **Step 2: Run test to verify it fails**
@@ -551,6 +581,8 @@ export abstract class SubscriptionBase<T> {
   protected lastHash: string | undefined
   protected cursor: string | number | undefined
   protected errorCount = 0
+  protected inFlight = false        // BridgeSubscription guards against tick pile-up
+  private paused = false            // gates pauseForHidden / resumeFromHidden idempotently
 
   constructor(
     protected readonly topic: TopicKey,
@@ -594,11 +626,16 @@ export abstract class SubscriptionBase<T> {
     for (const cb of [...this.subscribers]) cb(value)
   }
 
+  // Idempotent: iOS Safari can fire visibilitychange twice in a row.
   pauseForHidden(): void {
+    if (this.paused) return
+    this.paused = true
     if (this.subscribers.size > 0) this.disconnect()
   }
 
   resumeFromHidden(): void {
+    if (!this.paused) return
+    this.paused = false
     if (this.subscribers.size > 0) this.connect()
   }
 }
@@ -632,7 +669,7 @@ NOTE: Svelte 5 runes (`$state`, `$effect`) require the `.svelte.ts` extension AN
 // gui/web/src/lib/data/__tests__/hooks.spec.ts
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { setAdapter } from '../index'
-import { useSubscription, useRequest } from '../hooks.svelte'
+import { useRequest } from '../hooks.svelte'
 import type { DataAdapter, Subscription } from '../types'
 import type { TopicKey } from '../topics'
 
@@ -672,11 +709,9 @@ describe('hooks (component-less smoke)', () => {
     expect(result).toEqual({ ok: true })
   })
 
-  it('useSubscription returns object with reactive value getter', () => {
-    // Smoke: verifying shape only — runes need a component context to actually update.
-    const sub = useSubscription('status')
-    expect(typeof Object.getOwnPropertyDescriptor(sub, 'value')?.get).toBe('function')
-  })
+  // No `useSubscription` smoke test in this file — Svelte 5 runes throw
+  // outside a component context in vitest. Subscription shape is exercised
+  // indirectly by Phase 2.5 migration tests once real components consume it.
 })
 ```
 
@@ -701,12 +736,18 @@ export function useSubscription<K extends TopicKey>(
   topic: K,
   opts?: SubscribeOptions<K>,
 ) {
-  let value = $state<TopicValue<K> | undefined>(undefined)
   const adapter = getAdapter()
-  const sub = adapter.subscribe(topic, opts)
-  // Initial replay of cached snapshot value, if any.
-  value = sub.current as TopicValue<K> | undefined
+  // Peek cached snapshot synchronously for the initial $state seed. Reading
+  // `.current` does NOT open the transport — only `.subscribe(cb)` (inside
+  // the effect below) increments the SubscriptionBase ref count.
+  const initial = adapter.subscribe(topic, opts).current as TopicValue<K> | undefined
+  let value = $state<TopicValue<K> | undefined>(initial)
+  // The live subscription MUST live inside $effect so it is created and torn
+  // down with the component lifecycle. Holding a Subscription object outside
+  // $effect leaks subscribers when the component is conditionally rendered
+  // or unmounted before the effect fires.
   $effect(() => {
+    const sub = adapter.subscribe(topic, opts)
     return sub.subscribe(v => { value = v as TopicValue<K> })
   })
   return {
