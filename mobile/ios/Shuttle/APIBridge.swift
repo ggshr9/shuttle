@@ -37,7 +37,11 @@ final class APIBridge: NSObject, WKScriptMessageHandler {
     private func completeJS(id: Int, response: Data?) {
         DispatchQueue.main.async { [weak self] in
             guard let self = self, let webView = self.webView else { return }
-            if let data = response, let json = String(data: data, encoding: .utf8) {
+            if let data = response, let raw = String(data: data, encoding: .utf8) {
+                // U+2028 / U+2029 are valid JSON string contents but break JS
+                // source; substitute the \u-escaped form so evaluateJavaScript
+                // can parse the literal.
+                let json = APIBridge.escapeForJS(raw)
                 let js = "window.ShuttleBridge._complete(\(id), \(json))"
                 webView.evaluateJavaScript(js, completionHandler: nil)
             } else {
@@ -49,15 +53,27 @@ final class APIBridge: NSObject, WKScriptMessageHandler {
     private func failJS(id: Int, message: String) {
         DispatchQueue.main.async { [weak self] in
             guard let self = self, let webView = self.webView else { return }
-            // Single-quote escape for the message string. Newlines and quotes
-            // are the realistic risks; envelope errors don't carry HTML.
+            // Escape JS-source-breaking characters in the user-visible message.
+            // Newlines, quotes, backslashes, and the JS-only line terminators
+            // U+2028 / U+2029 all need escaping for evaluateJavaScript.
             let safeMsg = message
                 .replacingOccurrences(of: "\\", with: "\\\\")
                 .replacingOccurrences(of: "'", with: "\\'")
                 .replacingOccurrences(of: "\n", with: "\\n")
+                .replacingOccurrences(of: "\u{2028}", with: "\\u2028")
+                .replacingOccurrences(of: "\u{2029}", with: "\\u2029")
             let js = "window.ShuttleBridge._fail(\(id), '\(safeMsg)')"
             webView.evaluateJavaScript(js, completionHandler: nil)
         }
+    }
+
+    /// JSON allows U+2028/U+2029 raw inside string literals, but JavaScript
+    /// treats them as line terminators in source. Substitute the escape form
+    /// so a JSON document interpolated into a JS source string parses.
+    private static func escapeForJS(_ json: String) -> String {
+        json
+            .replacingOccurrences(of: "\u{2028}", with: "\\u2028")
+            .replacingOccurrences(of: "\u{2029}", with: "\\u2029")
     }
 }
 

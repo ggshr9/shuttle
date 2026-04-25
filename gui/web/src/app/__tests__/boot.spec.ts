@@ -50,4 +50,16 @@ describe('boot', () => {
     await boot()
     expect(getAdapter().constructor.name).toBe('BridgeAdapter')
   })
+
+  it('?bridge=1 force-installs BridgeAdapter even when probe fails', async () => {
+    Object.defineProperty(window, 'location', { value: { search: '?bridge=1' }, writable: true })
+    const post = vi.fn()
+    ;(window as any).webkit = { messageHandlers: { fallback: { postMessage: post } } }
+    ;(window as any).ShuttleBridge = {
+      send: async () => { throw new Error('healthz unreachable') },
+    }
+    await boot()
+    expect(post).not.toHaveBeenCalled()    // fallback NOT requested under force flag
+    expect(getAdapter().constructor.name).toBe('BridgeAdapter')
+  })
 })

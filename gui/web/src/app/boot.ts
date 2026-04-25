@@ -64,6 +64,12 @@ export async function boot(): Promise<void> {
     ])
     setAdapter(bridge)
   } catch (err) {
+    if (force === '1') {
+      // ?bridge=1 — install bridge anyway so the developer can reproduce
+      // the failing path without the SPA being torn down by FallbackHandler.
+      setAdapter(bridge)
+      return
+    }
     requestFallback(String(err instanceof Error ? err.message : err))
   }
 
