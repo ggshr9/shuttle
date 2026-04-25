@@ -21,6 +21,7 @@ export const subNav: SubNavEntry[] = [
   { slug: 'dns',      labelKey: 'settings.nav.dns',      icon: 'globe',     section: 'network' },
 
   // Diagnostics — observability
+  { slug: 'diag',     labelKey: 'settings.nav.diag',     icon: 'activity',  section: 'diagnostics' },
   { slug: 'logging',  labelKey: 'settings.nav.logging',  icon: 'logs',      section: 'diagnostics' },
   { slug: 'qos',      labelKey: 'settings.nav.qos',      icon: 'zap',       section: 'diagnostics' },
 
