@@ -44,6 +44,11 @@ export abstract class SubscriptionBase<T> {
   /** Subclasses call this to deliver a value to subscribers. Snapshot kind diffs by JSON hash. */
   protected emit(value: T): void {
     if (this.kind === 'snapshot') {
+      // Diff via JSON.stringify. Relies on stable key ordering, which Go's
+      // json.Marshal provides (struct field declaration order). All current
+      // topic payloads originate from the Go API; if a future topic is
+      // sourced JS-side, ensure its emit path produces consistent key order
+      // or replace this with structural comparison.
       const hash = JSON.stringify(value)
       if (hash === this.lastHash) return
       this.lastHash = hash

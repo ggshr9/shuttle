@@ -34,7 +34,9 @@ export class ConnectionStateController implements ReadableValue<ConnectionState>
     else next = 'error'
     if (next !== this._value) {
       this._value = next
-      for (const cb of this.subscribers) cb(next)
+      // Spread to snapshot the set so a callback that unsubscribes mid-emit
+      // doesn't break iteration. Matches SubscriptionBase.emit().
+      for (const cb of [...this.subscribers]) cb(next)
     }
   }
 }
