@@ -49,7 +49,7 @@ func NewHandler(cfg HandlerConfig) http.Handler {
 		// Inherit AllowPrivateNetworks from engine config (for sandbox testing)
 		if cfg.Engine != nil {
 			c := cfg.Engine.Config()
-			mgr.AllowPrivateNetworks = c.AllowPrivateNetworks
+			mgr.SetAllowPrivateNetworks(c.AllowPrivateNetworks)
 		}
 		cfg.SubMgr = mgr
 	}
@@ -231,10 +231,17 @@ func validateProbeURL(rawURL string) error {
 	if host == "localhost" {
 		return fmt.Errorf("probing localhost is not allowed")
 	}
-	// Block private, loopback, link-local, and cloud-metadata IP ranges.
-	ip := net.ParseIP(host)
-	if ip != nil && server.IsBlockedIP(ip) {
-		return fmt.Errorf("probing private/localhost/link-local addresses is not allowed")
+	// Block private, loopback, link-local, and cloud-metadata ranges.
+	// For literal IPs, check directly. For hostnames, use IsBlockedTarget
+	// which resolves DNS before checking (prevents DNS rebinding).
+	if ip := net.ParseIP(host); ip != nil {
+		if server.IsBlockedIP(ip) {
+			return fmt.Errorf("probing private/localhost/link-local addresses is not allowed")
+		}
+	} else {
+		if server.IsBlockedTarget(host) {
+			return fmt.Errorf("probing private/localhost/link-local addresses is not allowed (hostname %q resolves to a blocked address)", host)
+		}
 	}
 	return nil
 }
