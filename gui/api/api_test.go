@@ -323,7 +323,7 @@ func TestAPIStatsHistory_CustomDays(t *testing.T) {
 	}
 }
 
-func TestAPIConnectDoubleStart(t *testing.T) {
+func TestAPIConnectIsIdempotent(t *testing.T) {
 	h, eng, _ := newTestHandler()
 
 	// First connect should succeed.
@@ -333,19 +333,39 @@ func TestAPIConnectDoubleStart(t *testing.T) {
 	}
 	defer func() { _ = eng.Stop() }()
 
-	// Second connect on an already-running engine should return 409.
+	// Second connect on an already-running engine returns 200 (idempotent):
+	// the desired state is reached. Callers shouldn't have to track engine
+	// state to call /api/connect.
 	rr = doRequest(h, "POST", "/api/connect", "")
-	if rr.Code != http.StatusConflict {
-		t.Fatalf("expected 409 for double connect, got %d: %s", rr.Code, rr.Body.String())
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200 for double connect (idempotent), got %d: %s", rr.Code, rr.Body.String())
 	}
 
 	var result map[string]string
 	if err := json.Unmarshal(rr.Body.Bytes(), &result); err != nil {
 		t.Fatalf("invalid JSON: %v", err)
 	}
+	if result["status"] != "connected" {
+		t.Errorf("expected status=\"connected\" on idempotent connect, got %q", result["status"])
+	}
+}
 
-	if _, ok := result["error"]; !ok {
-		t.Error("expected 'error' field in response")
+func TestAPIDisconnectIsIdempotent(t *testing.T) {
+	h, _, _ := newTestHandler()
+
+	// Engine starts in stopped state. Disconnecting an already-stopped engine
+	// returns 200 (idempotent) — the desired state is already reached.
+	rr := doRequest(h, "POST", "/api/disconnect", "")
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200 for disconnect on stopped engine (idempotent), got %d: %s", rr.Code, rr.Body.String())
+	}
+
+	var result map[string]string
+	if err := json.Unmarshal(rr.Body.Bytes(), &result); err != nil {
+		t.Fatalf("invalid JSON: %v", err)
+	}
+	if result["status"] != "disconnected" {
+		t.Errorf("expected status=\"disconnected\" on idempotent disconnect, got %q", result["status"])
 	}
 }
 
