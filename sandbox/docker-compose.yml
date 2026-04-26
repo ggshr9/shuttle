@@ -46,7 +46,10 @@ services:
       - net.ipv4.ip_forward=1
     command: >
       sh -c "
-        apk add --no-cache iptables iproute2 iproute2-tc bash &&
+        apk add --no-cache iptables-legacy iproute2 iproute2-tc bash &&
+        ln -sf /usr/sbin/iptables-legacy /usr/sbin/iptables &&
+        ln -sf /usr/sbin/iptables-legacy-save /usr/sbin/iptables-save &&
+        ln -sf /usr/sbin/iptables-legacy-restore /usr/sbin/iptables-restore &&
         iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE &&
         iptables -A FORWARD -i eth1 -o eth0 -j ACCEPT &&
         iptables -A FORWARD -i eth2 -o eth0 -j ACCEPT &&
