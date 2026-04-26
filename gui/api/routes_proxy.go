@@ -10,8 +10,18 @@ import (
 )
 
 func registerProxyRoutes(mux *http.ServeMux, eng *engine.Engine) {
+	// /api/connect — idempotent. If the engine is already running or starting,
+	// returns success with status="connected" (no restart). Returns 409 only
+	// for a real failure during the start sequence.
 	mux.HandleFunc("POST /api/connect", func(w http.ResponseWriter, r *http.Request) {
 		if err := eng.Start(context.Background()); err != nil {
+			// "engine already starting" / "engine already running" are not
+			// failures from the caller's perspective — the desired state is
+			// reached. Map them to success.
+			if state := eng.Status().State; state == "running" || state == "starting" {
+				writeJSON(w, map[string]string{"status": "connected"})
+				return
+			}
 			writeError(w, http.StatusConflict, err.Error())
 			return
 		}
@@ -25,6 +35,8 @@ func registerProxyRoutes(mux *http.ServeMux, eng *engine.Engine) {
 		writeJSON(w, map[string]string{"status": "connected"})
 	})
 
+	// /api/disconnect — idempotent. If the engine is already stopped or
+	// stopping, returns success with status="disconnected".
 	mux.HandleFunc("POST /api/disconnect", func(w http.ResponseWriter, r *http.Request) {
 		// Clear system proxy first
 		cfg := eng.Config()
@@ -33,6 +45,10 @@ func registerProxyRoutes(mux *http.ServeMux, eng *engine.Engine) {
 		}
 
 		if err := eng.Stop(); err != nil {
+			if state := eng.Status().State; state == "stopped" || state == "stopping" {
+				writeJSON(w, map[string]string{"status": "disconnected"})
+				return
+			}
 			writeError(w, http.StatusConflict, err.Error())
 			return
 		}
