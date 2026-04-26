@@ -10,15 +10,16 @@ import (
 )
 
 func registerProxyRoutes(mux *http.ServeMux, eng *engine.Engine) {
-	// /api/connect — idempotent. If the engine is already running or starting,
-	// returns success with status="connected" (no restart). Returns 409 only
-	// for a real failure during the start sequence.
+	// /api/connect — idempotent for terminal states.
+	//
+	// running  → 200 (no restart; desired state already reached)
+	// starting → 409 (transient state in mid-flight; caller should retry,
+	//                  not assume success — the start could still fail)
+	// stopping → 409 (transient; caller should retry)
+	// stopped  → run Start, return 200/409 based on result
 	mux.HandleFunc("POST /api/connect", func(w http.ResponseWriter, r *http.Request) {
 		if err := eng.Start(context.Background()); err != nil {
-			// "engine already starting" / "engine already running" are not
-			// failures from the caller's perspective — the desired state is
-			// reached. Map them to success.
-			if state := eng.Status().State; state == "running" || state == "starting" {
+			if eng.Status().State == "running" {
 				writeJSON(w, map[string]string{"status": "connected"})
 				return
 			}
@@ -35,8 +36,9 @@ func registerProxyRoutes(mux *http.ServeMux, eng *engine.Engine) {
 		writeJSON(w, map[string]string{"status": "connected"})
 	})
 
-	// /api/disconnect — idempotent. If the engine is already stopped or
-	// stopping, returns success with status="disconnected".
+	// /api/disconnect — idempotent for the terminal "stopped" state only.
+	// "stopping" is transient and might still flip back if Stop fails,
+	// so we report 409 and let the caller retry once it settles.
 	mux.HandleFunc("POST /api/disconnect", func(w http.ResponseWriter, r *http.Request) {
 		// Clear system proxy first
 		cfg := eng.Config()
@@ -45,7 +47,7 @@ func registerProxyRoutes(mux *http.ServeMux, eng *engine.Engine) {
 		}
 
 		if err := eng.Stop(); err != nil {
-			if state := eng.Status().State; state == "stopped" || state == "stopping" {
+			if eng.Status().State == "stopped" {
 				writeJSON(w, map[string]string{"status": "disconnected"})
 				return
 			}
