@@ -109,26 +109,28 @@ func (q *EventQueue) size() int {
 // Wait blocks until events strictly after `since` are available or ctx is done.
 func (q *EventQueue) Wait(ctx context.Context, since int64) ([]Event, int64, bool, error) {
 	q.mu.Lock()
+	defer q.mu.Unlock()
+
+	if q.cursor > since {
+		events, latest, gap := q.tailLocked(since, 100)
+		return events, latest, gap, nil
+	}
+
+	// Register a one-shot wakeup on ctx cancellation. The callback runs in
+	// its own goroutine — it must reacquire the mutex to safely Broadcast.
+	stop := context.AfterFunc(ctx, func() {
+		q.mu.Lock()
+		q.cond.Broadcast()
+		q.mu.Unlock()
+	})
+	defer stop()
+
 	for q.cursor <= since {
-		// Park goroutine on cond, but allow ctx cancellation to unblock us.
-		done := make(chan struct{})
-		go func() {
-			select {
-			case <-ctx.Done():
-				q.mu.Lock()
-				q.cond.Broadcast()
-				q.mu.Unlock()
-			case <-done:
-			}
-		}()
 		q.cond.Wait()
-		close(done)
 		if ctx.Err() != nil {
-			q.mu.Unlock()
 			return nil, q.cursor, false, ctx.Err()
 		}
 	}
 	events, latest, gap := q.tailLocked(since, 100)
-	q.mu.Unlock()
 	return events, latest, gap, nil
 }
