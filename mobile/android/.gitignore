@@ -1,0 +1,14 @@
+# Gradle build output
+.gradle/
+build/
+*/build/
+
+# Local config
+local.properties
+
+# IDE
+.idea/
+*.iml
+
+# Generated AAR
+shuttle.aar
