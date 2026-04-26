@@ -96,7 +96,14 @@ func (q *EventQueue) tailLocked(since int64, max int) ([]Event, int64, bool) {
 	}
 	startOffset := startCursor - oldestCursor // index from oldest
 
-	out := make([]Event, 0, latest-startCursor+1)
+	// Cap the allocation by `max` — caller-supplied bound. Without this, a
+	// long-quiet caller (since == 0) on a full ring would allocate the whole
+	// window even though we'll only ever append `max` entries.
+	wantBytes := latest - startCursor + 1
+	if wantBytes > int64(max) {
+		wantBytes = int64(max)
+	}
+	out := make([]Event, 0, wantBytes)
 	for i := startOffset; i < int64(count) && len(out) < max; i++ {
 		idx := (q.head - count + int(i) + q.cap) % q.cap
 		out = append(out, q.ring[idx])
