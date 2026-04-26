@@ -79,17 +79,31 @@ func httpViaHTTPProxy(proxyAddr, targetURL string, timeout time.Duration) (*http
 }
 
 // apiGet makes a GET request to the client API.
+// decodeAPIResponse reads body, decodes JSON, and returns an error for non-2xx
+// status. Without the status check, tests silently accept 4xx/5xx responses
+// (the JSON {"error":"..."} payload decodes fine), masking real engine errors.
+func decodeAPIResponse(resp *http.Response, method, path string) (map[string]any, error) {
+	defer resp.Body.Close()
+	var result map[string]any
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("%s %s: decode body: %w", method, path, err)
+	}
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		errMsg, _ := result["error"].(string)
+		if errMsg == "" {
+			errMsg = fmt.Sprintf("(no 'error' field in body: %v)", result)
+		}
+		return result, fmt.Errorf("%s %s: HTTP %d: %s", method, path, resp.StatusCode, errMsg)
+	}
+	return result, nil
+}
+
 func apiGet(apiAddr, path string) (map[string]any, error) {
 	resp, err := http.Get("http://" + apiAddr + path)
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
-	var result map[string]any
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return nil, err
-	}
-	return result, nil
+	return decodeAPIResponse(resp, "GET", path)
 }
 
 // apiPost makes a POST request to the client API.
@@ -106,12 +120,7 @@ func apiPost(apiAddr, path string, body any) (map[string]any, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
-	var result map[string]any
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return nil, err
-	}
-	return result, nil
+	return decodeAPIResponse(resp, "POST", path)
 }
 
 // apiPut makes a PUT request to the client API.
@@ -134,12 +143,7 @@ func apiPut(apiAddr, path string, body any) (map[string]any, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
-	var result map[string]any
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return nil, err
-	}
-	return result, nil
+	return decodeAPIResponse(resp, "PUT", path)
 }
 
 // restoreH3Transport restores the client to H3 transport mode.
