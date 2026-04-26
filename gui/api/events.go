@@ -4,6 +4,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"log/slog"
 	"sync"
 	"time"
 )
@@ -40,7 +41,11 @@ func NewEventQueue(capacity int) *EventQueue {
 }
 
 func (q *EventQueue) Push(typ string, data any) {
-	raw, _ := json.Marshal(data)
+	raw, err := json.Marshal(data)
+	if err != nil {
+		slog.Warn("event marshal failed", "type", typ, "err", err)
+		raw = []byte("null")
+	}
 	q.mu.Lock()
 	defer q.mu.Unlock()
 	q.cursor++
