@@ -31,6 +31,45 @@ success() { echo -e "${GREEN}[✓]${NC} $1"; }
 error() { echo -e "${RED}[✗]${NC} $1"; }
 warn() { echo -e "${YELLOW}[!]${NC} $1"; }
 
+# diag <test_name> <command> [args...]
+# Run command silently on success; on failure, print captured stderr+stdout
+# (first 5 lines, joined). Returns the command's exit code.
+diag() {
+    local name="$1"; shift
+    local out rc
+    out=$("$@" 2>&1)
+    rc=$?
+    if [ $rc -eq 0 ]; then
+        success "$name"
+    else
+        local snippet
+        snippet=$(echo "$out" | head -5 | tr '\n' '|' | sed 's/|$//')
+        error "$name (exit=$rc): ${snippet:-<no output>}"
+    fi
+    return $rc
+}
+
+# diag_check <test_name> <expected-substring> <command> [args...]
+# Like diag but also requires the captured output to contain expected-substring.
+diag_check() {
+    local name="$1" needle="$2"; shift 2
+    local out rc
+    out=$("$@" 2>&1)
+    rc=$?
+    if [ $rc -eq 0 ] && echo "$out" | grep -q -- "$needle"; then
+        success "$name"
+        return 0
+    fi
+    local snippet
+    snippet=$(echo "$out" | head -5 | tr '\n' '|' | sed 's/|$//')
+    if [ $rc -ne 0 ]; then
+        error "$name (exit=$rc): ${snippet:-<no output>}"
+    else
+        error "$name (output missing '$needle'): ${snippet:-<no output>}"
+    fi
+    return 1
+}
+
 # Build binaries
 build_binaries() {
     log "Building shuttle binaries..."
@@ -96,123 +135,28 @@ run_tests() {
     local total=0
     set +e  # arithmetic ((...)) returns 1 when result is 0; disable errexit for tests
 
-    # Test 1: Server running
-    ((total++))
-    if docker compose exec -T server pgrep -x shuttled > /dev/null 2>&1; then
-        success "test_server_running"
-        ((passed++))
-    else
-        error "test_server_running"
-        ((failed++))
-    fi
+    # Process running checks
+    ((total++)); diag "test_server_running"   docker compose exec -T server   pgrep -x shuttled && ((passed++)) || ((failed++))
+    ((total++)); diag "test_client_a_running" docker compose exec -T client-a pgrep -x shuttle  && ((passed++)) || ((failed++))
+    ((total++)); diag "test_client_b_running" docker compose exec -T client-b pgrep -x shuttle  && ((passed++)) || ((failed++))
 
-    # Test 2: Client A running
-    ((total++))
-    if docker compose exec -T client-a pgrep -x shuttle > /dev/null 2>&1; then
-        success "test_client_a_running"
-        ((passed++))
-    else
-        error "test_client_a_running"
-        ((failed++))
-    fi
+    # L3 connectivity (client → router on its own subnet)
+    ((total++)); diag "test_client_a_to_router" docker compose exec -T client-a ping -c 1 -W 2 10.100.1.1 && ((passed++)) || ((failed++))
+    ((total++)); diag "test_client_b_to_router" docker compose exec -T client-b ping -c 1 -W 2 10.100.2.1 && ((passed++)) || ((failed++))
 
-    # Test 3: Client B running
-    ((total++))
-    if docker compose exec -T client-b pgrep -x shuttle > /dev/null 2>&1; then
-        success "test_client_b_running"
-        ((passed++))
-    else
-        error "test_client_b_running"
-        ((failed++))
-    fi
+    # L3 connectivity through router (client → server)
+    ((total++)); diag "test_client_a_to_server" docker compose exec -T client-a ping -c 1 -W 2 10.100.0.10 && ((passed++)) || ((failed++))
 
-    # Test 4: Client A -> Router connectivity (on net-a)
-    ((total++))
-    if docker compose exec -T client-a ping -c 1 -W 2 10.100.1.1 > /dev/null 2>&1; then
-        success "test_client_a_to_router"
-        ((passed++))
-    else
-        error "test_client_a_to_router"
-        ((failed++))
-    fi
+    # Proxy paths via server, hitting local httpbin (10.100.0.20)
+    ((total++)); diag_check "test_socks5_proxy"        "origin"  docker compose exec -T client-a curl -s  --socks5 127.0.0.1:1080 --max-time 10 http://10.100.0.20/ip  && ((passed++)) || ((failed++))
+    ((total++)); diag_check "test_http_proxy"          "origin"  docker compose exec -T client-a curl -s  --proxy http://127.0.0.1:8080 --max-time 10 http://10.100.0.20/ip  && ((passed++)) || ((failed++))
+    ((total++)); diag_check "test_socks5_get_endpoint" "headers" docker compose exec -T client-a curl -s  --socks5 127.0.0.1:1080 --max-time 10 http://10.100.0.20/get && ((passed++)) || ((failed++))
 
-    # Test 5: Client B -> Router connectivity (on net-b)
-    ((total++))
-    if docker compose exec -T client-b ping -c 1 -W 2 10.100.2.1 > /dev/null 2>&1; then
-        success "test_client_b_to_router"
-        ((passed++))
-    else
-        error "test_client_b_to_router"
-        ((failed++))
-    fi
+    # Client-side API health check (no network hop required)
+    ((total++)); diag_check "test_client_a_api_status" "state" docker compose exec -T client-a curl -s --max-time 5 http://127.0.0.1:9090/api/status && ((passed++)) || ((failed++))
 
-    # Test 6: Client A -> Server connectivity (through router)
-    ((total++))
-    if docker compose exec -T client-a ping -c 1 -W 2 10.100.0.10 > /dev/null 2>&1; then
-        success "test_client_a_to_server"
-        ((passed++))
-    else
-        error "test_client_a_to_server"
-        ((failed++))
-    fi
-
-    # Test 7: Proxy through server (SOCKS5) - via local httpbin
-    ((total++))
-    local socks5_result
-    socks5_result=$(docker compose exec -T client-a curl -sf --socks5 127.0.0.1:1080 --max-time 10 http://10.100.0.20/ip 2>&1)
-    if [ $? -eq 0 ] && echo "$socks5_result" | grep -q "origin"; then
-        success "test_socks5_proxy (response: $(echo "$socks5_result" | tr -d '\n'))"
-        ((passed++))
-    else
-        error "test_socks5_proxy"
-        ((failed++))
-    fi
-
-    # Test 8: Proxy through server (HTTP) - via local httpbin
-    ((total++))
-    local http_result
-    http_result=$(docker compose exec -T client-a curl -sf --proxy http://127.0.0.1:8080 --max-time 10 http://10.100.0.20/ip 2>&1)
-    if [ $? -eq 0 ] && echo "$http_result" | grep -q "origin"; then
-        success "test_http_proxy (response: $(echo "$http_result" | tr -d '\n'))"
-        ((passed++))
-    else
-        error "test_http_proxy"
-        ((failed++))
-    fi
-
-    # Test 9: Verify httpbin /get returns full request info
-    ((total++))
-    local get_result
-    get_result=$(docker compose exec -T client-a curl -sf --socks5 127.0.0.1:1080 --max-time 10 http://10.100.0.20/get 2>&1)
-    if [ $? -eq 0 ] && echo "$get_result" | grep -q "headers"; then
-        success "test_socks5_get_endpoint"
-        ((passed++))
-    else
-        error "test_socks5_get_endpoint"
-        ((failed++))
-    fi
-
-    # Test 10: Client API status check
-    ((total++))
-    local api_status
-    api_status=$(docker compose exec -T client-a curl -sf --max-time 5 http://127.0.0.1:9090/api/status 2>&1)
-    if [ $? -eq 0 ] && echo "$api_status" | grep -q "state"; then
-        success "test_client_a_api_status"
-        ((passed++))
-    else
-        error "test_client_a_api_status"
-        ((failed++))
-    fi
-
-    # Test 11: Client B SOCKS5 proxy (proxy_all mode)
-    ((total++))
-    if docker compose exec -T client-b curl -sf --socks5 127.0.0.1:1080 --max-time 10 http://10.100.0.20/ip > /dev/null 2>&1; then
-        success "test_client_b_socks5"
-        ((passed++))
-    else
-        error "test_client_b_socks5"
-        ((failed++))
-    fi
+    # Client B's SOCKS5 path
+    ((total++)); diag_check "test_client_b_socks5" "origin" docker compose exec -T client-b curl -s --socks5 127.0.0.1:1080 --max-time 10 http://10.100.0.20/ip && ((passed++)) || ((failed++))
 
     echo ""
     echo "==========================================="
