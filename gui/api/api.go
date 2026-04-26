@@ -212,8 +212,14 @@ func normalizeListenAddr(addr string) string {
 }
 
 // validateProbeURL checks that a probe URL is safe to request.
-// Rejects non-HTTP(S) schemes and localhost/private-IP targets to prevent SSRF.
-func validateProbeURL(rawURL string) error {
+// Rejects non-HTTP(S) schemes and (unless allowPrivate is true) localhost /
+// private-IP targets to prevent SSRF.
+//
+// allowPrivate=true skips the address-class block — used in sandbox/testing
+// contexts where the probe target is intentionally on a private network.
+// Mirrors the AllowPrivateNetworks behavior in server.HandlerConfig and
+// subscription.Manager.
+func validateProbeURL(rawURL string, allowPrivate bool) error {
 	u, err := url.Parse(rawURL)
 	if err != nil {
 		return fmt.Errorf("invalid URL: %w", err)
@@ -226,6 +232,9 @@ func validateProbeURL(rawURL string) error {
 	host := u.Hostname()
 	if host == "" {
 		return fmt.Errorf("URL must have a hostname")
+	}
+	if allowPrivate {
+		return nil
 	}
 	// Block localhost name before IP check to avoid DNS lookup.
 	if host == "localhost" {
