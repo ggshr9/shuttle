@@ -4,6 +4,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"log/slog"
 	"sync"
 	"time"
 )
@@ -40,7 +41,11 @@ func NewEventQueue(capacity int) *EventQueue {
 }
 
 func (q *EventQueue) Push(typ string, data any) {
-	raw, _ := json.Marshal(data)
+	raw, err := json.Marshal(data)
+	if err != nil {
+		slog.Warn("event marshal failed", "type", typ, "err", err)
+		raw = []byte("null")
+	}
 	q.mu.Lock()
 	defer q.mu.Unlock()
 	q.cursor++
@@ -91,7 +96,14 @@ func (q *EventQueue) tailLocked(since int64, max int) ([]Event, int64, bool) {
 	}
 	startOffset := startCursor - oldestCursor // index from oldest
 
-	out := make([]Event, 0, latest-startCursor+1)
+	// Cap the allocation by `max` — caller-supplied bound. Without this, a
+	// long-quiet caller (since == 0) on a full ring would allocate the whole
+	// window even though we'll only ever append `max` entries.
+	wantCount := latest - startCursor + 1
+	if wantCount > int64(max) {
+		wantCount = int64(max)
+	}
+	out := make([]Event, 0, wantCount)
 	for i := startOffset; i < int64(count) && len(out) < max; i++ {
 		idx := (q.head - count + int(i) + q.cap) % q.cap
 		out = append(out, q.ring[idx])
@@ -109,26 +121,28 @@ func (q *EventQueue) size() int {
 // Wait blocks until events strictly after `since` are available or ctx is done.
 func (q *EventQueue) Wait(ctx context.Context, since int64) ([]Event, int64, bool, error) {
 	q.mu.Lock()
+	defer q.mu.Unlock()
+
+	if q.cursor > since {
+		events, latest, gap := q.tailLocked(since, 100)
+		return events, latest, gap, nil
+	}
+
+	// Register a one-shot wakeup on ctx cancellation. The callback runs in
+	// its own goroutine — it must reacquire the mutex to safely Broadcast.
+	stop := context.AfterFunc(ctx, func() {
+		q.mu.Lock()
+		q.cond.Broadcast()
+		q.mu.Unlock()
+	})
+	defer stop()
+
 	for q.cursor <= since {
-		// Park goroutine on cond, but allow ctx cancellation to unblock us.
-		done := make(chan struct{})
-		go func() {
-			select {
-			case <-ctx.Done():
-				q.mu.Lock()
-				q.cond.Broadcast()
-				q.mu.Unlock()
-			case <-done:
-			}
-		}()
 		q.cond.Wait()
-		close(done)
 		if ctx.Err() != nil {
-			q.mu.Unlock()
 			return nil, q.cursor, false, ctx.Err()
 		}
 	}
 	events, latest, gap := q.tailLocked(since, 100)
-	q.mu.Unlock()
 	return events, latest, gap, nil
 }

@@ -122,7 +122,9 @@ func TestPumpEngineEvents_ForwardsEngineEvents(t *testing.T) {
 	eng := newTestEngine()
 
 	q := NewEventQueue(8)
-	go pumpEngineEvents(eng, q)
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	go pumpEngineEvents(ctx, eng, q)
 
 	// Give the goroutine a moment to subscribe before emitting.
 	time.Sleep(10 * time.Millisecond)
@@ -130,10 +132,10 @@ func TestPumpEngineEvents_ForwardsEngineEvents(t *testing.T) {
 	// EmitConnectionEvent is the only public emission path on a stopped engine.
 	eng.EmitConnectionEvent("conn-1", "opened", "example.com:443", "proxy", "tcp", "", 0, 0, 0)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
-	defer cancel()
+	waitCtx, waitCancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	defer waitCancel()
 
-	events, _, _, err := q.Wait(ctx, 0)
+	events, _, _, err := q.Wait(waitCtx, 0)
 	if err != nil {
 		t.Fatalf("Wait err: %v", err)
 	}
@@ -142,5 +144,34 @@ func TestPumpEngineEvents_ForwardsEngineEvents(t *testing.T) {
 	}
 	if events[0].Type != engine.EventConnection.String() {
 		t.Fatalf("expected event type %q, got %q", engine.EventConnection.String(), events[0].Type)
+	}
+}
+
+// TestPumpEngineEvents_ExitsOnContextCancel verifies the pump goroutine
+// exits cleanly when ctx is canceled, even with no events pending. Without
+// ctx-awareness the goroutine would block on the engine subscriber channel
+// indefinitely after engine teardown — leaking in test scenarios.
+func TestPumpEngineEvents_ExitsOnContextCancel(t *testing.T) {
+	eng := newTestEngine()
+
+	q := NewEventQueue(8)
+	ctx, cancel := context.WithCancel(context.Background())
+
+	done := make(chan struct{})
+	go func() {
+		pumpEngineEvents(ctx, eng, q)
+		close(done)
+	}()
+
+	// Let the goroutine register its subscriber.
+	time.Sleep(10 * time.Millisecond)
+
+	cancel()
+
+	select {
+	case <-done:
+		// Pump exited as expected.
+	case <-time.After(500 * time.Millisecond):
+		t.Fatal("pumpEngineEvents did not exit within 500ms of ctx cancel")
 	}
 }
