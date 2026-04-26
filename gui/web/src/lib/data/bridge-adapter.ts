@@ -2,7 +2,7 @@
 import { bridgeSend, type BridgeSend } from './bridge-transport'
 import { BridgeSubscription } from './bridge-subscription'
 import { ConnectionStateController } from './connection-state'
-import { topicConfig, type TopicKey, type TopicValue } from './topics'
+import { topicConfig, type TopicEntry, type TopicKey, type TopicValue } from './topics'
 import {
   ApiError, TransportError,
   type DataAdapter, type RequestOptions, type SubscribeOptions, type Subscription,
@@ -118,7 +118,10 @@ export class BridgeAdapter implements DataAdapter {
   subscribe<K extends TopicKey>(topic: K, _opts?: SubscribeOptions<K>): Subscription<TopicValue<K>> {
     let sub = this.subs.get(topic) as BridgeSubscription<TopicValue<K>> | undefined
     if (!sub) {
-      const cfg = topicConfig[topic]
+      // Widen to TopicEntry so cursorParam access is well-typed for stream
+      // topics. The `as const satisfies Record<TopicKey, TopicEntry>` literal
+      // narrows the value type per-key, hiding cursorParam on snapshot keys.
+      const cfg: TopicEntry = topicConfig[topic]
       const fetcher = async (path: string) => this.request({ method: 'GET', path })
       sub = new BridgeSubscription<TopicValue<K>>(
         topic, cfg.kind, cfg.restPath, cfg.pollMs, cfg.cursorParam, fetcher, this.connectionState,
