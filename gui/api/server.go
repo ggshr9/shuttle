@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"io/fs"
 	"net"
 	"net/http"
@@ -14,6 +15,7 @@ type Server struct {
 	eng      *engine.Engine
 	listener net.Listener
 	srv      *http.Server
+	pumpStop context.CancelFunc // nil if no engine
 }
 
 // NewServer creates an API server. If webFS is non-nil, it serves the SPA from it
@@ -23,21 +25,34 @@ type Server struct {
 // /api/events and /ws/events have live data to serve.
 func NewServer(eng *engine.Engine, webFS fs.FS) *Server {
 	q := NewEventQueue(1024)
+	var pumpStop context.CancelFunc
 	if eng != nil {
-		go pumpEngineEvents(eng, q)
+		var pumpCtx context.Context
+		pumpCtx, pumpStop = context.WithCancel(context.Background())
+		go pumpEngineEvents(pumpCtx, eng, q)
 	}
 	handler := NewHandler(HandlerConfig{Engine: eng, Events: q})
-	return NewServerWithHandler(eng, webFS, handler)
+	srv := NewServerWithHandler(eng, webFS, handler)
+	srv.pumpStop = pumpStop
+	return srv
 }
 
 // pumpEngineEvents subscribes to the engine event bus and forwards every event
-// into the EventQueue. Runs until the engine subscriber channel closes
-// (engine shutdown).
-func pumpEngineEvents(eng *engine.Engine, q *EventQueue) {
+// into the EventQueue. Exits when ctx is canceled OR the engine subscriber
+// channel closes (engine shutdown).
+func pumpEngineEvents(ctx context.Context, eng *engine.Engine, q *EventQueue) {
 	ch := eng.Subscribe()
 	defer eng.Unsubscribe(ch)
-	for ev := range ch {
-		q.Push(ev.Type.String(), ev)
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case ev, ok := <-ch:
+			if !ok {
+				return
+			}
+			q.Push(ev.Type.String(), ev)
+		}
 	}
 }
 
@@ -95,5 +110,8 @@ func (s *Server) ListenAndServe(addr string) (string, error) {
 
 // Close shuts down the server.
 func (s *Server) Close() error {
+	if s.pumpStop != nil {
+		s.pumpStop()
+	}
 	return s.srv.Close()
 }
