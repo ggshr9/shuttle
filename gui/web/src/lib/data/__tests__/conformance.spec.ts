@@ -64,6 +64,45 @@ const factories: Array<[string, AdapterFactory]> = [
   }],
 ]
 
+type AdapterName = 'http' | 'bridge'
+
+/**
+ * drivesValue triggers a snapshot emission via whichever mechanism the adapter
+ * uses, so tests don't have to branch on adapter name.
+ *
+ * `setup` is called to create the subscription and register callbacks. For
+ * bridge, setup runs INSIDE this function after fake timers are installed so
+ * that connect()'s setTimeout(0) lands in the fake-timer queue and is
+ * controlled by runOnlyPendingTimersAsync.
+ *
+ * Pass `setup` only on the FIRST call. Omit it on subsequent calls (dedup /
+ * unsubscribe tests) — the subscription already exists and the next poll timer
+ * is already scheduled; this function just advances time and pushes again.
+ */
+async function drivesValue(
+  name: AdapterName,
+  value: unknown,
+  setup?: () => void,
+): Promise<void> {
+  if (name === 'bridge') {
+    ;(globalThis as any).fetch = vi.fn(async () =>
+      new Response(JSON.stringify(value), { status: 200, headers: { 'content-type': 'application/json' } }))
+    vi.useFakeTimers()
+    // On first call: setup() registers the subscription under fake timers.
+    // On subsequent calls: the next-poll setTimeout is already in the fake
+    // queue (survives vi.useRealTimers / vi.useFakeTimers round-trip).
+    setup?.()
+    await vi.runOnlyPendingTimersAsync()
+    vi.useRealTimers()
+  } else {
+    // For HTTP, setup() creates the subscription and its FakeWS; the WS
+    // queues onopen via microtask. Wait for that to fire, then push.
+    setup?.()
+    await Promise.resolve()
+    FakeWS.instances[0].push(value)
+  }
+}
+
 describe.each(factories)('%s adapter conformance', (_name, factory) => {
   let adapter: DataAdapter
 
@@ -112,121 +151,57 @@ describe.each(factories)('%s adapter conformance', (_name, factory) => {
 
   describe('subscribe (snapshot)', () => {
     it('emits values to subscribers', async () => {
-      if (_name === 'bridge') {
-        ;(globalThis as any).fetch = vi.fn(async () =>
-          new Response(JSON.stringify({ connected: true }), { status: 200, headers: { 'content-type': 'application/json' } }))
-        vi.useFakeTimers()
-        const sub = adapter.subscribe('status')
-        const cb = vi.fn()
-        sub.subscribe(cb)
-        await vi.runOnlyPendingTimersAsync()
-        expect(cb).toHaveBeenCalledWith(expect.objectContaining({ connected: true }))
-        vi.useRealTimers()
-        return
-      }
-      // HTTP path — original code
-      const sub = adapter.subscribe('status')
       const cb = vi.fn()
-      sub.subscribe(cb)
-      await Promise.resolve()
-      FakeWS.instances[0].push({ connected: true })
+      await drivesValue(_name as AdapterName, { connected: true }, () => {
+        const sub = adapter.subscribe('status')
+        sub.subscribe(cb)
+      })
       expect(cb).toHaveBeenCalledWith(expect.objectContaining({ connected: true }))
     })
 
     it('does not emit when value unchanged', async () => {
-      if (_name === 'bridge') {
-        ;(globalThis as any).fetch = vi.fn(async () =>
-          new Response(JSON.stringify({ connected: true }), { status: 200, headers: { 'content-type': 'application/json' } }))
-        vi.useFakeTimers()
-        const sub = adapter.subscribe('status')
-        const cb = vi.fn()
-        sub.subscribe(cb)
-        // First poll — emits value
-        await vi.runOnlyPendingTimersAsync()
-        // Second poll — same body, should be deduped
-        await vi.runOnlyPendingTimersAsync()
-        expect(cb).toHaveBeenCalledTimes(1)
-        vi.useRealTimers()
-        return
-      }
-      // HTTP path
-      const sub = adapter.subscribe('status')
       const cb = vi.fn()
-      sub.subscribe(cb)
-      await Promise.resolve()
-      FakeWS.instances[0].push({ connected: true })
-      FakeWS.instances[0].push({ connected: true })
+      // First emission
+      await drivesValue(_name as AdapterName, { connected: true }, () => {
+        const sub = adapter.subscribe('status')
+        sub.subscribe(cb)
+      })
+      // Second emission — same value, should be deduped
+      await drivesValue(_name as AdapterName, { connected: true })
       expect(cb).toHaveBeenCalledTimes(1)
     })
 
     it('current() returns last value', async () => {
-      if (_name === 'bridge') {
-        ;(globalThis as any).fetch = vi.fn(async () =>
-          new Response(JSON.stringify({ connected: true }), { status: 200, headers: { 'content-type': 'application/json' } }))
-        vi.useFakeTimers()
-        const sub = adapter.subscribe('status')
+      let sub: ReturnType<typeof adapter.subscribe>
+      await drivesValue(_name as AdapterName, { connected: true }, () => {
+        sub = adapter.subscribe('status')
         sub.subscribe(() => {})
-        await vi.runOnlyPendingTimersAsync()
-        expect(sub.current).toEqual({ connected: true })
-        vi.useRealTimers()
-        return
-      }
-      // HTTP path
-      const sub = adapter.subscribe('status')
-      sub.subscribe(() => {})
-      await Promise.resolve()
-      FakeWS.instances[0].push({ connected: true })
-      expect(sub.current).toEqual({ connected: true })
+      })
+      expect(sub!.current).toEqual({ connected: true })
     })
 
     it('multiple subscribers all receive updates', async () => {
-      if (_name === 'bridge') {
-        ;(globalThis as any).fetch = vi.fn(async () =>
-          new Response(JSON.stringify({ connected: true }), { status: 200, headers: { 'content-type': 'application/json' } }))
-        vi.useFakeTimers()
-        const sub = adapter.subscribe('status')
-        const a = vi.fn(); const b = vi.fn()
-        sub.subscribe(a); sub.subscribe(b)
-        await vi.runOnlyPendingTimersAsync()
-        expect(a).toHaveBeenCalled(); expect(b).toHaveBeenCalled()
-        vi.useRealTimers()
-        return
-      }
-      // HTTP path
-      const sub = adapter.subscribe('status')
       const a = vi.fn(); const b = vi.fn()
-      sub.subscribe(a); sub.subscribe(b)
-      await Promise.resolve()
-      FakeWS.instances[0].push({ connected: true })
+      await drivesValue(_name as AdapterName, { connected: true }, () => {
+        const sub = adapter.subscribe('status')
+        sub.subscribe(a); sub.subscribe(b)
+      })
       expect(a).toHaveBeenCalled(); expect(b).toHaveBeenCalled()
     })
 
     it('unsubscribe stops emissions', async () => {
-      if (_name === 'bridge') {
-        ;(globalThis as any).fetch = vi.fn(async () =>
-          new Response(JSON.stringify({ connected: true }), { status: 200, headers: { 'content-type': 'application/json' } }))
-        vi.useFakeTimers()
-        const sub = adapter.subscribe('status')
-        const cb = vi.fn()
-        const off = sub.subscribe(cb)
-        // Poll once to confirm subscription works
-        await vi.runOnlyPendingTimersAsync()
-        expect(cb).toHaveBeenCalledTimes(1)
-        off()
-        // Advance timer — no further polls should reach cb
-        await vi.runAllTimersAsync()
-        expect(cb).toHaveBeenCalledTimes(1)
-        vi.useRealTimers()
-        return
-      }
-      // HTTP path
-      const sub = adapter.subscribe('status')
+      let off: () => void
       const cb = vi.fn()
-      const off = sub.subscribe(cb)
-      await Promise.resolve()
-      off()
-      FakeWS.instances[0].push({ connected: true })
-      expect(cb).not.toHaveBeenCalled()
+      // First emission — confirm subscription is working
+      await drivesValue(_name as AdapterName, { connected: true }, () => {
+        const sub = adapter.subscribe('status')
+        off = sub.subscribe(cb)
+      })
+      expect(cb).toHaveBeenCalledTimes(1)
+      off!()
+      // Attempt a second emission — cb should not be called again
+      await drivesValue(_name as AdapterName, { connected: true })
+      expect(cb).toHaveBeenCalledTimes(1)
     })
   })
 

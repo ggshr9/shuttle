@@ -49,12 +49,21 @@ describe('HttpAdapter.request', () => {
   })
 
   it('injects auth header from token getter', async () => {
-    const fetchMock = vi.fn(async () => new Response('{}', { status: 200, headers: { 'content-type': 'application/json' } }))
+    const fetchMock = vi.fn<typeof fetch>(async () => new Response('{}', { status: 200, headers: { 'content-type': 'application/json' } }))
     ;(globalThis as any).fetch = fetchMock
     const a = new HttpAdapter({ authToken: () => 'sekret' })
     await a.request({ method: 'GET', path: '/x' })
-    const init = fetchMock.mock.calls[0][1]
+    const init = fetchMock.mock.calls[0][1]!
     expect((init.headers as any)['Authorization']).toBe('Bearer sekret')
+  })
+
+  it('preserves caller-supplied Authorization header (does not overwrite)', async () => {
+    const fetchMock = vi.fn<typeof fetch>(async () => new Response('{}', { status: 200, headers: { 'content-type': 'application/json' } }))
+    ;(globalThis as any).fetch = fetchMock
+    const a = new HttpAdapter({ authToken: () => 'sekret' })
+    await a.request({ method: 'GET', path: '/x', headers: { Authorization: 'Bearer caller-token' } })
+    const init = fetchMock.mock.calls[0][1]!
+    expect((init.headers as any)['Authorization']).toBe('Bearer caller-token')
   })
 })
 

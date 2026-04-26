@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { setAdapter } from '../index'
 import { useRequest } from '../hooks.svelte'
+import { Diagnostics } from '../diagnostics.svelte'
 import type { DataAdapter, Subscription } from '../types'
 import type { TopicKey } from '../topics'
 
@@ -18,12 +19,13 @@ function fakeAdapter(opts: {
   request?: ReturnType<typeof vi.fn>,
 } = {}): DataAdapter {
   return {
-    request: opts.request ?? vi.fn().mockResolvedValue({}),
+    request: (opts.request ?? vi.fn().mockResolvedValue({})) as DataAdapter['request'],
     subscribe: ((k: TopicKey) => opts.subFor?.(k) ?? fakeSubscription()) as DataAdapter['subscribe'],
     connectionState: {
       value: 'idle',
       subscribe: () => () => {},
     },
+    diagnostics: new Diagnostics(),
   }
 }
 

@@ -1,7 +1,7 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { BridgeTransport } from '../bridge-transport'
+import { describe, it, expect, beforeEach } from 'vitest'
+import { bridgeSend } from '../bridge-transport'
 
-describe('BridgeTransport', () => {
+describe('bridgeSend', () => {
   let posted: Array<{ id: number; envelope: any }> = []
   let bridge: any
 
@@ -31,8 +31,7 @@ describe('BridgeTransport', () => {
   })
 
   it('forwards request envelopes', async () => {
-    const t = new BridgeTransport()
-    const p = t.send({ method: 'GET', path: '/api/x', headers: {} })
+    const p = bridgeSend({ method: 'GET', path: '/api/x', headers: {} })
     expect(posted.length).toBe(1)
     expect(posted[0].envelope.path).toBe('/api/x')
     bridge._complete(posted[0].id, { status: 200, headers: {}, body: btoa('{}'), error: null })
@@ -41,14 +40,13 @@ describe('BridgeTransport', () => {
   })
 
   it('rejects on _fail', async () => {
-    const t = new BridgeTransport()
-    const p = t.send({ method: 'GET', path: '/x', headers: {} })
+    const p = bridgeSend({ method: 'GET', path: '/x', headers: {} })
     bridge._fail(posted[0].id, 'boom')
     await expect(p).rejects.toThrow('boom')
   })
 
   it('throws if window.ShuttleBridge missing', () => {
     delete (globalThis as any).window.ShuttleBridge
-    expect(() => new BridgeTransport()).toThrow(/ShuttleBridge/)
+    expect(() => bridgeSend({ method: 'GET', path: '/x', headers: {} })).toThrow(/ShuttleBridge/)
   })
 })
