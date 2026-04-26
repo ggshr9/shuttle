@@ -12,19 +12,21 @@
   // SettingsPage chunk. Do NOT move these imports into nav.ts — that
   // module is reachable from the eagerly-loaded route table and would
   // pull every sub-page into the root bundle.
-  import General  from './sub/General.svelte'
-  import Proxy    from './sub/Proxy.svelte'
-  import Mesh     from './sub/Mesh.svelte'
-  import Routing  from './sub/Routing.svelte'
-  import Dns      from './sub/Dns.svelte'
-  import Logging  from './sub/Logging.svelte'
-  import Qos      from './sub/Qos.svelte'
-  import Backup   from './sub/Backup.svelte'
-  import Update   from './sub/Update.svelte'
-  import Advanced from './sub/Advanced.svelte'
+  import General     from './sub/General.svelte'
+  import Proxy       from './sub/Proxy.svelte'
+  import Mesh        from './sub/Mesh.svelte'
+  import Routing     from './sub/Routing.svelte'
+  import Dns         from './sub/Dns.svelte'
+  import Diagnostics from './sub/Diagnostics.svelte'
+  import Logging     from './sub/Logging.svelte'
+  import Qos         from './sub/Qos.svelte'
+  import Backup      from './sub/Backup.svelte'
+  import Update      from './sub/Update.svelte'
+  import Advanced    from './sub/Advanced.svelte'
 
   const pageMap: Record<string, Component> = {
     general: General, proxy: Proxy, mesh: Mesh, routing: Routing, dns: Dns,
+    diag: Diagnostics,
     logging: Logging, qos: Qos, backup: Backup, update: Update, advanced: Advanced,
   }
 

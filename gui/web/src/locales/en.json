@@ -453,7 +453,36 @@
       "qos": "QoS",
       "backup": "Backup",
       "update": "Update",
-      "advanced": "Advanced"
+      "advanced": "Advanced",
+      "diag": "Diagnostics"
+    },
+    "diag": {
+      "title": "Diagnostics",
+      "subtitle": "Bridge transport health and fallback history. Local data only.",
+      "section": {
+        "bridgeHealth": "Bridge health",
+        "lastError": "Last error",
+        "fallbackHistory": "Fallback history"
+      },
+      "stat": {
+        "requests": "Requests",
+        "errors": "Errors",
+        "errorRate": "Error rate",
+        "rttP50": "RTT p50",
+        "rttP95": "RTT p95"
+      },
+      "empty": {
+        "noSamples": "Not enough samples yet",
+        "noErrors": "No errors recorded this session",
+        "noFallbacks": "No fallback events recorded"
+      },
+      "action": {
+        "reset": "Reset counters",
+        "confirmReset": "Clear all diagnostic data?"
+      },
+      "totalTriggers": "Total triggers: {count}",
+      "relativeJustNow": "just now",
+      "rttUnit": "ms"
     },
     "section": {
       "basics": "Basics",

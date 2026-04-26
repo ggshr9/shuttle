@@ -63,3 +63,60 @@ describe('boot', () => {
     expect(getAdapter().constructor.name).toBe('BridgeAdapter')
   })
 })
+
+describe('boot — fallback diagnostics recording', () => {
+  beforeEach(() => {
+    __resetAdapter()
+    delete (window as any).ShuttleBridge
+    delete (window as any).webkit
+    Object.defineProperty(window, 'location', { value: { search: '' }, writable: true })
+    localStorage.clear()
+  })
+
+  it('persists fallback to localStorage before postMessage when probe fails', async () => {
+    const post = vi.fn()
+    ;(window as any).webkit = { messageHandlers: { fallback: { postMessage: post } } }
+    ;(window as any).ShuttleBridge = { send: async () => { throw new Error('unreachable') } }
+
+    let storedAtPostTime: string | null = null
+    post.mockImplementation(() => {
+      storedAtPostTime = localStorage.getItem('shuttle.diag.fallbacks')
+    })
+
+    await boot()
+    expect(storedAtPostTime).toBeTruthy()
+    const parsed = JSON.parse(storedAtPostTime!)
+    expect(parsed.entries.length).toBeGreaterThan(0)
+    expect(parsed.entries[0].reason).toMatch(/unreachable/i)
+  })
+
+  it('writes via persistDirect when ShuttleBridge is missing under bridge=1', async () => {
+    Object.defineProperty(window, 'location', { value: { search: '?bridge=1' }, writable: true })
+    const post = vi.fn()
+    ;(window as any).webkit = { messageHandlers: { fallback: { postMessage: post } } }
+
+    let storedAtPostTime: string | null = null
+    post.mockImplementation(() => {
+      storedAtPostTime = localStorage.getItem('shuttle.diag.fallbacks')
+    })
+
+    await boot()
+    expect(post).toHaveBeenCalled()
+    expect(storedAtPostTime).toBeTruthy()
+    const parsed = JSON.parse(storedAtPostTime!)
+    expect(parsed.total).toBeGreaterThanOrEqual(1)
+  })
+
+  it('does not register unhandledrejection listener when probe fails', async () => {
+    const post = vi.fn()
+    ;(window as any).webkit = { messageHandlers: { fallback: { postMessage: post } } }
+    ;(window as any).ShuttleBridge = { send: async () => { throw new Error('dead') } }
+    const addSpy = vi.spyOn(window, 'addEventListener')
+
+    await boot()
+
+    const listenerCalls = addSpy.mock.calls.filter(c => c[0] === 'unhandledrejection')
+    expect(listenerCalls).toHaveLength(0)
+    addSpy.mockRestore()
+  })
+})

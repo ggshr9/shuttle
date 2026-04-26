@@ -1,5 +1,6 @@
 // gui/web/src/lib/data/http-adapter.ts
 import { ConnectionStateController } from './connection-state'
+import { Diagnostics } from './diagnostics.svelte'
 import { HttpSubscription } from './http-subscription'
 import { topicConfig, type TopicKey, type TopicValue } from './topics'
 import {
@@ -16,6 +17,7 @@ export interface HttpAdapterOptions {
 
 export class HttpAdapter implements DataAdapter {
   readonly connectionState = new ConnectionStateController()
+  readonly diagnostics = new Diagnostics()
   private readonly subs = new Map<TopicKey, HttpSubscription<any>>()
   private readonly base: string
   private readonly authToken: () => string
@@ -28,12 +30,35 @@ export class HttpAdapter implements DataAdapter {
   }
 
   async request<T = unknown>(opts: RequestOptions): Promise<T> {
+    const t0 = (typeof performance !== 'undefined' ? performance : Date).now()
+    let ok = false
+    let reason: string | undefined
+    try {
+      const result = await this.#requestImpl<T>(opts)
+      ok = true
+      return result
+    } catch (err) {
+      if (err instanceof DOMException && err.name === 'AbortError') {
+        // user-initiated abort — count as request, not error
+        ok = true
+        throw err
+      }
+      reason = err instanceof Error ? err.message : String(err)
+      throw err
+    } finally {
+      const dt = (typeof performance !== 'undefined' ? performance : Date).now() - t0
+      this.diagnostics.recordRequest(dt, ok, reason)
+    }
+  }
+
+  async #requestImpl<T = unknown>(opts: RequestOptions): Promise<T> {
     const { method, path, body, headers, signal, timeoutMs } = opts
     const ctrl = new AbortController()
     const linkResult = signal
       ? linkSignals(signal, ctrl.signal)
       : { signal: ctrl.signal, cleanup: () => {} }
-    const timer = setTimeout(() => ctrl.abort(), timeoutMs ?? this.defaultTimeoutMs)
+    let timedOut = false
+    const timer = setTimeout(() => { timedOut = true; ctrl.abort() }, timeoutMs ?? this.defaultTimeoutMs)
     try {
       const tok = this.authToken()
       const finalHeaders: Record<string, string> = {
@@ -48,6 +73,13 @@ export class HttpAdapter implements DataAdapter {
       try {
         res = await fetch(this.base + path, init)
       } catch (err) {
+        if (err instanceof DOMException && err.name === 'AbortError') {
+          // Internal timeout → record as error with reason='timeout'.
+          // External (caller-supplied) signal abort → pass through so outer
+          // wrapper's carve-out treats it as ok (user cancellation).
+          if (timedOut) throw new TransportError(err, 'timeout')
+          throw err
+        }
         throw new TransportError(err, err instanceof Error ? err.message : String(err))
       }
 

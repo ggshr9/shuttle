@@ -453,7 +453,36 @@
       "qos": "服务质量",
       "backup": "备份",
       "update": "更新",
-      "advanced": "高级"
+      "advanced": "高级",
+      "diag": "诊断"
+    },
+    "diag": {
+      "title": "诊断",
+      "subtitle": "Bridge 传输健康状况与回退历史。所有数据仅保存在本机。",
+      "section": {
+        "bridgeHealth": "Bridge 健康",
+        "lastError": "最近一次错误",
+        "fallbackHistory": "回退历史"
+      },
+      "stat": {
+        "requests": "请求数",
+        "errors": "错误数",
+        "errorRate": "错误率",
+        "rttP50": "RTT p50",
+        "rttP95": "RTT p95"
+      },
+      "empty": {
+        "noSamples": "样本数量不足",
+        "noErrors": "本次会话无错误",
+        "noFallbacks": "无回退记录"
+      },
+      "action": {
+        "reset": "清空计数器",
+        "confirmReset": "确定要清空所有诊断数据吗？"
+      },
+      "totalTriggers": "累计触发: {count}",
+      "relativeJustNow": "刚才",
+      "rttUnit": "毫秒"
     },
     "section": {
       "basics": "常规",
