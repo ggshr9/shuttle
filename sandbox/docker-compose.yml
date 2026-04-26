@@ -47,14 +47,17 @@ services:
     command: >
       sh -c "
         apk add --no-cache iptables-legacy iproute2 iproute2-tc bash &&
-        ln -sf /usr/sbin/iptables-legacy /usr/sbin/iptables &&
-        ln -sf /usr/sbin/iptables-legacy-save /usr/sbin/iptables-save &&
-        ln -sf /usr/sbin/iptables-legacy-restore /usr/sbin/iptables-restore &&
+        ln -sf /sbin/iptables-legacy /sbin/iptables &&
+        ln -sf /sbin/iptables-legacy-save /sbin/iptables-save &&
+        ln -sf /sbin/iptables-legacy-restore /sbin/iptables-restore &&
         iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE &&
         iptables -A FORWARD -i eth1 -o eth0 -j ACCEPT &&
         iptables -A FORWARD -i eth2 -o eth0 -j ACCEPT &&
         iptables -A FORWARD -m state --state ESTABLISHED,RELATED -j ACCEPT &&
-        echo 'Router ready' &&
+        echo 'Router ready (rules:' &&
+        iptables -t nat -L POSTROUTING -n -v &&
+        iptables -L FORWARD -n -v &&
+        echo ')' &&
         tail -f /dev/null
       "
     networks:
