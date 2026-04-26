@@ -27,10 +27,10 @@ test.describe('P9 settings', () => {
         await expect(page).toHaveURL(/#\/settings\/general$/);
     });
 
-    test('settings sub-nav shows all 10 entries', async ({ page }) => {
+    test('settings sub-nav shows all 11 entries', async ({ page }) => {
         await page.goto('/#/settings');
         await expect(page.locator('a.sub-item').first()).toBeVisible({ timeout: 5000 });
-        await expect(page.locator('a.sub-item')).toHaveCount(10);
+        await expect(page.locator('a.sub-item')).toHaveCount(11);
     });
 
     test('clicking a sub-nav entry updates the URL', async ({ page }) => {
