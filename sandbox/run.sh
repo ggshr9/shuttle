@@ -136,27 +136,27 @@ run_tests() {
     set +e  # arithmetic ((...)) returns 1 when result is 0; disable errexit for tests
 
     # Process running checks
-    ((total++)); diag "test_server_running"   docker compose exec -T server   pgrep -x shuttled && ((passed++)) || ((failed++))
-    ((total++)); diag "test_client_a_running" docker compose exec -T client-a pgrep -x shuttle  && ((passed++)) || ((failed++))
-    ((total++)); diag "test_client_b_running" docker compose exec -T client-b pgrep -x shuttle  && ((passed++)) || ((failed++))
+    total=$((total+1)); diag "test_server_running"   docker compose exec -T server   pgrep -x shuttled && passed=$((passed+1)) || failed=$((failed+1))
+    total=$((total+1)); diag "test_client_a_running" docker compose exec -T client-a pgrep -x shuttle  && passed=$((passed+1)) || failed=$((failed+1))
+    total=$((total+1)); diag "test_client_b_running" docker compose exec -T client-b pgrep -x shuttle  && passed=$((passed+1)) || failed=$((failed+1))
 
     # L3 connectivity (client → router on its own subnet)
-    ((total++)); diag "test_client_a_to_router" docker compose exec -T client-a ping -c 1 -W 2 10.100.1.1 && ((passed++)) || ((failed++))
-    ((total++)); diag "test_client_b_to_router" docker compose exec -T client-b ping -c 1 -W 2 10.100.2.1 && ((passed++)) || ((failed++))
+    total=$((total+1)); diag "test_client_a_to_router" docker compose exec -T client-a ping -c 1 -W 2 10.100.1.1 && passed=$((passed+1)) || failed=$((failed+1))
+    total=$((total+1)); diag "test_client_b_to_router" docker compose exec -T client-b ping -c 1 -W 2 10.100.2.1 && passed=$((passed+1)) || failed=$((failed+1))
 
     # L3 connectivity through router (client → server)
-    ((total++)); diag "test_client_a_to_server" docker compose exec -T client-a ping -c 1 -W 2 10.100.0.10 && ((passed++)) || ((failed++))
+    total=$((total+1)); diag "test_client_a_to_server" docker compose exec -T client-a ping -c 1 -W 2 10.100.0.10 && passed=$((passed+1)) || failed=$((failed+1))
 
     # Proxy paths via server, hitting local httpbin (10.100.0.20)
-    ((total++)); diag_check "test_socks5_proxy"        "origin"  docker compose exec -T client-a curl -s  --socks5 127.0.0.1:1080 --max-time 10 http://10.100.0.20/ip  && ((passed++)) || ((failed++))
-    ((total++)); diag_check "test_http_proxy"          "origin"  docker compose exec -T client-a curl -s  --proxy http://127.0.0.1:8080 --max-time 10 http://10.100.0.20/ip  && ((passed++)) || ((failed++))
-    ((total++)); diag_check "test_socks5_get_endpoint" "headers" docker compose exec -T client-a curl -s  --socks5 127.0.0.1:1080 --max-time 10 http://10.100.0.20/get && ((passed++)) || ((failed++))
+    total=$((total+1)); diag_check "test_socks5_proxy"        "origin"  docker compose exec -T client-a curl -s  --socks5 127.0.0.1:1080 --max-time 10 http://10.100.0.20/ip  && passed=$((passed+1)) || failed=$((failed+1))
+    total=$((total+1)); diag_check "test_http_proxy"          "origin"  docker compose exec -T client-a curl -s  --proxy http://127.0.0.1:8080 --max-time 10 http://10.100.0.20/ip  && passed=$((passed+1)) || failed=$((failed+1))
+    total=$((total+1)); diag_check "test_socks5_get_endpoint" "headers" docker compose exec -T client-a curl -s  --socks5 127.0.0.1:1080 --max-time 10 http://10.100.0.20/get && passed=$((passed+1)) || failed=$((failed+1))
 
     # Client-side API health check (no network hop required)
-    ((total++)); diag_check "test_client_a_api_status" "state" docker compose exec -T client-a curl -s --max-time 5 http://127.0.0.1:9090/api/status && ((passed++)) || ((failed++))
+    total=$((total+1)); diag_check "test_client_a_api_status" "state" docker compose exec -T client-a curl -s --max-time 5 http://127.0.0.1:9090/api/status && passed=$((passed+1)) || failed=$((failed+1))
 
     # Client B's SOCKS5 path
-    ((total++)); diag_check "test_client_b_socks5" "origin" docker compose exec -T client-b curl -s --socks5 127.0.0.1:1080 --max-time 10 http://10.100.0.20/ip && ((passed++)) || ((failed++))
+    total=$((total+1)); diag_check "test_client_b_socks5" "origin" docker compose exec -T client-b curl -s --socks5 127.0.0.1:1080 --max-time 10 http://10.100.0.20/ip && passed=$((passed+1)) || failed=$((failed+1))
 
     echo ""
     echo "==========================================="
