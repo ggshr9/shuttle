@@ -98,7 +98,10 @@ func TestEventsHandler_WS_StreamsEvents(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
-	c, _, err := websocket.Dial(ctx, wsURL, nil)
+	c, resp, err := websocket.Dial(ctx, wsURL, nil)
+	if resp != nil && resp.Body != nil {
+		defer resp.Body.Close()
+	}
 	if err != nil {
 		t.Fatalf("dial: %v", err)
 	}
@@ -140,6 +143,9 @@ func TestEventsHandler_WS_BadSince_400(t *testing.T) {
 	defer cancel()
 
 	_, resp, err := websocket.Dial(ctx, wsURL, nil)
+	if resp != nil && resp.Body != nil {
+		defer resp.Body.Close()
+	}
 	if err == nil {
 		t.Fatal("expected dial to fail with 400")
 	}
@@ -159,7 +165,10 @@ func TestEventsHandler_WS_ClientCancel_ServerExits(t *testing.T) {
 	dialCtx, dialCancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer dialCancel()
 
-	c, _, err := websocket.Dial(dialCtx, wsURL, nil)
+	c, resp, err := websocket.Dial(dialCtx, wsURL, nil)
+	if resp != nil && resp.Body != nil {
+		defer resp.Body.Close()
+	}
 	if err != nil {
 		t.Fatalf("dial: %v", err)
 	}
