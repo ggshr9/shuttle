@@ -267,7 +267,7 @@ func registerMiscRoutes(mux *http.ServeMux, eng *engine.Engine, subMgr *subscrip
 			return
 		}
 		// Validate URL scheme to prevent SSRF against internal services
-		if err := validateProbeURL(req.URL); err != nil {
+		if err := validateProbeURL(req.URL, eng.Config().AllowPrivateNetworks); err != nil {
 			writeError(w, http.StatusBadRequest, err.Error())
 			return
 		}
@@ -380,7 +380,7 @@ func registerMiscRoutes(mux *http.ServeMux, eng *engine.Engine, subMgr *subscrip
 			if t.Via == "" {
 				t.Via = "socks5"
 			}
-			if err := validateProbeURL(t.URL); err != nil {
+			if err := validateProbeURL(t.URL, eng.Config().AllowPrivateNetworks); err != nil {
 				results = append(results, result{Name: t.Name, URL: t.URL, Via: t.Via, Error: err.Error()})
 				continue
 			}

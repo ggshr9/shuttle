@@ -631,7 +631,7 @@ func TestValidateProbeURL(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.url, func(t *testing.T) {
-			err := validateProbeURL(tc.url)
+			err := validateProbeURL(tc.url, false)
 			if tc.wantErr && err == nil {
 				t.Fatalf("expected error for %q, got nil", tc.url)
 			}
@@ -653,7 +653,7 @@ func TestValidateProbeURL_PrivateIP(t *testing.T) {
 		"http://localhost/",
 	}
 	for _, u := range blocked {
-		if err := validateProbeURL(u); err == nil {
+		if err := validateProbeURL(u, false); err == nil {
 			t.Errorf("expected error for blocked URL %q, got nil", u)
 		}
 	}
@@ -664,9 +664,33 @@ func TestValidateProbeURL_PrivateIP(t *testing.T) {
 		"https://example.com:443/path",
 	}
 	for _, u := range allowed {
-		if err := validateProbeURL(u); err != nil {
+		if err := validateProbeURL(u, false); err != nil {
 			t.Errorf("unexpected error for allowed URL %q: %v", u, err)
 		}
+	}
+}
+
+// When AllowPrivateNetworks is true (sandbox/testing), the address-class
+// blocks are bypassed. Scheme + hostname-format checks still apply.
+func TestValidateProbeURL_AllowPrivate(t *testing.T) {
+	allowedUnderFlag := []string{
+		"http://10.100.0.20/ip",
+		"http://192.168.1.1/",
+		"http://localhost/",
+		"http://127.0.0.1:8080/",
+	}
+	for _, u := range allowedUnderFlag {
+		if err := validateProbeURL(u, true); err != nil {
+			t.Errorf("expected %q to pass under allowPrivate=true, got: %v", u, err)
+		}
+	}
+	// Scheme check still enforced even with allowPrivate=true.
+	if err := validateProbeURL("ftp://10.0.0.1/", true); err == nil {
+		t.Error("scheme check should still apply under allowPrivate=true")
+	}
+	// Empty hostname still rejected.
+	if err := validateProbeURL("http:///path", true); err == nil {
+		t.Error("empty hostname should still be rejected under allowPrivate=true")
 	}
 }
 
