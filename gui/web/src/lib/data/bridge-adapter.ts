@@ -1,5 +1,5 @@
 // gui/web/src/lib/data/bridge-adapter.ts
-import { BridgeTransport } from './bridge-transport'
+import { bridgeSend, type BridgeSend } from './bridge-transport'
 import { BridgeSubscription } from './bridge-subscription'
 import { ConnectionStateController } from './connection-state'
 import { topicConfig, type TopicKey, type TopicValue } from './topics'
@@ -12,18 +12,18 @@ import { Diagnostics } from './diagnostics.svelte'
 
 export interface BridgeAdapterOptions {
   authToken?: () => string
-  transport?: BridgeTransport
+  transport?: BridgeSend
 }
 
 export class BridgeAdapter implements DataAdapter {
   readonly connectionState = new ConnectionStateController()
   readonly diagnostics = new Diagnostics()
   private readonly subs = new Map<TopicKey, BridgeSubscription<any>>()
-  private readonly transport: BridgeTransport
+  private readonly transport: BridgeSend
   private readonly authToken: () => string
 
   constructor(opts: BridgeAdapterOptions = {}) {
-    this.transport = opts.transport ?? new BridgeTransport()
+    this.transport = opts.transport ?? bridgeSend
     this.authToken = opts.authToken ?? (() => (typeof window !== 'undefined' ? (window as any).__SHUTTLE_AUTH_TOKEN__ ?? '' : ''))
   }
 
@@ -77,7 +77,7 @@ export class BridgeAdapter implements DataAdapter {
         // contract by rejecting locally as soon as the signal aborts. The
         // envelope completes natively and its response is discarded.
         resp = await Promise.race([
-          this.transport.send(envelope),
+          this.transport(envelope),
           new Promise<never>((_, reject) => {
             const handler = () => reject(new DOMException('Aborted', 'AbortError'))
             opts.signal!.addEventListener('abort', handler, { once: true })
@@ -85,7 +85,7 @@ export class BridgeAdapter implements DataAdapter {
           }),
         ])
       } else {
-        resp = await this.transport.send(envelope)
+        resp = await this.transport(envelope)
       }
     } catch (err) {
       if (err instanceof DOMException && err.name === 'AbortError') {

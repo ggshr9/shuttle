@@ -27,17 +27,13 @@ declare global {
   }
 }
 
-export class BridgeTransport {
-  private readonly bridge: ShuttleBridgeAPI
+/** Caller-injectable transport function. Default: dispatches via window.ShuttleBridge.
+ *  Throws when window.ShuttleBridge is missing — caller must verify availability first. */
+export type BridgeSend = (envelope: BridgeEnvelope) => Promise<BridgeResponse>
 
-  constructor() {
-    if (typeof window === 'undefined' || !window.ShuttleBridge) {
-      throw new Error('window.ShuttleBridge not available — BridgeAdapter requires it')
-    }
-    this.bridge = window.ShuttleBridge
+export const bridgeSend: BridgeSend = (envelope) => {
+  if (typeof window === 'undefined' || !window.ShuttleBridge) {
+    throw new Error('window.ShuttleBridge not available — BridgeAdapter requires it')
   }
-
-  send(envelope: BridgeEnvelope): Promise<BridgeResponse> {
-    return this.bridge.send(envelope)
-  }
+  return window.ShuttleBridge.send(envelope)
 }
