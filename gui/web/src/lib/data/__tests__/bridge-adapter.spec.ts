@@ -43,6 +43,22 @@ describe('BridgeAdapter.request', () => {
     await a.request({ method: 'POST', path: '/x', body: { a: 1 } })
     expect(captured.body).toBe(btoa(JSON.stringify({ a: 1 })))
   })
+
+  it('injects auth header from token getter', async () => {
+    let captured: any
+    fakeBridge(async (env) => { captured = env; return ok({}) })
+    const a = new BridgeAdapter({ authToken: () => 'sekret' })
+    await a.request({ method: 'GET', path: '/x' })
+    expect(captured.headers['Authorization']).toBe('Bearer sekret')
+  })
+
+  it('preserves caller-supplied Authorization header (does not overwrite)', async () => {
+    let captured: any
+    fakeBridge(async (env) => { captured = env; return ok({}) })
+    const a = new BridgeAdapter({ authToken: () => 'sekret' })
+    await a.request({ method: 'GET', path: '/x', headers: { Authorization: 'Bearer caller-token' } })
+    expect(captured.headers['Authorization']).toBe('Bearer caller-token')
+  })
 })
 
 describe('BridgeAdapter — diagnostics integration', () => {
