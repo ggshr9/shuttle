@@ -93,6 +93,81 @@ function Get-ShuttledBinary {
     return $dest
 }
 
+function Invoke-Wizard {
+    Write-Host ''
+    Write-Host '╔══════════════════════════════════════════╗' -ForegroundColor Cyan
+    Write-Host '║   Shuttle Server — Setup Wizard          ║' -ForegroundColor Cyan
+    Write-Host '╚══════════════════════════════════════════╝' -ForegroundColor Cyan
+    Write-Host ''
+
+    # --- Step 1: domain or IP ---
+    Write-Host 'Step 1/3 — Server Address' -ForegroundColor White
+    Write-Host ''
+    Write-Host '  1) Use a domain name'
+    Write-Host '  2) Use server IP address'
+    Write-Host ''
+    do {
+        $mode = Read-Host '  Choose [1/2] (default: 2)'
+        if ([string]::IsNullOrWhiteSpace($mode)) { $mode = '2' }
+    } until ($mode -in '1', '2')
+
+    if ($mode -eq '1') {
+        do {
+            $script:domain = Read-Host '  Enter your domain'
+        } until ($script:domain)
+    } else {
+        $detected = Get-PublicIP
+        if ($detected) {
+            $entered = Read-Host "  Server IP [$detected]"
+            $script:domain = if ($entered) { $entered } else { $detected }
+        } else {
+            do {
+                $script:domain = Read-Host '  Could not detect IP. Enter server IP'
+            } until ($script:domain)
+        }
+    }
+    Write-Info "Using address: $script:domain"
+
+    # --- Step 2: password ---
+    Write-Host ''
+    Write-Host 'Step 2/3 — Authentication' -ForegroundColor White
+    $script:password = Read-Host '  Set a password (leave empty to auto-generate)'
+    if ([string]::IsNullOrWhiteSpace($script:password)) {
+        $bytes = New-Object byte[] 24
+        [Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($bytes)
+        $script:password = [Convert]::ToBase64String($bytes).Replace('/', '').Replace('+', '').Replace('=', '').Substring(0, 16)
+        Write-Info "Generated password: $script:password"
+    }
+
+    # --- Step 3: transport ---
+    Write-Host ''
+    Write-Host 'Step 3/3 — Transport Protocol' -ForegroundColor White
+    Write-Host '  1) Both H3 + Reality (recommended)'
+    Write-Host '  2) H3/QUIC only'
+    Write-Host '  3) Reality only'
+    do {
+        $t = Read-Host '  Choose [1/2/3] (default: 1)'
+        if ([string]::IsNullOrWhiteSpace($t)) { $t = '1' }
+    } until ($t -in '1', '2', '3')
+    $script:transport = @{ '1' = 'both'; '2' = 'h3'; '3' = 'reality' }[$t]
+
+    Write-Host ''
+    Write-Info 'Generating config...'
+    & (Join-Path $INSTALL_DIR 'shuttled.exe') init `
+        --dir $CONFIG_DIR `
+        --domain $script:domain `
+        --password $script:password `
+        --transport $script:transport
+}
+
+function Invoke-AutoConfigure {
+    Write-Info 'Running auto-config...'
+    $args = @('init', '--dir', $CONFIG_DIR, '--transport', $Transport)
+    if ($Domain)   { $args += @('--domain',   $Domain) }
+    if ($Password) { $args += @('--password', $Password) }
+    & (Join-Path $INSTALL_DIR 'shuttled.exe') @args
+}
+
 # --- main dispatch (filled in by later tasks) ---
 switch ($Action) {
     'install'   { Assert-Admin; Install-Shuttled }
