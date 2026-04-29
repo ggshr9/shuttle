@@ -26,6 +26,11 @@ type MultiListener struct {
 	closed     atomic.Bool
 	wg         sync.WaitGroup
 	logger     *slog.Logger
+
+	// OnListenerReady, if non-nil, is invoked with each transport's
+	// Type() string immediately after its Listen() call succeeds and
+	// before the accept loop starts. Used by readiness probes.
+	OnListenerReady func(name string)
 }
 
 func NewMultiListener(cfg *ListenerConfig, logger *slog.Logger) *MultiListener {
@@ -77,6 +82,10 @@ func (ml *MultiListener) Start(ctx context.Context) error {
 			"type", t.Type(),
 			"addr", ml.config.ListenAddr,
 			"proto", protoForType(t.Type()))
+
+		if ml.OnListenerReady != nil {
+			ml.OnListenerReady(t.Type())
+		}
 
 		ml.wg.Add(1)
 		go func(tr transport.ServerTransport) {

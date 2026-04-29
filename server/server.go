@@ -323,7 +323,13 @@ func (s *Server) Start(ctx context.Context) error {
 			"peers", len(s.cfg.Cluster.Peers))
 	}
 
-	// Start transport listeners
+	// Start transport listeners.
+	// Wire readiness callback so /api/health/ready can observe bind state.
+	if s.adminInfo != nil {
+		s.ml.OnListenerReady = func(name string) {
+			s.adminInfo.MarkListenerReady(name)
+		}
+	}
 	if err := s.ml.Start(ctx); err != nil {
 		return err
 	}
