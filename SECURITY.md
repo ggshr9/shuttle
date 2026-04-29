@@ -1,5 +1,7 @@
 # Security
 
+> **Last reviewed:** 2026-04-28. This document is reviewed at every release.
+
 ## Verifying Download Integrity
 
 Every release includes a `checksums.txt` file containing SHA-256 hashes for all release artifacts. To verify a downloaded file:
