@@ -63,10 +63,19 @@ func (m *windowsManager) Install(cfg *Config) error {
 		if sec == 0 {
 			sec = 5
 		}
+		// Three ServiceRestart actions with no NoAction terminator:
+		// per Windows SCM policy, when more failures occur than there
+		// are actions in the array, the LAST action is reused — so
+		// making the last entry ServiceRestart matches the
+		// "always restart" semantics of systemd Restart=always and
+		// launchd KeepAlive=<true/>. Previously the third entry was
+		// NoAction, which silently stopped the service after just two
+		// failures while Linux/macOS kept restarting forever.
+		delay := time.Duration(sec) * time.Second
 		recover := []mgr.RecoveryAction{
-			{Type: mgr.ServiceRestart, Delay: time.Duration(sec) * time.Second},
-			{Type: mgr.ServiceRestart, Delay: time.Duration(sec) * time.Second},
-			{Type: mgr.NoAction, Delay: 0},
+			{Type: mgr.ServiceRestart, Delay: delay},
+			{Type: mgr.ServiceRestart, Delay: delay},
+			{Type: mgr.ServiceRestart, Delay: delay},
 		}
 		if err := s.SetRecoveryActions(recover, 86400); err != nil {
 			fmt.Fprintf(os.Stderr, "warning: could not configure auto-restart: %v\n", err)
