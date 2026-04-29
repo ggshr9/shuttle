@@ -20,14 +20,18 @@ homepage: https://github.com/ggshr9/shuttle
 license: MIT
 
 contents:
-  # Client binary
-  - src: ./dist/shuttle-linux-${GOARCH}
+  # Client binary. The CI's "Extract CLI binaries from archive" step
+  # places the binaries at ./dist/shuttle and ./dist/shuttled (without
+  # arch suffix). nfpm doesn't reliably expand ${GOARCH} inside
+  # contents.src globs, so referencing the flat paths is the robust
+  # answer — arch is still recorded in the package metadata above.
+  - src: ./dist/shuttle
     dst: /usr/bin/shuttle
     file_info:
       mode: 0755
 
   # Server binary
-  - src: ./dist/shuttled-linux-${GOARCH}
+  - src: ./dist/shuttled
     dst: /usr/bin/shuttled
     file_info:
       mode: 0755

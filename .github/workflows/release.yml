@@ -182,9 +182,11 @@ jobs:
         run: go install github.com/goreleaser/nfpm/v2/cmd/nfpm@latest
       - name: Build deb + rpm
         env:
-          VERSION: ${{ github.ref_name }}
+          # Strip 'v' prefix: deb/rpm version strings don't accept v-prefixed tags.
+          # `${tag#v}` removes a leading 'v' if present, otherwise leaves the value alone.
           GOARCH: ${{ matrix.nfpm_arch }}
         run: |
+          export VERSION="${GITHUB_REF_NAME#v}"
           nfpm pkg --packager deb --target dist/shuttle-${{ matrix.goarch }}.deb -f build/package/nfpm.yaml
           nfpm pkg --packager rpm --target dist/shuttle-${{ matrix.goarch }}.rpm -f build/package/nfpm.yaml
       - uses: actions/upload-artifact@v4
