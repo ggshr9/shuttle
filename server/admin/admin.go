@@ -6,9 +6,9 @@ import (
 	"crypto/subtle"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log/slog"
 	"net"
-	"io"
 	"net/http"
 	"runtime"
 	"strconv"
@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/shuttleX/shuttle/config"
+	"github.com/shuttleX/shuttle/internal/healthcheck"
 	"github.com/shuttleX/shuttle/plugin"
 	"github.com/shuttleX/shuttle/server/audit"
 	"github.com/shuttleX/shuttle/server/metrics"
@@ -25,7 +26,6 @@ import (
 // EventHandler is an optional http.HandlerFunc for SSE event streaming.
 // When non-nil, it is registered at GET /api/events.
 type EventHandler = http.HandlerFunc
-
 
 // ServerInfo tracks runtime server metrics.
 type ServerInfo struct {
@@ -80,7 +80,7 @@ type BackupPayload struct {
 // Handler creates the admin API HTTP handler. The optional eventsHandler,
 // when non-nil, is registered at GET /api/events for SSE streaming.
 // The optional pm provides plugin chain metrics at GET /api/metrics.
-func Handler(info *ServerInfo, cfg *config.ServerConfig, configPath string, users *UserStore, auditLog *audit.Logger, mc *metrics.Collector, pm *plugin.Metrics, eventsHandler EventHandler) http.Handler {
+func Handler(info *ServerInfo, cfg *config.ServerConfig, configPath string, users *UserStore, auditLog *audit.Logger, mc *metrics.Collector, pm *plugin.Metrics, eventsHandler EventHandler, hb *healthcheck.Heartbeat) http.Handler {
 	mux := http.NewServeMux()
 	var cfgMu sync.RWMutex // protects concurrent access to cfg
 	token := cfg.Admin.Token
@@ -119,10 +119,12 @@ func Handler(info *ServerInfo, cfg *config.ServerConfig, configPath string, user
 	// Dashboard — no auth required (login handled client-side)
 	mux.HandleFunc("GET /", handleDashboard)
 
-	// Health check — no auth required
+	// Health routes — /api/health (legacy shallow), /api/health/live (liveness),
+	// /api/health/ready (readiness). All without auth.
 	mux.HandleFunc("GET /api/health", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, map[string]string{"status": "ok"})
 	})
+	registerHealthRoutes(mux, info, cfg, mc, hb)
 
 	mux.HandleFunc("GET /api/status", auth(func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, map[string]any{
@@ -376,7 +378,7 @@ func Handler(info *ServerInfo, cfg *config.ServerConfig, configPath string, user
 // ListenAndServe starts the admin API server and returns the *http.Server
 // so the caller can call Shutdown() for graceful termination.
 // If the admin API is disabled, it returns (nil, nil).
-func ListenAndServe(cfg *config.AdminConfig, info *ServerInfo, serverCfg *config.ServerConfig, configPath string, users *UserStore, auditLog *audit.Logger, mc *metrics.Collector, pm *plugin.Metrics, eventsHandler EventHandler) (*http.Server, error) {
+func ListenAndServe(cfg *config.AdminConfig, info *ServerInfo, serverCfg *config.ServerConfig, configPath string, users *UserStore, auditLog *audit.Logger, mc *metrics.Collector, pm *plugin.Metrics, eventsHandler EventHandler, hb *healthcheck.Heartbeat) (*http.Server, error) {
 	if !cfg.Enabled {
 		return nil, nil
 	}
@@ -391,7 +393,7 @@ func ListenAndServe(cfg *config.AdminConfig, info *ServerInfo, serverCfg *config
 		return nil, fmt.Errorf("admin listen: %w", err)
 	}
 
-	handler := Handler(info, serverCfg, configPath, users, auditLog, mc, pm, eventsHandler)
+	handler := Handler(info, serverCfg, configPath, users, auditLog, mc, pm, eventsHandler, hb)
 	server := &http.Server{
 		Handler:      handler,
 		ReadTimeout:  10 * time.Second,

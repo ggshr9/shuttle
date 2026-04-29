@@ -13,6 +13,7 @@ import (
 	"github.com/shuttleX/shuttle/adapter"
 	"github.com/shuttleX/shuttle/config"
 	"github.com/shuttleX/shuttle/congestion"
+	"github.com/shuttleX/shuttle/internal/healthcheck"
 	"github.com/shuttleX/shuttle/mesh"
 	meshsignal "github.com/shuttleX/shuttle/mesh/signal"
 	"github.com/shuttleX/shuttle/plugin"
@@ -37,20 +38,22 @@ type Server struct {
 	version    string
 	logger     *slog.Logger
 
-	ml          *MultiListener
-	handler     *Handler
-	adminInfo   *admin.ServerInfo
-	adminServer *http.Server
-	pprofServer *http.Server
-	cluster     *ClusterManager
-	reputation  *Reputation
-	auditLog    *audit.Logger
-	metrics     *metrics.Collector
-	users       *admin.UserStore
-	peerTable   *mesh.PeerTable
-	ipAllocator *mesh.IPAllocator
-	signalHub   *meshsignal.Hub
-	eventBus    *ServerEventBus
+	ml             *MultiListener
+	handler        *Handler
+	adminInfo      *admin.ServerInfo
+	adminServer    *http.Server
+	adminHeartbeat *healthcheck.Heartbeat
+	adminHBStop    chan struct{}
+	pprofServer    *http.Server
+	cluster        *ClusterManager
+	reputation     *Reputation
+	auditLog       *audit.Logger
+	metrics        *metrics.Collector
+	users          *admin.UserStore
+	peerTable      *mesh.PeerTable
+	ipAllocator    *mesh.IPAllocator
+	signalHub      *meshsignal.Hub
+	eventBus       *ServerEventBus
 
 	connWg sync.WaitGroup
 
@@ -179,8 +182,11 @@ func New(c Config) (*Server, error) {
 			Version:    c.Version,
 			ConfigPath: c.ConfigPath,
 		}
+		s.adminHeartbeat = healthcheck.NewHeartbeat()
+		s.adminHBStop = make(chan struct{})
+		s.adminHeartbeat.Run(s.adminHBStop, 5*time.Second)
 		var err error
-		s.adminServer, err = admin.ListenAndServe(&cfg.Admin, s.adminInfo, cfg, c.ConfigPath, s.users, s.auditLog, s.metrics, s.pluginMetrics, s.sseEventsHandler())
+		s.adminServer, err = admin.ListenAndServe(&cfg.Admin, s.adminInfo, cfg, c.ConfigPath, s.users, s.auditLog, s.metrics, s.pluginMetrics, s.sseEventsHandler(), s.adminHeartbeat)
 		if err != nil {
 			logger.Error("failed to start admin API", "err", err)
 		} else {
@@ -213,15 +219,15 @@ func New(c Config) (*Server, error) {
 
 	// --- Connection handler ---
 	s.handler = &Handler{
-		Users:       s.users,
-		Reputation:  s.reputation,
-		AuditLog:    s.auditLog,
-		PeerTable:   s.peerTable,
-		Allocator:   s.ipAllocator,
-		SignalHub:   s.signalHub,
-		Metrics:     s.metrics,
-		AdminInfo:   s.adminInfo,
-		PluginChain: s.pluginChain,
+		Users:                s.users,
+		Reputation:           s.reputation,
+		AuditLog:             s.auditLog,
+		PeerTable:            s.peerTable,
+		Allocator:            s.ipAllocator,
+		SignalHub:            s.signalHub,
+		Metrics:              s.metrics,
+		AdminInfo:            s.adminInfo,
+		PluginChain:          s.pluginChain,
 		StreamSem:            make(chan struct{}, cfg.MaxStreams),
 		Logger:               logger,
 		AllowPrivateNetworks: cfg.AllowPrivateNetworks,
@@ -440,6 +446,12 @@ func (s *Server) Shutdown(ctx context.Context) {
 			s.logger.Error("admin server shutdown error", "err", err)
 		}
 		shutdownCancel()
+	}
+
+	// Stop admin heartbeat goroutine
+	if s.adminHBStop != nil {
+		close(s.adminHBStop)
+		s.adminHBStop = nil
 	}
 
 	// Stop cluster manager
