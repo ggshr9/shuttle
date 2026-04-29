@@ -52,6 +52,14 @@ func wrapConnWithPQ(conn net.Conn, pqSecret []byte) (net.Conn, error) {
 // pqConn wraps a net.Conn with XChaCha20-Poly1305 AEAD encryption.
 // Writes are framed as [2-byte big-endian ciphertext length][ciphertext].
 // Reads reverse the process. Each direction has an independent nonce counter.
+//
+// INVARIANT: aead must have NonceSize() == chacha20poly1305.NonceSizeX
+// (24 bytes). The Read/Write hot paths use a stack-allocated
+// [chacha20poly1305.NonceSizeX]byte nonce; passing an AEAD with a
+// different nonce size would either truncate or read past the array.
+// The only constructor (wrapConnWithPQ) calls chacha20poly1305.NewX,
+// which always returns NonceSize=24, so this holds — but anyone adding
+// a new constructor needs to preserve the invariant.
 type pqConn struct {
 	net.Conn
 
