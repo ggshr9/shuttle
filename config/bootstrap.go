@@ -9,11 +9,11 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"time"
 
 	shuttleCrypto "github.com/ggshr9/shuttle/crypto"
+	"github.com/ggshr9/shuttle/internal/paths"
 )
 
 // InitOptions configures the bootstrap process.
@@ -189,14 +189,27 @@ func Bootstrap(opts *InitOptions) (*InitResult, error) {
 }
 
 // FindDefaultConfig looks for server config in standard locations.
+// Search order: legacy paths first (back-compat with pre-paths-resolver
+// installs), then the OS-appropriate paths.Resolve result for system
+// and user scopes. The legacy entries make sure existing installs
+// keep working after this change; the resolver entries cover Windows
+// (%AppData%\Shuttle) and macOS (~/Library/Application Support/Shuttle)
+// correctly.
 func FindDefaultConfig() string {
-	candidates := []string{
-		"/etc/shuttle/server.yaml",
-	}
+	var candidates []string
 
-	// Add home dir path
+	// Legacy hardcoded paths.
+	candidates = append(candidates, "/etc/shuttle/server.yaml")
 	if home, err := os.UserHomeDir(); err == nil {
 		candidates = append(candidates, filepath.Join(home, ".shuttle", "server.yaml"))
+	}
+
+	// Resolver-driven OS-correct paths.
+	if p := paths.Resolve(paths.ScopeSystem); p.ConfigDir != "" {
+		candidates = append(candidates, filepath.Join(p.ConfigDir, "server.yaml"))
+	}
+	if p := paths.Resolve(paths.ScopeUser); p.ConfigDir != "" {
+		candidates = append(candidates, filepath.Join(p.ConfigDir, "server.yaml"))
 	}
 
 	for _, path := range candidates {
@@ -209,14 +222,21 @@ func FindDefaultConfig() string {
 
 func applyInitDefaults(opts *InitOptions) {
 	if opts.ConfigDir == "" {
-		if os.Getuid() == 0 || runtime.GOOS == "linux" {
-			opts.ConfigDir = "/etc/shuttle"
+		// Pick scope from privilege; let paths.Resolve do per-OS routing
+		// so Windows lands in %AppData%\Shuttle (not C:\Users\X\.shuttle)
+		// and macOS lands in ~/Library/Application Support/Shuttle.
+		// os.Getuid() returns -1 on Windows, so the !=0 branch is taken
+		// there and ScopeUser is selected — exactly what we want.
+		scope := paths.ScopeUser
+		if os.Getuid() == 0 {
+			scope = paths.ScopeSystem
+		}
+		if dir := paths.Resolve(scope).ConfigDir; dir != "" {
+			opts.ConfigDir = dir
+		} else if home, err := os.UserHomeDir(); err == nil {
+			opts.ConfigDir = filepath.Join(home, ".shuttle")
 		} else {
-			if home, err := os.UserHomeDir(); err == nil {
-				opts.ConfigDir = filepath.Join(home, ".shuttle")
-			} else {
-				opts.ConfigDir = ".shuttle"
-			}
+			opts.ConfigDir = ".shuttle"
 		}
 	}
 	if opts.Listen == "" {
