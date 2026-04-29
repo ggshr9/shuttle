@@ -110,6 +110,11 @@ func (b *BrutalController) GetPacingRate() uint64 {
 	return b.targetRate
 }
 
+// InStartup is always false for Brutal — there is no
+// initial-bandwidth-discovery phase; the target rate is
+// configured up front. Implements CongestionController.
+func (b *BrutalController) InStartup() bool { return false }
+
 // SetRate updates the target send rate.
 func (b *BrutalController) SetRate(rate uint64) {
 	b.mu.Lock()

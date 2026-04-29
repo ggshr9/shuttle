@@ -13,6 +13,11 @@ type CongestionController interface {
 	OnPacketLoss(lostBytes uint64)
 	GetCwnd() uint64
 	GetPacingRate() uint64
+	// InStartup returns true while the controller is in an
+	// initial-bandwidth-discovery phase (BBR Startup, etc.). Algorithms
+	// without such a phase return false. The QUIC adapter exposes this
+	// to quic-go via InSlowStart().
+	InStartup() bool
 }
 
 const rttRingSize = 100
@@ -268,6 +273,20 @@ func (ac *AdaptiveCongestion) GetPacingRate() uint64 {
 	active := ac.active
 	ac.mu.Unlock()
 	return active.GetPacingRate()
+}
+
+// InStartup delegates to the active controller. The previous version
+// of this signal lived in QUICAdapter as a type-switch reaching into
+// AdaptiveCongestion's private `active` field; making it part of the
+// CongestionController contract removes the abstraction leak.
+func (ac *AdaptiveCongestion) InStartup() bool {
+	ac.mu.Lock()
+	active := ac.active
+	ac.mu.Unlock()
+	if active == nil {
+		return false
+	}
+	return active.InStartup()
 }
 
 // ActiveName returns the name of the active controller.

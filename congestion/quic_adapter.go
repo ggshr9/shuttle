@@ -105,18 +105,7 @@ func (a *QUICAdapter) SetMaxDatagramSize(size int64) {
 }
 
 func (a *QUICAdapter) InSlowStart() bool {
-	if bbr, ok := a.cc.(*BBRController); ok {
-		return bbr.InStartup()
-	}
-	if ac, ok := a.cc.(*AdaptiveCongestion); ok {
-		ac.mu.Lock()
-		active := ac.active
-		ac.mu.Unlock()
-		if bbr, ok := active.(*BBRController); ok {
-			return bbr.InStartup()
-		}
-	}
-	return false
+	return a.cc.InStartup()
 }
 
 func (a *QUICAdapter) InRecovery() bool {
