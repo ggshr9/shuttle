@@ -1,4 +1,4 @@
-//go:build linux
+//go:build linux && !android
 
 package service
 
@@ -61,6 +61,12 @@ func (m *linuxManager) Install(cfg *Config) error {
 			return ErrPermission
 		}
 		return fmt.Errorf("write unit: %w", err)
+	}
+	// Pre-create LogDir so systemd's StandardOutput=append:... directive
+	// has a writable target on the first start. Mirrors the windows /
+	// darwin install paths.
+	if cfg.LogDir != "" {
+		_ = os.MkdirAll(cfg.LogDir, 0755)
 	}
 	if out, err := m.systemctl("daemon-reload"); err != nil {
 		return fmt.Errorf("daemon-reload: %s", string(out))
