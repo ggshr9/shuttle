@@ -5,6 +5,7 @@ import (
 
 	"github.com/shuttleX/shuttle/adapter"
 	"github.com/shuttleX/shuttle/config"
+	"github.com/shuttleX/shuttle/transport"
 )
 
 func init() {
@@ -55,7 +56,11 @@ func (f *h2Factory) NewServer(cfg *config.ServerConfig, opts adapter.FactoryOpti
 	if sCfg.ListenAddr == "" {
 		sCfg.ListenAddr = cfg.Listen
 	}
-	return NewServer(sCfg, logger), nil
+	srv := NewServer(sCfg, logger)
+	if hm, ok := opts.HandshakeMetrics.(*transport.HandshakeMetrics); ok && hm != nil {
+		srv.SetHandshakeMetrics(hm)
+	}
+	return srv, nil
 }
 
 // grpcFactory handles CDN gRPC client transport.

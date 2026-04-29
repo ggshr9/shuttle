@@ -5,6 +5,7 @@ import (
 
 	"github.com/shuttleX/shuttle/adapter"
 	"github.com/shuttleX/shuttle/config"
+	"github.com/shuttleX/shuttle/transport"
 )
 
 func init() {
@@ -50,5 +51,12 @@ func (f *factory) NewServer(cfg *config.ServerConfig, opts adapter.FactoryOption
 		PostQuantum: cfg.Transport.Reality.PostQuantum,
 		Yamux:       &cfg.Yamux,
 	}
-	return NewServer(sCfg, logger)
+	srv, err := NewServer(sCfg, logger)
+	if err != nil {
+		return nil, err
+	}
+	if hm, ok := opts.HandshakeMetrics.(*transport.HandshakeMetrics); ok && hm != nil {
+		srv.SetHandshakeMetrics(hm)
+	}
+	return srv, nil
 }

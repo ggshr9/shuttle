@@ -20,6 +20,7 @@ import (
 	"github.com/shuttleX/shuttle/server/admin"
 	"github.com/shuttleX/shuttle/server/audit"
 	"github.com/shuttleX/shuttle/server/metrics"
+	"github.com/shuttleX/shuttle/transport"
 )
 
 // Config holds everything the Server needs to initialize.
@@ -111,9 +112,15 @@ func New(c Config) (*Server, error) {
 		ListenAddr: cfg.Listen,
 	}, logger)
 
+	hsMetrics := &transport.HandshakeMetrics{
+		OnSuccess: func(t string, d time.Duration) { s.metrics.RecordHandshake(t, d) },
+		OnFailure: func(t string, reason string) { s.metrics.RecordHandshakeFailure(t, reason) },
+	}
+
 	opts := adapter.FactoryOptions{
 		Logger:            logger,
 		CongestionControl: ccAdapter,
+		HandshakeMetrics:  hsMetrics,
 	}
 	for name, factory := range adapter.All() {
 		t, err := factory.NewServer(cfg, opts)

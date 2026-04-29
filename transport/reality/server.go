@@ -50,6 +50,13 @@ type Server struct {
 	logger   *slog.Logger
 	privKey  [32]byte
 	pubKey   [32]byte
+	metrics  *transport.HandshakeMetrics
+}
+
+// SetHandshakeMetrics installs the handshake metrics hook. Must be called
+// before Listen; the hook is invoked once per completed or failed handshake.
+func (s *Server) SetHandshakeMetrics(m *transport.HandshakeMetrics) {
+	s.metrics = m
 }
 
 // NewServer creates a new Reality server transport.
@@ -144,12 +151,15 @@ func (s *Server) acceptLoop(ctx context.Context) {
 }
 
 func (s *Server) handleConn(ctx context.Context, raw net.Conn) {
+	start := time.Now()
+
 	// Set a deadline for the Noise handshake phase
 	_ = raw.SetReadDeadline(time.Now().Add(10 * time.Second))
 
 	hs, err := shuttlecrypto.NewResponder(s.privKey, s.pubKey)
 	if err != nil {
 		s.logger.Error("noise responder init failed", "err", err)
+		s.recordFailure("protocol")
 		raw.Close()
 		return
 	}
@@ -158,6 +168,7 @@ func (s *Server) handleConn(ctx context.Context, raw net.Conn) {
 	msg1, err := readFrame(raw)
 	if err != nil {
 		s.logger.Debug("noise read failed, forwarding to target", "err", err)
+		s.recordFailure(classifyReason(err))
 		_ = raw.SetReadDeadline(time.Time{})
 		s.forwardToTarget(raw)
 		return
@@ -166,6 +177,7 @@ func (s *Server) handleConn(ctx context.Context, raw net.Conn) {
 	_, err = hs.ReadMessage(msg1)
 	if err != nil {
 		s.logger.Debug("noise auth failed, forwarding to target", "err", err)
+		s.recordFailure("auth")
 		raw.SetReadDeadline(time.Time{})
 		s.forwardToTarget(raw)
 		return
@@ -175,11 +187,13 @@ func (s *Server) handleConn(ctx context.Context, raw net.Conn) {
 	msg2, err := hs.WriteMessage(nil)
 	if err != nil {
 		s.logger.Debug("noise write failed, forwarding to target", "err", err)
+		s.recordFailure("protocol")
 		raw.SetReadDeadline(time.Time{})
 		s.forwardToTarget(raw)
 		return
 	}
 	if err := writeFrame(raw, msg2); err != nil {
+		s.recordFailure(classifyReason(err))
 		raw.Close()
 		return
 	}
@@ -188,6 +202,7 @@ func (s *Server) handleConn(ctx context.Context, raw net.Conn) {
 	raw.SetReadDeadline(time.Time{})
 
 	if !hs.Completed() {
+		s.recordFailure("auth")
 		s.forwardToTarget(raw)
 		return
 	}
@@ -198,6 +213,7 @@ func (s *Server) handleConn(ctx context.Context, raw net.Conn) {
 		next, err := s.detectAndHandlePQ(raw, hs)
 		if err != nil {
 			s.logger.Warn("reality pq phase failed", "err", err)
+			s.recordFailure("protocol")
 			raw.Close()
 			return
 		}
@@ -209,13 +225,27 @@ func (s *Server) handleConn(ctx context.Context, raw net.Conn) {
 	conn, err := mux.Server(raw)
 	if err != nil {
 		s.logger.Error("yamux server error", "err", err)
+		s.recordFailure("protocol")
 		raw.Close()
 		return
 	}
+	s.recordSuccess(time.Since(start))
 	select {
 	case s.connCh <- conn:
 	case <-ctx.Done():
 		conn.Close()
+	}
+}
+
+func (s *Server) recordSuccess(d time.Duration) {
+	if s.metrics != nil && s.metrics.OnSuccess != nil {
+		s.metrics.OnSuccess("reality", d)
+	}
+}
+
+func (s *Server) recordFailure(reason string) {
+	if s.metrics != nil && s.metrics.OnFailure != nil {
+		s.metrics.OnFailure("reality", reason)
 	}
 }
 

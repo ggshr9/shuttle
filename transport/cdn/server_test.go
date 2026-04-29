@@ -1,7 +1,14 @@
 package cdn
 
 import (
+	"bytes"
+	"net/http"
+	"net/http/httptest"
+	"sync/atomic"
 	"testing"
+	"time"
+
+	"github.com/shuttleX/shuttle/transport"
 )
 
 func TestCDNServerName(t *testing.T) {
@@ -69,5 +76,75 @@ func TestCDNServerCloseBeforeListen(t *testing.T) {
 	// Closing before Listen should not panic
 	if err := s.Close(); err != nil {
 		t.Errorf("Close() before Listen() returned error: %v", err)
+	}
+}
+
+// TestCDNServerHandshakeMetricsWired asserts the handshake metrics hook is
+// stored on the server struct after SetHandshakeMetrics is called.
+func TestCDNServerHandshakeMetricsWired(t *testing.T) {
+	s := NewServer(&ServerConfig{Password: "test"}, nil)
+	if s.metrics != nil {
+		t.Fatalf("metrics should be nil before SetHandshakeMetrics")
+	}
+	hook := &transport.HandshakeMetrics{
+		OnSuccess: func(string, time.Duration) {},
+		OnFailure: func(string, string) {},
+	}
+	s.SetHandshakeMetrics(hook)
+	if s.metrics != hook {
+		t.Fatalf("metrics not stored after SetHandshakeMetrics")
+	}
+}
+
+// TestCDNServerHandshakeHookFires_AuthFailure drives handleStream directly
+// with a malformed (empty) auth payload — the read fails and OnFailure must
+// fire with the "protocol" reason. This exercises the wiring end-to-end
+// without needing real TLS infrastructure.
+func TestCDNServerHandshakeHookFires_AuthFailure(t *testing.T) {
+	var failures int32
+	var lastTransport, lastReason string
+	hook := &transport.HandshakeMetrics{
+		OnFailure: func(tn, reason string) {
+			atomic.AddInt32(&failures, 1)
+			lastTransport, lastReason = tn, reason
+		},
+	}
+
+	s := NewServer(&ServerConfig{Password: "secret"}, nil)
+	s.SetHandshakeMetrics(hook)
+
+	// Empty body — io.ReadFull will return io.EOF, classifyReason → "protocol".
+	req := httptest.NewRequest(http.MethodPost, "/cdn/stream", bytes.NewReader(nil))
+	rec := httptest.NewRecorder()
+	s.handleStream(rec, req)
+
+	if got := atomic.LoadInt32(&failures); got != 1 {
+		t.Fatalf("expected 1 OnFailure call, got %d", got)
+	}
+	if lastTransport != "cdn" {
+		t.Errorf("expected transport %q, got %q", "cdn", lastTransport)
+	}
+	if lastReason != "protocol" {
+		t.Errorf("expected reason %q, got %q", "protocol", lastReason)
+	}
+}
+
+// TestCDNServerHandshakeHookFires_BadMethod ensures non-POST requests count
+// as protocol failures.
+func TestCDNServerHandshakeHookFires_BadMethod(t *testing.T) {
+	var failures int32
+	hook := &transport.HandshakeMetrics{
+		OnFailure: func(string, string) { atomic.AddInt32(&failures, 1) },
+	}
+
+	s := NewServer(&ServerConfig{Password: "secret"}, nil)
+	s.SetHandshakeMetrics(hook)
+
+	req := httptest.NewRequest(http.MethodGet, "/cdn/stream", nil)
+	rec := httptest.NewRecorder()
+	s.handleStream(rec, req)
+
+	if got := atomic.LoadInt32(&failures); got != 1 {
+		t.Fatalf("expected 1 OnFailure call, got %d", got)
 	}
 }

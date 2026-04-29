@@ -46,6 +46,13 @@ type Server struct {
 	closed     atomic.Bool
 	logger     *slog.Logger
 	wg         sync.WaitGroup
+	metrics    *transport.HandshakeMetrics
+}
+
+// SetHandshakeMetrics installs the handshake metrics hook. Must be called
+// before Listen; the hook is invoked once per completed or failed handshake.
+func (s *Server) SetHandshakeMetrics(m *transport.HandshakeMetrics) {
+	s.metrics = m
 }
 
 // NewServer creates a new CDN server transport.
@@ -135,9 +142,12 @@ func (s *Server) Listen(ctx context.Context) error {
 // Together they form a bidirectional byte stream authenticated by HMAC and multiplexed by yamux.
 func (s *Server) handleStream(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
+		s.recordFailure("protocol")
 		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
 		return
 	}
+
+	start := time.Now()
 
 	// Flush headers immediately to establish the bidirectional channel.
 	// The client is waiting for a 200 OK before proceeding with auth.
@@ -148,6 +158,7 @@ func (s *Server) handleStream(w http.ResponseWriter, r *http.Request) {
 	flusher, ok := w.(http.Flusher)
 	if !ok {
 		s.logger.Error("cdn: ResponseWriter does not implement http.Flusher")
+		s.recordFailure("protocol")
 		return
 	}
 	flusher.Flush()
@@ -164,6 +175,7 @@ func (s *Server) handleStream(w http.ResponseWriter, r *http.Request) {
 	var authBuf [64]byte
 	if _, err := io.ReadFull(duplex.reader, authBuf[:]); err != nil {
 		s.logger.Debug("cdn: failed to read auth payload", "err", err, "remote", r.RemoteAddr)
+		s.recordFailure(classifyReason(err))
 		return
 	}
 
@@ -172,6 +184,7 @@ func (s *Server) handleStream(w http.ResponseWriter, r *http.Request) {
 
 	if !auth.VerifyHMAC(nonce, clientMAC, s.config.Password) {
 		s.logger.Debug("cdn: auth failed", "remote", r.RemoteAddr)
+		s.recordFailure("auth")
 		return
 	}
 
@@ -180,6 +193,7 @@ func (s *Server) handleStream(w http.ResponseWriter, r *http.Request) {
 	muxConn, err := ym.ServerRWC(duplex)
 	if err != nil {
 		s.logger.Error("cdn: yamux server setup failed", "err", err, "remote", r.RemoteAddr)
+		s.recordFailure("protocol")
 		return
 	}
 
@@ -191,6 +205,7 @@ func (s *Server) handleStream(w http.ResponseWriter, r *http.Request) {
 	}
 
 	s.logger.Debug("cdn: client authenticated", "remote", r.RemoteAddr)
+	s.recordSuccess(time.Since(start))
 
 	// Pass connection to Accept() via channel.
 	select {
@@ -204,6 +219,18 @@ func (s *Server) handleStream(w http.ResponseWriter, r *http.Request) {
 	// the HTTP/2 stream (and its body) will be closed by the net/http server,
 	// tearing down the duplex.
 	<-muxConn.CloseChan()
+}
+
+func (s *Server) recordSuccess(d time.Duration) {
+	if s.metrics != nil && s.metrics.OnSuccess != nil {
+		s.metrics.OnSuccess("cdn", d)
+	}
+}
+
+func (s *Server) recordFailure(reason string) {
+	if s.metrics != nil && s.metrics.OnFailure != nil {
+		s.metrics.OnFailure("cdn", reason)
+	}
 }
 
 func (s *Server) Accept(ctx context.Context) (transport.Connection, error) {
