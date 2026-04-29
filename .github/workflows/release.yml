@@ -370,6 +370,19 @@ jobs:
 
   # ──────────────────────────────────────────────
   # Bump Homebrew tap formulae after the GitHub Release exists.
+  #
+  # mislav/bump-homebrew-formula-action only handles single-URL
+  # formulae. Our formulae have on_arm + on_intel blocks pointing
+  # at distinct architecture-specific tarballs (so Apple Silicon
+  # Macs get a native binary instead of going through Rosetta).
+  # The action would rewrite both URLs to whichever single
+  # download-url we passed it — wrong by design.
+  #
+  # Instead, this job does the bump in plain bash: download both
+  # darwin tarballs, compute sha256 for each, edit the formula
+  # files directly, commit + push to the tap repo. ~30 lines,
+  # fully deterministic, no third-party action.
+  #
   # Requires HOMEBREW_TAP_TOKEN secret: a fine-grained PAT with
   # `contents:write` on ggshr9/homebrew-shuttle.
   # ──────────────────────────────────────────────
@@ -377,25 +390,82 @@ jobs:
     needs: [release]
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/v')
+    env:
+      VERSION: ${{ github.ref_name }}
+      TAP_REPO: ggshr9/homebrew-shuttle
     steps:
-      - name: Bump shuttle formula
-        uses: mislav/bump-homebrew-formula-action@v3
-        with:
-          formula-name: shuttle
-          formula-path: Formula/shuttle.rb
-          homebrew-tap: ggshr9/homebrew-shuttle
-          base-branch: main
-          download-url: https://github.com/ggshr9/shuttle/releases/download/${{ github.ref_name }}/shuttle-darwin-amd64.tar.gz
-        env:
-          COMMITTER_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+      - name: Compute sha256 of darwin release tarballs
+        id: shas
+        run: |
+          # Both shuttle and shuttled binaries ship in the same per-arch
+          # tarball, so we only need two checksums total (arm64, amd64).
+          base="https://github.com/ggshr9/shuttle/releases/download/${VERSION}"
+          for arch in arm64 amd64; do
+            url="${base}/shuttle-darwin-${arch}.tar.gz"
+            curl -fsSL -o "/tmp/shuttle-darwin-${arch}.tar.gz" "$url"
+            sha=$(sha256sum "/tmp/shuttle-darwin-${arch}.tar.gz" | awk '{print $1}')
+            echo "sha_${arch}=${sha}" >> "$GITHUB_OUTPUT"
+            echo "darwin-${arch}: ${sha}"
+          done
 
-      - name: Bump shuttled formula
-        uses: mislav/bump-homebrew-formula-action@v3
-        with:
-          formula-name: shuttled
-          formula-path: Formula/shuttled.rb
-          homebrew-tap: ggshr9/homebrew-shuttle
-          base-branch: main
-          download-url: https://github.com/ggshr9/shuttle/releases/download/${{ github.ref_name }}/shuttled-darwin-amd64.tar.gz
+      - name: Clone tap repo
+        run: |
+          git clone "https://x-access-token:${{ secrets.HOMEBREW_TAP_TOKEN }}@github.com/${TAP_REPO}.git" /tmp/tap
+          cd /tmp/tap
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Rewrite both formulae
         env:
-          COMMITTER_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          SHA_ARM64: ${{ steps.shas.outputs.sha_arm64 }}
+          SHA_AMD64: ${{ steps.shas.outputs.sha_amd64 }}
+          STRIPPED_VERSION: ${{ github.ref_name }}
+        run: |
+          # Strip leading 'v' for the formula's `version` field.
+          v="${STRIPPED_VERSION#v}"
+          base="https://github.com/ggshr9/shuttle/releases/download/${VERSION}"
+
+          # rewrite_formula <path> <binary-name>: rebuilds the on_macos
+          # block atomically using a heredoc so we don't depend on regex
+          # alignment between releases.
+          rewrite_formula() {
+            local path="$1" binary="$2"
+            python3 - "$path" "$binary" "$v" "$base" "$SHA_ARM64" "$SHA_AMD64" <<'PY'
+          import re, sys
+          path, binary, version, base, sha_arm, sha_amd = sys.argv[1:]
+          with open(path) as f:
+              src = f.read()
+          # Replace the formula's `version` field
+          src = re.sub(r'version\s+"[^"]*"', f'version "{version}"', src, count=1)
+          # Replace the on_macos block (everything between `on_macos do` and
+          # its matching `end`) with a freshly-generated one. This is more
+          # robust than line-by-line url/sha256 rewriting.
+          new_block = (
+              "on_macos do\n"
+              "    on_arm do\n"
+              f'      url "{base}/shuttle-darwin-arm64.tar.gz"\n'
+              f'      sha256 "{sha_arm}"\n'
+              "    end\n"
+              "    on_intel do\n"
+              f'      url "{base}/shuttle-darwin-amd64.tar.gz"\n'
+              f'      sha256 "{sha_amd}"\n'
+              "    end\n"
+              "  end"
+          )
+          src = re.sub(r'on_macos do\n.*?\n  end', new_block, src, count=1, flags=re.S)
+          with open(path, "w") as f:
+              f.write(src)
+          PY
+          }
+
+          rewrite_formula /tmp/tap/Formula/shuttle.rb  shuttle
+          rewrite_formula /tmp/tap/Formula/shuttled.rb shuttled
+
+          cd /tmp/tap
+          git add Formula/shuttle.rb Formula/shuttled.rb
+          if git diff --cached --quiet; then
+            echo "no formula changes; skipping commit"
+            exit 0
+          fi
+          git commit -m "chore: bump formulae to ${VERSION}"
+          git push origin main
