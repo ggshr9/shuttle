@@ -74,3 +74,33 @@ Shuttle is designed to defend against the following classes of adversary:
 ```
 
 The management plane is its own trust domain: its credentials must not be derivable from or reused with the data-plane credentials (`auth.password`, `auth.private_key`).
+
+## Hardening Checklist
+
+Treat this as a pre-deploy checklist. Items marked **(default)** are configured automatically by the install scripts; others require explicit configuration.
+
+**Process & filesystem**
+- [ ] Service runs as a dedicated non-root user (default — `shuttle` user via `install.sh`)
+- [ ] systemd `ProtectSystem=strict`, `NoNewPrivileges=true`, `PrivateTmp=true` (default)
+- [ ] `CapabilityBoundingSet=CAP_NET_BIND_SERVICE` only (default)
+- [ ] Config file mode `0600`, directory `0700`, owned by service user
+- [ ] TLS private key file mode `0600`
+
+**Authentication**
+- [ ] `auth.password` is at least 16 chars, randomly generated (use `openssl rand -base64 32`)
+- [ ] For Reality, prefer `auth.private_key` over passwords entirely
+- [ ] `admin.token` is at least 32 chars, randomly generated, never reused as `auth.password`
+
+**Network exposure**
+- [ ] Admin port (`admin.listen`) bound to `127.0.0.1` or restricted by firewall to operator networks
+- [ ] Metrics port (`metrics.listen`) bound to `127.0.0.1` plus token; never exposed publicly
+- [ ] Public listener ports limited to the transports actually in use
+
+**Routing & SSRF**
+- [ ] `router.allow_private_networks: false` in production (the sandbox-only override defaults to `false` already)
+- [ ] If `cdn` outbound is enabled, quotas are configured to bound proxy abuse risk
+
+**Observability**
+- [ ] IP reputation rate-limiting enabled (default — auto-bans after 5 failed auth attempts)
+- [ ] Logs do not echo `Authorization` header, password, or private key (verified by spot-check at each release)
+- [ ] Audit log destination configured if compliance requires it
