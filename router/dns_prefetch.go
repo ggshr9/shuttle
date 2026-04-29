@@ -62,8 +62,22 @@ func (p *Prefetcher) Record(domain string, ttl time.Duration) {
 		// FQDN traffic (e.g. CDN-style hostnames) used to balloon the
 		// map between hourly cleanups; cap = 10*topN is large enough
 		// to find the prefetch winners while bounding memory.
+		//
+		// Drop a *batch* (10% of the cap or at least topN entries),
+		// not just the single one needed to fit. Otherwise every new
+		// unique domain triggers another full sort under the lock —
+		// O(N log N) per insert, sustained, on a hot path. Batching
+		// amortises the sort across the next ~maxDomains/10 inserts.
 		if p.maxDomains > 0 && len(p.domains) >= p.maxDomains {
-			p.evictLowestCountLocked(len(p.domains) - p.maxDomains + 1)
+			batch := p.maxDomains / 10
+			if batch < p.topN {
+				batch = p.topN
+			}
+			needed := len(p.domains) - p.maxDomains + 1
+			if batch < needed {
+				batch = needed
+			}
+			p.evictLowestCountLocked(batch)
 		}
 		ds = &domainStats{}
 		p.domains[domain] = ds
