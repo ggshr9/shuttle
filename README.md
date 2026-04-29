@@ -43,9 +43,59 @@ Client                              Server
 | Android | arm64, arm | ✅ | - | ✅ |
 | iOS | arm64 | ✅ | - | ✅ |
 
-## Download
+## Install
 
-Pre-built binaries available on [GitHub Releases](https://github.com/shuttleX/shuttle/releases):
+### Which installer do I want?
+
+| If you want to... | Use |
+|---|---|
+| Run the **server** (`shuttled`) on a VPS | CLI installer (Linux / macOS / Windows below) |
+| Run a **desktop client** with a UI | GUI installer (`.dmg` / `.exe` / AppImage from [Releases](https://github.com/shuttleX/shuttle/releases)) |
+| Automate / script / CI | CLI installer |
+
+> **Read [SECURITY.md](./SECURITY.md) before deploying to production.**
+
+### Linux
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/shuttleX/shuttle/main/scripts/install-linux.sh | sudo bash
+```
+
+Or with environment variables for non-interactive setup:
+
+```bash
+sudo SHUTTLE_DOMAIN=proxy.example.com SHUTTLE_PASSWORD=secret \
+    bash -c "$(curl -fsSL https://raw.githubusercontent.com/shuttleX/shuttle/main/scripts/install-linux.sh) install --auto"
+```
+
+### macOS (Homebrew)
+
+```bash
+brew tap shuttleX/shuttle
+brew install shuttled
+shuttled init
+brew services start shuttled
+```
+
+### Windows (PowerShell, run as Administrator)
+
+```powershell
+iwr -useb https://raw.githubusercontent.com/shuttleX/shuttle/main/scripts/install-windows.ps1 | iex
+```
+
+### Verify
+
+After install, on any platform:
+
+```bash
+shuttled --version
+curl http://127.0.0.1:8443/api/health/ready    # 200 OK once listeners are bound
+```
+
+### Pre-built binaries
+
+For manual installs or unsupported platforms, grab a binary from
+[GitHub Releases](https://github.com/shuttleX/shuttle/releases):
 
 - `shuttle-linux-amd64` / `shuttle-linux-arm64` - Linux CLI
 - `shuttle-linux-mipsle` - OpenWrt (MIPS soft-float)
@@ -55,29 +105,9 @@ Pre-built binaries available on [GitHub Releases](https://github.com/shuttleX/sh
 - `shuttle-amd64.deb` / `shuttle-amd64.rpm` - Linux packages
 - `shuttle-android.aar` / `shuttle-ios.xcframework.zip` - Mobile libraries
 
-## Quick Start
+## Quick Start (Client)
 
-### 1. Deploy Server (one command)
-
-```bash
-# One-click install on any Linux VPS (generates config, certs, and systemd service)
-curl -fsSL https://raw.githubusercontent.com/shuttleX/shuttle/main/deploy/install.sh | bash
-```
-
-The installer prints a `shuttle://` URI at the end -- copy it for the next step.
-
-Or deploy manually:
-
-```bash
-# Docker
-docker compose -f deploy/docker-compose.yml up -d
-
-# Or build from source
-go build -o shuttled ./cmd/shuttled
-./shuttled run -c server.yaml
-```
-
-### 2. Connect Client
+Once a server is running (see [Install](#install) above), connect with either:
 
 **CLI (2 steps):**
 
@@ -92,8 +122,6 @@ shuttle run -c config.yaml
 shuttle-gui
 # Paste the shuttle:// URI from the server output — done.
 ```
-
-Pre-built binaries for all platforms are on the [Releases](https://github.com/shuttleX/shuttle/releases) page.
 
 ## Import URI
 
