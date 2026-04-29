@@ -206,14 +206,24 @@ func parseOutboundGroupConfig(raw json.RawMessage) (OutboundGroupConfig, error) 
 }
 
 // QualityConfigFromGroupConfig extracts a QualityConfig from the parsed group config.
+//
+// quality_tolerance_ms semantics in JSON:
+//   > 0  — explicit band width in milliseconds
+//   < 0  — strict ranking, no shuffling (caller wants the genuine #1
+//          tried first every time)
+//   == 0 — falls back to defaultQualityToleranceMS at rank time;
+//          this is the "field absent from JSON" case as well.
 func QualityConfigFromGroupConfig(cfg OutboundGroupConfig) QualityConfig {
 	var qc QualityConfig
 	if cfg.MaxLatency != "" {
 		qc.MaxLatency, _ = time.ParseDuration(cfg.MaxLatency) // already validated
 	}
 	qc.MaxLossRate = cfg.MaxLossRate
-	if cfg.QualityToleranceMS > 0 {
+	switch {
+	case cfg.QualityToleranceMS > 0:
 		qc.Tolerance = time.Duration(cfg.QualityToleranceMS) * time.Millisecond
+	case cfg.QualityToleranceMS < 0:
+		qc.Tolerance = -1 // sentinel: strict ranking
 	}
 	return qc
 }

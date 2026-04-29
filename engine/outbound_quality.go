@@ -15,7 +15,11 @@ type QualityConfig struct {
 	// entries within Tolerance of the top score are treated as
 	// equivalent and the bucket is shuffled per-dial so concurrent
 	// callers don't all stampede the single nominal #1 (thundering
-	// herd). When 0, falls back to defaultQualityToleranceMS.
+	// herd). Three states:
+	//   > 0  — explicit band width (e.g. 50ms)
+	//   < 0  — strict ranking, no shuffling (the dialer always tries
+	//          the genuinely best entry first)
+	//   == 0 — default band (defaultQualityToleranceMS)
 	Tolerance time.Duration `json:"tolerance"`
 }
 
@@ -48,9 +52,10 @@ func qualityScore(latency time.Duration, loss float64) float64 {
 // rankByQuality sorts entries by quality score (best first).
 // The input slice is copied so the original is not modified.
 //
-// `cfg.Tolerance` (or defaultQualityToleranceMS when zero) defines a
-// score band around the top: entries inside the band are shuffled
-// each call so concurrent dialers don't all hit the same nominal #1.
+// `cfg.Tolerance` defines a score band around the top: entries inside
+// the band are shuffled each call so concurrent dialers don't all hit
+// the same nominal #1. Negative cfg.Tolerance disables shuffling
+// entirely (strict ranking). Zero means "use the default band."
 // Entries outside the band keep their score-sorted order.
 func rankByQuality(entries []qualityEntry, cfg QualityConfig) []qualityEntry {
 	ranked := make([]qualityEntry, len(entries))
@@ -62,9 +67,12 @@ func rankByQuality(entries []qualityEntry, cfg QualityConfig) []qualityEntry {
 	if len(ranked) <= 1 {
 		return ranked
 	}
+	if cfg.Tolerance < 0 {
+		return ranked // strict ranking, no shuffle
+	}
 
 	tolMS := float64(cfg.Tolerance.Milliseconds())
-	if tolMS <= 0 {
+	if tolMS == 0 {
 		tolMS = defaultQualityToleranceMS
 	}
 	bestScore := qualityScore(ranked[0].latency, ranked[0].loss)
