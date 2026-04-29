@@ -104,3 +104,35 @@ Treat this as a pre-deploy checklist. Items marked **(default)** are configured 
 - [ ] IP reputation rate-limiting enabled (default — auto-bans after 5 failed auth attempts)
 - [ ] Logs do not echo `Authorization` header, password, or private key (verified by spot-check at each release)
 - [ ] Audit log destination configured if compliance requires it
+
+## Configuration Best Practices
+
+**Strong credentials:**
+```
+openssl rand -base64 32        # admin.token
+openssl rand -base64 24        # auth.password
+shuttled keygen                # Reality auth.private_key + public_key pair
+```
+
+**TLS certificates:**
+- Prefer Let's Encrypt + cert-manager (Kubernetes) or acme.sh (bare metal) for automated renewal.
+- Avoid wildcard certificates: a single revocation invalidates traffic for every subdomain.
+- Renew at least 14 days before expiry; alert on certificates within 30 days of expiry.
+
+**Reality `target_sni`:**
+- Choose a domain that is **actually reachable** from the public internet and whose responses are behaviourally similar to your server's environment (latency, content type).
+- A dead or misconfigured SNI target is worse than no SNI camouflage — it is a fingerprint.
+- Avoid using domains owned by the same operator as common camouflage choices, since their failure correlates.
+
+**Subscription sources:**
+- HTTPS-only is enforced (`http://` URLs are rejected at parse time).
+- Pass authentication via `Authorization` header, not query string — query strings appear in HTTP logs and HTTP referer headers.
+- Pin subscription provider hostnames in your firewall egress rules where possible.
+
+**Mesh CIDR:**
+- The default mesh CIDR is `10.7.0.0/24`; change it if your corporate network uses overlapping space.
+- Mesh peer authentication uses the same key material as the underlying transport — do not weaken transport auth on the assumption that mesh adds defence-in-depth.
+
+**Metrics endpoint:**
+- Bind `metrics.listen` to `127.0.0.1` and scrape via SSH tunnel or local Prometheus agent.
+- Never expose `/metrics` publicly: it leaks connection counts, transport mix, and internal hostnames via labels.
