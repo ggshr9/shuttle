@@ -1,4 +1,5 @@
 // gui/web/src/lib/data/http-subscription.ts
+import { nextBackoffMs } from '../backoff'
 import { SubscriptionBase } from './subscription-base'
 import type { TopicKey, TopicKind } from './topics'
 import type { ConnectionStateController } from './connection-state'
@@ -6,6 +7,7 @@ import type { ConnectionStateController } from './connection-state'
 export class HttpSubscription<T> extends SubscriptionBase<T> {
   private ws: WebSocket | null = null
   private closed = false
+  private reconnectAttempt = 0
 
   constructor(
     topic: TopicKey,
@@ -26,6 +28,9 @@ export class HttpSubscription<T> extends SubscriptionBase<T> {
     const url = `${proto}//${location.host}${this.wsPath}${qs}`
     const ws = new WebSocket(url)
     this.ws = ws
+    ws.onopen = () => {
+      this.reconnectAttempt = 0 // success resets the backoff window
+    }
     ws.onmessage = (ev: MessageEvent) => {
       try {
         const data = JSON.parse(ev.data) as T
@@ -37,10 +42,13 @@ export class HttpSubscription<T> extends SubscriptionBase<T> {
       this.ws = null
       if (this.closed) return
       this.conn.report(this.topic, 'error')
-      // Reopen with fixed 2s retry (matches lib/ws.ts convention). Exponential
-      // backoff lives in BridgeSubscription per spec §5.5.
+      // Capped exponential backoff with jitter — matches the reconnect
+      // discipline used by BridgeSubscription so HTTP and bridge paths
+      // don't behave differently under outage.
       if (this.subscribers.size > 0) {
-        setTimeout(() => this.connect(), 2000)
+        const delay = nextBackoffMs(this.reconnectAttempt)
+        this.reconnectAttempt++
+        setTimeout(() => this.connect(), delay)
       }
     }
     ws.onerror = () => ws.close()
