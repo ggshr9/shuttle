@@ -3,6 +3,7 @@ package engine
 import (
 	"log/slog"
 	"sync"
+	"sync/atomic"
 
 	"github.com/ggshr9/shuttle/adapter"
 	"github.com/ggshr9/shuttle/config"
@@ -90,6 +91,11 @@ type Engine struct {
 
 	// Subscription manager for auto-refreshing server lists
 	subscriptionManager *subscription.Manager
+
+	// subRefreshActive single-flights CB-driven RefreshAll: a refresh
+	// storm (many CBs opening at once) must not spawn N concurrent
+	// RefreshAlls each iterating every subscription.
+	subRefreshActive atomic.Bool
 
 	// Proxy and rule providers (ecosystem compat)
 	proxyProviders []*provider.ProxyProvider

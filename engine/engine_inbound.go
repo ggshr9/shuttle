@@ -91,9 +91,15 @@ func (e *Engine) startInbounds(ctx context.Context, cfg *config.ClientConfig) ([
 				if state == CircuitOpen {
 					e.mu.RLock()
 					sm := e.subscriptionManager
+					ctx := e.parentCtx
 					e.mu.RUnlock()
-					if sm != nil {
-						go sm.RefreshAll(context.Background())
+					if sm != nil && ctx != nil && e.subRefreshActive.CompareAndSwap(false, true) {
+						e.bgWg.Add(1)
+						go func() {
+							defer e.bgWg.Done()
+							defer e.subRefreshActive.Store(false)
+							sm.RefreshAll(ctx)
+						}()
 						e.logger.Info("circuit breaker open: triggering subscription refresh", "outbound", tagName)
 					}
 				}
