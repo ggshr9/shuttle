@@ -210,7 +210,73 @@ function Set-FirewallRules {
     }
 }
 
-# --- main dispatch (filled in by later tasks) ---
+function Install-Shuttled {
+    $arch = Get-Architecture
+    Write-Info "Platform: windows/$arch"
+
+    Get-ShuttledBinary -Version $Version -Arch $arch | Out-Null
+
+    if ($Auto) {
+        Invoke-AutoConfigure
+    } else {
+        Invoke-Wizard
+    }
+
+    Register-ShuttledService
+    Set-FirewallRules
+
+    Write-Host ''
+    Write-Host '╔══════════════════════════════════════════╗' -ForegroundColor Green
+    Write-Host '║   Setup complete! shuttled is running.   ║' -ForegroundColor Green
+    Write-Host '╚══════════════════════════════════════════╝' -ForegroundColor Green
+    Write-Host ''
+    Write-Host "  Manage:  Get-Service $SERVICE_NAME"
+    Write-Host "  Logs:    Get-EventLog -LogName Application -Source $SERVICE_NAME -Newest 50"
+    Write-Host "  Config:  $CONFIG_DIR\server.yaml"
+    Write-Host "  Share:   & '$INSTALL_DIR\shuttled.exe' share -c '$CONFIG_DIR\server.yaml'"
+}
+
+function Uninstall-Shuttled {
+    Write-Info 'Uninstalling shuttled...'
+    $exe = Join-Path $INSTALL_DIR 'shuttled.exe'
+    if (Test-Path $exe) {
+        & $exe service stop      | Out-Null
+        & $exe service uninstall | Out-Null
+    }
+
+    Get-NetFirewallRule -DisplayName 'Shuttled-Inbound-*' -ErrorAction SilentlyContinue | Remove-NetFirewallRule
+
+    if (Test-Path $INSTALL_DIR) { Remove-Item -Path $INSTALL_DIR -Recurse -Force }
+    Write-Info "Removed binary at $INSTALL_DIR"
+    Write-Warn "Config directory $CONFIG_DIR was NOT removed (contains keys)."
+    Write-Warn "To remove it: Remove-Item -Path $CONFIG_DIR -Recurse -Force"
+}
+
+function Upgrade-Shuttled {
+    param([string]$To = 'latest')
+    Write-Info "Upgrading to $To..."
+    $exe = Join-Path $INSTALL_DIR 'shuttled.exe'
+    if (Test-Path $exe) { & $exe service stop | Out-Null }
+    Get-ShuttledBinary -Version $To -Arch (Get-Architecture) | Out-Null
+    & $exe service start | Out-Null
+    Write-Info 'Upgrade complete.'
+}
+
+function Show-Status {
+    $svc = Get-Service -Name $SERVICE_NAME -ErrorAction SilentlyContinue
+    if ($svc) {
+        Write-Host "shuttled status: $($svc.Status)" -ForegroundColor (
+            if ($svc.Status -eq 'Running') { 'Green' } else { 'Yellow' }
+        )
+    } else {
+        Write-Warn 'shuttled service is not installed.'
+    }
+    if (Test-Path "$CONFIG_DIR\server.yaml") {
+        Write-Info "Config: $CONFIG_DIR\server.yaml"
+    }
+}
+
+# --- main dispatch ---
 switch ($Action) {
     'install'   { Assert-Admin; Install-Shuttled }
     'uninstall' { Assert-Admin; Uninstall-Shuttled }
