@@ -46,6 +46,53 @@ function Assert-Admin {
     if (-not $isAdmin) { Write-Err 'Run this script in an elevated PowerShell window (Run as Administrator).' }
 }
 
+function Get-Architecture {
+    switch ($env:PROCESSOR_ARCHITECTURE) {
+        'AMD64' { 'amd64' }
+        'ARM64' { 'arm64' }
+        default { Write-Err "Unsupported architecture: $env:PROCESSOR_ARCHITECTURE" }
+    }
+}
+
+function Get-PublicIP {
+    foreach ($svc in 'https://api.ipify.org', 'https://ifconfig.me/ip', 'https://icanhazip.com') {
+        try {
+            $ip = (Invoke-RestMethod -Uri $svc -TimeoutSec 5 -ErrorAction Stop).ToString().Trim()
+            if ($ip -match '^[0-9.]+$|^[0-9a-f:]+$') { return $ip }
+        } catch { continue }
+    }
+    return $null
+}
+
+function Get-ShuttledBinary {
+    param(
+        [string]$Version = 'latest',
+        [string]$Arch
+    )
+    $ext = '.exe'
+    $base = if ($Version -eq 'latest') {
+        "https://github.com/$REPO/releases/latest/download"
+    } else {
+        "https://github.com/$REPO/releases/download/$Version"
+    }
+    $url = "$base/shuttled-windows-$Arch$ext"
+
+    if (-not (Test-Path $INSTALL_DIR)) { New-Item -ItemType Directory -Path $INSTALL_DIR | Out-Null }
+    $dest = Join-Path $INSTALL_DIR 'shuttled.exe'
+
+    Write-Info "Downloading shuttled..."
+    Write-Host "  $url" -ForegroundColor DarkGray
+
+    try {
+        Invoke-WebRequest -Uri $url -OutFile $dest -UseBasicParsing -ErrorAction Stop
+    } catch {
+        Write-Err "Download failed: $($_.Exception.Message)"
+    }
+
+    Write-Info "Installed to $dest"
+    return $dest
+}
+
 # --- main dispatch (filled in by later tasks) ---
 switch ($Action) {
     'install'   { Assert-Admin; Install-Shuttled }
