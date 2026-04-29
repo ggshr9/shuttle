@@ -224,6 +224,11 @@ func (hp *HolePuncher) sendLoop(ctx context.Context, remoteVIP net.IP, candidate
 // inbound channel. Used only when the HolePuncher is not managed by a Manager
 // (i.e., standalone usage). When managed, the Manager's receiveLoop calls
 // Deliver() instead to avoid a concurrent ReadFromUDP race.
+//
+// The deadline-driven loop only `continue`s on timeouts (the keep-polling
+// signal); any other error — including the closed-conn case after the
+// caller closes hp.conn — exits the loop. Previously this `continue`d on
+// every error, hot-spinning at full CPU after a closed socket.
 func (hp *HolePuncher) socketPump(ctx context.Context) {
 	buf := make([]byte, 1500)
 	for {
@@ -239,8 +244,10 @@ func (hp *HolePuncher) socketPump(ctx context.Context) {
 			if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
 				continue
 			}
-			hp.logger.Debug("holepunch: socket pump error", "err", err)
-			continue
+			if ctx.Err() == nil {
+				hp.logger.Debug("holepunch: socket pump exiting on read error", "err", err)
+			}
+			return
 		}
 
 		hp.Deliver(buf[:n], addr)

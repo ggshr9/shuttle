@@ -63,6 +63,11 @@ type MDNSService struct {
 	peers   map[string]*MDNSPeer // Discovered peers by name
 	running bool
 	done    chan struct{}
+	// wg tracks the 4 long-lived goroutines (two receiveLoops,
+	// announceLoop, expiryLoop) so Stop can wait for them to exit
+	// before closing the multicast sockets — otherwise ReadFromUDP /
+	// WriteToUDP race the conn.Close, leaking the multicast group join.
+	wg sync.WaitGroup
 
 	// Callbacks
 	onPeerDiscovered func(*MDNSPeer)
@@ -129,17 +134,21 @@ func (s *MDNSService) Start(vip net.IP, port int) error {
 
 	// Start receiver goroutines
 	if s.conn4 != nil {
-		go s.receiveLoop(s.conn4)
+		s.wg.Add(1)
+		go func() { defer s.wg.Done(); s.receiveLoop(s.conn4) }()
 	}
 	if s.conn6 != nil {
-		go s.receiveLoop(s.conn6)
+		s.wg.Add(1)
+		go func() { defer s.wg.Done(); s.receiveLoop(s.conn6) }()
 	}
 
 	// Start announcement goroutine
-	go s.announceLoop()
+	s.wg.Add(1)
+	go func() { defer s.wg.Done(); s.announceLoop() }()
 
 	// Start peer expiry goroutine
-	go s.expiryLoop()
+	s.wg.Add(1)
+	go func() { defer s.wg.Done(); s.expiryLoop() }()
 
 	s.logger.Info("mDNS service started",
 		"instance", s.instanceName,
@@ -166,10 +175,14 @@ func (s *MDNSService) Stop() error {
 	conn6 := s.conn6
 	s.mu.Unlock()
 
-	// Send goodbye (TTL=0) - outside of lock since it acquires RLock
+	// Send goodbye (TTL=0) before any goroutine exits — the loops are
+	// still running, but they only read; sendGoodbye writes once, no race.
 	s.sendGoodbye()
 
-	// Close connections
+	// Wait for receive/announce/expiry goroutines to observe `done` and
+	// return; only then is it safe to close the multicast sockets.
+	s.wg.Wait()
+
 	if conn4 != nil {
 		conn4.Close()
 	}

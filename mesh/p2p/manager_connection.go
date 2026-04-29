@@ -103,9 +103,9 @@ func (m *Manager) Connect(ctx context.Context, dstVIP net.IP) error {
 	// Perform hole punching — register the puncher so receiveLoop forwards
 	// hole-punch packets to it instead of discarding them.
 	puncher := NewHolePuncher(m.udpConn, m.localVIP, m.holePunchTimeout, m.logger)
-	m.setActiveHolePuncher(puncher)
+	m.setActiveHolePuncher(dstVIP, puncher)
 	punchResult, err := puncher.Punch(ctx, dstVIP, remoteCandidates)
-	m.clearActiveHolePuncher()
+	m.clearActiveHolePuncher(dstVIP)
 	if err != nil {
 		m.logger.Debug("p2p: hole punch failed", "peer", dstVIP, "err", err)
 		m.markFailed(key)
@@ -235,7 +235,12 @@ func (m *Manager) handleConnect(msg *signal.Message) {
 		return
 	}
 
-	// Start hole punching in background
+	// Start hole punching in background. Refuse to start if Stop has
+	// flipped stopping; otherwise wg.Add could race wg.Wait and panic.
+	if m.stopping.Load() {
+		m.logger.Debug("p2p: ignoring connect request during shutdown", "peer", msg.SrcVIP)
+		return
+	}
 	m.wg.Add(1)
 	go func() {
 		defer m.wg.Done()
@@ -253,9 +258,9 @@ func (m *Manager) handleConnect(msg *signal.Message) {
 		punchCtx, punchCancel := context.WithTimeout(m.ctx, m.holePunchTimeout)
 		defer punchCancel()
 		// Register puncher so receiveLoop forwards hole-punch packets to it.
-		m.setActiveHolePuncher(puncher)
+		m.setActiveHolePuncher(msg.SrcVIP, puncher)
 		punchResult, err := puncher.Punch(punchCtx, msg.SrcVIP, candidates)
-		m.clearActiveHolePuncher()
+		m.clearActiveHolePuncher(msg.SrcVIP)
 		if err != nil {
 			m.logger.Debug("p2p: hole punch failed", "peer", msg.SrcVIP, "err", err)
 			m.markFailed(key)

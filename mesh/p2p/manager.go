@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"net"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"golang.org/x/crypto/curve25519"
@@ -107,13 +108,21 @@ type Manager struct {
 	// VIP ownership has been confirmed by a successful X25519 handshake.
 	mdns *MDNSService
 
-	// activeHP is the HolePuncher currently waiting for packets (if any).
-	// Protected by activeHPMu.
+	// activeHPs maps remote-peer VIP -> HolePuncher waiting for packets.
+	// Concurrent inbound + outbound (or two simultaneous inbound from
+	// different peers) need distinct entries; previously a single
+	// activeHP pointer was overwritten silently. Protected by activeHPMu.
 	activeHPMu sync.Mutex
-	activeHP   *HolePuncher
+	activeHPs  map[[4]byte]*HolePuncher
 
 	// Goroutine lifecycle
 	wg sync.WaitGroup
+
+	// stopping flips to true at the very top of Stop, before cancel().
+	// Signal-handler goroutines (which may fire from a separate signal
+	// client even after cancel) check this before calling wg.Add — Add
+	// after Wait would panic with "WaitGroup misuse".
+	stopping atomic.Bool
 
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -219,6 +228,7 @@ func NewManager(cfg *Config, signalClient *signal.Client, logger *slog.Logger) (
 		relayFunc:           cfg.RelayFunc,
 		logger:              logger,
 		peers:               make(map[[4]byte]*PeerConnection),
+		activeHPs:           make(map[[4]byte]*HolePuncher),
 		stunServers:         cfg.STUNServers,
 		holePunchTimeout:    cfg.HolePunchTimeout,
 		directRetryInterval: cfg.DirectRetryInterval,
@@ -358,6 +368,9 @@ func (m *Manager) Start() error {
 
 // Stop stops the manager and waits for all goroutines to exit.
 func (m *Manager) Stop() error {
+	// Set stopping FIRST so any signal handler that fires concurrently
+	// with Stop returns early instead of doing wg.Add after wg.Wait.
+	m.stopping.Store(true)
 	m.cancel()
 
 	// Wait for all background goroutines to exit before closing resources.
@@ -443,28 +456,35 @@ func (m *Manager) deriveSharedSecret(remotePub [32]byte) ([]byte, error) {
 	return shared, nil
 }
 
-// setActiveHolePuncher registers hp as the current hole puncher so that
-// receiveLoop can forward hole-punch packets to it. It also marks hp as
-// managed so that Punch does not start a competing socket read goroutine.
-func (m *Manager) setActiveHolePuncher(hp *HolePuncher) {
+// setActiveHolePuncher registers hp as the active hole puncher for the
+// remote peer identified by remoteVIP, so receiveLoop can route
+// hole-punch packets sourced from that peer to this puncher. Also marks
+// hp as managed so its own Punch loop does not start a competing socket
+// reader.
+func (m *Manager) setActiveHolePuncher(remoteVIP net.IP, hp *HolePuncher) {
 	hp.managed = true
 	m.activeHPMu.Lock()
-	m.activeHP = hp
+	m.activeHPs[vipKey(remoteVIP)] = hp
 	m.activeHPMu.Unlock()
 }
 
-// clearActiveHolePuncher removes the current hole puncher registration.
-func (m *Manager) clearActiveHolePuncher() {
+// clearActiveHolePuncher removes the registration for remoteVIP.
+func (m *Manager) clearActiveHolePuncher(remoteVIP net.IP) {
 	m.activeHPMu.Lock()
-	m.activeHP = nil
+	delete(m.activeHPs, vipKey(remoteVIP))
 	m.activeHPMu.Unlock()
 }
 
-// deliverToHolePuncher forwards a hole-punch packet to the active HolePuncher
-// (if any). Called from receiveLoop under no locks.
+// deliverToHolePuncher forwards a hole-punch packet to the puncher that
+// is targeting the packet's source VIP (if any). Called from receiveLoop
+// under no manager locks.
 func (m *Manager) deliverToHolePuncher(data []byte, addr *net.UDPAddr) {
+	pkt, err := DecodeHolePunchPacket(data)
+	if err != nil {
+		return
+	}
 	m.activeHPMu.Lock()
-	hp := m.activeHP
+	hp := m.activeHPs[vipKey(pkt.SrcVIP)]
 	m.activeHPMu.Unlock()
 	if hp != nil {
 		hp.Deliver(data, addr)
