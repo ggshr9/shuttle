@@ -81,9 +81,19 @@ func makeNonce(buf []byte, counter uint64) {
 }
 
 // Write encrypts p and writes a length-prefixed ciphertext frame to the underlying conn.
+//
+// Per-frame allocations: previously each call allocated a new
+// nonce slice (24 B) and a new 2-byte header, both on the heap.
+// Since chacha20poly1305.NonceSizeX is a constant, the nonce now
+// lives in a stack array; the same goes for the length prefix.
+// Hot-path data plane sees zero allocations beyond the AEAD
+// ciphertext that Seal returns.
 func (c *pqConn) Write(p []byte) (int, error) {
 	c.writeMu.Lock()
 	defer c.writeMu.Unlock()
+
+	var nonce [chacha20poly1305.NonceSizeX]byte
+	var header [2]byte
 
 	written := 0
 	for len(p) > 0 {
@@ -92,16 +102,13 @@ func (c *pqConn) Write(p []byte) (int, error) {
 			chunk = chunk[:pqFrameMaxPlaintext]
 		}
 
-		nonce := make([]byte, c.aead.NonceSize())
-		makeNonce(nonce, c.writeNonce)
+		makeNonce(nonce[:], c.writeNonce)
 		c.writeNonce++
 
-		ciphertext := c.aead.Seal(nil, nonce, chunk, nil)
+		ciphertext := c.aead.Seal(nil, nonce[:], chunk, nil)
 
-		// Length prefix (2 bytes big-endian) + ciphertext.
-		header := make([]byte, 2)
-		binary.BigEndian.PutUint16(header, uint16(len(ciphertext)))
-		if _, err := c.Conn.Write(header); err != nil {
+		binary.BigEndian.PutUint16(header[:], uint16(len(ciphertext)))
+		if _, err := c.Conn.Write(header[:]); err != nil {
 			return written, err
 		}
 		if _, err := c.Conn.Write(ciphertext); err != nil {
@@ -132,11 +139,11 @@ func (c *pqConn) Read(p []byte) (int, error) {
 	}
 
 	// Read next frame: 2-byte length prefix.
-	header := make([]byte, 2)
-	if _, err := io.ReadFull(c.Conn, header); err != nil {
+	var header [2]byte
+	if _, err := io.ReadFull(c.Conn, header[:]); err != nil {
 		return 0, err
 	}
-	ctLen := binary.BigEndian.Uint16(header)
+	ctLen := binary.BigEndian.Uint16(header[:])
 	if ctLen == 0 {
 		return 0, fmt.Errorf("pqwrap: zero-length ciphertext frame")
 	}
@@ -146,11 +153,11 @@ func (c *pqConn) Read(p []byte) (int, error) {
 		return 0, err
 	}
 
-	nonce := make([]byte, c.aead.NonceSize())
-	makeNonce(nonce, c.readNonce)
+	var nonce [chacha20poly1305.NonceSizeX]byte
+	makeNonce(nonce[:], c.readNonce)
 	c.readNonce++
 
-	plaintext, err := c.aead.Open(nil, nonce, ciphertext, nil)
+	plaintext, err := c.aead.Open(nil, nonce[:], ciphertext, nil)
 	if err != nil {
 		return 0, fmt.Errorf("pqwrap: decrypt: %w", err)
 	}
