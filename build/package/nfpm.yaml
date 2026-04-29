@@ -10,7 +10,7 @@ name: shuttle
 arch: ${GOARCH}
 platform: linux
 version: ${VERSION}
-maintainer: Shuttle <shuttle@example.com>
+maintainer: ggshr9 <ggshr9@users.noreply.github.com>
 description: |
   Multi-transport network toolkit with adaptive routing, mesh networking,
   and encrypted tunneling. Features H3/QUIC, Reality/TLS+Noise, and CDN

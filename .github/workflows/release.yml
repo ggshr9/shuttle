@@ -72,7 +72,8 @@ jobs:
           GOMIPS: ${{ matrix.gomips }}
           CGO_ENABLED: '0'
         run: |
-          VERSION="${GITHUB_REF_NAME}"
+          # Strip 'v' so `--version` matches what deb/rpm/brew report.
+          VERSION="${GITHUB_REF_NAME#v}"
           LDFLAGS="-s -w -X main.version=${VERSION}"
           go build -ldflags="${LDFLAGS}" -o shuttle${{ matrix.ext }}   ./cmd/shuttle
           go build -ldflags="${LDFLAGS}" -o shuttled${{ matrix.ext }}  ./cmd/shuttled
@@ -139,7 +140,8 @@ jobs:
           CGO_ENABLED: '1'
           CGO_LDFLAGS: ${{ matrix.goos == 'darwin' && '-framework UniformTypeIdentifiers' || '' }}
         run: |
-          VERSION="${GITHUB_REF_NAME}"
+          # Strip 'v' so `--version` matches what deb/rpm/brew report.
+          VERSION="${GITHUB_REF_NAME#v}"
           LDFLAGS="-s -w -X main.version=${VERSION}"
           go build -tags desktop,production -ldflags="${LDFLAGS}" \
             -o shuttle-gui-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }} ./cmd/shuttle-gui
@@ -175,10 +177,9 @@ jobs:
           tar xzf shuttle-linux-${{ matrix.goarch }}.tar.gz
           cp shuttle-linux-${{ matrix.goarch }}/shuttle shuttle-linux-${{ matrix.goarch }}/shuttled .
       - name: Install nFPM
-        # `go install` is more robust than the upstream tarball: no URL
-        # fragility, no asset-name drift, version pinned via Go module
-        # resolution. nfpm is itself a Go program, so this is its
-        # canonical install path.
+        # `go install` avoids the upstream-tarball URL/asset-name
+        # fragility. Tracks @latest; bump to a fixed @vX.Y.Z if the
+        # release pipeline ever needs strict reproducibility.
         run: go install github.com/goreleaser/nfpm/v2/cmd/nfpm@latest
       - name: Build deb + rpm
         env:
@@ -214,7 +215,9 @@ jobs:
       - name: Determine image tags
         id: tags
         run: |
-          VERSION="${GITHUB_REF_NAME}"
+          # Strip 'v' so the image tag matches the binary's --version
+          # and the deb/rpm/brew version strings.
+          VERSION="${GITHUB_REF_NAME#v}"
           IMAGE="ghcr.io/${{ github.repository_owner }}/shuttled"
           echo "tags=${IMAGE}:${VERSION},${IMAGE}:latest" >> "$GITHUB_OUTPUT"
       - uses: docker/build-push-action@v5
@@ -235,7 +238,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: ./.github/actions/setup-gomobile
         with:
           go-version: ${{ env.GO_VERSION }}
       - uses: actions/setup-java@v4
@@ -245,12 +248,6 @@ jobs:
       - uses: android-actions/setup-android@v3
       - name: Install NDK
         run: sdkmanager "ndk;27.2.12479018"
-      - name: Install gomobile
-        run: |
-          go get golang.org/x/mobile/bind@latest
-          go install golang.org/x/mobile/cmd/gomobile@latest
-          go install golang.org/x/mobile/cmd/gobind@latest
-          gomobile init
       - name: Build .aar
         env:
           ANDROID_NDK_HOME: ${{ env.ANDROID_HOME }}/ndk/27.2.12479018
@@ -277,15 +274,9 @@ jobs:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: ./.github/actions/setup-gomobile
         with:
           go-version: ${{ env.GO_VERSION }}
-      - name: Install gomobile
-        run: |
-          go get golang.org/x/mobile/bind@latest
-          go install golang.org/x/mobile/cmd/gomobile@latest
-          go install golang.org/x/mobile/cmd/gobind@latest
-          gomobile init
       - name: Build .xcframework
         run: gomobile bind -target=ios -o mobile/ios/Shuttle.xcframework ./mobile
       - uses: actions/upload-artifact@v4
@@ -323,11 +314,12 @@ jobs:
           # Linux packages (deb + rpm)
           find artifacts/packages-* -type f \( -name '*.deb' -o -name '*.rpm' \) -exec cp {} release/ \;
 
-          # Android
-          cp artifacts/android-aar/shuttle.aar release/shuttle-android.aar || true
+          # Android — `release.needs` already requires build-android,
+          # so the artifact must exist here; no `|| true` to mask drift.
+          cp artifacts/android-aar/shuttle.aar release/shuttle-android.aar
 
-          # iOS
-          (cd artifacts/ios-xcframework && zip -r ../../release/shuttle-ios.xcframework.zip Shuttle.xcframework/) || true
+          # iOS — same gating as Android above.
+          (cd artifacts/ios-xcframework && zip -r ../../release/shuttle-ios.xcframework.zip Shuttle.xcframework/)
 
           echo "--- Release artifacts ---"
           ls -lh release/
@@ -366,7 +358,7 @@ jobs:
           name: Shuttle ${{ github.ref_name }}
           body_path: release-notes.md
           files: release/*
-          fail_on_unmatched_files: false
+          fail_on_unmatched_files: true
 
   # ──────────────────────────────────────────────
   # Bump Homebrew tap formulae after the GitHub Release exists.
@@ -393,17 +385,24 @@ jobs:
     env:
       VERSION: ${{ github.ref_name }}
       TAP_REPO: ggshr9/homebrew-shuttle
+      BASE_URL: https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}
     steps:
       - name: Compute sha256 of darwin release tarballs
         id: shas
         run: |
           # Both shuttle and shuttled binaries ship in the same per-arch
           # tarball, so we only need two checksums total (arm64, amd64).
-          base="https://github.com/ggshr9/shuttle/releases/download/${VERSION}"
+          # GitHub's release-asset CDN can lag a few seconds behind the
+          # release-publish event, so retry on transient 404.
           for arch in arm64 amd64; do
-            url="${base}/shuttle-darwin-${arch}.tar.gz"
-            curl -fsSL -o "/tmp/shuttle-darwin-${arch}.tar.gz" "$url"
-            sha=$(sha256sum "/tmp/shuttle-darwin-${arch}.tar.gz" | awk '{print $1}')
+            url="${BASE_URL}/shuttle-darwin-${arch}.tar.gz"
+            out="/tmp/shuttle-darwin-${arch}.tar.gz"
+            for attempt in 1 2 3 4 5; do
+              if curl -fsSL -o "$out" "$url"; then break; fi
+              echo "attempt ${attempt} failed for ${url}; sleeping 10s"
+              sleep 10
+            done
+            sha=$(sha256sum "$out" | awk '{print $1}')
             echo "sha_${arch}=${sha}" >> "$GITHUB_OUTPUT"
             echo "darwin-${arch}: ${sha}"
           done
@@ -419,20 +418,18 @@ jobs:
         env:
           SHA_ARM64: ${{ steps.shas.outputs.sha_arm64 }}
           SHA_AMD64: ${{ steps.shas.outputs.sha_amd64 }}
-          STRIPPED_VERSION: ${{ github.ref_name }}
         run: |
           # Strip leading 'v' for the formula's `version` field.
-          v="${STRIPPED_VERSION#v}"
-          base="https://github.com/ggshr9/shuttle/releases/download/${VERSION}"
+          v="${VERSION#v}"
 
-          # rewrite_formula <path> <binary-name>: rebuilds the on_macos
-          # block atomically using a heredoc so we don't depend on regex
-          # alignment between releases.
+          # rewrite_formula <path>: rebuilds the on_macos block atomically
+          # using a heredoc so we don't depend on regex alignment between
+          # releases. Both formulae share the same darwin tarballs.
           rewrite_formula() {
-            local path="$1" binary="$2"
-            python3 - "$path" "$binary" "$v" "$base" "$SHA_ARM64" "$SHA_AMD64" <<'PY'
+            local path="$1"
+            python3 - "$path" "$v" "$BASE_URL" "$SHA_ARM64" "$SHA_AMD64" <<'PY'
           import re, sys
-          path, binary, version, base, sha_arm, sha_amd = sys.argv[1:]
+          path, version, base, sha_arm, sha_amd = sys.argv[1:]
           with open(path) as f:
               src = f.read()
           # Replace the formula's `version` field
@@ -458,8 +455,8 @@ jobs:
           PY
           }
 
-          rewrite_formula /tmp/tap/Formula/shuttle.rb  shuttle
-          rewrite_formula /tmp/tap/Formula/shuttled.rb shuttled
+          rewrite_formula /tmp/tap/Formula/shuttle.rb
+          rewrite_formula /tmp/tap/Formula/shuttled.rb
 
           cd /tmp/tap
           git add Formula/shuttle.rb Formula/shuttled.rb

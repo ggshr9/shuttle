@@ -1,0 +1,24 @@
+name: setup-gomobile
+description: Install Go + gomobile + gobind for `gomobile bind` invocations.
+
+inputs:
+  go-version:
+    description: Go toolchain version to install.
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-go@v5
+      with:
+        go-version: ${{ inputs.go-version }}
+
+    - shell: bash
+      run: |
+        # `go get bind@latest` registers the import in go.mod so
+        # `gomobile bind` resolves stdlib types correctly. `gobind` is
+        # the codegen tool; `gomobile init` provisions the NDK side.
+        go get golang.org/x/mobile/bind@latest
+        go install golang.org/x/mobile/cmd/gomobile@latest
+        go install golang.org/x/mobile/cmd/gobind@latest
+        gomobile init

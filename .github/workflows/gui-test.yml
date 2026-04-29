@@ -1,17 +1,22 @@
 name: GUI Tests
 
 on:
+  # No `gui/api/**` filter: the Playwright suite stubs /api responses
+  # via page.route() and tolerates fetch failures (no real shuttled in
+  # CI), so it cannot detect API contract drift today. To re-enable
+  # the gui/api/** trigger meaningfully, start shuttled in this
+  # workflow, point Vite's proxy at it, and remove the page.route()
+  # stubs in gui/web/tests/*.spec.ts.
   push:
     branches: [main]
     paths:
       - 'gui/web/**'
-      - 'gui/api/**'   # API contract changes can break the frontend; let Playwright catch it.
       - '.github/workflows/gui-test.yml'
   pull_request:
     branches: [main]
     paths:
       - 'gui/web/**'
-      - 'gui/api/**'
+      - '.github/workflows/gui-test.yml'
   workflow_dispatch:
 
 jobs:
