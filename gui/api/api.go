@@ -39,10 +39,10 @@ type HandlerConfig struct {
 	Events       *EventQueue // optional; nil disables /api/events + /ws/events
 	AuthToken    string      // empty = no auth
 	// Heartbeat backs /api/health/live. The lifecycle owner (typically
-	// gui/api.Server) is responsible for ticking it. When nil, NewHandler
-	// creates a single-tick heartbeat so the route is still mounted, but
-	// it will go stale after the liveness threshold unless the caller
-	// ticks it themselves.
+	// gui/api.Server) is responsible for constructing and ticking it.
+	// When nil, /api/health/live always returns 200 — the conservative
+	// "no liveness signal tracked" semantics for direct callers that
+	// don't run a heartbeat goroutine.
 	Heartbeat *healthcheck.Heartbeat
 }
 
@@ -64,14 +64,8 @@ func NewHandler(cfg HandlerConfig) http.Handler {
 	mux := http.NewServeMux()
 	updateChecker := update.NewChecker()
 
-	hb := cfg.Heartbeat
-	if hb == nil {
-		hb = healthcheck.NewHeartbeat()
-		hb.Tick() // single tick so /api/health/live returns 200 immediately
-	}
-
 	registerHealthzRoute(mux)
-	registerDeepHealthRoutes(mux, cfg.Engine, hb)
+	registerDeepHealthRoutes(mux, cfg.Engine, cfg.Heartbeat)
 	registerStatusRoutes(mux, cfg.Engine)
 	registerConfigRoutes(mux, cfg.Engine)
 	registerProxyRoutes(mux, cfg.Engine)
