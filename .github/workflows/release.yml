@@ -11,6 +11,13 @@ permissions:
   contents: write
   packages: write
 
+# Force bash on every run step regardless of runner OS. Windows runners
+# default to PowerShell, which silently corrupts heredocs / ${VAR} syntax.
+# Git for Windows ships with bash, so this just works on windows-latest.
+defaults:
+  run:
+    shell: bash
+
 env:
   GO_VERSION: '1.24'
   NODE_VERSION: '22'
@@ -155,6 +162,9 @@ jobs:
           - { goarch: arm64, nfpm_arch: arm64 }
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
       - uses: actions/download-artifact@v4
         with:
           name: cli-linux-${{ matrix.goarch }}
@@ -165,9 +175,11 @@ jobs:
           tar xzf shuttle-linux-${{ matrix.goarch }}.tar.gz
           cp shuttle-linux-${{ matrix.goarch }}/shuttle shuttle-linux-${{ matrix.goarch }}/shuttled .
       - name: Install nFPM
-        run: |
-          curl -sfL https://github.com/goreleaser/nfpm/releases/latest/download/nfpm_linux_amd64.tar.gz \
-            | tar xz -C /usr/local/bin nfpm
+        # `go install` is more robust than the upstream tarball: no URL
+        # fragility, no asset-name drift, version pinned via Go module
+        # resolution. nfpm is itself a Go program, so this is its
+        # canonical install path.
+        run: go install github.com/goreleaser/nfpm/v2/cmd/nfpm@latest
       - name: Build deb + rpm
         env:
           VERSION: ${{ github.ref_name }}
@@ -240,9 +252,14 @@ jobs:
       - name: Build .aar
         env:
           ANDROID_NDK_HOME: ${{ env.ANDROID_HOME }}/ndk/27.2.12479018
+        # -checklinkname=0 keeps wlynxg/anet's linkname into the std net
+        # package working under Go 1.23+ (which defaults to checklinkname=1).
+        # Remove once anet drops the linkname dependency or std net exports
+        # the equivalent.
         run: |
           mkdir -p mobile/android/app/libs
           gomobile bind -target=android/arm64,android/arm -androidapi 21 \
+            -ldflags=-checklinkname=0 \
             -o mobile/android/app/libs/shuttle.aar ./mobile
       - uses: actions/upload-artifact@v4
         with:
