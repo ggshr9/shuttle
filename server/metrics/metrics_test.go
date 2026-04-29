@@ -315,6 +315,38 @@ func TestCollectorConcurrent(t *testing.T) {
 	}
 }
 
+func TestCollector_HandshakeHistogram(t *testing.T) {
+	c := NewCollector()
+	c.RecordHandshake("h3", 50*time.Millisecond)
+	c.RecordHandshake("h3", 250*time.Millisecond)
+
+	rr := httptest.NewRecorder()
+	c.Handler().ServeHTTP(rr, httptest.NewRequest("GET", "/metrics", nil))
+	body := rr.Body.String()
+
+	if !strings.Contains(body, `shuttle_handshake_duration_seconds_count{transport="h3"} 2`) {
+		t.Fatalf("missing handshake count, got:\n%s", body)
+	}
+}
+
+func TestCollector_HandshakeFailure(t *testing.T) {
+	c := NewCollector()
+	c.RecordHandshakeFailure("reality", "auth")
+	c.RecordHandshakeFailure("reality", "auth")
+	c.RecordHandshakeFailure("reality", "timeout")
+
+	rr := httptest.NewRecorder()
+	c.Handler().ServeHTTP(rr, httptest.NewRequest("GET", "/metrics", nil))
+	body := rr.Body.String()
+
+	if !strings.Contains(body, `shuttle_handshake_failures_total{transport="reality",reason="auth"} 2`) {
+		t.Fatalf("missing auth failure line, got:\n%s", body)
+	}
+	if !strings.Contains(body, `shuttle_handshake_failures_total{transport="reality",reason="timeout"} 1`) {
+		t.Fatalf("missing timeout failure line, got:\n%s", body)
+	}
+}
+
 func TestFormatFloat(t *testing.T) {
 	tests := []struct {
 		in   float64
