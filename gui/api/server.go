@@ -6,6 +6,7 @@ import (
 	"net"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/shuttleX/shuttle/engine"
@@ -14,11 +15,12 @@ import (
 
 // Server wraps the API handler with SPA fallback serving.
 type Server struct {
-	eng      *engine.Engine
-	listener net.Listener
-	srv      *http.Server
-	pumpStop context.CancelFunc // nil if no engine
-	hbStop   chan struct{}      // closes when server shuts down to stop heartbeat
+	eng        *engine.Engine
+	listener   net.Listener
+	srv        *http.Server
+	pumpStop   context.CancelFunc // nil if no engine
+	hbStop     chan struct{}      // closes when server shuts down to stop heartbeat
+	hbStopOnce sync.Once          // guards hbStop close — concurrent Close() calls are safe
 }
 
 // NewServer creates an API server. If webFS is non-nil, it serves the SPA from it
@@ -121,14 +123,14 @@ func (s *Server) ListenAndServe(addr string) (string, error) {
 	return ln.Addr().String(), nil
 }
 
-// Close shuts down the server.
+// Close shuts down the server. Safe to call concurrently — the heartbeat
+// stop channel is closed exactly once via sync.Once.
 func (s *Server) Close() error {
 	if s.pumpStop != nil {
 		s.pumpStop()
 	}
 	if s.hbStop != nil {
-		close(s.hbStop)
-		s.hbStop = nil
+		s.hbStopOnce.Do(func() { close(s.hbStop) })
 	}
 	return s.srv.Close()
 }

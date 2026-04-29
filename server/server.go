@@ -42,8 +42,9 @@ type Server struct {
 	handler        *Handler
 	adminInfo      *admin.ServerInfo
 	adminServer    *http.Server
-	adminHeartbeat *healthcheck.Heartbeat
-	adminHBStop    chan struct{}
+	adminHeartbeat  *healthcheck.Heartbeat
+	adminHBStop     chan struct{}
+	adminHBStopOnce sync.Once // guards adminHBStop close — concurrent Shutdown() calls are safe
 	pprofServer    *http.Server
 	cluster        *ClusterManager
 	reputation     *Reputation
@@ -454,10 +455,11 @@ func (s *Server) Shutdown(ctx context.Context) {
 		shutdownCancel()
 	}
 
-	// Stop admin heartbeat goroutine
+	// Stop admin heartbeat goroutine. sync.Once guards against concurrent
+	// Shutdown() calls — without it, two callers could race past a nil-check
+	// and double-close the channel.
 	if s.adminHBStop != nil {
-		close(s.adminHBStop)
-		s.adminHBStop = nil
+		s.adminHBStopOnce.Do(func() { close(s.adminHBStop) })
 	}
 
 	// Stop cluster manager
