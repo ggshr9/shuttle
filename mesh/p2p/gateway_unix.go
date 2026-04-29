@@ -77,24 +77,5 @@ func getDefaultGatewayLinux() (net.IP, error) {
 	return getDefaultGatewayFallback()
 }
 
-// getDefaultGatewayFallback uses UDP connection heuristic
-func getDefaultGatewayFallback() (net.IP, error) {
-	conn, err := net.Dial("udp4", "8.8.8.8:80")
-	if err != nil {
-		return nil, err
-	}
-	defer conn.Close()
-
-	localAddr := conn.LocalAddr().(*net.UDPAddr)
-	ip := localAddr.IP.To4()
-	if ip == nil {
-		return nil, ErrNATPMPNotFound
-	}
-
-	// Assume gateway is .1 on the same subnet
-	gateway := make(net.IP, 4)
-	copy(gateway, ip)
-	gateway[3] = 1
-
-	return gateway, nil
-}
+// getDefaultGatewayFallback lives in gateway.go (shared across unix +
+// windows). The per-OS files only own the OS-native lookup paths.
