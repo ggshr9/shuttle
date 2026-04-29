@@ -168,6 +168,48 @@ function Invoke-AutoConfigure {
     & (Join-Path $INSTALL_DIR 'shuttled.exe') @args
 }
 
+function Register-ShuttledService {
+    Write-Info 'Registering Windows service...'
+    $exe = Join-Path $INSTALL_DIR 'shuttled.exe'
+    $cfg = Join-Path $CONFIG_DIR 'server.yaml'
+
+    # Use shuttled's own service install subcommand (existing service_windows.go).
+    & $exe service install --config $cfg
+    if ($LASTEXITCODE -ne 0) { Write-Err 'service install returned non-zero' }
+
+    & $exe service start
+    if ($LASTEXITCODE -ne 0) { Write-Warn 'service start returned non-zero; check Event Viewer' }
+}
+
+function Set-FirewallRules {
+    Write-Host ''
+    Write-Host 'shuttled needs inbound firewall rules for the transports you enabled.'
+    $confirm = Read-Host 'Add firewall rules now? [Y/n]'
+    if ($confirm -match '^(n|no)$') {
+        Write-Warn 'Skipped firewall rule creation. You will need to add rules manually before clients can connect.'
+        return
+    }
+
+    # Read ports from server.yaml
+    $cfgFile = Join-Path $CONFIG_DIR 'server.yaml'
+    if (-not (Test-Path $cfgFile)) {
+        Write-Warn "Config not found at $cfgFile; skipping firewall."
+        return
+    }
+
+    $portRegex = '(?m)^\s*listen:\s*[":\s]*(\d+)'
+    $ports = (Select-String -Path $cfgFile -Pattern $portRegex).Matches | ForEach-Object {
+        $_.Groups[1].Value
+    } | Sort-Object -Unique
+
+    foreach ($port in $ports) {
+        $ruleName = "Shuttled-Inbound-$port"
+        Write-Info "Adding firewall rule: TCP/UDP $port (rule: $ruleName)"
+        New-NetFirewallRule -DisplayName $ruleName -Direction Inbound -Protocol TCP -LocalPort $port -Action Allow -ErrorAction SilentlyContinue | Out-Null
+        New-NetFirewallRule -DisplayName "$ruleName-UDP" -Direction Inbound -Protocol UDP -LocalPort $port -Action Allow -ErrorAction SilentlyContinue | Out-Null
+    }
+}
+
 # --- main dispatch (filled in by later tasks) ---
 switch ($Action) {
     'install'   { Assert-Admin; Install-Shuttled }
