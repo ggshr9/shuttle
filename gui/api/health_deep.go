@@ -95,7 +95,7 @@ func runClientReadiness(eng engineProbe) map[string]clientCheckResult {
 		return out
 	}
 	switch eng.StateName() {
-	case "running", "starting":
+	case "running":
 		out["engine"] = clientCheckResult{Status: "ok", Detail: eng.StateName()}
 	default:
 		out["engine"] = clientCheckResult{Status: "fail", Error: "engine state: " + eng.StateName()}
