@@ -46,3 +46,31 @@ We aim to acknowledge reports within 72 hours and to ship a fix or mitigation wi
 ## Supported Versions
 
 Security fixes are applied to the latest release only. We recommend always running the most recent version of Shuttle to benefit from the latest security patches and improvements.
+
+## Threat Model
+
+Shuttle is designed to defend against the following classes of adversary:
+
+**In scope:**
+- Passive traffic analysis on the wire between client and server.
+- Active SNI probing of the server's TLS endpoint (Reality transport).
+- Passive deep packet inspection identifying or fingerprinting Shuttle traffic.
+- Unauthorised access to the management plane (`/api/*` endpoints).
+- Unauthorised use of forwarded outbound traffic (e.g., open-relay abuse).
+
+**Out of scope:**
+- Local-host compromise (device theft, root-level malware on client or server).
+- Active collaboration by the upstream CDN, hosting provider, or transit network.
+- Long-term confidentiality breach by quantum computation against current Noise IK key exchange.
+- Side-channel attacks against the TLS implementation provided by the Go standard library.
+
+**Trust boundaries:**
+
+```
+[client app] ⟷ [shuttle CLI / GUI] ⟷ [transport: H3/Reality/CDN] ⟷ [shuttled] ⟷ [destination]
+                       │                                                   │
+                       └─── management plane (/api/*) ── separate trust ───┘
+                                                              domain (admin.token)
+```
+
+The management plane is its own trust domain: its credentials must not be derivable from or reused with the data-plane credentials (`auth.password`, `auth.private_key`).
