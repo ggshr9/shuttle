@@ -116,9 +116,10 @@ func (m *Manager) ListPeers() []PeerInfo {
 	return peers
 }
 
-// LocalCandidates returns the local ICE candidates.
+// LocalCandidates returns a snapshot of local ICE candidates. Safe to
+// range over even if a concurrent ICE restart re-gathers.
 func (m *Manager) LocalCandidates() []*Candidate {
-	return m.candidates
+	return m.localCandidatesSnapshot()
 }
 
 // SetDataHandler sets the handler for incoming P2P data.
@@ -175,7 +176,7 @@ func (m *Manager) GetExternalEndpoint() *net.UDPAddr {
 	}
 
 	// Look for server-reflexive or UPnP candidate
-	for _, c := range m.candidates {
+	for _, c := range m.localCandidatesSnapshot() {
 		if c.Type == CandidateUPnP || c.Type == CandidateServerReflexive {
 			return c.Addr
 		}
@@ -199,8 +200,9 @@ func (m *Manager) GetNATStatus() *NATStatus {
 	}
 
 	// Candidates
-	status.CandidateCount = len(m.candidates)
-	for _, c := range m.candidates {
+	cands := m.localCandidatesSnapshot()
+	status.CandidateCount = len(cands)
+	for _, c := range cands {
 		switch c.Type {
 		case CandidateHost:
 			status.HasHostCandidate = true

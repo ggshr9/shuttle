@@ -302,26 +302,31 @@ func (m *Manager) Start() error {
 	// Gather local candidates
 	gatherer := NewICEGatherer(m.stunServers, 5*time.Second)
 	result, err := gatherer.GatherWithConnection(m.udpConn)
+
+	// Build the candidate list locally then publish under m.mu so
+	// readers (LocalCandidates / GetNATStatus / Connect / handleConnect)
+	// never observe a torn assignment or an in-progress append.
+	var built []*Candidate
 	if err != nil {
 		m.logger.Warn("p2p: gather candidates failed", "err", err)
 	} else {
-		m.candidates = result.Candidates
+		built = result.Candidates
 	}
-
-	// Add UPnP candidate if available (highest priority for direct connection)
 	if m.upnpEnabled && m.portMapper != nil {
 		upnpAddr := m.portMapper.GetExternalAddr()
 		if upnpAddr != nil {
 			upnpCandidate := NewCandidate(CandidateUPnP, upnpAddr)
 			upnpCandidate.Base = m.udpConn.LocalAddr().(*net.UDPAddr)
-			// Insert at the beginning (highest priority)
-			m.candidates = append([]*Candidate{upnpCandidate}, m.candidates...)
+			built = append([]*Candidate{upnpCandidate}, built...)
 			m.logger.Info("p2p: added UPnP candidate", "addr", upnpAddr)
 		}
 	}
+	m.mu.Lock()
+	m.candidates = built
+	m.mu.Unlock()
 
-	m.logger.Info("p2p: gathered candidates", "count", len(m.candidates))
-	for _, c := range m.candidates {
+	m.logger.Info("p2p: gathered candidates", "count", len(built))
+	for _, c := range built {
 		m.logger.Debug("p2p: candidate", "type", c.Type, "addr", c.Addr)
 	}
 
@@ -454,6 +459,21 @@ func (m *Manager) deriveSharedSecret(remotePub [32]byte) ([]byte, error) {
 		return nil, fmt.Errorf("x25519: %w", err)
 	}
 	return shared, nil
+}
+
+// localCandidatesSnapshot returns a snapshot slice of m.candidates safe
+// for the caller to range over while concurrent re-gathers / ICE-restart
+// reassign m.candidates. The Candidate pointers themselves are treated
+// as immutable post-publish.
+func (m *Manager) localCandidatesSnapshot() []*Candidate {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	if len(m.candidates) == 0 {
+		return nil
+	}
+	out := make([]*Candidate, len(m.candidates))
+	copy(out, m.candidates)
+	return out
 }
 
 // setActiveHolePuncher registers hp as the active hole puncher for the

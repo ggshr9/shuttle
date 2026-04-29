@@ -66,7 +66,7 @@ func (m *Manager) Connect(ctx context.Context, dstVIP net.IP) error {
 
 	// Build local candidate list, augmenting with a verified mDNS host
 	// candidate when one is available (fast LAN path on reconnect).
-	candidates := m.candidates
+	candidates := m.localCandidatesSnapshot()
 	m.mu.RLock()
 	mdnsSvc := m.mdns
 	m.mu.RUnlock()
@@ -229,7 +229,7 @@ func (m *Manager) handleConnect(msg *signal.Message) {
 	m.logger.Info("p2p: received connection request", "peer", msg.SrcVIP)
 
 	// Respond with our candidates and public key
-	candidateInfos := m.candidatesToInfo(m.candidates)
+	candidateInfos := m.candidatesToInfo(m.localCandidatesSnapshot())
 	if err := m.signalClient.RespondToHandshake(m.ctx, msg.SrcVIP, m.localPub, candidateInfos); err != nil {
 		m.logger.Debug("p2p: respond to handshake failed", "err", err)
 		return
@@ -246,8 +246,15 @@ func (m *Manager) handleConnect(msg *signal.Message) {
 		defer m.wg.Done()
 		puncher := NewHolePuncher(m.udpConn, m.localVIP, m.holePunchTimeout, m.logger)
 
+		// Snapshot the slice under RLock so a concurrent trickle-ICE
+		// append can't reallocate the backing array while we range.
+		// Pointer entries are treated as immutable post-publish.
 		m.mu.RLock()
-		candidates := peer.Candidates
+		var candidates []*Candidate
+		if n := len(peer.Candidates); n > 0 {
+			candidates = make([]*Candidate, n)
+			copy(candidates, peer.Candidates)
+		}
 		m.mu.RUnlock()
 
 		if len(candidates) == 0 {
@@ -370,23 +377,31 @@ func (m *Manager) receiveLoop() {
 
 // handleP2PPacket handles an incoming P2P packet.
 func (m *Manager) handleP2PPacket(data []byte, from *net.UDPAddr) {
-	// Find the peer by address
+	// Snapshot both the peer and the P2PConn pointer under RLock. The
+	// snapshot lets us decrypt without holding any lock; the captured
+	// pointer also lets us recheck identity before mutating below
+	// (Connect / ICE-restart may have replaced peer.P2PConn between
+	// the find and the close-message handling).
 	m.mu.RLock()
-	var peer *PeerConnection
+	var (
+		peer *PeerConnection
+		conn *P2PConn
+	)
 	for _, p := range m.peers {
 		if p.P2PConn != nil && p.P2PConn.RemoteAddr().String() == from.String() {
 			peer = p
+			conn = p.P2PConn
 			break
 		}
 	}
 	m.mu.RUnlock()
 
-	if peer == nil || peer.P2PConn == nil {
+	if peer == nil || conn == nil {
 		m.logger.Debug("p2p: packet from unknown peer", "from", from)
 		return
 	}
 
-	plaintext, typ, err := peer.P2PConn.Decrypt(data)
+	plaintext, typ, err := conn.Decrypt(data)
 	if err != nil {
 		m.logger.Debug("p2p: decrypt failed", "err", err)
 		return
@@ -407,8 +422,15 @@ func (m *Manager) handleP2PPacket(data []byte, from *net.UDPAddr) {
 	case P2PClose:
 		m.logger.Info("p2p: peer closed connection", "peer", peer.VIP)
 		m.mu.Lock()
-		peer.State = StateDisconnected
-		peer.P2PConn = nil
+		// Only nil the connection if it's still the one we received the
+		// close on; a concurrent Connect / ICE-restart may have already
+		// replaced it with a newer P2PConn that should NOT be torn down.
+		if peer.P2PConn == conn {
+			peer.State = StateDisconnected
+			peer.P2PConn = nil
+		} else {
+			m.logger.Debug("p2p: ignoring stale close — connection already replaced", "peer", peer.VIP)
+		}
 		m.mu.Unlock()
 	}
 }

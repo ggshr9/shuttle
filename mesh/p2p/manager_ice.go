@@ -331,9 +331,13 @@ func (m *Manager) SendEndOfCandidates(dstVIP net.IP) error {
 		return fmt.Errorf("p2p: no signal client")
 	}
 
+	m.mu.RLock()
+	gen := m.iceGeneration
+	total := len(m.candidates)
+	m.mu.RUnlock()
 	info := &signal.EndOfCandidatesInfo{
-		Generation:      uint16(m.iceGeneration), //nolint:gosec // G115: generation is a small counter, fits uint16
-		TotalCandidates: uint8(len(m.candidates)), //nolint:gosec // G115: candidate count never exceeds 255
+		Generation:      uint16(gen),   //nolint:gosec // G115: generation is a small counter, fits uint16
+		TotalCandidates: uint8(total), //nolint:gosec // G115: candidate count never exceeds 255
 	}
 
 	return m.signalClient.SendEndOfCandidates(dstVIP, info)
