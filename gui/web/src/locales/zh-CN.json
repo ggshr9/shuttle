@@ -701,5 +701,14 @@
     "toast": {
       "connecting": "连接到 {vip}…"
     }
+  },
+  "notify": {
+    "connected": "Shuttle 已连接",
+    "connectedTo": "已连接到 {name}",
+    "connectedBody": "代理连接已建立",
+    "disconnected": "Shuttle 已断开",
+    "disconnectedBody": "代理连接已关闭",
+    "error": "Shuttle 错误",
+    "pageMoved": "页面已迁移 — 现在位于 {path}。"
   }
 }

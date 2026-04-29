@@ -1,5 +1,7 @@
 // Browser notification utility
 
+import { t } from './i18n'
+
 let permission: NotificationPermission = 'default'
 
 // Request notification permission
@@ -57,23 +59,25 @@ export function notify(title: string, options: NotifyOptions = {}): Notification
   }
 }
 
-// Connection state notifications
+// Connection state notifications. Strings flow through t() so the
+// bilingual UI is consistent with the rest of the app — previously
+// these toasts were hardcoded English.
 export function notifyConnected(serverName?: string): Notification | null {
-  return notify('Shuttle Connected', {
-    body: serverName ? `Connected to ${serverName}` : 'Proxy connection established',
+  return notify(t('notify.connected'), {
+    body: serverName ? t('notify.connectedTo', { name: serverName }) : t('notify.connectedBody'),
     tag: 'shuttle-connection',
   })
 }
 
 export function notifyDisconnected(): Notification | null {
-  return notify('Shuttle Disconnected', {
-    body: 'Proxy connection closed',
+  return notify(t('notify.disconnected'), {
+    body: t('notify.disconnectedBody'),
     tag: 'shuttle-connection',
   })
 }
 
 export function notifyError(message: string): Notification | null {
-  return notify('Shuttle Error', {
+  return notify(t('notify.error'), {
     body: message,
     tag: 'shuttle-error',
   })

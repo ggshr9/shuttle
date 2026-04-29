@@ -701,5 +701,14 @@
     "toast": {
       "connecting": "Connecting to {vip}…"
     }
+  },
+  "notify": {
+    "connected": "Shuttle Connected",
+    "connectedTo": "Connected to {name}",
+    "connectedBody": "Proxy connection established",
+    "disconnected": "Shuttle Disconnected",
+    "disconnectedBody": "Proxy connection closed",
+    "error": "Shuttle Error",
+    "pageMoved": "This page moved — now at {path}."
   }
 }

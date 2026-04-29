@@ -3,6 +3,7 @@
 import type { Component } from 'svelte'
 import { resolveLegacyRoute, hasSeenMigrationToast, markMigrationToastSeen } from '@/app/route-migration'
 import { toasts } from '@/lib/toaster.svelte'
+import { t } from '@/lib/i18n'
 
 interface RouteState {
   path: string
@@ -30,7 +31,7 @@ function update() {
     const newHash = '#' + legacy.path + (qs ? '?' + qs : '')
     history.replaceState(null, '', newHash)
     if (!hasSeenMigrationToast()) {
-      toasts.info(`This page moved — now at ${legacy.path}.`)
+      toasts.info(t('notify.pageMoved', { path: legacy.path }))
       markMigrationToastSeen()
     }
     state.path = legacy.path
