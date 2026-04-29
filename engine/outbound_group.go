@@ -37,11 +37,12 @@ type ProbeSnapshot struct {
 
 // OutboundGroupConfig is the JSON options schema for a group outbound.
 type OutboundGroupConfig struct {
-	Strategy    GroupStrategy    `json:"strategy"`
-	Outbounds   []string         `json:"outbounds"`
-	MaxLatency  string           `json:"max_latency,omitempty"`   // duration string, e.g. "200ms"
-	MaxLossRate float64          `json:"max_loss_rate,omitempty"` // 0-1 range
-	HealthCheck *GroupHealthCheck `json:"health_check,omitempty"` // for url-test strategy
+	Strategy             GroupStrategy     `json:"strategy"`
+	Outbounds            []string          `json:"outbounds"`
+	MaxLatency           string            `json:"max_latency,omitempty"`   // duration string, e.g. "200ms"
+	MaxLossRate          float64           `json:"max_loss_rate,omitempty"` // 0-1 range
+	QualityToleranceMS   int               `json:"quality_tolerance_ms,omitempty"` // for quality strategy; 0 -> default
+	HealthCheck          *GroupHealthCheck `json:"health_check,omitempty"`         // for url-test strategy
 }
 
 // GroupHealthCheck configures the health checker for url-test groups.
@@ -147,9 +148,10 @@ func (g *OutboundGroup) dialQuality(ctx context.Context, network, address string
 		entries[i] = entry
 	}
 
-	// Filter and rank.
+	// Filter and rank. rankByQuality shuffles entries within the
+	// tolerance bucket per call so concurrent dials don't pile on #1.
 	entries = filterByQuality(entries, g.qualityCfg)
-	entries = rankByQuality(entries)
+	entries = rankByQuality(entries, g.qualityCfg)
 
 	// Try ranked outbounds in order (failover among qualified).
 	var lastErr error
@@ -210,6 +212,9 @@ func QualityConfigFromGroupConfig(cfg OutboundGroupConfig) QualityConfig {
 		qc.MaxLatency, _ = time.ParseDuration(cfg.MaxLatency) // already validated
 	}
 	qc.MaxLossRate = cfg.MaxLossRate
+	if cfg.QualityToleranceMS > 0 {
+		qc.Tolerance = time.Duration(cfg.QualityToleranceMS) * time.Millisecond
+	}
 	return qc
 }
 

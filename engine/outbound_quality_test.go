@@ -44,7 +44,7 @@ func TestQualityRank(t *testing.T) {
 		{tag: "medium", latency: 80 * time.Millisecond, loss: 0.0, index: 2},
 	}
 
-	ranked := rankByQuality(entries)
+	ranked := rankByQuality(entries, QualityConfig{})
 
 	if len(ranked) != 3 {
 		t.Fatalf("expected 3 entries, got %d", len(ranked))
@@ -72,7 +72,7 @@ func TestQualityRank_LossBreaksTie(t *testing.T) {
 		{tag: "low-loss", latency: 50 * time.Millisecond, loss: 0.05, index: 1},
 	}
 
-	ranked := rankByQuality(entries)
+	ranked := rankByQuality(entries, QualityConfig{})
 
 	if ranked[0].tag != "low-loss" {
 		t.Errorf("ranked[0].tag = %q, want %q", ranked[0].tag, "low-loss")
