@@ -217,7 +217,15 @@ func (h *Handler) HandleStream(ctx context.Context, stream transport.Stream, rem
 			var counter *countingReadWriter
 			if user != nil {
 				user.ActiveConns.Add(1)
-				defer user.ActiveConns.Add(-1) //nolint:gocritic // not a real loop; reads until newline then returns
+				if h.Users != nil {
+					h.Users.FireActivity(user.Name, +1)
+				}
+				defer func() {
+					user.ActiveConns.Add(-1)
+					if h.Users != nil {
+						h.Users.FireActivity(user.Name, -1)
+					}
+				}() //nolint:gocritic // not a real loop; reads until newline then returns
 				counter = &countingReadWriter{
 					inner: stream,
 					user:  user,

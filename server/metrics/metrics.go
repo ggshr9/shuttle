@@ -53,6 +53,12 @@ type Collector struct {
 	dnsQueryDuration *labeledHistogram
 	destResolveFails *labeledCounter
 
+	// Per-user active connections gauge (gated by cfg.Metrics.PerUser).
+	// Populated only when UserActivityDelta is called; otherwise empty
+	// and omitted from /metrics output.
+	userActiveMu sync.RWMutex
+	userActive   map[string]*atomic.Int64
+
 	startTime time.Time
 
 	// Cached MemStats to avoid STW pause on every /metrics scrape.
@@ -176,6 +182,30 @@ func (c *Collector) RecordDestResolveFailure(reason string) {
 	c.destResolveFails.Inc(reason)
 }
 
+// UserActivityDelta adjusts the per-user active connections gauge by delta.
+// Pass +1 on connect and -1 on disconnect. Lazily allocates the user's
+// counter on first use.
+//
+// This metric should only be wired when cfg.Metrics.PerUser is true to
+// bound label cardinality.
+func (c *Collector) UserActivityDelta(user string, delta int64) {
+	c.userActiveMu.RLock()
+	v, ok := c.userActive[user]
+	c.userActiveMu.RUnlock()
+	if !ok {
+		c.userActiveMu.Lock()
+		if c.userActive == nil {
+			c.userActive = make(map[string]*atomic.Int64)
+		}
+		if v, ok = c.userActive[user]; !ok {
+			v = &atomic.Int64{}
+			c.userActive[user] = v
+		}
+		c.userActiveMu.Unlock()
+	}
+	v.Add(delta)
+}
+
 // Handler returns an http.Handler that serves /metrics in Prometheus text format.
 func (c *Collector) Handler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -288,6 +318,17 @@ func (c *Collector) writeMetrics(w io.Writer) {
 
 	c.dnsQueryDuration.write(w, "DNS query duration in seconds")
 	c.destResolveFails.write(w, "Destination resolve failures by reason")
+
+	// --- Per-user active connections (only emitted when populated) ---
+	c.userActiveMu.RLock()
+	if len(c.userActive) > 0 {
+		fmt.Fprintf(w, "# HELP shuttle_user_active_connections Active connections by user\n")
+		fmt.Fprintf(w, "# TYPE shuttle_user_active_connections gauge\n")
+		for user, v := range c.userActive {
+			fmt.Fprintf(w, "shuttle_user_active_connections{user=%q} %d\n", user, v.Load())
+		}
+	}
+	c.userActiveMu.RUnlock()
 
 	// --- Duration histogram ---
 	fmt.Fprintf(w, "# HELP shuttle_connection_duration_seconds Connection duration histogram\n")

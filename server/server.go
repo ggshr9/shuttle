@@ -164,6 +164,12 @@ func New(c Config) (*Server, error) {
 
 	// --- Users ---
 	s.users = admin.NewUserStore(cfg.Admin.Users)
+	if cfg.Metrics.PerUser {
+		s.users.SetActivityHook(func(user string, delta int) {
+			s.metrics.UserActivityDelta(user, int64(delta))
+		})
+		logger.Info("per-user metrics enabled (shuttle_user_active_connections)")
+	}
 
 	// --- Audit ---
 	if cfg.Audit.Enabled {

@@ -20,6 +20,15 @@ type ServerConfig struct {
 	Yamux        YamuxConfig          `yaml:"yamux" json:"yamux"`
 	Log          LogConfig            `yaml:"log" json:"log"`
 	Inbounds     []InboundConfig      `yaml:"inbounds,omitempty" json:"inbounds,omitempty"` // per-request protocol inbounds (SS, VLESS, Trojan)
+	Metrics      MetricsConfig        `yaml:"metrics" json:"metrics"`
+}
+
+// MetricsConfig configures Prometheus metrics emission.
+//
+// PerUser enables the shuttle_user_active_connections gauge labelled by user
+// name. Disabled by default to bound cardinality on deployments with many users.
+type MetricsConfig struct {
+	PerUser bool `yaml:"per_user,omitempty" json:"per_user,omitempty"`
 }
 
 // TLSConfig configures TLS certificates.

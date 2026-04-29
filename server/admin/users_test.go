@@ -1,6 +1,7 @@
 package admin
 
 import (
+	"sync"
 	"testing"
 
 	"github.com/shuttleX/shuttle/config"
@@ -105,6 +106,55 @@ func TestUserStoreSetEnabledNotFound(t *testing.T) {
 	s := NewUserStore(nil)
 	if s.SetEnabled("nonexistent", true) {
 		t.Fatal("should return false for unknown token")
+	}
+}
+
+func TestUserStoreActivityHook(t *testing.T) {
+	s := NewUserStore(nil)
+
+	// FireActivity with no hook installed should be a no-op (no panic).
+	s.FireActivity("alice", +1)
+
+	type call struct {
+		user  string
+		delta int
+	}
+	var (
+		mu    sync.Mutex
+		calls []call
+	)
+	s.SetActivityHook(func(user string, delta int) {
+		mu.Lock()
+		defer mu.Unlock()
+		calls = append(calls, call{user, delta})
+	})
+
+	s.FireActivity("alice", +1)
+	s.FireActivity("alice", -1)
+	s.FireActivity("bob", +1)
+
+	mu.Lock()
+	got := append([]call(nil), calls...)
+	mu.Unlock()
+
+	want := []call{{"alice", +1}, {"alice", -1}, {"bob", +1}}
+	if len(got) != len(want) {
+		t.Fatalf("hook calls = %v, want %v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("hook call[%d] = %+v, want %+v", i, got[i], want[i])
+		}
+	}
+
+	// Removing the hook stops further dispatch.
+	s.SetActivityHook(nil)
+	s.FireActivity("alice", +1)
+	mu.Lock()
+	finalLen := len(calls)
+	mu.Unlock()
+	if finalLen != 3 {
+		t.Fatalf("hook fired after SetActivityHook(nil); calls now %d", finalLen)
 	}
 }
 
