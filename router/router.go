@@ -39,9 +39,13 @@ type Rule struct {
 
 // Router dispatches connections based on domain, IP, process, and protocol rules.
 type Router struct {
-	mu           sync.RWMutex
-	ruleChain    []compiledRule // ordered rules evaluated before legacy stack
-	domainTrie   *DomainTrie
+	mu sync.RWMutex
+	ruleChain []compiledRule // ordered rules evaluated before legacy stack
+	// exactDomain holds RuleTypeDomain entries (lowercased). Looked up
+	// before the suffix trie so an exact rule for "example.com" does
+	// NOT also match "sub.example.com".
+	exactDomain  map[string]Action
+	domainTrie   *DomainTrie // RuleTypeDomainSuffix + RuleTypeGeoSite
 	ipRules      []ipRule
 	processMap   map[string]Action
 	protocolMap  map[string]Action
@@ -89,6 +93,7 @@ func NewRouter(cfg *RouterConfig, geoIP *GeoIPDB, geoSite *GeoSiteDB, logger *sl
 		logger = slog.Default()
 	}
 	r := &Router{
+		exactDomain: make(map[string]Action),
 		domainTrie:  NewDomainTrie(),
 		processMap:  make(map[string]Action),
 		protocolMap: make(map[string]Action),
@@ -169,7 +174,11 @@ func (r *Router) addRule(rule Rule) {
 	}
 
 	switch rule.Type {
-	case RuleTypeDomain, RuleTypeDomainSuffix:
+	case RuleTypeDomain:
+		for _, v := range rule.Values {
+			r.exactDomain[strings.ToLower(strings.TrimSuffix(v, "."))] = rule.Action
+		}
+	case RuleTypeDomainSuffix:
 		for _, v := range rule.Values {
 			r.domainTrie.Insert(v, string(rule.Action))
 		}
@@ -270,6 +279,11 @@ func (r *Router) MatchDomain(domain string) Action {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
+	key := strings.ToLower(strings.TrimSuffix(domain, "."))
+	if act, ok := r.exactDomain[key]; ok {
+		r.notifyDecision(act, "domain")
+		return act
+	}
 	if action, found := r.domainTrie.Lookup(domain); found {
 		act := Action(action)
 		r.notifyDecision(act, "domain")
@@ -350,6 +364,13 @@ func (r *Router) DryRun(domain string) DryRunResult {
 	defer r.mu.RUnlock()
 
 	if domain != "" {
+		key := strings.ToLower(strings.TrimSuffix(domain, "."))
+		if act, ok := r.exactDomain[key]; ok {
+			result.Action = string(act)
+			result.MatchedBy = "domain_rule"
+			result.Rule = domain
+			return result
+		}
 		if action, found := r.domainTrie.Lookup(domain); found {
 			result.Action = action
 			result.MatchedBy = "domain_rule"

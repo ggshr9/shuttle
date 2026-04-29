@@ -39,7 +39,21 @@ func GeneratePAC(r *Router, cfg *PACConfig) string {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
-	// Collect domain rules from trie
+	// Exact-match domains (RuleTypeDomain): emit as `host === "..."` so
+	// they don't get the suffix semantics of dnsDomainIs.
+	var exactProxy, exactDirect, exactReject []string
+	for d, act := range r.exactDomain {
+		switch act {
+		case ActionProxy:
+			exactProxy = append(exactProxy, d)
+		case ActionDirect:
+			exactDirect = append(exactDirect, d)
+		case ActionReject:
+			exactReject = append(exactReject, d)
+		}
+	}
+
+	// Collect suffix domain rules from trie (RuleTypeDomainSuffix + GeoSite).
 	var proxyDomains, directDomains, rejectDomains []string
 	collectDomains(r.domainTrie.root, nil, &proxyDomains, &directDomains, &rejectDomains)
 
@@ -71,7 +85,30 @@ func GeneratePAC(r *Router, cfg *PACConfig) string {
 	sb.WriteString("    return \"DIRECT\";\n")
 	sb.WriteString("  }\n\n")
 
-	// Reject domains
+	// Exact-match domains first (precise wins over suffix).
+	if len(exactReject) > 0 {
+		sb.WriteString("  // Exact reject domains\n")
+		for _, d := range exactReject {
+			sb.WriteString(fmt.Sprintf("  if (host === %q) return \"PROXY 0.0.0.0:1\";\n", escapeJSString(d)))
+		}
+		sb.WriteString("\n")
+	}
+	if len(exactDirect) > 0 {
+		sb.WriteString("  // Exact direct domains\n")
+		for _, d := range exactDirect {
+			sb.WriteString(fmt.Sprintf("  if (host === %q) return \"DIRECT\";\n", escapeJSString(d)))
+		}
+		sb.WriteString("\n")
+	}
+	if len(exactProxy) > 0 {
+		sb.WriteString("  // Exact proxy domains\n")
+		for _, d := range exactProxy {
+			sb.WriteString(fmt.Sprintf("  if (host === %q) return %q;\n", escapeJSString(d), proxyStr))
+		}
+		sb.WriteString("\n")
+	}
+
+	// Suffix domains (dnsDomainIs).
 	if len(rejectDomains) > 0 {
 		sb.WriteString("  // Rejected domains (ads/tracking)\n")
 		for _, d := range rejectDomains {
@@ -80,18 +117,16 @@ func GeneratePAC(r *Router, cfg *PACConfig) string {
 		sb.WriteString("\n")
 	}
 
-	// Direct domains
 	if len(directDomains) > 0 {
-		sb.WriteString("  // Direct domains\n")
+		sb.WriteString("  // Direct suffix domains\n")
 		for _, d := range directDomains {
 			sb.WriteString(fmt.Sprintf("  if (dnsDomainIs(host, %q)) return \"DIRECT\";\n", escapeJSString(d)))
 		}
 		sb.WriteString("\n")
 	}
 
-	// Proxy domains
 	if len(proxyDomains) > 0 {
-		sb.WriteString("  // Proxy domains\n")
+		sb.WriteString("  // Proxy suffix domains\n")
 		for _, d := range proxyDomains {
 			sb.WriteString(fmt.Sprintf("  if (dnsDomainIs(host, %q)) return %q;\n", escapeJSString(d), proxyStr))
 		}
