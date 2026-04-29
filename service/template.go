@@ -39,6 +39,16 @@ func renderSystemdUnit(cfg *Config, scope Scope) string {
 	if cfg.User != "" && scope == ScopeSystem {
 		fmt.Fprintf(&sb, "User=%s\n", sanitizeUnitValue(cfg.User))
 	}
+	// Mirror darwin/windows: write stdout/stderr to LogDir so
+	// `shuttle logs` can fall back to file-tailing on systems where
+	// journalctl isn't available (containers, distros without
+	// systemd-journald). LogDir was previously dead config on Linux.
+	if cfg.LogDir != "" {
+		logOut := filepath.Join(cfg.LogDir, cfg.Name+".log")
+		logErr := filepath.Join(cfg.LogDir, cfg.Name+".err.log")
+		fmt.Fprintf(&sb, "StandardOutput=append:%s\n", logOut)
+		fmt.Fprintf(&sb, "StandardError=append:%s\n", logErr)
+	}
 	fmt.Fprintf(&sb, "\n[Install]\nWantedBy=%s\n", wantedBy)
 	return sb.String()
 }
