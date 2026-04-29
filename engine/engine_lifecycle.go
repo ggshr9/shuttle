@@ -513,7 +513,18 @@ func (e *Engine) reloadRouterOnly(cfg *config.ClientConfig) error {
 // When only routing/DNS fields change the engine performs a zero-downtime
 // router-only hot-swap instead of a full stop-then-start cycle.
 func (e *Engine) Reload(cfg *config.ClientConfig) error {
+	// Loose pre-check (server addr, at least one transport).
 	if err := ValidateConfig(cfg); err != nil {
+		e.mu.Lock()
+		e.lastConfigErr = err
+		e.mu.Unlock()
+		return fmt.Errorf("invalid config: %w", err)
+	}
+	// Full validation BEFORE we touch engine state. Previously this
+	// only ran inside startInternal, after stopInternal had already
+	// torn down listeners — a malformed config would cause a window
+	// of dropped traffic before the rollback path tried to restart.
+	if err := cfg.Validate(); err != nil {
 		e.mu.Lock()
 		e.lastConfigErr = err
 		e.mu.Unlock()
