@@ -99,6 +99,11 @@ type Engine struct {
 	// or nil when the active config validated cleanly. Used by the deep
 	// readiness probe (gui/api/health_deep.go).
 	lastConfigErr error
+
+	// metrics holds engine-side counters/histograms surfaced via Metrics().
+	// Allocated once in New() and never reset across Reload() — counters
+	// are monotonically increasing for the lifetime of the engine.
+	metrics *engineMetrics
 }
 
 // New creates a new Engine from the given config.
@@ -112,6 +117,7 @@ func New(cfg *config.ClientConfig) *Engine {
 		obs:         NewObservabilityManager(logger),
 		traffic:     NewTrafficManager(logger),
 		meshManager: NewMeshManager(logger),
+		metrics:     newEngineMetrics(),
 	}
 }
 
