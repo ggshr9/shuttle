@@ -77,6 +77,11 @@ func (e *Engine) startInbounds(ctx context.Context, cfg *config.ClientConfig) ([
 			BaseCooldown: 10 * time.Second,
 			MaxCooldown:  5 * time.Minute,
 			OnStateChange: func(state CircuitState, cooldown time.Duration) {
+				// Record per-outbound CB state for Metrics() snapshot.
+				e.metrics.mu.Lock()
+				e.metrics.circuitBreakers[tagName] = state.String()
+				e.metrics.mu.Unlock()
+
 				e.obs.Emit(Event{
 					Type:      EventConnectionError,
 					Timestamp: time.Now(),

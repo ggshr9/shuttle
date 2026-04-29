@@ -7,6 +7,52 @@ import (
 	"github.com/shuttleX/shuttle/config"
 )
 
+// TestEngine_CBStateRecordedInMetrics verifies that the per-outbound circuit
+// breaker callback (as wired in startInbounds) writes the new state to
+// e.metrics.circuitBreakers under e.metrics.mu.
+//
+// This test replicates the wiring done in engine_inbound.go directly rather
+// than spinning up a full engine + outbound stack (which would require real
+// network dialing to drive failures). The closure under test is the same
+// pattern used at startInbounds line ~79.
+func TestEngine_CBStateRecordedInMetrics(t *testing.T) {
+	eng := New(config.DefaultClientConfig())
+	tagName := "out-test"
+
+	cb := NewCircuitBreaker(CircuitBreakerConfig{
+		Threshold:    1,
+		BaseCooldown: 10 * time.Millisecond,
+		OnStateChange: func(state CircuitState, _ time.Duration) {
+			eng.metrics.mu.Lock()
+			eng.metrics.circuitBreakers[tagName] = state.String()
+			eng.metrics.mu.Unlock()
+		},
+	})
+
+	// Drive a Closed -> Open transition.
+	cb.RecordFailure()
+
+	snap := eng.Metrics()
+	if got, want := snap.CircuitBreakers[tagName], "open"; got != want {
+		t.Fatalf("after RecordFailure, CircuitBreakers[%q] = %q, want %q", tagName, got, want)
+	}
+
+	// Drive Open -> HalfOpen via cooldown.
+	time.Sleep(30 * time.Millisecond)
+	snap = eng.Metrics()
+	if got, want := snap.CircuitBreakers[tagName], "half-open"; got != want {
+		t.Fatalf("after cooldown, CircuitBreakers[%q] = %q, want %q", tagName, got, want)
+	}
+
+	// Drive HalfOpen -> Closed via success.
+	cb.Allow() // consume probe
+	cb.RecordSuccess()
+	snap = eng.Metrics()
+	if got, want := snap.CircuitBreakers[tagName], "closed"; got != want {
+		t.Fatalf("after RecordSuccess, CircuitBreakers[%q] = %q, want %q", tagName, got, want)
+	}
+}
+
 // TestEngine_MetricsZeroValueSnapshot verifies a freshly-constructed engine
 // returns a snapshot whose maps are non-nil (callers may safely range/index)
 // and empty.
