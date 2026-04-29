@@ -2,6 +2,7 @@ package router
 
 import (
 	"net"
+	"sync"
 	"testing"
 	"time"
 )
@@ -389,6 +390,88 @@ func TestRouterMatchProtocol(t *testing.T) {
 	got = r.MatchProtocol("http")
 	if got != ActionProxy {
 		t.Errorf("MatchProtocol(http) = %q, want %q", got, ActionProxy)
+	}
+}
+
+func TestRouter_DecisionHookFires(t *testing.T) {
+	r := newTestRouter([]Rule{
+		{Type: "domain", Values: []string{"example.com"}, Action: ActionDirect},
+	}, ActionProxy)
+
+	var (
+		hits   []string
+		hitsMu sync.Mutex
+	)
+	r.SetDecisionHook(func(decision, rule string) {
+		hitsMu.Lock()
+		defer hitsMu.Unlock()
+		hits = append(hits, decision+"/"+rule)
+	})
+
+	_ = r.MatchDomain("example.com")
+
+	// Hook fires async — wait briefly for goroutine to dispatch.
+	deadline := time.Now().Add(1 * time.Second)
+	for time.Now().Before(deadline) {
+		hitsMu.Lock()
+		n := len(hits)
+		hitsMu.Unlock()
+		if n >= 1 {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	hitsMu.Lock()
+	defer hitsMu.Unlock()
+	if len(hits) != 1 {
+		t.Fatalf("expected 1 hook call, got %d: %v", len(hits), hits)
+	}
+	if hits[0] != "direct/domain" {
+		t.Errorf("expected hook %q, got %q", "direct/domain", hits[0])
+	}
+}
+
+func TestRouter_DecisionHookCoversAllMatchers(t *testing.T) {
+	r := newTestRouter([]Rule{
+		{Type: "domain", Values: []string{"example.com"}, Action: ActionDirect},
+		{Type: "ip-cidr", Values: []string{"10.0.0.0/8"}, Action: ActionDirect},
+		{Type: "process", Values: []string{"chrome"}, Action: ActionReject},
+		{Type: "protocol", Values: []string{"bittorrent"}, Action: ActionReject},
+	}, ActionProxy)
+
+	var (
+		hits   []string
+		hitsMu sync.Mutex
+	)
+	r.SetDecisionHook(func(decision, rule string) {
+		hitsMu.Lock()
+		defer hitsMu.Unlock()
+		hits = append(hits, decision+"/"+rule)
+	})
+
+	_ = r.MatchDomain("example.com")
+	_ = r.MatchIP(net.ParseIP("10.1.2.3"))
+	_ = r.MatchProcess("chrome")
+	_ = r.MatchProtocol("bittorrent")
+	// default fallthrough
+	_ = r.MatchDomain("nomatch.invalid")
+
+	deadline := time.Now().Add(1 * time.Second)
+	for time.Now().Before(deadline) {
+		hitsMu.Lock()
+		n := len(hits)
+		hitsMu.Unlock()
+		if n >= 5 {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	hitsMu.Lock()
+	defer hitsMu.Unlock()
+	if len(hits) < 5 {
+		t.Fatalf("expected at least 5 hook calls, got %d: %v", len(hits), hits)
 	}
 }
 

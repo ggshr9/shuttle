@@ -184,6 +184,16 @@ func (e *Engine) buildRouter(cfg *config.ClientConfig, ruleProviders map[string]
 	}
 	e.logger.Debug("router built", "rules", len(routerCfg.Rules), "default_action", routerCfg.DefaultAction, "dns_prefetch", cfg.Routing.DNS.Prefetch)
 	rt := router.NewRouter(routerCfg, geoIPDB, geoSiteDB, e.logger)
+
+	// Wire routing-decision metrics: each Match* call notifies the hook with
+	// (action, rule_kind); we increment routingDecisions["<action>/<rule>"].
+	rt.SetDecisionHook(func(decision, rule string) {
+		key := decision + "/" + rule
+		e.metrics.mu.Lock()
+		e.metrics.routingDecisions[key]++
+		e.metrics.mu.Unlock()
+	})
+
 	return rt, dnsResolver, prefetcher
 }
 
