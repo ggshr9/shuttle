@@ -4,7 +4,7 @@ import { client, BASE } from './client'
 import type {
   Status,
   Server, ServersResponse, Config, ImportResult, AutoSelectResult, ConfigValidation,
-  RoutingRules, RoutingTemplate, DryRunResult, RoutingConflict,
+  RoutingRules, RoutingTemplate, DryRunResult,
   Process,
   SpeedtestResult, SpeedtestHistoryEntry,
   Subscription,
@@ -12,12 +12,11 @@ import type {
   UpdateInfo, VersionInfo,
   LanInfo,
   GeoDataStatus, GeodataSourcePreset,
-  TransportStats, PathStats,
-  ConnectionHistoryEntry, StreamInfo,
-  DebugState, SystemResources,
-  ProbeResult, BatchProbeResult,
+  TransportStats,
+  ConnectionHistoryEntry,
+  ProbeResult,
   MeshStatus, MeshPeer,
-  GroupInfo, GroupTestResult,
+  GroupInfo,
 } from './types'
 
 // ── Engine / status ──────────────────────────────────────────
@@ -52,9 +51,6 @@ export const getRoutingTemplates = () => client.get<RoutingTemplate[]>('/api/rou
 export const applyRoutingTemplate = (id: string) => client.post<void>(`/api/routing/templates/${id}`, {})
 export const getGeositeCategories = () => client.get<string[]>('/api/geosite/categories')
 export const testRouting = (url: string) => client.post<DryRunResult>('/api/routing/test', { url })
-export const getRoutingConflicts = () =>
-  client.get<{ conflicts: RoutingConflict[]; count: number }>('/api/routing/conflicts')
-export const getPacScript = () => client.get<string>('/api/pac')
 
 // ── Processes ────────────────────────────────────────────────
 export const getProcesses = () => client.get<Process[]>('/api/processes')
@@ -113,23 +109,14 @@ export const updateGeodataSource = (id: string) =>
 
 // ── Transport / multipath ────────────────────────────────────
 export const getTransportStats = () => client.get<TransportStats[]>('/api/transports/stats')
-export const getMultipathStats = () => client.get<PathStats[]>('/api/multipath/stats')
 
 // ── Connections / streams ────────────────────────────────────
 export const getConnectionsHistory = () =>
   client.get<ConnectionHistoryEntry[]>('/api/connections/history')
-export const getConnectionStreams = (id: string) =>
-  client.get<StreamInfo[]>(`/api/connections/${id}/streams`)
-
-// ── Debug / system ───────────────────────────────────────────
-export const getDebugState = () => client.get<DebugState>('/api/debug/state')
-export const getSystemResources = () => client.get<SystemResources>('/api/system/resources')
 
 // ── Probe / test ─────────────────────────────────────────────
 export const testProbe = (url: string, via?: string) =>
   client.post<ProbeResult>('/api/test/probe', { url, via }, 20000)
-export const testProbeBatch = (tests: Array<{ name?: string; url: string; method?: string; via?: string }>) =>
-  client.post<{ results: BatchProbeResult[] }>('/api/test/probe/batch', { tests }, 60000)
 
 // ── Mesh ─────────────────────────────────────────────────────
 export const meshStatus = () => client.get<MeshStatus>('/api/mesh/status')
@@ -141,10 +128,6 @@ export const meshConnectPeer = (vip: string) =>
 export const getGroups = () => client.get<GroupInfo[]>('/api/groups')
 export const getGroup = (tag: string) =>
   client.get<GroupInfo>(`/api/groups/${encodeURIComponent(tag)}`)
-export const testGroup = (tag: string) =>
-  client.post<GroupTestResult[]>(`/api/groups/${encodeURIComponent(tag)}/test`, {})
-export const selectGroupMember = (groupTag: string, member: string) =>
-  client.put<void>(`/api/groups/${encodeURIComponent(groupTag)}/selected`, { selected: member })
 
 // ── Diagnostics (binary download) ────────────────────────────
 export const downloadDiagnostics = async (): Promise<void> => {
@@ -171,8 +154,7 @@ export const api = {
   getConfig, putConfig, importConfig, exportConfig, validateConfig,
   getServers, setActiveServer, putServers, addServer, deleteServer, autoSelectServer,
   getRouting, putRouting, exportRouting, exportRoutingData, importRouting,
-  getRoutingTemplates, applyRoutingTemplate, getGeositeCategories, testRouting, getRoutingConflicts,
-  getPacScript,
+  getRoutingTemplates, applyRoutingTemplate, getGeositeCategories, testRouting,
   getProcesses,
   speedtest, getSpeedtestHistory,
   getSubscriptions, addSubscription, refreshSubscription, deleteSubscription,
@@ -183,11 +165,10 @@ export const api = {
   getAutostart, setAutostart,
   getLanInfo,
   getGeoDataStatus, updateGeoData, getGeodataSources, updateGeodataSource,
-  getTransportStats, getMultipathStats,
-  getConnectionsHistory, getConnectionStreams,
-  getDebugState, getSystemResources,
-  testProbe, testProbeBatch,
+  getTransportStats,
+  getConnectionsHistory,
+  testProbe,
   meshStatus, meshPeers, meshConnectPeer,
-  getGroups, getGroup, testGroup, selectGroupMember,
+  getGroups, getGroup,
   downloadDiagnostics,
 }
