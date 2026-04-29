@@ -347,6 +347,36 @@ func TestCollector_HandshakeFailure(t *testing.T) {
 	}
 }
 
+func TestCollector_DNSQuery(t *testing.T) {
+	c := NewCollector()
+	c.RecordDNSQuery("system", true, 2*time.Millisecond)
+	c.RecordDNSQuery("system", false, 30*time.Millisecond)
+
+	rr := httptest.NewRecorder()
+	c.Handler().ServeHTTP(rr, httptest.NewRequest("GET", "/metrics", nil))
+	body := rr.Body.String()
+
+	if !strings.Contains(body, `shuttle_dns_query_duration_seconds_count{protocol="system",cached="true"} 1`) {
+		t.Fatalf("missing cached count, got:\n%s", body)
+	}
+	if !strings.Contains(body, `shuttle_dns_query_duration_seconds_count{protocol="system",cached="false"} 1`) {
+		t.Fatalf("missing uncached count, got:\n%s", body)
+	}
+}
+
+func TestCollector_DestResolveFailure(t *testing.T) {
+	c := NewCollector()
+	c.RecordDestResolveFailure("nxdomain")
+
+	rr := httptest.NewRecorder()
+	c.Handler().ServeHTTP(rr, httptest.NewRequest("GET", "/metrics", nil))
+	body := rr.Body.String()
+
+	if !strings.Contains(body, `shuttle_destination_resolve_failures_total{reason="nxdomain"} 1`) {
+		t.Fatalf("missing failure line, got:\n%s", body)
+	}
+}
+
 func TestFormatFloat(t *testing.T) {
 	tests := []struct {
 		in   float64

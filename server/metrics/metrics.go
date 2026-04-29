@@ -50,6 +50,9 @@ type Collector struct {
 	handshakeDuration *labeledHistogram
 	handshakeFailures *labeledCounter
 
+	dnsQueryDuration *labeledHistogram
+	destResolveFails *labeledCounter
+
 	startTime time.Time
 
 	// Cached MemStats to avoid STW pause on every /metrics scrape.
@@ -83,6 +86,15 @@ func NewCollector() *Collector {
 	c.handshakeFailures = newLabeledCounter(
 		"shuttle_handshake_failures_total",
 		[]string{"transport", "reason"},
+	)
+	c.dnsQueryDuration = newLabeledHistogram(
+		"shuttle_dns_query_duration_seconds",
+		DNSQueryDurationBuckets,
+		[]string{"protocol", "cached"},
+	)
+	c.destResolveFails = newLabeledCounter(
+		"shuttle_destination_resolve_failures_total",
+		[]string{"reason"},
 	)
 	return c
 }
@@ -147,6 +159,21 @@ func (c *Collector) RecordHandshake(transport string, duration time.Duration) {
 // Reason should be one of: timeout, auth, protocol.
 func (c *Collector) RecordHandshakeFailure(transport, reason string) {
 	c.handshakeFailures.Inc(transport, reason)
+}
+
+// RecordDNSQuery records a DNS query duration. protocol is one of "udp", "system".
+func (c *Collector) RecordDNSQuery(protocol string, cached bool, duration time.Duration) {
+	cachedStr := "false"
+	if cached {
+		cachedStr = "true"
+	}
+	c.dnsQueryDuration.Observe(duration.Seconds(), protocol, cachedStr)
+}
+
+// RecordDestResolveFailure records a destination resolution failure.
+// reason is one of "nxdomain", "timeout", "refused".
+func (c *Collector) RecordDestResolveFailure(reason string) {
+	c.destResolveFails.Inc(reason)
 }
 
 // Handler returns an http.Handler that serves /metrics in Prometheus text format.
@@ -258,6 +285,9 @@ func (c *Collector) writeMetrics(w io.Writer) {
 	// --- Handshake metrics ---
 	c.handshakeDuration.write(w, "Server-side handshake duration in seconds, by transport")
 	c.handshakeFailures.write(w, "Total handshake failures, by transport and reason")
+
+	c.dnsQueryDuration.write(w, "DNS query duration in seconds")
+	c.destResolveFails.write(w, "Destination resolve failures by reason")
 
 	// --- Duration histogram ---
 	fmt.Fprintf(w, "# HELP shuttle_connection_duration_seconds Connection duration histogram\n")
