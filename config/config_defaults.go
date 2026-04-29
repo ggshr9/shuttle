@@ -142,20 +142,30 @@ func applyClientDefaults(cfg *ClientConfig) {
 
 func applyGeoDataDefaults(g *GeoDataConfig) {
 	if g.DataDir == "" {
-		// Cache lives under the OS-appropriate user data dir so Windows
-		// hits %AppData%\Shuttle\geodata and macOS hits
+		// New default lives under the OS-appropriate user data dir so
+		// Windows hits %AppData%\Shuttle\geodata and macOS hits
 		// ~/Library/Application Support/Shuttle/geodata instead of
-		// landing in ~/.shuttle/geodata everywhere. Geodata files are
-		// regenerable from URLs, so users upgrading from the legacy
-		// location just see a one-time re-download.
+		// landing in ~/.shuttle/geodata everywhere.
+		//
+		// On upgrade, prefer the legacy ~/.shuttle/geodata when it
+		// already has data: forcing a re-download from the URLs hurts
+		// air-gapped or bandwidth-sensitive deployments. Once that
+		// directory is empty / missing, the new resolver-driven path
+		// takes over.
 		scope := paths.ScopeUser
 		if os.Getuid() == 0 {
 			scope = paths.ScopeSystem
 		}
-		if dir := paths.Resolve(scope).ConfigDir; dir != "" {
+		var legacy string
+		if home, err := os.UserHomeDir(); err == nil {
+			legacy = filepath.Join(home, ".shuttle", "geodata")
+		}
+		if legacy != "" && hasFiles(legacy) {
+			g.DataDir = legacy
+		} else if dir := paths.Resolve(scope).ConfigDir; dir != "" {
 			g.DataDir = filepath.Join(dir, "geodata")
-		} else if home, err := os.UserHomeDir(); err == nil {
-			g.DataDir = filepath.Join(home, ".shuttle", "geodata")
+		} else if legacy != "" {
+			g.DataDir = legacy
 		}
 	}
 	if g.UpdateInterval == "" {
@@ -179,6 +189,17 @@ func applyGeoDataDefaults(g *GeoDataConfig) {
 	if g.PrivateCidrURL == "" {
 		g.PrivateCidrURL = defaultPrivateCidr
 	}
+}
+
+// hasFiles reports whether dir is a directory containing at least one
+// regular entry. Used by applyGeoDataDefaults to detect a populated
+// legacy geodata cache so upgrades don't silently force a re-download.
+func hasFiles(dir string) bool {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return false
+	}
+	return len(entries) > 0
 }
 
 // DefaultServerConfig returns a config with sensible defaults.
