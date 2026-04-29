@@ -46,22 +46,31 @@ func registerMiscRoutes(mux *http.ServeMux, eng *engine.Engine, subMgr *subscrip
 	// Full backup - exports complete configuration including subscriptions
 	mux.HandleFunc("GET /api/backup", func(w http.ResponseWriter, r *http.Request) {
 		cfg := eng.Config()
+		includeSecrets := r.URL.Query().Get("include_secrets") == "true"
 
-		// Redact secrets unless explicitly requested
-		if r.URL.Query().Get("include_secrets") != "true" {
+		if !includeSecrets {
 			redactClientConfig(&cfg)
 		}
 
-		// Get subscriptions from manager
-		subs := []*subscription.Subscription{}
+		// Subscriptions: route through subscriptionDTO when secrets are
+		// not explicitly requested so cached server passwords (which the
+		// restore path doesn't even consume — it re-fetches from URL)
+		// don't leak into the backup file.
+		var subsBody any
 		if subMgr != nil {
-			subs = subMgr.List()
+			if includeSecrets {
+				subsBody = subMgr.List()
+			} else {
+				subsBody = toSubscriptionListDTO(subMgr.List())
+			}
+		} else {
+			subsBody = []any{}
 		}
 
 		backup := map[string]interface{}{
 			"version":       1,
 			"config":        cfg,
-			"subscriptions": subs,
+			"subscriptions": subsBody,
 		}
 
 		w.Header().Set("Content-Type", "application/json")
