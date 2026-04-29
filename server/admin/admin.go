@@ -36,6 +36,37 @@ type ServerInfo struct {
 	TotalConns  atomic.Int64
 	BytesSent   atomic.Int64
 	BytesRecv   atomic.Int64
+
+	listenerMu     sync.RWMutex
+	listenerStatus map[string]bool
+}
+
+// MarkListenerReady records that the named transport listener has bound successfully.
+func (s *ServerInfo) MarkListenerReady(name string) {
+	s.listenerMu.Lock()
+	defer s.listenerMu.Unlock()
+	if s.listenerStatus == nil {
+		s.listenerStatus = make(map[string]bool)
+	}
+	s.listenerStatus[name] = true
+}
+
+// IsListenerReady reports whether the named listener has bound.
+func (s *ServerInfo) IsListenerReady(name string) bool {
+	s.listenerMu.RLock()
+	defer s.listenerMu.RUnlock()
+	return s.listenerStatus[name]
+}
+
+// ListenerSnapshot returns a copy of the listener status map.
+func (s *ServerInfo) ListenerSnapshot() map[string]bool {
+	s.listenerMu.RLock()
+	defer s.listenerMu.RUnlock()
+	out := make(map[string]bool, len(s.listenerStatus))
+	for k, v := range s.listenerStatus {
+		out[k] = v
+	}
+	return out
 }
 
 // BackupPayload is the JSON structure for backup/restore operations.

@@ -292,3 +292,17 @@ func TestRestoreInvalidJSON(t *testing.T) {
 		t.Errorf("POST /api/restore with bad JSON status = %d, want 400", w.Code)
 	}
 }
+
+func TestServerInfo_ListenerStatus(t *testing.T) {
+	info := &ServerInfo{}
+	if info.IsListenerReady("h3") {
+		t.Fatal("listener should not be ready before MarkListenerReady")
+	}
+	info.MarkListenerReady("h3")
+	if !info.IsListenerReady("h3") {
+		t.Fatal("listener should be ready after MarkListenerReady")
+	}
+	if info.IsListenerReady("reality") {
+		t.Fatal("untracked listener should not be ready")
+	}
+}
