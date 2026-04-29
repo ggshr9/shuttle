@@ -10,6 +10,7 @@ import (
 
 	"github.com/shuttleX/shuttle/adapter"
 	"github.com/shuttleX/shuttle/config"
+	"github.com/shuttleX/shuttle/internal/dnsclass"
 	"github.com/shuttleX/shuttle/internal/relay"
 )
 
@@ -146,6 +147,9 @@ func (s *Server) inboundConnHandler(ctx context.Context) adapter.ConnHandler {
 		remote, err := net.DialTimeout("tcp", target, 10*time.Second)
 		if err != nil {
 			s.logger.Debug("inbound: dial target failed", "target", target, "err", err)
+			if s.metrics != nil {
+				s.metrics.RecordDestResolveFailure(dnsclass.Classify(err))
+			}
 			return
 		}
 		defer remote.Close()

@@ -11,6 +11,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/shuttleX/shuttle/internal/dnsclass"
 	"github.com/shuttleX/shuttle/internal/relay"
 	"github.com/shuttleX/shuttle/mesh"
 	meshsignal "github.com/shuttleX/shuttle/mesh/signal"
@@ -184,6 +185,9 @@ func (h *Handler) HandleStream(ctx context.Context, stream transport.Stream, rem
 			remote, err := net.DialTimeout("tcp", target, 10*time.Second)
 			if err != nil {
 				h.Logger.Debug("dial target failed", "target", target, "err", err)
+				if h.Metrics != nil {
+					h.Metrics.RecordDestResolveFailure(dnsclass.Classify(err))
+				}
 				return
 			}
 			defer remote.Close() //nolint:gocritic // not a real loop; reads until newline then returns

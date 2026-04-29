@@ -385,3 +385,125 @@ func TestDomainPolicy_DoHServerInResolve(t *testing.T) {
 		t.Fatalf("expected exactly 1 request to policy server, got %d", reqCount.Load())
 	}
 }
+
+func TestResolver_MetricHookCalled(t *testing.T) {
+	const dohJSON = `{"Status":0,"Answer":[{"type":1,"data":"1.2.3.4"}]}`
+	srv, _ := newDoHServer(t, dohJSON)
+
+	r := newTestResolver(&DNSConfig{
+		RemoteServer:   srv.URL,
+		DomesticDoH:    srv.URL,
+		LeakPrevention: true,
+	}, srv.Client())
+
+	var queries, failures int32
+	var lastProtocol string
+	var lastCached atomic.Bool
+	var lastDuration atomic.Int64
+	r.SetMetricHook(&MetricHook{
+		OnQuery: func(protocol string, cached bool, d time.Duration) {
+			atomic.AddInt32(&queries, 1)
+			lastProtocol = protocol
+			lastCached.Store(cached)
+			lastDuration.Store(int64(d))
+		},
+		OnFailure: func(string) { atomic.AddInt32(&failures, 1) },
+	})
+
+	ctx := context.Background()
+	if _, err := r.Resolve(ctx, "example.com"); err != nil {
+		t.Fatalf("first resolve: %v", err)
+	}
+	if got := atomic.LoadInt32(&queries); got != 1 {
+		t.Fatalf("expected 1 OnQuery call after first resolve, got %d", got)
+	}
+	if got := atomic.LoadInt32(&failures); got != 0 {
+		t.Fatalf("expected 0 OnFailure calls, got %d", got)
+	}
+	if lastProtocol != "split-dns" {
+		t.Fatalf("expected protocol=split-dns on first resolve, got %q", lastProtocol)
+	}
+	if lastCached.Load() {
+		t.Fatal("expected cached=false on first resolve")
+	}
+	if lastDuration.Load() <= 0 {
+		t.Fatal("expected duration > 0 on first resolve")
+	}
+
+	// Second resolve hits the cache — protocol should be "cache" with cached=true.
+	if _, err := r.Resolve(ctx, "example.com"); err != nil {
+		t.Fatalf("second resolve: %v", err)
+	}
+	if got := atomic.LoadInt32(&queries); got != 2 {
+		t.Fatalf("expected 2 OnQuery calls after cache hit, got %d", got)
+	}
+	if lastProtocol != "cache" {
+		t.Fatalf("expected protocol=cache on second resolve, got %q", lastProtocol)
+	}
+	if !lastCached.Load() {
+		t.Fatal("expected cached=true on second resolve")
+	}
+}
+
+func TestResolver_MetricHookFailure(t *testing.T) {
+	// Point both servers at an unreachable port and disable leak prevention so
+	// queryDomestic falls through to the actual UDP path. Use a context with
+	// an immediate deadline so Resolve fails deterministically without making
+	// a real network call.
+	r := newTestResolver(&DNSConfig{
+		RemoteServer:   "https://127.0.0.1:1/invalid",
+		DomesticServer: "127.0.0.1:1",
+		LeakPrevention: true, // refuses domestic plaintext, forces remote-only path which will fail
+	}, nil)
+
+	var failures int32
+	var lastReason string
+	r.SetMetricHook(&MetricHook{
+		OnFailure: func(reason string) {
+			atomic.AddInt32(&failures, 1)
+			lastReason = reason
+		},
+	})
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // Cancel immediately so both lookups fail with context error.
+
+	if _, err := r.Resolve(ctx, "example.com"); err == nil {
+		t.Fatal("expected resolve to fail with cancelled context")
+	}
+	if got := atomic.LoadInt32(&failures); got != 1 {
+		t.Fatalf("expected 1 OnFailure call, got %d", got)
+	}
+	if lastReason != "timeout" {
+		t.Fatalf("expected reason=timeout for cancelled context, got %q", lastReason)
+	}
+}
+
+func TestClassifyDNSErr(t *testing.T) {
+	cases := []struct {
+		name string
+		err  error
+		want string
+	}{
+		{"nil", nil, ""},
+		{"deadline exceeded", context.DeadlineExceeded, "timeout"},
+		{"context cancelled", context.Canceled, "timeout"},
+		{"dnserror not found", &net.DNSError{IsNotFound: true}, "nxdomain"},
+		{"dnserror timeout", &net.DNSError{IsTimeout: true}, "timeout"},
+		{"no such host string", &timeoutError{msg: "lookup foo: no such host"}, "nxdomain"},
+		{"i/o timeout string", &timeoutError{msg: "read udp: i/o timeout"}, "timeout"},
+		{"unknown defaults to refused", &timeoutError{msg: "connection refused"}, "refused"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := ClassifyDNSErr(tc.err); got != tc.want {
+				t.Fatalf("ClassifyDNSErr(%v) = %q, want %q", tc.err, got, tc.want)
+			}
+		})
+	}
+}
+
+// timeoutError is a minimal error type for ClassifyDNSErr string-matching tests.
+type timeoutError struct{ msg string }
+
+func (e *timeoutError) Error() string { return e.msg }
