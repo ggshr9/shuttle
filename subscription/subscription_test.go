@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -109,6 +110,103 @@ func TestManagerRefreshError(t *testing.T) {
 	}
 	if refreshed.Error == "" {
 		t.Error("Refresh() should set Error field on failure")
+	}
+}
+
+func TestManager_RefreshHookFires_OK(t *testing.T) {
+	servers := []config.ServerEndpoint{
+		{Addr: "server1.example.com:443", Name: "Server 1", Password: "pass1"},
+	}
+	data, _ := json.Marshal(servers)
+
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write(data)
+	}))
+	defer ts.Close()
+
+	m := NewManager()
+	m.SetAllowPrivateNetworks(true)
+	sub, _ := m.Add("Test", ts.URL)
+
+	var (
+		callsMu sync.Mutex
+		calls   []struct{ ID, Result string }
+	)
+	m.SetRefreshHook(func(id, result string, _ time.Time) {
+		callsMu.Lock()
+		defer callsMu.Unlock()
+		calls = append(calls, struct{ ID, Result string }{id, result})
+	})
+
+	if _, err := m.Refresh(context.Background(), sub.ID); err != nil {
+		t.Fatalf("Refresh() error = %v", err)
+	}
+
+	// Hook fires async — wait briefly.
+	deadline := time.Now().Add(500 * time.Millisecond)
+	for time.Now().Before(deadline) {
+		callsMu.Lock()
+		n := len(calls)
+		callsMu.Unlock()
+		if n >= 1 {
+			break
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+
+	callsMu.Lock()
+	defer callsMu.Unlock()
+	if len(calls) != 1 {
+		t.Fatalf("expected 1 hook call, got %d", len(calls))
+	}
+	if calls[0].ID != sub.ID {
+		t.Errorf("hook ID = %q, want %q", calls[0].ID, sub.ID)
+	}
+	if calls[0].Result != "ok" {
+		t.Errorf("hook result = %q, want %q", calls[0].Result, "ok")
+	}
+}
+
+func TestManager_RefreshHookFires_Fail(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer ts.Close()
+
+	m := NewManager()
+	m.SetAllowPrivateNetworks(true)
+	sub, _ := m.Add("Test", ts.URL)
+
+	var (
+		callsMu sync.Mutex
+		calls   []struct{ ID, Result string }
+	)
+	m.SetRefreshHook(func(id, result string, _ time.Time) {
+		callsMu.Lock()
+		defer callsMu.Unlock()
+		calls = append(calls, struct{ ID, Result string }{id, result})
+	})
+
+	_, _ = m.Refresh(context.Background(), sub.ID)
+
+	deadline := time.Now().Add(500 * time.Millisecond)
+	for time.Now().Before(deadline) {
+		callsMu.Lock()
+		n := len(calls)
+		callsMu.Unlock()
+		if n >= 1 {
+			break
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+
+	callsMu.Lock()
+	defer callsMu.Unlock()
+	if len(calls) != 1 {
+		t.Fatalf("expected 1 hook call, got %d", len(calls))
+	}
+	if calls[0].Result != "fail" {
+		t.Errorf("hook result = %q, want %q", calls[0].Result, "fail")
 	}
 }
 

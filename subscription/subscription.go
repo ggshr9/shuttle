@@ -41,6 +41,21 @@ type Manager struct {
 	autoMu      sync.Mutex
 	autoCancel  context.CancelFunc
 	autoRunning bool
+
+	// refreshHook is an optional callback invoked after every Refresh call.
+	// Guarded by mu. Fired asynchronously to avoid blocking Refresh.
+	refreshHook func(id, result string, ts time.Time)
+}
+
+// SetRefreshHook installs an optional callback invoked after every Refresh
+// call. The callback receives the subscription ID, the result ("ok" or
+// "fail"), and a timestamp. The hook fires asynchronously in a fresh
+// goroutine, so it must be safe for concurrent use. Safe to call once at
+// startup; subsequent calls replace the previous hook.
+func (m *Manager) SetRefreshHook(hook func(id, result string, ts time.Time)) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.refreshHook = hook
 }
 
 // NewManager creates a new subscription manager.
@@ -159,17 +174,28 @@ func (m *Manager) Refresh(ctx context.Context, id string) (*Subscription, error)
 	servers, err := m.fetch(ctx, sub.URL)
 
 	m.mu.Lock()
-	defer m.mu.Unlock()
-
 	if err != nil {
 		sub.Error = err.Error()
 		sub.UpdatedAt = time.Now()
-		return sub, err
+	} else {
+		sub.Servers = servers
+		sub.Error = ""
+		sub.UpdatedAt = time.Now()
+	}
+	hook := m.refreshHook
+	m.mu.Unlock()
+
+	if hook != nil {
+		result := "ok"
+		if err != nil {
+			result = "fail"
+		}
+		go hook(id, result, time.Now())
 	}
 
-	sub.Servers = servers
-	sub.Error = ""
-	sub.UpdatedAt = time.Now()
+	if err != nil {
+		return sub, err
+	}
 	return sub, nil
 }
 
