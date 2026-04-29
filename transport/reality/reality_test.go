@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/hashicorp/yamux"
-	"github.com/shuttleX/shuttle/crypto"
+	"github.com/ggshr9/shuttle/crypto"
 	"golang.org/x/crypto/curve25519"
 )
 

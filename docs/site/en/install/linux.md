@@ -2,7 +2,7 @@
 
 This guide covers installing `shuttled` (the server daemon) on a Linux VPS.
 
-For the desktop GUI, see the [Releases page](https://github.com/shuttleX/shuttle/releases).
+For the desktop GUI, see the [Releases page](https://github.com/ggshr9/shuttle/releases).
 
 ## Prerequisites
 - Linux (Debian, Ubuntu, RHEL, Alpine, OpenWrt, ...)
@@ -12,7 +12,7 @@ For the desktop GUI, see the [Releases page](https://github.com/shuttleX/shuttle
 ## Quick install
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/shuttleX/shuttle/main/scripts/install-linux.sh | sudo bash
+curl -fsSL https://raw.githubusercontent.com/ggshr9/shuttle/main/scripts/install-linux.sh | sudo bash
 ```
 
 The wizard will:
@@ -28,7 +28,7 @@ The wizard will:
 SHUTTLE_DOMAIN=proxy.example.com \
 SHUTTLE_PASSWORD=$(openssl rand -base64 32) \
 SHUTTLE_TRANSPORT=both \
-sudo bash -c "$(curl -fsSL https://raw.githubusercontent.com/shuttleX/shuttle/main/scripts/install-linux.sh) install --auto"
+sudo bash -c "$(curl -fsSL https://raw.githubusercontent.com/ggshr9/shuttle/main/scripts/install-linux.sh) install --auto"
 ```
 
 ## Manage
@@ -47,4 +47,4 @@ sudo bash install.sh uninstall
 ```
 
 ## Read next
-- [SECURITY.md](https://github.com/shuttleX/shuttle/blob/main/SECURITY.md) — pre-deploy checklist.
+- [SECURITY.md](https://github.com/ggshr9/shuttle/blob/main/SECURITY.md) — pre-deploy checklist.

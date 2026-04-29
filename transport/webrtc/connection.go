@@ -8,8 +8,8 @@ import (
 	"sync/atomic"
 
 	"github.com/pion/webrtc/v4"
-	ymux "github.com/shuttleX/shuttle/transport/mux/yamux"
-	"github.com/shuttleX/shuttle/transport"
+	ymux "github.com/ggshr9/shuttle/transport/mux/yamux"
+	"github.com/ggshr9/shuttle/transport"
 )
 
 // wsConn is an abstraction over a WebSocket connection for reconnection signaling.

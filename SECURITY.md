@@ -10,8 +10,8 @@ Every release includes a `checksums.txt` file containing SHA-256 hashes for all 
 
 ```bash
 # Download the checksums file and the binary you need
-curl -LO https://github.com/shuttleX/shuttle/releases/download/<tag>/checksums.txt
-curl -LO https://github.com/shuttleX/shuttle/releases/download/<tag>/shuttle-linux-amd64
+curl -LO https://github.com/ggshr9/shuttle/releases/download/<tag>/checksums.txt
+curl -LO https://github.com/ggshr9/shuttle/releases/download/<tag>/shuttle-linux-amd64
 
 # Verify the hash
 sha256sum -c checksums.txt --ignore-missing
@@ -29,9 +29,9 @@ If the hash does not match, do not use the file. Re-download from the official r
 
 ## Reporting Security Issues
 
-**Confidential reports:** Use [GitHub Security Advisory](https://github.com/shuttleX/shuttle/security/advisories/new) for any security-sensitive issue. This is the preferred channel — reports are private until coordinated disclosure.
+**Confidential reports:** Use [GitHub Security Advisory](https://github.com/ggshr9/shuttle/security/advisories/new) for any security-sensitive issue. This is the preferred channel — reports are private until coordinated disclosure.
 
-**Non-sensitive concerns:** A public [GitHub issue](https://github.com/shuttleX/shuttle/issues/new) is fine for hardening suggestions, dependency updates, or configuration questions where no exploit path is involved.
+**Non-sensitive concerns:** A public [GitHub issue](https://github.com/ggshr9/shuttle/issues/new) is fine for hardening suggestions, dependency updates, or configuration questions where no exploit path is involved.
 
 **PGP:** No project PGP key is currently published. Please use GitHub Security Advisory for confidential reports — GitHub encrypts reports in transit and at rest.
 

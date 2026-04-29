@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/shuttleX/shuttle/transport"
+	"github.com/ggshr9/shuttle/transport"
 )
 
 // Strategy defines how transport selection works.

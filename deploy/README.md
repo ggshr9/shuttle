@@ -86,7 +86,7 @@ docker compose cp shuttled:/data/server.yaml ./server.yaml.bak
 ### Interactive Wizard
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/shuttleX/shuttle/main/deploy/install.sh -o install.sh
+curl -fsSL https://raw.githubusercontent.com/ggshr9/shuttle/main/deploy/install.sh -o install.sh
 sudo bash install.sh
 ```
 

@@ -12,9 +12,9 @@ import (
 	"time"
 
 	"github.com/quic-go/quic-go"
-	"github.com/shuttleX/shuttle/crypto"
-	"github.com/shuttleX/shuttle/obfs"
-	"github.com/shuttleX/shuttle/transport/auth"
+	"github.com/ggshr9/shuttle/crypto"
+	"github.com/ggshr9/shuttle/obfs"
+	"github.com/ggshr9/shuttle/transport/auth"
 )
 
 func TestNewClient(t *testing.T) {

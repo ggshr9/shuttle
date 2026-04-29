@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/shuttleX/shuttle/adapter"
+	"github.com/ggshr9/shuttle/adapter"
 )
 
 func TestSelectState_SelectAndSelected(t *testing.T) {

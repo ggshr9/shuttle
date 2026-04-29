@@ -1,6 +1,6 @@
 package adapter
 
-import "github.com/shuttleX/shuttle/config"
+import "github.com/ggshr9/shuttle/config"
 
 // BaseFactory provides default nil implementations of NewClient and NewServer.
 // Per-request protocol factories (vless, vmess, trojan, shadowsocks) that do not

@@ -1,6 +1,6 @@
 # Windows Install
 
-For headless Windows Server deployments. For a desktop client, install the `.exe` from the [Releases page](https://github.com/shuttleX/shuttle/releases).
+For headless Windows Server deployments. For a desktop client, install the `.exe` from the [Releases page](https://github.com/ggshr9/shuttle/releases).
 
 ## Prerequisites
 - Windows Server 2019/2022 or Windows 10/11
@@ -10,7 +10,7 @@ For headless Windows Server deployments. For a desktop client, install the `.exe
 ## Install
 
 ```powershell
-iwr -useb https://raw.githubusercontent.com/shuttleX/shuttle/main/scripts/install-windows.ps1 | iex
+iwr -useb https://raw.githubusercontent.com/ggshr9/shuttle/main/scripts/install-windows.ps1 | iex
 ```
 
 If your PowerShell execution policy blocks the script, temporarily relax it:
@@ -37,4 +37,4 @@ Get-EventLog -LogName Application -Source shuttled -Newest 50
 ```
 
 ## Read next
-- [SECURITY.md](https://github.com/shuttleX/shuttle/blob/main/SECURITY.md)
+- [SECURITY.md](https://github.com/ggshr9/shuttle/blob/main/SECURITY.md)

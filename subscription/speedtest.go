@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/shuttleX/shuttle/config"
+	"github.com/ggshr9/shuttle/config"
 )
 
 // SpeedResult holds the result of a speed test for one server.

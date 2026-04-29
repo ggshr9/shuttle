@@ -3,7 +3,7 @@ package test
 import (
 	"testing"
 
-	"github.com/shuttleX/shuttle/transport/reality"
+	"github.com/ggshr9/shuttle/transport/reality"
 )
 
 func TestRealityClientCreate(t *testing.T) {

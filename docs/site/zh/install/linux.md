@@ -2,7 +2,7 @@
 
 本指南介绍如何在 Linux VPS 上安装 `shuttled`（服务端守护进程）。
 
-桌面 GUI 请前往 [Releases 页面](https://github.com/shuttleX/shuttle/releases) 下载。
+桌面 GUI 请前往 [Releases 页面](https://github.com/ggshr9/shuttle/releases) 下载。
 
 ## 前置条件
 - Linux（Debian、Ubuntu、RHEL、Alpine、OpenWrt 等）
@@ -12,7 +12,7 @@
 ## 一键安装
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/shuttleX/shuttle/main/scripts/install-linux.sh | sudo bash
+curl -fsSL https://raw.githubusercontent.com/ggshr9/shuttle/main/scripts/install-linux.sh | sudo bash
 ```
 
 安装向导会：
@@ -28,7 +28,7 @@ curl -fsSL https://raw.githubusercontent.com/shuttleX/shuttle/main/scripts/insta
 SHUTTLE_DOMAIN=proxy.example.com \
 SHUTTLE_PASSWORD=$(openssl rand -base64 32) \
 SHUTTLE_TRANSPORT=both \
-sudo bash -c "$(curl -fsSL https://raw.githubusercontent.com/shuttleX/shuttle/main/scripts/install-linux.sh) install --auto"
+sudo bash -c "$(curl -fsSL https://raw.githubusercontent.com/ggshr9/shuttle/main/scripts/install-linux.sh) install --auto"
 ```
 
 ## 管理
@@ -47,4 +47,4 @@ sudo bash install.sh uninstall
 ```
 
 ## 延伸阅读
-- [SECURITY.md](https://github.com/shuttleX/shuttle/blob/main/SECURITY.md) — 部署前安全检查清单。
+- [SECURITY.md](https://github.com/ggshr9/shuttle/blob/main/SECURITY.md) — 部署前安全检查清单。

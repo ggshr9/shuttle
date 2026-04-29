@@ -8,8 +8,8 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/shuttleX/shuttle/config"
-	"github.com/shuttleX/shuttle/transport"
+	"github.com/ggshr9/shuttle/config"
+	"github.com/ggshr9/shuttle/transport"
 )
 
 type ListenerConfig struct {

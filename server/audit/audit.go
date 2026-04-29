@@ -3,7 +3,7 @@ package audit
 import (
 	"time"
 
-	"github.com/shuttleX/shuttle/internal/ringlog"
+	"github.com/ggshr9/shuttle/internal/ringlog"
 )
 
 // Entry records a completed stream for audit purposes.

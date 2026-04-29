@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-REPO="shuttleX/shuttle"
+REPO="ggshr9/shuttle"
 INSTALL_DIR="/usr/local/bin"
 CONFIG_DIR="/etc/shuttle"
 SERVICE_FILE="/etc/systemd/system/shuttled.service"

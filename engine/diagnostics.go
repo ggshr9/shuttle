@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/shuttleX/shuttle/update"
+	"github.com/ggshr9/shuttle/update"
 )
 
 // DiagnosticsBundle collects system state for debugging.

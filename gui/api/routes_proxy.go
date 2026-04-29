@@ -4,9 +4,9 @@ import (
 	"context"
 	"net/http"
 
-	"github.com/shuttleX/shuttle/autostart"
-	"github.com/shuttleX/shuttle/engine"
-	"github.com/shuttleX/shuttle/sysproxy"
+	"github.com/ggshr9/shuttle/autostart"
+	"github.com/ggshr9/shuttle/engine"
+	"github.com/ggshr9/shuttle/sysproxy"
 )
 
 func registerProxyRoutes(mux *http.ServeMux, eng *engine.Engine) {

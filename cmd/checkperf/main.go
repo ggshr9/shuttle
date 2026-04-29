@@ -11,7 +11,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/shuttleX/shuttle/internal/checkperf"
+	"github.com/ggshr9/shuttle/internal/checkperf"
 )
 
 func main() {

@@ -8,9 +8,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/shuttleX/shuttle/internal/netmon"
-	"github.com/shuttleX/shuttle/router"
-	"github.com/shuttleX/shuttle/testkit/vnet"
+	"github.com/ggshr9/shuttle/internal/netmon"
+	"github.com/ggshr9/shuttle/router"
+	"github.com/ggshr9/shuttle/testkit/vnet"
 )
 
 // ---------------------------------------------------------------------------

@@ -3,8 +3,8 @@ package cdn
 import (
 	"testing"
 
-	"github.com/shuttleX/shuttle/transport"
-	"github.com/shuttleX/shuttle/transport/conformance"
+	"github.com/ggshr9/shuttle/transport"
+	"github.com/ggshr9/shuttle/transport/conformance"
 )
 
 func cdnFactory(t testing.TB) (

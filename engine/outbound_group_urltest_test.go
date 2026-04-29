@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/shuttleX/shuttle/adapter"
-	"github.com/shuttleX/shuttle/outbound/healthcheck"
+	"github.com/ggshr9/shuttle/adapter"
+	"github.com/ggshr9/shuttle/outbound/healthcheck"
 )
 
 func TestURLTestState_SelectBest(t *testing.T) {

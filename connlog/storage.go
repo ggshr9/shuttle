@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/shuttleX/shuttle/internal/ringlog"
+	"github.com/ggshr9/shuttle/internal/ringlog"
 )
 
 // Entry represents a single connection event.

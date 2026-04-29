@@ -6,8 +6,8 @@ import (
 
 	"github.com/coder/websocket"
 
-	"github.com/shuttleX/shuttle/engine"
-	"github.com/shuttleX/shuttle/speedtest"
+	"github.com/ggshr9/shuttle/engine"
+	"github.com/ggshr9/shuttle/speedtest"
 )
 
 func handleEventWS(w http.ResponseWriter, r *http.Request, eng *engine.Engine, filter engine.EventType) {

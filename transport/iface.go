@@ -1,6 +1,6 @@
 package transport
 
-import "github.com/shuttleX/shuttle/adapter"
+import "github.com/ggshr9/shuttle/adapter"
 
 // Type aliases bridging transport types to adapter types.
 // All new code should import adapter directly.

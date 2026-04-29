@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/shuttleX/shuttle/provider"
+	"github.com/ggshr9/shuttle/provider"
 )
 
 // ── Info types for API responses ─────────────────────────────────────────────

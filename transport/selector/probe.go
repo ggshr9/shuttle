@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/shuttleX/shuttle/transport"
+	"github.com/ggshr9/shuttle/transport"
 )
 
 // Probe tests a transport's availability and performance.

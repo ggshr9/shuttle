@@ -50,7 +50,7 @@ Client                              Server
 | If you want to... | Use |
 |---|---|
 | Run the **server** (`shuttled`) on a VPS | CLI installer (Linux / macOS / Windows below) |
-| Run a **desktop client** with a UI | GUI installer (`.dmg` / `.exe` / AppImage from [Releases](https://github.com/shuttleX/shuttle/releases)) |
+| Run a **desktop client** with a UI | GUI installer (`.dmg` / `.exe` / AppImage from [Releases](https://github.com/ggshr9/shuttle/releases)) |
 | Automate / script / CI | CLI installer |
 
 > **Read [SECURITY.md](./SECURITY.md) before deploying to production.**
@@ -58,20 +58,20 @@ Client                              Server
 ### Linux
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/shuttleX/shuttle/main/scripts/install-linux.sh | sudo bash
+curl -fsSL https://raw.githubusercontent.com/ggshr9/shuttle/main/scripts/install-linux.sh | sudo bash
 ```
 
 Or with environment variables for non-interactive setup:
 
 ```bash
 sudo SHUTTLE_DOMAIN=proxy.example.com SHUTTLE_PASSWORD=secret \
-    bash -c "$(curl -fsSL https://raw.githubusercontent.com/shuttleX/shuttle/main/scripts/install-linux.sh) install --auto"
+    bash -c "$(curl -fsSL https://raw.githubusercontent.com/ggshr9/shuttle/main/scripts/install-linux.sh) install --auto"
 ```
 
 ### macOS (Homebrew)
 
 ```bash
-brew tap shuttleX/shuttle
+brew tap ggshr9/shuttle
 brew install shuttled
 shuttled init
 brew services start shuttled
@@ -80,7 +80,7 @@ brew services start shuttled
 ### Windows (PowerShell, run as Administrator)
 
 ```powershell
-iwr -useb https://raw.githubusercontent.com/shuttleX/shuttle/main/scripts/install-windows.ps1 | iex
+iwr -useb https://raw.githubusercontent.com/ggshr9/shuttle/main/scripts/install-windows.ps1 | iex
 ```
 
 ### Verify
@@ -95,7 +95,7 @@ curl http://127.0.0.1:8443/api/health/ready    # 200 OK once listeners are bound
 ### Pre-built binaries
 
 For manual installs or unsupported platforms, grab a binary from
-[GitHub Releases](https://github.com/shuttleX/shuttle/releases):
+[GitHub Releases](https://github.com/ggshr9/shuttle/releases):
 
 - `shuttle-linux-amd64` / `shuttle-linux-arm64` - Linux CLI
 - `shuttle-linux-mipsle` - OpenWrt (MIPS soft-float)

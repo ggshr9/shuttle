@@ -10,8 +10,8 @@ import (
 	"net/http"
 	"sync/atomic"
 
-	"github.com/shuttleX/shuttle/transport"
-	ymux "github.com/shuttleX/shuttle/transport/mux/yamux"
+	"github.com/ggshr9/shuttle/transport"
+	ymux "github.com/ggshr9/shuttle/transport/mux/yamux"
 )
 
 // H2Config configures the CDN HTTP/2 transport.

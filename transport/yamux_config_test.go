@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/shuttleX/shuttle/config"
+	"github.com/ggshr9/shuttle/config"
 )
 
 func TestYamuxSessionConfig_Nil(t *testing.T) {

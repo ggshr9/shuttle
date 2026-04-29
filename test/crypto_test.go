@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"testing"
 
-	"github.com/shuttleX/shuttle/crypto"
+	"github.com/ggshr9/shuttle/crypto"
 )
 
 func TestEncryptDecrypt(t *testing.T) {

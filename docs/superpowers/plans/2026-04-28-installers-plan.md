@@ -93,7 +93,7 @@ git commit -m "feat(scripts): add install-linux.sh wrapper for URL parity"
   Mirrors deploy/install.sh: download → wizard → register service → firewall.
   Subcommands: install (default), uninstall, upgrade [version], status.
 .EXAMPLE
-  iwr -useb https://raw.githubusercontent.com/shuttleX/shuttle/main/scripts/install-windows.ps1 | iex
+  iwr -useb https://raw.githubusercontent.com/ggshr9/shuttle/main/scripts/install-windows.ps1 | iex
 .EXAMPLE
   .\install-windows.ps1 install
 .EXAMPLE
@@ -117,7 +117,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
-$REPO         = 'shuttleX/shuttle'
+$REPO         = 'ggshr9/shuttle'
 $INSTALL_DIR  = "$env:ProgramFiles\Shuttle"
 $CONFIG_DIR   = "$env:ProgramData\Shuttle"
 $SERVICE_NAME = 'shuttled'
@@ -511,7 +511,7 @@ On a fresh Ubuntu 22.04 VM:
 
 On macOS 14 with Homebrew installed:
 
-- [ ] `brew tap shuttleX/shuttle` succeeds.
+- [ ] `brew tap ggshr9/shuttle` succeeds.
 - [ ] `brew install shuttled` completes; binary lives at `$(brew --prefix)/bin/shuttled`.
 - [ ] `shuttled --version` prints the expected version.
 - [ ] `shuttled init --dir ~/.config/shuttle` generates a config.
@@ -558,7 +558,7 @@ Show the planned command and wait for explicit approval:
 
 ```bash
 gh repo create shuttleX/homebrew-shuttle --public \
-    --description "Homebrew Tap for Shuttle (https://github.com/shuttleX/shuttle)"
+    --description "Homebrew Tap for Shuttle (https://github.com/ggshr9/shuttle)"
 ```
 
 - [ ] **Step 8.2: Create the repo**
@@ -586,16 +586,16 @@ mkdir -p Formula .github/workflows
 # Formula/shuttle.rb
 class Shuttle < Formula
   desc "Multi-transport network toolkit (CLI client)"
-  homepage "https://github.com/shuttleX/shuttle"
+  homepage "https://github.com/ggshr9/shuttle"
   version "0.4.0"
 
   on_macos do
     on_arm do
-      url "https://github.com/shuttleX/shuttle/releases/download/v#{version}/shuttle-darwin-arm64.tar.gz"
+      url "https://github.com/ggshr9/shuttle/releases/download/v#{version}/shuttle-darwin-arm64.tar.gz"
       sha256 "REPLACE_WITH_REAL_SHA256_FROM_CHECKSUMS_TXT"
     end
     on_intel do
-      url "https://github.com/shuttleX/shuttle/releases/download/v#{version}/shuttle-darwin-amd64.tar.gz"
+      url "https://github.com/ggshr9/shuttle/releases/download/v#{version}/shuttle-darwin-amd64.tar.gz"
       sha256 "REPLACE_WITH_REAL_SHA256_FROM_CHECKSUMS_TXT"
     end
   end
@@ -634,16 +634,16 @@ git commit -m "feat: add shuttle formula"
 # Formula/shuttled.rb
 class Shuttled < Formula
   desc "Multi-transport network toolkit (server)"
-  homepage "https://github.com/shuttleX/shuttle"
+  homepage "https://github.com/ggshr9/shuttle"
   version "0.4.0"
 
   on_macos do
     on_arm do
-      url "https://github.com/shuttleX/shuttle/releases/download/v#{version}/shuttled-darwin-arm64.tar.gz"
+      url "https://github.com/ggshr9/shuttle/releases/download/v#{version}/shuttled-darwin-arm64.tar.gz"
       sha256 "REPLACE_WITH_REAL_SHA256_FROM_CHECKSUMS_TXT"
     end
     on_intel do
-      url "https://github.com/shuttleX/shuttle/releases/download/v#{version}/shuttled-darwin-amd64.tar.gz"
+      url "https://github.com/ggshr9/shuttle/releases/download/v#{version}/shuttled-darwin-amd64.tar.gz"
       sha256 "REPLACE_WITH_REAL_SHA256_FROM_CHECKSUMS_TXT"
     end
   end
@@ -689,12 +689,12 @@ git commit -m "feat: add shuttled formula"
 ```markdown
 # Homebrew Tap for Shuttle
 
-Official Homebrew tap for [Shuttle](https://github.com/shuttleX/shuttle), a multi-transport network toolkit.
+Official Homebrew tap for [Shuttle](https://github.com/ggshr9/shuttle), a multi-transport network toolkit.
 
 ## Install
 
 ```bash
-brew tap shuttleX/shuttle
+brew tap ggshr9/shuttle
 brew install shuttle    # CLI client
 brew install shuttled   # server daemon
 ```
@@ -763,7 +763,7 @@ Locate the job that publishes release artifacts. Append a step that runs **after
           formula-path: Formula/shuttle.rb
           homebrew-tap: shuttleX/homebrew-shuttle
           base-branch: main
-          download-url: https://github.com/shuttleX/shuttle/releases/download/${{ github.ref_name }}/shuttle-darwin-amd64.tar.gz
+          download-url: https://github.com/ggshr9/shuttle/releases/download/${{ github.ref_name }}/shuttle-darwin-amd64.tar.gz
         env:
           COMMITTER_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
 
@@ -775,7 +775,7 @@ Locate the job that publishes release artifacts. Append a step that runs **after
           formula-path: Formula/shuttled.rb
           homebrew-tap: shuttleX/homebrew-shuttle
           base-branch: main
-          download-url: https://github.com/shuttleX/shuttle/releases/download/${{ github.ref_name }}/shuttled-darwin-amd64.tar.gz
+          download-url: https://github.com/ggshr9/shuttle/releases/download/${{ github.ref_name }}/shuttled-darwin-amd64.tar.gz
         env:
           COMMITTER_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
 ```
@@ -816,7 +816,7 @@ Replace the current install section (or create one if absent) with:
 | If you want to... | Use |
 |---|---|
 | Run the **server** (`shuttled`) on a VPS | CLI installer (Linux / macOS / Windows below) |
-| Run a **desktop client** with a UI | GUI installer (`.dmg` / `.exe` / AppImage from [Releases](https://github.com/shuttleX/shuttle/releases)) |
+| Run a **desktop client** with a UI | GUI installer (`.dmg` / `.exe` / AppImage from [Releases](https://github.com/ggshr9/shuttle/releases)) |
 | Automate / script / CI | CLI installer |
 
 > **Read [SECURITY.md](./SECURITY.md) before deploying to production.**
@@ -824,20 +824,20 @@ Replace the current install section (or create one if absent) with:
 ### Linux
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/shuttleX/shuttle/main/scripts/install-linux.sh | sudo bash
+curl -fsSL https://raw.githubusercontent.com/ggshr9/shuttle/main/scripts/install-linux.sh | sudo bash
 ```
 
 Or with environment variables for non-interactive setup:
 
 ```bash
 sudo SHUTTLE_DOMAIN=proxy.example.com SHUTTLE_PASSWORD=secret \
-    bash -c "$(curl -fsSL https://raw.githubusercontent.com/shuttleX/shuttle/main/scripts/install-linux.sh) install --auto"
+    bash -c "$(curl -fsSL https://raw.githubusercontent.com/ggshr9/shuttle/main/scripts/install-linux.sh) install --auto"
 ```
 
 ### macOS (Homebrew)
 
 ```bash
-brew tap shuttleX/shuttle
+brew tap ggshr9/shuttle
 brew install shuttled
 shuttled init
 brew services start shuttled
@@ -846,7 +846,7 @@ brew services start shuttled
 ### Windows (PowerShell, run as Administrator)
 
 ```powershell
-iwr -useb https://raw.githubusercontent.com/shuttleX/shuttle/main/scripts/install-windows.ps1 | iex
+iwr -useb https://raw.githubusercontent.com/ggshr9/shuttle/main/scripts/install-windows.ps1 | iex
 ```
 
 ### Verify
@@ -881,7 +881,7 @@ git commit -m "docs(readme): reorganise install section with decision table"
 
 This guide covers installing `shuttled` (the server daemon) on a Linux VPS.
 
-For the desktop GUI, see the [Releases page](https://github.com/shuttleX/shuttle/releases).
+For the desktop GUI, see the [Releases page](https://github.com/ggshr9/shuttle/releases).
 
 ## Prerequisites
 - Linux (Debian, Ubuntu, RHEL, Alpine, OpenWrt, ...)
@@ -891,7 +891,7 @@ For the desktop GUI, see the [Releases page](https://github.com/shuttleX/shuttle
 ## Quick install
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/shuttleX/shuttle/main/scripts/install-linux.sh | sudo bash
+curl -fsSL https://raw.githubusercontent.com/ggshr9/shuttle/main/scripts/install-linux.sh | sudo bash
 ```
 
 The wizard will:
@@ -907,7 +907,7 @@ The wizard will:
 SHUTTLE_DOMAIN=proxy.example.com \
 SHUTTLE_PASSWORD=$(openssl rand -base64 32) \
 SHUTTLE_TRANSPORT=both \
-sudo bash -c "$(curl -fsSL https://raw.githubusercontent.com/shuttleX/shuttle/main/scripts/install-linux.sh) install --auto"
+sudo bash -c "$(curl -fsSL https://raw.githubusercontent.com/ggshr9/shuttle/main/scripts/install-linux.sh) install --auto"
 ```
 
 ## Manage
@@ -926,7 +926,7 @@ sudo bash install.sh uninstall
 ```
 
 ## Read next
-- [SECURITY.md](https://github.com/shuttleX/shuttle/blob/main/SECURITY.md) — pre-deploy checklist.
+- [SECURITY.md](https://github.com/ggshr9/shuttle/blob/main/SECURITY.md) — pre-deploy checklist.
 - [Configuration reference](../configuration.md).
 ```
 
@@ -935,7 +935,7 @@ sudo bash install.sh uninstall
 ```markdown
 # macOS Install
 
-For headless macOS deployments. For a desktop client, install the `.dmg` from the [Releases page](https://github.com/shuttleX/shuttle/releases).
+For headless macOS deployments. For a desktop client, install the `.dmg` from the [Releases page](https://github.com/ggshr9/shuttle/releases).
 
 ## Prerequisites
 - macOS 12 or later
@@ -944,7 +944,7 @@ For headless macOS deployments. For a desktop client, install the `.dmg` from th
 ## Install
 
 ```bash
-brew tap shuttleX/shuttle
+brew tap ggshr9/shuttle
 brew install shuttled
 ```
 
@@ -972,7 +972,7 @@ brew uninstall shuttled
 The config in `$(brew --prefix)/etc/shuttle/` is preserved across upgrades.
 
 ## Read next
-- [SECURITY.md](https://github.com/shuttleX/shuttle/blob/main/SECURITY.md)
+- [SECURITY.md](https://github.com/ggshr9/shuttle/blob/main/SECURITY.md)
 ```
 
 - [ ] **Step 14.3: Windows guide**
@@ -980,7 +980,7 @@ The config in `$(brew --prefix)/etc/shuttle/` is preserved across upgrades.
 ```markdown
 # Windows Install
 
-For headless Windows Server deployments. For a desktop client, install the `.exe` from the [Releases page](https://github.com/shuttleX/shuttle/releases).
+For headless Windows Server deployments. For a desktop client, install the `.exe` from the [Releases page](https://github.com/ggshr9/shuttle/releases).
 
 ## Prerequisites
 - Windows Server 2019/2022 or Windows 10/11
@@ -990,7 +990,7 @@ For headless Windows Server deployments. For a desktop client, install the `.exe
 ## Install
 
 ```powershell
-iwr -useb https://raw.githubusercontent.com/shuttleX/shuttle/main/scripts/install-windows.ps1 | iex
+iwr -useb https://raw.githubusercontent.com/ggshr9/shuttle/main/scripts/install-windows.ps1 | iex
 ```
 
 If your PowerShell execution policy blocks the script, temporarily relax it:
@@ -1017,7 +1017,7 @@ Get-EventLog -LogName Application -Source shuttled -Newest 50
 ```
 
 ## Read next
-- [SECURITY.md](https://github.com/shuttleX/shuttle/blob/main/SECURITY.md)
+- [SECURITY.md](https://github.com/ggshr9/shuttle/blob/main/SECURITY.md)
 ```
 
 - [ ] **Step 14.4: Translate to Chinese**

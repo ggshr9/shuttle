@@ -5,7 +5,7 @@ import (
 	"net"
 	"strings"
 
-	"github.com/shuttleX/shuttle/provider"
+	"github.com/ggshr9/shuttle/provider"
 )
 
 // MatchContext holds per-connection fields for rule chain matching.

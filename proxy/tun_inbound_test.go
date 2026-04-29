@@ -3,7 +3,7 @@ package proxy
 import (
 	"testing"
 
-	"github.com/shuttleX/shuttle/adapter"
+	"github.com/ggshr9/shuttle/adapter"
 )
 
 func TestTUNInboundFactory_Registered(t *testing.T) {

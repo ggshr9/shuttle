@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/shuttleX/shuttle/testkit/vnet"
+	"github.com/ggshr9/shuttle/testkit/vnet"
 )
 
 // ---------------------------------------------------------------------------

@@ -4,7 +4,7 @@ import (
 	"context"
 	"net"
 
-	"github.com/shuttleX/shuttle/adapter"
+	"github.com/ggshr9/shuttle/adapter"
 )
 
 // DirectOutbound dials destinations directly without a proxy.

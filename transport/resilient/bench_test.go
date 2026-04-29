@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/shuttleX/shuttle/transport"
+	"github.com/ggshr9/shuttle/transport"
 )
 
 // BenchmarkResilientConnOpenStream benchmarks OpenStream on a healthy connection

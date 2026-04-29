@@ -9,10 +9,10 @@ import (
 	"io"
 	"sync/atomic"
 
-	"github.com/shuttleX/shuttle/config"
-	"github.com/shuttleX/shuttle/crypto"
-	"github.com/shuttleX/shuttle/transport"
-	ymux "github.com/shuttleX/shuttle/transport/mux/yamux"
+	"github.com/ggshr9/shuttle/config"
+	"github.com/ggshr9/shuttle/crypto"
+	"github.com/ggshr9/shuttle/transport"
+	ymux "github.com/ggshr9/shuttle/transport/mux/yamux"
 )
 
 // ClientConfig holds configuration for a Reality client transport.

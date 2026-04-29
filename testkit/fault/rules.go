@@ -5,7 +5,7 @@ import (
 	"math/rand"
 	"time"
 
-	"github.com/shuttleX/shuttle/testkit/vnet"
+	"github.com/ggshr9/shuttle/testkit/vnet"
 )
 
 // Action defines a fault behavior applied to read/write data.

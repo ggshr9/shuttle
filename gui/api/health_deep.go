@@ -15,7 +15,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/shuttleX/shuttle/internal/healthcheck"
+	"github.com/ggshr9/shuttle/internal/healthcheck"
 )
 
 const clientLivenessThreshold = 30 * time.Second

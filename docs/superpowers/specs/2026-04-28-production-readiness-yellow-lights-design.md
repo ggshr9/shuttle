@@ -255,7 +255,7 @@ Operator-facing checklist (markdown checkboxes). Each item indicates whether it 
 
 ### Reference from examples
 
-`examples/server.example.yaml` gets one line at the top: `# Read SECURITY.md before deploying: https://github.com/shuttleX/shuttle/blob/main/SECURITY.md`.
+`examples/server.example.yaml` gets one line at the top: `# Read SECURITY.md before deploying: https://github.com/ggshr9/shuttle/blob/main/SECURITY.md`.
 
 ## Workstream 5 — Cross-Platform CLI Installers
 
@@ -278,7 +278,7 @@ Each formula:
 
 User experience:
 ```bash
-brew tap shuttleX/shuttle
+brew tap ggshr9/shuttle
 brew install shuttled
 shuttled init
 brew services start shuttled
@@ -302,7 +302,7 @@ A single PowerShell script (~250 lines) mirroring the structure of `deploy/insta
 
 Entry point:
 ```powershell
-iwr -useb https://raw.githubusercontent.com/shuttleX/shuttle/main/scripts/install-windows.ps1 | iex
+iwr -useb https://raw.githubusercontent.com/ggshr9/shuttle/main/scripts/install-windows.ps1 | iex
 ```
 
 ### 5c. Shared changes

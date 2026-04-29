@@ -9,8 +9,8 @@ import (
 	"time"
 
 	"github.com/hashicorp/yamux"
-	"github.com/shuttleX/shuttle/adapter"
-	"github.com/shuttleX/shuttle/config"
+	"github.com/ggshr9/shuttle/adapter"
+	"github.com/ggshr9/shuttle/config"
 )
 
 // Mux implements adapter.Multiplexer using yamux.

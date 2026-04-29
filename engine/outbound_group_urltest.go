@@ -8,8 +8,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/shuttleX/shuttle/adapter"
-	"github.com/shuttleX/shuttle/outbound/healthcheck"
+	"github.com/ggshr9/shuttle/adapter"
+	"github.com/ggshr9/shuttle/outbound/healthcheck"
 )
 
 // URLTestConfig configures the url-test group strategy.

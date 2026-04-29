@@ -16,7 +16,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/shuttleX/shuttle/router/dns/fakeip"
+	"github.com/ggshr9/shuttle/router/dns/fakeip"
 )
 
 // DNSConfig configures the DNS resolver.

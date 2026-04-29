@@ -41,7 +41,7 @@ linters-settings:
       - (net.Conn).SetWriteDeadline
       - (*net.UDPConn).SetReadDeadline
       # Relay/proxy — fire-and-forget
-      - (*github.com/shuttleX/shuttle/internal/relay.Relay).Relay
+      - (*github.com/ggshr9/shuttle/internal/relay.Relay).Relay
       - fmt.Sscanf
       - rand.Read  # crypto/rand.Read never fails on supported OS
   gocritic:

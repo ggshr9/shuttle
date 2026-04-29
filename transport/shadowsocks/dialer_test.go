@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/shuttleX/shuttle/transport/shadowsocks"
+	"github.com/ggshr9/shuttle/transport/shadowsocks"
 )
 
 func TestMain(m *testing.M) {

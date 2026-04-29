@@ -10,10 +10,10 @@ import (
 	"time"
 
 	"github.com/hashicorp/yamux"
-	"github.com/shuttleX/shuttle/transport"
+	"github.com/ggshr9/shuttle/transport"
 	"golang.org/x/crypto/curve25519"
 
-	shuttlecrypto "github.com/shuttleX/shuttle/crypto"
+	shuttlecrypto "github.com/ggshr9/shuttle/crypto"
 )
 
 // stubPeerPub satisfies the noisePeerPub interface for tests without

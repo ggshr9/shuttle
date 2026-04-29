@@ -5,7 +5,7 @@ import (
 	"io"
 	"net/http"
 
-	"github.com/shuttleX/shuttle/engine"
+	"github.com/ggshr9/shuttle/engine"
 )
 
 // writeMetric writes a Prometheus HELP, TYPE, and value triple for a single metric.

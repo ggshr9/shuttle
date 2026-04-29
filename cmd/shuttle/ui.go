@@ -6,8 +6,8 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/shuttleX/shuttle/engine"
-	"github.com/shuttleX/shuttle/gui/api"
+	"github.com/ggshr9/shuttle/engine"
+	"github.com/ggshr9/shuttle/gui/api"
 )
 
 // startUIServer launches the Web management UI on addr using the shared

@@ -6,7 +6,7 @@ import (
 	"net"
 	"testing"
 
-	"github.com/shuttleX/shuttle/adapter"
+	"github.com/ggshr9/shuttle/adapter"
 )
 
 // startEchoServer starts a TCP echo server and returns its address and a stop function.

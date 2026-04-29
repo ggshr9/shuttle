@@ -1,4 +1,4 @@
-module github.com/shuttleX/shuttle
+module github.com/ggshr9/shuttle
 
 go 1.24.0
 

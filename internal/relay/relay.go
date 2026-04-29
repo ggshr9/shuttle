@@ -8,7 +8,7 @@ import (
 	"log/slog"
 	"sync"
 
-	"github.com/shuttleX/shuttle/internal/pool"
+	"github.com/ggshr9/shuttle/internal/pool"
 )
 
 // Relay copies data bidirectionally between a and b.

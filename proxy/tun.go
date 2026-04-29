@@ -12,8 +12,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/shuttleX/shuttle/internal/procnet"
-	"github.com/shuttleX/shuttle/qos"
+	"github.com/ggshr9/shuttle/internal/procnet"
+	"github.com/ggshr9/shuttle/qos"
 )
 
 // TUNConfig configures the TUN device for system-wide proxying.

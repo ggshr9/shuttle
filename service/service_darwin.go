@@ -10,7 +10,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/shuttleX/shuttle/internal/paths"
+	"github.com/ggshr9/shuttle/internal/paths"
 )
 
 type darwinManager struct {

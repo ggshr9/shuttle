@@ -10,7 +10,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/shuttleX/shuttle/internal/paths"
+	"github.com/ggshr9/shuttle/internal/paths"
 	"golang.org/x/sys/windows/svc"
 )
 

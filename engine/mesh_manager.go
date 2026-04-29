@@ -8,10 +8,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/shuttleX/shuttle/config"
-	"github.com/shuttleX/shuttle/mesh"
-	"github.com/shuttleX/shuttle/proxy"
-	"github.com/shuttleX/shuttle/transport/selector"
+	"github.com/ggshr9/shuttle/config"
+	"github.com/ggshr9/shuttle/mesh"
+	"github.com/ggshr9/shuttle/proxy"
+	"github.com/ggshr9/shuttle/transport/selector"
 )
 
 // MeshManager owns the mesh VPN connection lifecycle independently from the

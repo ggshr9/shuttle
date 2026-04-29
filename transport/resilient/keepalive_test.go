@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/shuttleX/shuttle/transport"
+	"github.com/ggshr9/shuttle/transport"
 )
 
 // waitFor polls condition every 5ms until it returns true or timeout expires.

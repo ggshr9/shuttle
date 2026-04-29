@@ -6,7 +6,7 @@
   Mirrors deploy/install.sh: download → wizard → register service → firewall.
   Subcommands: install (default), uninstall, upgrade [version], status.
 .EXAMPLE
-  iwr -useb https://raw.githubusercontent.com/shuttleX/shuttle/main/scripts/install-windows.ps1 | iex
+  iwr -useb https://raw.githubusercontent.com/ggshr9/shuttle/main/scripts/install-windows.ps1 | iex
 .EXAMPLE
   .\install-windows.ps1 install
 .EXAMPLE
@@ -30,7 +30,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
-$REPO         = 'shuttleX/shuttle'
+$REPO         = 'ggshr9/shuttle'
 $INSTALL_DIR  = "$env:ProgramFiles\Shuttle"
 $CONFIG_DIR   = "$env:ProgramData\Shuttle"
 $SERVICE_NAME = 'shuttled'

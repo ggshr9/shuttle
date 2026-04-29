@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/shuttleX/shuttle/provider"
+	"github.com/ggshr9/shuttle/provider"
 )
 
 // ParseURI parses a single proxy URI and returns a ProxyNode.

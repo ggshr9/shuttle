@@ -8,14 +8,14 @@ import (
 	"net"
 	"time"
 
-	"github.com/shuttleX/shuttle/config"
-	"github.com/shuttleX/shuttle/internal/netmon"
-	"github.com/shuttleX/shuttle/internal/sysopt"
-	"github.com/shuttleX/shuttle/provider"
-	"github.com/shuttleX/shuttle/proxy"
-	"github.com/shuttleX/shuttle/stream"
-	"github.com/shuttleX/shuttle/subscription"
-	"github.com/shuttleX/shuttle/transport/selector"
+	"github.com/ggshr9/shuttle/config"
+	"github.com/ggshr9/shuttle/internal/netmon"
+	"github.com/ggshr9/shuttle/internal/sysopt"
+	"github.com/ggshr9/shuttle/provider"
+	"github.com/ggshr9/shuttle/proxy"
+	"github.com/ggshr9/shuttle/stream"
+	"github.com/ggshr9/shuttle/subscription"
+	"github.com/ggshr9/shuttle/transport/selector"
 )
 
 const stopTimeout = 10 * time.Second

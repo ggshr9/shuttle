@@ -9,7 +9,7 @@ import (
 
 const sampleBenchOutput = `goos: linux
 goarch: amd64
-pkg: github.com/shuttleX/shuttle/test
+pkg: github.com/ggshr9/shuttle/test
 cpu: AMD EPYC 7B13
 BenchmarkBBROnAck-8              5000000               234 ns/op          48 B/op          2 allocs/op
 BenchmarkBrutalOnAck-8          10000000               112 ns/op           0 B/op          0 allocs/op
@@ -20,7 +20,7 @@ BenchmarkRouterMatch-8           2000000               678 ns/op          64 B/o
 BenchmarkBufferPool-8           50000000                34 ns/op           0 B/op          0 allocs/op
 BenchmarkPadding-8               1000000              1234 ns/op         128 B/op          3 allocs/op
 PASS
-ok      github.com/shuttleX/shuttle/test   12.345s
+ok      github.com/ggshr9/shuttle/test   12.345s
 `
 
 func TestParseBenchOutput(t *testing.T) {

@@ -192,7 +192,7 @@ Create `transport/reality/pq_compat.go`:
 package reality
 
 import (
-	shuttlecrypto "github.com/shuttleX/shuttle/crypto"
+	shuttlecrypto "github.com/ggshr9/shuttle/crypto"
 )
 
 // pqPayloadMinSize guards the PQ-vs-yamux detection heuristic in
@@ -466,7 +466,7 @@ import (
 	"testing"
 	"time"
 
-	shuttlecrypto "github.com/shuttleX/shuttle/crypto"
+	shuttlecrypto "github.com/ggshr9/shuttle/crypto"
 )
 
 // fakeNoiseHS satisfies the subset of NoiseState used by detectAndHandlePQ
@@ -784,7 +784,7 @@ import (
 	"testing"
 	"time"
 
-	shuttlecrypto "github.com/shuttleX/shuttle/crypto"
+	shuttlecrypto "github.com/ggshr9/shuttle/crypto"
 )
 
 // TestRealityPQServer_AcceptsClassicalAndPQ spins up a Reality server with

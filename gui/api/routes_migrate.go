@@ -4,7 +4,7 @@ import (
 	"io"
 	"net/http"
 
-	"github.com/shuttleX/shuttle/subscription"
+	"github.com/ggshr9/shuttle/subscription"
 )
 
 func registerMigrateRoutes(mux *http.ServeMux) {

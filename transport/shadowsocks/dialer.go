@@ -7,7 +7,7 @@ import (
 
 	"github.com/shadowsocks/go-shadowsocks2/core"
 
-	"github.com/shuttleX/shuttle/transport/shared"
+	"github.com/ggshr9/shuttle/transport/shared"
 )
 
 // DialerConfig holds configuration for a Shadowsocks client dialer.

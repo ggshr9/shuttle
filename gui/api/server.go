@@ -9,8 +9,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/shuttleX/shuttle/engine"
-	"github.com/shuttleX/shuttle/internal/healthcheck"
+	"github.com/ggshr9/shuttle/engine"
+	"github.com/ggshr9/shuttle/internal/healthcheck"
 )
 
 // Server wraps the API handler with SPA fallback serving.

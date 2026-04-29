@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/shuttleX/shuttle/adapter"
+	"github.com/ggshr9/shuttle/adapter"
 )
 
 // generateTestKey returns a deterministic 32-byte base64-encoded key for tests.

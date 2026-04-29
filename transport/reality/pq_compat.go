@@ -1,7 +1,7 @@
 package reality
 
 import (
-	shuttlecrypto "github.com/shuttleX/shuttle/crypto"
+	shuttlecrypto "github.com/ggshr9/shuttle/crypto"
 )
 
 // pqPayloadMinSize guards the PQ-vs-yamux detection heuristic in

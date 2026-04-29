@@ -3,7 +3,7 @@ package admin
 import (
 	"testing"
 
-	"github.com/shuttleX/shuttle/config"
+	"github.com/ggshr9/shuttle/config"
 )
 
 func TestQuotaExceeded_NoLimit(t *testing.T) {

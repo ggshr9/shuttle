@@ -3,7 +3,7 @@ package qos
 import (
 	"testing"
 
-	"github.com/shuttleX/shuttle/config"
+	"github.com/ggshr9/shuttle/config"
 )
 
 func TestClassifier_Disabled(t *testing.T) {

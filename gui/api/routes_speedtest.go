@@ -5,9 +5,9 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/shuttleX/shuttle/config"
-	"github.com/shuttleX/shuttle/engine"
-	"github.com/shuttleX/shuttle/speedtest"
+	"github.com/ggshr9/shuttle/config"
+	"github.com/ggshr9/shuttle/engine"
+	"github.com/ggshr9/shuttle/speedtest"
 )
 
 func registerSpeedtestRoutes(mux *http.ServeMux, eng *engine.Engine, stHistory *speedtest.HistoryStorage) {

@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/shuttleX/shuttle/config"
+	"github.com/ggshr9/shuttle/config"
 )
 
 func TestEmit_ConcurrentUnsubscribeNoDeadlock(t *testing.T) {

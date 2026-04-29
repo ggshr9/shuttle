@@ -6,8 +6,8 @@ import (
 	"net"
 	"testing"
 
-	"github.com/shuttleX/shuttle/adapter"
-	ymux "github.com/shuttleX/shuttle/transport/mux/yamux"
+	"github.com/ggshr9/shuttle/adapter"
+	ymux "github.com/ggshr9/shuttle/transport/mux/yamux"
 )
 
 func TestYamuxMux_ClientServer(t *testing.T) {

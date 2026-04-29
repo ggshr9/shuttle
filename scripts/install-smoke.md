@@ -17,7 +17,7 @@ On a fresh Ubuntu 22.04 VM:
 
 On macOS 14 with Homebrew installed:
 
-- [ ] `brew tap shuttleX/shuttle` succeeds.
+- [ ] `brew tap ggshr9/shuttle` succeeds.
 - [ ] `brew install shuttled` completes; binary lives at `$(brew --prefix)/bin/shuttled`.
 - [ ] `shuttled --version` prints the expected version.
 - [ ] `shuttled init --dir ~/.config/shuttle` generates a config.

@@ -4,7 +4,7 @@ package mobile
 import (
 	"encoding/json"
 
-	"github.com/shuttleX/shuttle/config"
+	"github.com/ggshr9/shuttle/config"
 )
 
 // NetworkPreset defines a named configuration profile optimized for a specific

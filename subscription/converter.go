@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/shuttleX/shuttle/config"
+	"github.com/ggshr9/shuttle/config"
 )
 
 // clashTypeToAdapterType maps Clash/sing-box protocol type names to Shuttle adapter types.

@@ -6,7 +6,7 @@ import (
 	"net"
 	"time"
 
-	"github.com/shuttleX/shuttle/mesh/signal"
+	"github.com/ggshr9/shuttle/mesh/signal"
 )
 
 // SendPacket sends a packet to a peer.

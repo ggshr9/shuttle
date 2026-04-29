@@ -5,7 +5,7 @@ package service
 import (
 	"errors"
 
-	ipaths "github.com/shuttleX/shuttle/internal/paths"
+	ipaths "github.com/ggshr9/shuttle/internal/paths"
 )
 
 // Scope identifies whether the service is system-wide or per-user.

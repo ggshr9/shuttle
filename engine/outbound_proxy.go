@@ -4,10 +4,10 @@ import (
 	"context"
 	"net"
 
-	"github.com/shuttleX/shuttle/adapter"
-	"github.com/shuttleX/shuttle/config"
-	"github.com/shuttleX/shuttle/obfs"
-	"github.com/shuttleX/shuttle/qos"
+	"github.com/ggshr9/shuttle/adapter"
+	"github.com/ggshr9/shuttle/config"
+	"github.com/ggshr9/shuttle/obfs"
+	"github.com/ggshr9/shuttle/qos"
 )
 
 // ProxyOutbound routes connections through the proxy server via the engine's

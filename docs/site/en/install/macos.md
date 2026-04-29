@@ -1,6 +1,6 @@
 # macOS Install
 
-For headless macOS deployments. For a desktop client, install the `.dmg` from the [Releases page](https://github.com/shuttleX/shuttle/releases).
+For headless macOS deployments. For a desktop client, install the `.dmg` from the [Releases page](https://github.com/ggshr9/shuttle/releases).
 
 ## Prerequisites
 - macOS 12 or later
@@ -9,7 +9,7 @@ For headless macOS deployments. For a desktop client, install the `.dmg` from th
 ## Install
 
 ```bash
-brew tap shuttleX/shuttle
+brew tap ggshr9/shuttle
 brew install shuttled
 ```
 
@@ -37,4 +37,4 @@ brew uninstall shuttled
 The config in `$(brew --prefix)/etc/shuttle/` is preserved across upgrades.
 
 ## Read next
-- [SECURITY.md](https://github.com/shuttleX/shuttle/blob/main/SECURITY.md)
+- [SECURITY.md](https://github.com/ggshr9/shuttle/blob/main/SECURITY.md)

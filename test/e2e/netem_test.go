@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/shuttleX/shuttle/test/netem"
+	"github.com/ggshr9/shuttle/test/netem"
 )
 
 // =============================================================================

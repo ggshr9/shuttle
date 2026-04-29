@@ -1,6 +1,6 @@
 # Windows 安装
 
-适用于无界面（headless）的 Windows Server 部署。如需桌面客户端，请前往 [Releases 页面](https://github.com/shuttleX/shuttle/releases) 下载 `.exe`。
+适用于无界面（headless）的 Windows Server 部署。如需桌面客户端，请前往 [Releases 页面](https://github.com/ggshr9/shuttle/releases) 下载 `.exe`。
 
 ## 前置条件
 - Windows Server 2019/2022 或 Windows 10/11
@@ -10,7 +10,7 @@
 ## 安装
 
 ```powershell
-iwr -useb https://raw.githubusercontent.com/shuttleX/shuttle/main/scripts/install-windows.ps1 | iex
+iwr -useb https://raw.githubusercontent.com/ggshr9/shuttle/main/scripts/install-windows.ps1 | iex
 ```
 
 如果 PowerShell 的执行策略阻止脚本运行，可临时放宽：
@@ -37,4 +37,4 @@ Get-EventLog -LogName Application -Source shuttled -Newest 50
 ```
 
 ## 延伸阅读
-- [SECURITY.md](https://github.com/shuttleX/shuttle/blob/main/SECURITY.md)
+- [SECURITY.md](https://github.com/ggshr9/shuttle/blob/main/SECURITY.md)

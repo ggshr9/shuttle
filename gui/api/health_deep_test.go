@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/shuttleX/shuttle/internal/healthcheck"
+	"github.com/ggshr9/shuttle/internal/healthcheck"
 )
 
 type fakeEngine struct {

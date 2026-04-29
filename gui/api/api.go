@@ -14,16 +14,16 @@ import (
 	"strings"
 	"time"
 
-	"github.com/shuttleX/shuttle/config"
-	"github.com/shuttleX/shuttle/connlog"
-	"github.com/shuttleX/shuttle/engine"
-	"github.com/shuttleX/shuttle/internal/healthcheck"
-	"github.com/shuttleX/shuttle/server"
-	"github.com/shuttleX/shuttle/speedtest"
-	"github.com/shuttleX/shuttle/stats"
-	"github.com/shuttleX/shuttle/subscription"
-	"github.com/shuttleX/shuttle/sysproxy"
-	"github.com/shuttleX/shuttle/update"
+	"github.com/ggshr9/shuttle/config"
+	"github.com/ggshr9/shuttle/connlog"
+	"github.com/ggshr9/shuttle/engine"
+	"github.com/ggshr9/shuttle/internal/healthcheck"
+	"github.com/ggshr9/shuttle/server"
+	"github.com/ggshr9/shuttle/speedtest"
+	"github.com/ggshr9/shuttle/stats"
+	"github.com/ggshr9/shuttle/subscription"
+	"github.com/ggshr9/shuttle/sysproxy"
+	"github.com/ggshr9/shuttle/update"
 )
 
 // apiStartTime records when the API package was initialised, used for uptime calculation.

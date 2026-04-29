@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/shuttleX/shuttle/config"
-	"github.com/shuttleX/shuttle/gui/api"
+	"github.com/ggshr9/shuttle/config"
+	"github.com/ggshr9/shuttle/gui/api"
 )
 
 // Token prints the bearer token from the appropriate config field.
