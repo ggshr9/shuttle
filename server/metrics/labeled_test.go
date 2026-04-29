@@ -52,3 +52,29 @@ func TestLabeledCounter_Concurrent(t *testing.T) {
 		t.Fatalf("expected 100, got %s", sb.String())
 	}
 }
+
+func TestLabeledHistogram_BucketBoundary(t *testing.T) {
+	buckets := []float64{0.1, 0.5, 1.0}
+	h := newLabeledHistogram("shuttle_dur_seconds", buckets, []string{"transport"})
+
+	// Three observations: 0.05, 0.5, 2.0 — should land in <=0.1, <=0.5, +Inf
+	h.Observe(0.05, "h3")
+	h.Observe(0.5, "h3")
+	h.Observe(2.0, "h3")
+
+	var sb strings.Builder
+	h.write(&sb, "Duration")
+	out := sb.String()
+
+	for _, want := range []string{
+		`shuttle_dur_seconds_bucket{transport="h3",le="0.1"} 1`,
+		`shuttle_dur_seconds_bucket{transport="h3",le="0.5"} 2`,
+		`shuttle_dur_seconds_bucket{transport="h3",le="1.0"} 2`,
+		`shuttle_dur_seconds_bucket{transport="h3",le="+Inf"} 3`,
+		`shuttle_dur_seconds_count{transport="h3"} 3`,
+	} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("missing line %q in:\n%s", want, out)
+		}
+	}
+}

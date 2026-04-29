@@ -77,3 +77,93 @@ func (c *labeledCounter) write(w io.Writer, help string) {
 		fmt.Fprintf(w, "%s %d\n", sb.String(), v.Load())
 	}
 }
+
+type histogramSeries struct {
+	bucketCounts []atomic.Int64
+	sum          atomic.Int64 // stored as nanos for time-like values
+	total        atomic.Int64
+}
+
+type labeledHistogram struct {
+	name      string
+	labelKeys []string
+	buckets   []float64
+	mu        sync.RWMutex
+	series    map[labelTuple]*histogramSeries
+}
+
+func newLabeledHistogram(name string, buckets []float64, labelKeys []string) *labeledHistogram {
+	bb := make([]float64, len(buckets))
+	copy(bb, buckets)
+	return &labeledHistogram{
+		name:      name,
+		labelKeys: labelKeys,
+		buckets:   bb,
+		series:    make(map[labelTuple]*histogramSeries),
+	}
+}
+
+func (h *labeledHistogram) Observe(value float64, labels ...string) {
+	if len(labels) != len(h.labelKeys) {
+		panic(fmt.Sprintf("labeledHistogram %s: expected %d labels, got %d", h.name, len(h.labelKeys), len(labels)))
+	}
+	tup := makeTuple(labels)
+
+	h.mu.RLock()
+	s, ok := h.series[tup]
+	h.mu.RUnlock()
+	if !ok {
+		h.mu.Lock()
+		if s, ok = h.series[tup]; !ok {
+			s = &histogramSeries{bucketCounts: make([]atomic.Int64, len(h.buckets))}
+			h.series[tup] = s
+		}
+		h.mu.Unlock()
+	}
+
+	for i, b := range h.buckets {
+		if value <= b {
+			s.bucketCounts[i].Add(1)
+		}
+	}
+	s.sum.Add(int64(value * 1e9)) // store as nanos to preserve precision
+	s.total.Add(1)
+}
+
+func (h *labeledHistogram) write(w io.Writer, help string) {
+	fmt.Fprintf(w, "# HELP %s %s\n# TYPE %s histogram\n", h.name, help, h.name)
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	for tup, s := range h.series {
+		labelVals := tup.values()
+		labelStr := h.formatLabels(labelVals, "")
+		for i, b := range h.buckets {
+			extra := fmt.Sprintf(`le=%q`, formatFloat(b))
+			fmt.Fprintf(w, "%s_bucket%s %d\n", h.name, h.formatLabels(labelVals, extra), s.bucketCounts[i].Load())
+			_ = i
+		}
+		fmt.Fprintf(w, "%s_bucket%s %d\n", h.name, h.formatLabels(labelVals, `le="+Inf"`), s.total.Load())
+		sumSecs := float64(s.sum.Load()) / 1e9
+		fmt.Fprintf(w, "%s_sum%s %s\n", h.name, labelStr, formatFloat(sumSecs))
+		fmt.Fprintf(w, "%s_count%s %d\n", h.name, labelStr, s.total.Load())
+	}
+}
+
+func (h *labeledHistogram) formatLabels(vals []string, extra string) string {
+	var sb strings.Builder
+	sb.WriteByte('{')
+	for i, k := range h.labelKeys {
+		if i > 0 {
+			sb.WriteByte(',')
+		}
+		fmt.Fprintf(&sb, `%s=%q`, k, vals[i])
+	}
+	if extra != "" {
+		if len(h.labelKeys) > 0 {
+			sb.WriteByte(',')
+		}
+		sb.WriteString(extra)
+	}
+	sb.WriteByte('}')
+	return sb.String()
+}
