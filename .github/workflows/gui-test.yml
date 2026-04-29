@@ -5,11 +5,13 @@ on:
     branches: [main]
     paths:
       - 'gui/web/**'
+      - 'gui/api/**'   # API contract changes can break the frontend; let Playwright catch it.
       - '.github/workflows/gui-test.yml'
   pull_request:
     branches: [main]
     paths:
       - 'gui/web/**'
+      - 'gui/api/**'
   workflow_dispatch:
 
 jobs:
