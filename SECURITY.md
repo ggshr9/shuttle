@@ -75,6 +75,16 @@ Shuttle is designed to defend against the following classes of adversary:
 
 The management plane is its own trust domain: its credentials must not be derivable from or reused with the data-plane credentials (`auth.password`, `auth.private_key`).
 
+**Health endpoints are intentionally unauthenticated**: `/api/health`,
+`/api/health/live`, `/api/health/ready` (and `/api/healthz` on the
+client) are deliberately exempt from `admin.token` so that
+external supervisors (Kubernetes liveness/readiness, load balancer
+health checks, monitoring agents) can probe without secret distribution.
+These endpoints expose only the boolean health state and listener
+binding state — no configuration values, no credentials, no traffic
+counters. Operators should still gate them by network ACL when
+running in untrusted environments.
+
 ## Hardening Checklist
 
 Treat this as a pre-deploy checklist. Items marked **(default)** are configured automatically by the install scripts; others require explicit configuration.
