@@ -142,7 +142,8 @@ shuttled keygen                # Reality auth.private_key + public_key pair
 | Credential | Rotation trigger | Procedure |
 |---|---|---|
 | Reality `auth.private_key` | Suspected leak | `shuttled keygen` to generate a new pair → distribute new public key to clients (e.g., via subscription update) → rolling restart of `shuttled` instances → keep the previous `short_id` listed for 24h to allow client cutover |
-| `auth.password` (H3) | Scheduled (90 days) or after personnel change | Update the config to include both old and new passwords, hot reload via `POST /api/reload`, distribute new password to clients, then remove the old password and reload again |
+| `auth.password` (H3, single-password mode) | Scheduled (90 days) or after personnel change | `auth.password` is single-valued — there is no in-place dual-credential window. Schedule a brief outage: distribute the new password to clients out-of-band, update `auth.password`, hot reload via `POST /api/reload`. For zero-downtime rotation, use per-user credentials (next row) instead. |
+| `admin.users[]` (per-user H3 credentials) | Scheduled (90 days) or after personnel change | Add a new entry to `admin.users` with a fresh credential, hot reload, distribute the new credential, then remove the old user entry and reload again. Old credential is rejected as soon as the second reload completes. |
 | `admin.token` | Scheduled (30 days) or after operator role change | Update config, hot reload, old token is rejected immediately |
 | Subscription auth token | Per provider's scheme | Driven by your subscription provider |
 
