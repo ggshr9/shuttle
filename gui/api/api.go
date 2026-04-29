@@ -17,6 +17,7 @@ import (
 	"github.com/shuttleX/shuttle/config"
 	"github.com/shuttleX/shuttle/connlog"
 	"github.com/shuttleX/shuttle/engine"
+	"github.com/shuttleX/shuttle/internal/healthcheck"
 	"github.com/shuttleX/shuttle/server"
 	"github.com/shuttleX/shuttle/speedtest"
 	"github.com/shuttleX/shuttle/stats"
@@ -37,6 +38,12 @@ type HandlerConfig struct {
 	SpeedHistory *speedtest.HistoryStorage
 	Events       *EventQueue // optional; nil disables /api/events + /ws/events
 	AuthToken    string      // empty = no auth
+	// Heartbeat backs /api/health/live. The lifecycle owner (typically
+	// gui/api.Server) is responsible for ticking it. When nil, NewHandler
+	// creates a single-tick heartbeat so the route is still mounted, but
+	// it will go stale after the liveness threshold unless the caller
+	// ticks it themselves.
+	Heartbeat *healthcheck.Heartbeat
 }
 
 // NewHandler creates the HTTP handler for the shuttle API.
@@ -57,7 +64,14 @@ func NewHandler(cfg HandlerConfig) http.Handler {
 	mux := http.NewServeMux()
 	updateChecker := update.NewChecker()
 
+	hb := cfg.Heartbeat
+	if hb == nil {
+		hb = healthcheck.NewHeartbeat()
+		hb.Tick() // single tick so /api/health/live returns 200 immediately
+	}
+
 	registerHealthzRoute(mux)
+	registerDeepHealthRoutes(mux, cfg.Engine, hb)
 	registerStatusRoutes(mux, cfg.Engine)
 	registerConfigRoutes(mux, cfg.Engine)
 	registerProxyRoutes(mux, cfg.Engine)

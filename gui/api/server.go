@@ -6,8 +6,10 @@ import (
 	"net"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/shuttleX/shuttle/engine"
+	"github.com/shuttleX/shuttle/internal/healthcheck"
 )
 
 // Server wraps the API handler with SPA fallback serving.
@@ -16,6 +18,7 @@ type Server struct {
 	listener net.Listener
 	srv      *http.Server
 	pumpStop context.CancelFunc // nil if no engine
+	hbStop   chan struct{}      // closes when server shuts down to stop heartbeat
 }
 
 // NewServer creates an API server. If webFS is non-nil, it serves the SPA from it
@@ -31,9 +34,19 @@ func NewServer(eng *engine.Engine, webFS fs.FS) *Server {
 		pumpCtx, pumpStop = context.WithCancel(context.Background())
 		go pumpEngineEvents(pumpCtx, eng, q)
 	}
-	handler := NewHandler(HandlerConfig{Engine: eng, Events: q})
+
+	// Liveness heartbeat — ticked every 5s so /api/health/live can detect
+	// a hung event-loop / locked process (it goes stale after the
+	// 30s threshold defined in health_deep.go). Mirrors the admin server
+	// pattern in server/server.go.
+	hb := healthcheck.NewHeartbeat()
+	hbStop := make(chan struct{})
+	hb.Run(hbStop, 5*time.Second)
+
+	handler := NewHandler(HandlerConfig{Engine: eng, Events: q, Heartbeat: hb})
 	srv := NewServerWithHandler(eng, webFS, handler)
 	srv.pumpStop = pumpStop
+	srv.hbStop = hbStop
 	return srv
 }
 
@@ -112,6 +125,10 @@ func (s *Server) ListenAndServe(addr string) (string, error) {
 func (s *Server) Close() error {
 	if s.pumpStop != nil {
 		s.pumpStop()
+	}
+	if s.hbStop != nil {
+		close(s.hbStop)
+		s.hbStop = nil
 	}
 	return s.srv.Close()
 }

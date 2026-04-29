@@ -94,6 +94,11 @@ type Engine struct {
 	// Proxy and rule providers (ecosystem compat)
 	proxyProviders []*provider.ProxyProvider
 	ruleProviders  []*provider.RuleProvider
+
+	// lastConfigErr records the most recent configuration validation error,
+	// or nil when the active config validated cleanly. Used by the deep
+	// readiness probe (gui/api/health_deep.go).
+	lastConfigErr error
 }
 
 // New creates a new Engine from the given config.
@@ -228,6 +233,37 @@ func (e *Engine) Status() EngineStatus {
 	}
 
 	return status
+}
+
+// StateName returns the human-readable engine state. Used by the deep
+// readiness probe in gui/api/health_deep.go to satisfy the engineProbe
+// interface.
+func (e *Engine) StateName() string {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	return e.state.String()
+}
+
+// HealthyOutbounds returns the count of outbounds currently usable. The
+// engine populates the outbounds map at startInbounds time; while the
+// engine is stopped the map is nil. We do not currently maintain a
+// separate per-outbound liveness check at the engine level (each
+// OutboundGroup with a url-test strategy runs its own healthcheck.Checker
+// — see outbound_group_urltest.go), so "configured & built" is the best
+// engine-wide approximation. Returns 0 when the engine is stopped.
+func (e *Engine) HealthyOutbounds() int {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	return len(e.outbounds)
+}
+
+// ConfigValid reports whether the active config most recently validated
+// cleanly. False after a Start() / Reload() that failed validation, true
+// once a subsequent successful validation has occurred.
+func (e *Engine) ConfigValid() bool {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	return e.lastConfigErr == nil
 }
 
 // StreamStats returns an aggregate summary of per-stream metrics.

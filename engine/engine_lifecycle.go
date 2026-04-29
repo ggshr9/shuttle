@@ -66,8 +66,14 @@ func (e *Engine) startInternal(ctx context.Context) error {
 	e.mu.RUnlock()
 
 	if err := cfgSnap.Validate(); err != nil {
+		e.mu.Lock()
+		e.lastConfigErr = err
+		e.mu.Unlock()
 		return fail(fmt.Errorf("config validation: %w", err))
 	}
+	e.mu.Lock()
+	e.lastConfigErr = nil
+	e.mu.Unlock()
 
 	e.logger.Debug("building congestion control", "mode", cfgSnap.Congestion.Mode)
 	ccAdapter := e.buildCongestionControl(cfgSnap)
@@ -492,8 +498,14 @@ func (e *Engine) reloadRouterOnly(cfg *config.ClientConfig) error {
 // router-only hot-swap instead of a full stop-then-start cycle.
 func (e *Engine) Reload(cfg *config.ClientConfig) error {
 	if err := ValidateConfig(cfg); err != nil {
+		e.mu.Lock()
+		e.lastConfigErr = err
+		e.mu.Unlock()
 		return fmt.Errorf("invalid config: %w", err)
 	}
+	e.mu.Lock()
+	e.lastConfigErr = nil
+	e.mu.Unlock()
 
 	e.lifecycleMu.Lock()
 	defer e.lifecycleMu.Unlock()
