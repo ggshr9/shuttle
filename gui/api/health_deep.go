@@ -29,9 +29,14 @@ type engineProbe interface {
 	ConfigValid() bool
 }
 
+// clientCheckResult is the per-check JSON shape emitted by /api/health/ready
+// on the client GUI. It mirrors the server-side admin checkResult shape
+// (server/admin/health.go) so a single blackbox monitoring config can scrape
+// either side without missing fields. All fields are omitempty.
 type clientCheckResult struct {
 	Status string `json:"status"`
 	Error  string `json:"error,omitempty"`
+	Addr   string `json:"addr,omitempty"`
 	Detail string `json:"detail,omitempty"`
 }
 

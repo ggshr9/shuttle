@@ -12,10 +12,16 @@ import (
 
 const defaultLivenessThreshold = 30 * time.Second
 
+// checkResult is the per-check JSON shape emitted by both /api/health/ready
+// (server) and /api/health/ready (client GUI). The four fields form a
+// uniform wire contract; each side populates the subset that's meaningful
+// for its checks (server: Addr for listeners; client: Detail for engine
+// state). All fields are omitempty so absent fields don't leak.
 type checkResult struct {
 	Status string `json:"status"`
 	Error  string `json:"error,omitempty"`
 	Addr   string `json:"addr,omitempty"`
+	Detail string `json:"detail,omitempty"`
 }
 
 type healthResponse struct {
