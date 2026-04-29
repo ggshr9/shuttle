@@ -78,7 +78,8 @@ func registerPrometheusRoutes(mux *http.ServeMux, eng *engine.Engine) {
 				}
 			}
 		}
-		fmt.Fprintf(w, "shuttle_circuit_breaker_state %d  # DEPRECATED: use the labelled variant; removed in v0.5\n", worst)
+		fmt.Fprintf(w, "# DEPRECATED: shuttle_circuit_breaker_state (unlabelled) — use the labelled variant; removed in v0.5.\n")
+		fmt.Fprintf(w, "shuttle_circuit_breaker_state %d\n", worst)
 		fmt.Fprintln(w)
 
 		// Subscription refresh attempts and last-refresh timestamps.
