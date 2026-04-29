@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/netip"
 	"net/url"
+	"sort"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -610,42 +611,47 @@ func (c *dnsCache) put(domain string, ips []net.IP, ttl time.Duration, domestic 
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if len(c.entries) >= c.maxSize {
-		// Evict expired entries first, then oldest up to 10% of max
+		// Evict expired entries first, then sort the survivors by
+		// lastUsed ascending and drop the oldest 10%. The previous
+		// version found the LRU entry by linear scan in an inner loop
+		// repeated `target` times — O(N²) when nothing was expired
+		// (≈10⁷ map iterations at maxSize=10k under sustained pressure).
 		now := time.Now()
-		evicted := 0
 		target := c.maxSize / 10
 		if target < 1 {
 			target = 1
 		}
+		evicted := 0
 		for k, v := range c.entries {
 			if now.After(v.expiresAt) {
 				delete(c.entries, k)
 				evicted++
 			}
 		}
-		// Evict least recently used entries if not enough expired entries were removed
-		for evicted < target {
-			var oldestKey string
-			var oldestNano int64
-			first := true
+		if evicted < target {
+			type kv struct {
+				key  string
+				nano int64
+			}
+			survivors := make([]kv, 0, len(c.entries))
 			for k, v := range c.entries {
-				nano := v.lastUsed.Load()
-				if first || nano < oldestNano {
-					oldestKey = k
-					oldestNano = nano
-					first = false
-				}
+				survivors = append(survivors, kv{k, v.lastUsed.Load()})
 			}
-			if oldestKey == "" {
-				break
+			sort.Slice(survivors, func(i, j int) bool {
+				return survivors[i].nano < survivors[j].nano
+			})
+			toEvict := target - evicted
+			if toEvict > len(survivors) {
+				toEvict = len(survivors)
 			}
-			delete(c.entries, oldestKey)
-			evicted++
+			for i := 0; i < toEvict; i++ {
+				delete(c.entries, survivors[i].key)
+			}
 		}
 	}
 	now := time.Now()
 	entry := &dnsCacheEntry{
-		ips:      ips,
+		ips:       ips,
 		expiresAt: now.Add(ttl),
 		domestic:  domestic,
 	}
