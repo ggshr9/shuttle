@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/shuttleX/shuttle/transport"
 	ymux "github.com/shuttleX/shuttle/transport/mux/yamux"
@@ -28,10 +29,31 @@ type GRPCConfig struct {
 
 // GRPCClient implements transport.ClientTransport over gRPC through CDN.
 type GRPCClient struct {
-	config *GRPCConfig
-	client *http.Client
-	logger *slog.Logger
-	closed atomic.Bool
+	config  *GRPCConfig
+	client  *http.Client
+	logger  *slog.Logger
+	closed  atomic.Bool
+	metrics *transport.HandshakeMetrics
+}
+
+// SetHandshakeMetrics installs the handshake metrics hook on this client.
+// Must be called before Dial; the hook fires once per Dial — OnSuccess
+// after the gRPC auth frame and yamux setup, OnFailure on any handshake
+// error.
+func (c *GRPCClient) SetHandshakeMetrics(m *transport.HandshakeMetrics) {
+	c.metrics = m
+}
+
+func (c *GRPCClient) recordSuccess(d time.Duration) {
+	if c.metrics != nil && c.metrics.OnSuccess != nil {
+		c.metrics.OnSuccess("cdn-grpc", d)
+	}
+}
+
+func (c *GRPCClient) recordFailure(reason string) {
+	if c.metrics != nil && c.metrics.OnFailure != nil {
+		c.metrics.OnFailure("cdn-grpc", reason)
+	}
 }
 
 func NewGRPCClient(cfg *GRPCConfig, opts ...GRPCOption) *GRPCClient {
@@ -80,6 +102,8 @@ func (c *GRPCClient) Dial(ctx context.Context, addr string) (transport.Connectio
 	}
 	c.logger.Debug("cdn-grpc: dialing", "addr", addr)
 
+	start := time.Now()
+
 	pr, pw := io.Pipe()
 
 	// gRPC uses POST to /{ServiceName}/Tunnel
@@ -87,6 +111,7 @@ func (c *GRPCClient) Dial(ctx context.Context, addr string) (transport.Connectio
 	url := fmt.Sprintf("https://%s%s", c.config.CDNDomain, path)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, pr)
 	if err != nil {
+		c.recordFailure("protocol")
 		pw.Close()
 		return nil, fmt.Errorf("create grpc request: %w", err)
 	}
@@ -100,10 +125,12 @@ func (c *GRPCClient) Dial(ctx context.Context, addr string) (transport.Connectio
 
 	resp, err := c.client.Do(req)
 	if err != nil {
+		c.recordFailure(classifyReason(err))
 		pw.Close()
 		return nil, fmt.Errorf("grpc dial: %w", err)
 	}
 	if resp.StatusCode != http.StatusOK {
+		c.recordFailure("auth")
 		pw.Close()
 		resp.Body.Close()
 		return nil, fmt.Errorf("grpc dial: status %d", resp.StatusCode)
@@ -118,6 +145,7 @@ func (c *GRPCClient) Dial(ctx context.Context, addr string) (transport.Connectio
 
 	// Send auth: [32-byte nonce][32-byte HMAC-SHA256(password, nonce)]
 	if err := sendGRPCAuth(duplex, c.config.Password); err != nil {
+		c.recordFailure(classifyReason(err))
 		duplex.Close()
 		return nil, fmt.Errorf("grpc auth: %w", err)
 	}
@@ -125,9 +153,12 @@ func (c *GRPCClient) Dial(ctx context.Context, addr string) (transport.Connectio
 	mux := ymux.New(nil)
 	muxConn, err := mux.ClientRWC(duplex)
 	if err != nil {
+		c.recordFailure("protocol")
 		duplex.Close()
 		return nil, fmt.Errorf("yamux client: %w", err)
 	}
+
+	c.recordSuccess(time.Since(start))
 
 	cdnAddr := &net.TCPAddr{}
 	if host, port, e := net.SplitHostPort(c.config.CDNDomain + ":443"); e == nil {

@@ -35,7 +35,11 @@ func (f *h2Factory) NewClient(cfg *config.ClientConfig, opts adapter.FactoryOpti
 		FrontDomain:        cfg.Transport.CDN.FrontDomain,
 		InsecureSkipVerify: cfg.Transport.CDN.InsecureSkipVerify,
 	}
-	return NewH2Client(h2Cfg, WithH2Logger(logger)), nil
+	cli := NewH2Client(h2Cfg, WithH2Logger(logger))
+	if hm, ok := opts.HandshakeMetrics.(*transport.HandshakeMetrics); ok && hm != nil {
+		cli.SetHandshakeMetrics(hm)
+	}
+	return cli, nil
 }
 
 func (f *h2Factory) NewServer(cfg *config.ServerConfig, opts adapter.FactoryOptions) (adapter.ServerTransport, error) {
@@ -83,7 +87,11 @@ func (f *grpcFactory) NewClient(cfg *config.ClientConfig, opts adapter.FactoryOp
 		Host:        cfg.Transport.CDN.Domain,
 		FrontDomain: cfg.Transport.CDN.FrontDomain,
 	}
-	return NewGRPCClient(grpcCfg, WithGRPCLogger(logger)), nil
+	cli := NewGRPCClient(grpcCfg, WithGRPCLogger(logger))
+	if hm, ok := opts.HandshakeMetrics.(*transport.HandshakeMetrics); ok && hm != nil {
+		cli.SetHandshakeMetrics(hm)
+	}
+	return cli, nil
 }
 
 func (f *grpcFactory) NewServer(cfg *config.ServerConfig, opts adapter.FactoryOptions) (adapter.ServerTransport, error) {

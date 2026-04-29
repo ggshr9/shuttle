@@ -9,6 +9,7 @@ import (
 	"net"
 	"net/http"
 	"sync/atomic"
+	"time"
 
 	"github.com/shuttleX/shuttle/transport"
 	ymux "github.com/shuttleX/shuttle/transport/mux/yamux"
@@ -31,10 +32,30 @@ type H2Config struct {
 // transport, not net.Conn. This means it cannot use ByteStreamClient directly.
 // The HMAC auth is inline; yamux multiplexing uses the shared Mux via ClientRWC.
 type H2Client struct {
-	config *H2Config
-	client *http.Client
-	logger *slog.Logger
-	closed atomic.Bool
+	config  *H2Config
+	client  *http.Client
+	logger  *slog.Logger
+	closed  atomic.Bool
+	metrics *transport.HandshakeMetrics
+}
+
+// SetHandshakeMetrics installs the handshake metrics hook on this client.
+// Must be called before Dial; the hook fires once per Dial — OnSuccess
+// after the HMAC auth and yamux setup, OnFailure on any handshake error.
+func (c *H2Client) SetHandshakeMetrics(m *transport.HandshakeMetrics) {
+	c.metrics = m
+}
+
+func (c *H2Client) recordSuccess(d time.Duration) {
+	if c.metrics != nil && c.metrics.OnSuccess != nil {
+		c.metrics.OnSuccess("cdn-h2", d)
+	}
+}
+
+func (c *H2Client) recordFailure(reason string) {
+	if c.metrics != nil && c.metrics.OnFailure != nil {
+		c.metrics.OnFailure("cdn-h2", reason)
+	}
 }
 
 func NewH2Client(cfg *H2Config, opts ...H2Option) *H2Client {
@@ -81,6 +102,8 @@ func (c *H2Client) Dial(ctx context.Context, addr string) (transport.Connection,
 	}
 	c.logger.Debug("cdn-h2: dialing", "addr", addr)
 
+	start := time.Now()
+
 	// Create a bidirectional channel over HTTP/2:
 	// - Client writes into io.Pipe -> becomes request body (upload)
 	// - Server response body -> client reads (download)
@@ -89,6 +112,7 @@ func (c *H2Client) Dial(ctx context.Context, addr string) (transport.Connection,
 	url := fmt.Sprintf("https://%s%s", c.config.CDNDomain, c.config.Path)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, pr)
 	if err != nil {
+		c.recordFailure("protocol")
 		pw.Close()
 		return nil, fmt.Errorf("create request: %w", err)
 	}
@@ -100,10 +124,12 @@ func (c *H2Client) Dial(ctx context.Context, addr string) (transport.Connection,
 
 	resp, err := c.client.Do(req)
 	if err != nil {
+		c.recordFailure(classifyReason(err))
 		pw.Close()
 		return nil, fmt.Errorf("http2 dial: %w", err)
 	}
 	if resp.StatusCode != http.StatusOK {
+		c.recordFailure("auth")
 		pw.Close()
 		resp.Body.Close()
 		return nil, fmt.Errorf("http2 dial: status %d", resp.StatusCode)
@@ -118,6 +144,7 @@ func (c *H2Client) Dial(ctx context.Context, addr string) (transport.Connection,
 
 	// Send auth: [32-byte nonce][32-byte HMAC-SHA256(password, nonce)]
 	if err := sendAuth(duplex, c.config.Password); err != nil {
+		c.recordFailure(classifyReason(err))
 		duplex.Close()
 		return nil, fmt.Errorf("auth handshake: %w", err)
 	}
@@ -126,9 +153,12 @@ func (c *H2Client) Dial(ctx context.Context, addr string) (transport.Connection,
 	mux := ymux.New(nil)
 	muxConn, err := mux.ClientRWC(duplex)
 	if err != nil {
+		c.recordFailure("protocol")
 		duplex.Close()
 		return nil, fmt.Errorf("yamux client: %w", err)
 	}
+
+	c.recordSuccess(time.Since(start))
 
 	cdnAddr := &net.TCPAddr{}
 	if host, port, e := net.SplitHostPort(c.config.CDNDomain + ":443"); e == nil {

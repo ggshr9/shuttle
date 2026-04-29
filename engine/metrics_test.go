@@ -53,6 +53,63 @@ func TestEngine_CBStateRecordedInMetrics(t *testing.T) {
 	}
 }
 
+// TestEngine_RecordsClientHandshake verifies the snapshot mechanics for
+// client-side handshake metrics: OnSuccess appends a per-transport
+// duration, OnFailure increments a per-(transport,reason) counter, and
+// the snapshot reflects both — without driving a real network handshake.
+//
+// End-to-end coverage (real Dial against a server) is sandbox-only; this
+// host-safe test exercises the same closure the engine installs into
+// every client transport via FactoryOptions.HandshakeMetrics.
+func TestEngine_RecordsClientHandshake(t *testing.T) {
+	eng := New(config.DefaultClientConfig())
+	hook := eng.clientHandshakeHook()
+
+	hook.OnSuccess("h3", 50*time.Millisecond)
+	hook.OnSuccess("h3", 75*time.Millisecond)
+	hook.OnFailure("reality", "timeout")
+	hook.OnFailure("reality", "timeout")
+	hook.OnFailure("reality", "auth")
+
+	snap := eng.Metrics()
+
+	got := snap.HandshakeDurationsNanos["h3"]
+	if len(got) != 2 || got[0] != int64(50*time.Millisecond) || got[1] != int64(75*time.Millisecond) {
+		t.Fatalf("HandshakeDurationsNanos[h3] = %v, want [50ms 75ms] in nanos", got)
+	}
+	if snap.HandshakeFailures["reality/timeout"] != 2 {
+		t.Errorf("HandshakeFailures[reality/timeout] = %d, want 2", snap.HandshakeFailures["reality/timeout"])
+	}
+	if snap.HandshakeFailures["reality/auth"] != 1 {
+		t.Errorf("HandshakeFailures[reality/auth] = %d, want 1", snap.HandshakeFailures["reality/auth"])
+	}
+}
+
+// TestEngine_HandshakeDurationsCappedAt1024 verifies the bounded-memory
+// invariant for handshakeDurations: under sustained traffic the slice
+// keeps only the most recent 1024 samples per transport.
+func TestEngine_HandshakeDurationsCappedAt1024(t *testing.T) {
+	eng := New(config.DefaultClientConfig())
+	hook := eng.clientHandshakeHook()
+
+	for i := 0; i < 1100; i++ {
+		hook.OnSuccess("h3", time.Duration(i)*time.Millisecond)
+	}
+
+	snap := eng.Metrics()
+	got := snap.HandshakeDurationsNanos["h3"]
+	if len(got) != 1024 {
+		t.Fatalf("len(HandshakeDurationsNanos[h3]) = %d, want 1024", len(got))
+	}
+	// First retained sample should be index 76 (0-indexed): 1100 - 1024 = 76.
+	if got[0] != int64(76*time.Millisecond) {
+		t.Errorf("got[0] = %d, want %d (76ms in nanos)", got[0], int64(76*time.Millisecond))
+	}
+	if got[len(got)-1] != int64(1099*time.Millisecond) {
+		t.Errorf("got[last] = %d, want %d (1099ms in nanos)", got[len(got)-1], int64(1099*time.Millisecond))
+	}
+}
+
 // TestEngine_MetricsZeroValueSnapshot verifies a freshly-constructed engine
 // returns a snapshot whose maps are non-nil (callers may safely range/index)
 // and empty.

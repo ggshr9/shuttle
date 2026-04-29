@@ -29,7 +29,11 @@ func (f *factory) NewClient(cfg *config.ClientConfig, opts adapter.FactoryOption
 		PostQuantum: cfg.Transport.Reality.PostQuantum,
 		Yamux:       &cfg.Yamux,
 	}
-	return NewClient(rCfg), nil
+	cli := NewClient(rCfg)
+	if hm, ok := opts.HandshakeMetrics.(*transport.HandshakeMetrics); ok && hm != nil {
+		cli.SetHandshakeMetrics(hm)
+	}
+	return cli, nil
 }
 
 func (f *factory) NewServer(cfg *config.ServerConfig, opts adapter.FactoryOptions) (adapter.ServerTransport, error) {

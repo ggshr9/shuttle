@@ -47,7 +47,11 @@ func (f *factory) NewClient(cfg *config.ClientConfig, opts adapter.FactoryOption
 			ProbeInterval: probe,
 		}
 	}
-	return NewClient(h3Cfg), nil
+	cli := NewClient(h3Cfg)
+	if hm, ok := opts.HandshakeMetrics.(*transport.HandshakeMetrics); ok && hm != nil {
+		cli.SetHandshakeMetrics(hm)
+	}
+	return cli, nil
 }
 
 func (f *factory) NewServer(cfg *config.ServerConfig, opts adapter.FactoryOptions) (adapter.ServerTransport, error) {
