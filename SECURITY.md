@@ -136,3 +136,22 @@ shuttled keygen                # Reality auth.private_key + public_key pair
 **Metrics endpoint:**
 - Bind `metrics.listen` to `127.0.0.1` and scrape via SSH tunnel or local Prometheus agent.
 - Never expose `/metrics` publicly: it leaks connection counts, transport mix, and internal hostnames via labels.
+
+## Key & Token Rotation
+
+| Credential | Rotation trigger | Procedure |
+|---|---|---|
+| Reality `auth.private_key` | Suspected leak | `shuttled keygen` to generate a new pair → distribute new public key to clients (e.g., via subscription update) → rolling restart of `shuttled` instances → keep the previous `short_id` listed for 24h to allow client cutover |
+| `auth.password` (H3) | Scheduled (90 days) or after personnel change | Update the config to include both old and new passwords, hot reload via `POST /api/reload`, distribute new password to clients, then remove the old password and reload again |
+| `admin.token` | Scheduled (30 days) or after operator role change | Update config, hot reload, old token is rejected immediately |
+| Subscription auth token | Per provider's scheme | Driven by your subscription provider |
+
+**Recommended cadence:**
+- `admin.token`: every 30 days
+- `auth.password` (H3): every 90 days
+- `auth.private_key` (Reality): only on suspected compromise — rotation is disruptive and the underlying scheme is forward-secret
+
+**During rotation:**
+- Keep audit logs to verify when old credentials were last used.
+- Notify clients out-of-band before the cutover, not via the channel being rotated.
+- For mesh deployments, rotate the relay-tier credentials before the leaf-tier credentials.
