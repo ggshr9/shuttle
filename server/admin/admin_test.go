@@ -49,6 +49,12 @@ func TestHealthNoAuth(t *testing.T) {
 	if resp["status"] != "ok" {
 		t.Errorf("status = %q, want ok", resp["status"])
 	}
+	// Lock the legacy contract: only the {"status":"ok"} key is allowed.
+	// Adding or renaming keys would change the wire format silently;
+	// future probes asserting on this body would break.
+	if len(resp) != 1 {
+		t.Fatalf("expected exactly 1 key in /api/health body, got %d: %v", len(resp), resp)
+	}
 }
 
 func TestStatusRequiresAuth(t *testing.T) {

@@ -30,6 +30,12 @@ func TestHealthz_Returns200WithStatus(t *testing.T) {
 	if body["status"] != "ok" {
 		t.Fatalf("status = %v, want ok", body["status"])
 	}
+	// Lock the legacy contract: only the {"status":"ok"} key is allowed.
+	// Adding or renaming keys would change the wire format silently;
+	// the iOS BridgeAdapter probe asserts this exact shape.
+	if len(body) != 1 {
+		t.Fatalf("expected exactly 1 key in /api/healthz body, got %d: %v", len(body), body)
+	}
 }
 
 func TestHealthz_PreservedAfterDeepHealthAdded(t *testing.T) {
