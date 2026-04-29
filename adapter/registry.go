@@ -20,6 +20,7 @@ type TransportFactory interface {
 type FactoryOptions struct {
 	Logger            *slog.Logger
 	CongestionControl interface{} // quic.CongestionControl — typed as interface{} to avoid quic-go import in adapter
+	HandshakeMetrics  interface{} // *transport.HandshakeMetrics — typed as interface{} to avoid an import cycle (transport → adapter → transport)
 }
 
 var (

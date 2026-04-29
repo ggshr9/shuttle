@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Server `/metrics`: `shuttle_handshake_duration_seconds`, `shuttle_handshake_failures_total`, `shuttle_dns_query_duration_seconds`, `shuttle_destination_resolve_failures_total`. Per-user gauge `shuttle_user_active_connections` gated by `metrics.per_user`.
+- Client `/api/prometheus`: `shuttle_routing_decisions_total`, `shuttle_circuit_breaker_state{outbound}`, `shuttle_subscription_refresh_total`, `shuttle_subscription_last_refresh_timestamp`, `shuttle_handshake_duration_seconds` (summary).
+
+### Deprecated
+- Client `/api/prometheus` unlabelled `shuttle_circuit_breaker_state` (no `outbound` label). The labelled variant supersedes it. The unlabelled metric will be removed in v0.5.
+
 ### Changed — GUI refactor (branch `refactor/gui-v2`)
 
 End-to-end rewrite of the desktop GUI frontend. Same Go backend, same

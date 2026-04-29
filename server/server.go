@@ -20,6 +20,7 @@ import (
 	"github.com/ggshr9/shuttle/server/admin"
 	"github.com/ggshr9/shuttle/server/audit"
 	"github.com/ggshr9/shuttle/server/metrics"
+	"github.com/ggshr9/shuttle/transport"
 )
 
 // Config holds everything the Server needs to initialize.
@@ -111,9 +112,15 @@ func New(c Config) (*Server, error) {
 		ListenAddr: cfg.Listen,
 	}, logger)
 
+	hsMetrics := &transport.HandshakeMetrics{
+		OnSuccess: func(t string, d time.Duration) { s.metrics.RecordHandshake(t, d) },
+		OnFailure: func(t string, reason string) { s.metrics.RecordHandshakeFailure(t, reason) },
+	}
+
 	opts := adapter.FactoryOptions{
 		Logger:            logger,
 		CongestionControl: ccAdapter,
+		HandshakeMetrics:  hsMetrics,
 	}
 	for name, factory := range adapter.All() {
 		t, err := factory.NewServer(cfg, opts)
@@ -157,6 +164,12 @@ func New(c Config) (*Server, error) {
 
 	// --- Users ---
 	s.users = admin.NewUserStore(cfg.Admin.Users)
+	if cfg.Metrics.PerUser {
+		s.users.SetActivityHook(func(user string, delta int) {
+			s.metrics.UserActivityDelta(user, int64(delta))
+		})
+		logger.Info("per-user metrics enabled (shuttle_user_active_connections)")
+	}
 
 	// --- Audit ---
 	if cfg.Audit.Enabled {

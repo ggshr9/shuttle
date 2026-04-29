@@ -1,0 +1,226 @@
+package engine
+
+import (
+	"testing"
+	"time"
+
+	"github.com/ggshr9/shuttle/config"
+)
+
+// TestEngine_CBStateRecordedInMetrics verifies that the per-outbound circuit
+// breaker callback (as wired in startInbounds) writes the new state to
+// e.metrics.circuitBreakers under e.metrics.mu.
+//
+// This test replicates the wiring done in engine_inbound.go directly rather
+// than spinning up a full engine + outbound stack (which would require real
+// network dialing to drive failures). The closure under test is the same
+// pattern used at startInbounds line ~79.
+func TestEngine_CBStateRecordedInMetrics(t *testing.T) {
+	eng := New(config.DefaultClientConfig())
+	tagName := "out-test"
+
+	cb := NewCircuitBreaker(CircuitBreakerConfig{
+		Threshold:    1,
+		BaseCooldown: 10 * time.Millisecond,
+		OnStateChange: func(state CircuitState, _ time.Duration) {
+			eng.metrics.mu.Lock()
+			eng.metrics.circuitBreakers[tagName] = state.String()
+			eng.metrics.mu.Unlock()
+		},
+	})
+
+	// Drive a Closed -> Open transition.
+	cb.RecordFailure()
+
+	snap := eng.Metrics()
+	if got, want := snap.CircuitBreakers[tagName], "open"; got != want {
+		t.Fatalf("after RecordFailure, CircuitBreakers[%q] = %q, want %q", tagName, got, want)
+	}
+
+	// Drive Open -> HalfOpen via cooldown.
+	time.Sleep(30 * time.Millisecond)
+	snap = eng.Metrics()
+	if got, want := snap.CircuitBreakers[tagName], "half-open"; got != want {
+		t.Fatalf("after cooldown, CircuitBreakers[%q] = %q, want %q", tagName, got, want)
+	}
+
+	// Drive HalfOpen -> Closed via success.
+	cb.Allow() // consume probe
+	cb.RecordSuccess()
+	snap = eng.Metrics()
+	if got, want := snap.CircuitBreakers[tagName], "closed"; got != want {
+		t.Fatalf("after RecordSuccess, CircuitBreakers[%q] = %q, want %q", tagName, got, want)
+	}
+}
+
+// TestEngine_RecordsClientHandshake verifies the snapshot mechanics for
+// client-side handshake metrics: OnSuccess appends a per-transport
+// duration, OnFailure increments a per-(transport,reason) counter, and
+// the snapshot reflects both — without driving a real network handshake.
+//
+// End-to-end coverage (real Dial against a server) is sandbox-only; this
+// host-safe test exercises the same closure the engine installs into
+// every client transport via FactoryOptions.HandshakeMetrics.
+func TestEngine_RecordsClientHandshake(t *testing.T) {
+	eng := New(config.DefaultClientConfig())
+	hook := eng.clientHandshakeHook()
+
+	hook.OnSuccess("h3", 50*time.Millisecond)
+	hook.OnSuccess("h3", 75*time.Millisecond)
+	hook.OnFailure("reality", "timeout")
+	hook.OnFailure("reality", "timeout")
+	hook.OnFailure("reality", "auth")
+
+	snap := eng.Metrics()
+
+	got := snap.HandshakeDurationsNanos["h3"]
+	if len(got) != 2 || got[0] != int64(50*time.Millisecond) || got[1] != int64(75*time.Millisecond) {
+		t.Fatalf("HandshakeDurationsNanos[h3] = %v, want [50ms 75ms] in nanos", got)
+	}
+	if snap.HandshakeFailures["reality/timeout"] != 2 {
+		t.Errorf("HandshakeFailures[reality/timeout] = %d, want 2", snap.HandshakeFailures["reality/timeout"])
+	}
+	if snap.HandshakeFailures["reality/auth"] != 1 {
+		t.Errorf("HandshakeFailures[reality/auth] = %d, want 1", snap.HandshakeFailures["reality/auth"])
+	}
+}
+
+// TestEngine_HandshakeDurationsCappedAt1024 verifies the bounded-memory
+// invariant for handshakeDurations: under sustained traffic the slice
+// keeps only the most recent 1024 samples per transport.
+func TestEngine_HandshakeDurationsCappedAt1024(t *testing.T) {
+	eng := New(config.DefaultClientConfig())
+	hook := eng.clientHandshakeHook()
+
+	for i := 0; i < 1100; i++ {
+		hook.OnSuccess("h3", time.Duration(i)*time.Millisecond)
+	}
+
+	snap := eng.Metrics()
+	got := snap.HandshakeDurationsNanos["h3"]
+	if len(got) != 1024 {
+		t.Fatalf("len(HandshakeDurationsNanos[h3]) = %d, want 1024", len(got))
+	}
+	// First retained sample should be index 76 (0-indexed): 1100 - 1024 = 76.
+	if got[0] != int64(76*time.Millisecond) {
+		t.Errorf("got[0] = %d, want %d (76ms in nanos)", got[0], int64(76*time.Millisecond))
+	}
+	if got[len(got)-1] != int64(1099*time.Millisecond) {
+		t.Errorf("got[last] = %d, want %d (1099ms in nanos)", got[len(got)-1], int64(1099*time.Millisecond))
+	}
+}
+
+// TestEngine_MetricsZeroValueSnapshot verifies a freshly-constructed engine
+// returns a snapshot whose maps are non-nil (callers may safely range/index)
+// and empty.
+func TestEngine_MetricsZeroValueSnapshot(t *testing.T) {
+	eng := New(config.DefaultClientConfig())
+	snap := eng.Metrics()
+
+	if snap.RoutingDecisions == nil {
+		t.Error("RoutingDecisions should be a non-nil empty map")
+	}
+	if len(snap.RoutingDecisions) != 0 {
+		t.Errorf("RoutingDecisions len = %d, want 0", len(snap.RoutingDecisions))
+	}
+	if snap.CircuitBreakers == nil {
+		t.Error("CircuitBreakers should be non-nil")
+	}
+	if len(snap.CircuitBreakers) != 0 {
+		t.Errorf("CircuitBreakers len = %d, want 0", len(snap.CircuitBreakers))
+	}
+	if snap.Subscriptions == nil {
+		t.Error("Subscriptions should be non-nil")
+	}
+	if len(snap.Subscriptions) != 0 {
+		t.Errorf("Subscriptions len = %d, want 0", len(snap.Subscriptions))
+	}
+	if snap.HandshakeDurationsNanos == nil {
+		t.Error("HandshakeDurationsNanos should be non-nil")
+	}
+	if snap.HandshakeFailures == nil {
+		t.Error("HandshakeFailures should be non-nil")
+	}
+	if snap.DNSQueryDurationsNanos == nil {
+		t.Error("DNSQueryDurationsNanos should be non-nil")
+	}
+}
+
+// TestEngine_MetricsSnapshotIsDeepCopy verifies that mutating the returned
+// snapshot does not affect the engine's internal storage. This is essential
+// for Tasks 9-13 which will populate the maps concurrently with readers.
+func TestEngine_MetricsSnapshotIsDeepCopy(t *testing.T) {
+	eng := New(config.DefaultClientConfig())
+
+	// Seed the internal storage by direct access (we're in the same package).
+	eng.metrics.mu.Lock()
+	eng.metrics.routingDecisions["proxy/rule-1"] = 7
+	eng.metrics.circuitBreakers["out-1"] = "closed"
+	eng.metrics.subscriptions["sub-1"] = SubscriptionStats{OK: 3, Fail: 1, LastRefresh: time.Unix(1700000000, 0)}
+	eng.metrics.handshakeDurations["h3"] = []int64{100, 200, 300}
+	eng.metrics.handshakeFailures["h3/timeout"] = 2
+	eng.metrics.dnsDurations["doh/cached"] = []int64{50}
+	eng.metrics.mu.Unlock()
+
+	snap := eng.Metrics()
+
+	// Sanity: the seeded values appear in the snapshot.
+	if snap.RoutingDecisions["proxy/rule-1"] != 7 {
+		t.Errorf("RoutingDecisions[proxy/rule-1] = %d, want 7", snap.RoutingDecisions["proxy/rule-1"])
+	}
+	if snap.CircuitBreakers["out-1"] != "closed" {
+		t.Errorf("CircuitBreakers[out-1] = %q, want closed", snap.CircuitBreakers["out-1"])
+	}
+	if got := snap.Subscriptions["sub-1"]; got.OK != 3 || got.Fail != 1 {
+		t.Errorf("Subscriptions[sub-1] = %+v, want OK=3 Fail=1", got)
+	}
+	if len(snap.HandshakeDurationsNanos["h3"]) != 3 {
+		t.Errorf("HandshakeDurationsNanos[h3] len = %d, want 3", len(snap.HandshakeDurationsNanos["h3"]))
+	}
+
+	// Mutate every field in the snapshot.
+	snap.RoutingDecisions["proxy/rule-1"] = 999
+	snap.RoutingDecisions["new-key"] = 1
+	snap.CircuitBreakers["out-1"] = "open"
+	snap.CircuitBreakers["new-key"] = "half-open"
+	snap.Subscriptions["sub-1"] = SubscriptionStats{OK: 999}
+	snap.Subscriptions["new-sub"] = SubscriptionStats{OK: 1}
+	snap.HandshakeDurationsNanos["h3"][0] = 99999 // mutate slice element
+	snap.HandshakeDurationsNanos["new-transport"] = []int64{1}
+	snap.HandshakeFailures["h3/timeout"] = 999
+	snap.DNSQueryDurationsNanos["doh/cached"][0] = 99999
+
+	// Re-fetch and verify the engine's internal state was untouched.
+	snap2 := eng.Metrics()
+
+	if snap2.RoutingDecisions["proxy/rule-1"] != 7 {
+		t.Errorf("after mutation, internal RoutingDecisions[proxy/rule-1] = %d, want 7", snap2.RoutingDecisions["proxy/rule-1"])
+	}
+	if _, ok := snap2.RoutingDecisions["new-key"]; ok {
+		t.Error("after mutation, snapshot leaked new key into internal RoutingDecisions")
+	}
+	if snap2.CircuitBreakers["out-1"] != "closed" {
+		t.Errorf("after mutation, internal CircuitBreakers[out-1] = %q, want closed", snap2.CircuitBreakers["out-1"])
+	}
+	if _, ok := snap2.CircuitBreakers["new-key"]; ok {
+		t.Error("after mutation, snapshot leaked new key into internal CircuitBreakers")
+	}
+	if got := snap2.Subscriptions["sub-1"]; got.OK != 3 || got.Fail != 1 {
+		t.Errorf("after mutation, internal Subscriptions[sub-1] = %+v, want OK=3 Fail=1", got)
+	}
+	if _, ok := snap2.Subscriptions["new-sub"]; ok {
+		t.Error("after mutation, snapshot leaked new key into internal Subscriptions")
+	}
+	if snap2.HandshakeDurationsNanos["h3"][0] != 100 {
+		t.Errorf("after mutation, internal HandshakeDurationsNanos[h3][0] = %d, want 100", snap2.HandshakeDurationsNanos["h3"][0])
+	}
+	if _, ok := snap2.HandshakeDurationsNanos["new-transport"]; ok {
+		t.Error("after mutation, snapshot leaked new key into internal HandshakeDurationsNanos")
+	}
+	if snap2.HandshakeFailures["h3/timeout"] != 2 {
+		t.Errorf("after mutation, internal HandshakeFailures[h3/timeout] = %d, want 2", snap2.HandshakeFailures["h3/timeout"])
+	}
+	if snap2.DNSQueryDurationsNanos["doh/cached"][0] != 50 {
+		t.Errorf("after mutation, internal DNSQueryDurationsNanos[doh/cached][0] = %d, want 50", snap2.DNSQueryDurationsNanos["doh/cached"][0])
+	}
+}

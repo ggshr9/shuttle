@@ -5,7 +5,7 @@
 **Goal:** Provide single-command CLI install paths for macOS (Homebrew tap) and Windows (PowerShell), reaching the same coverage as the existing Linux `deploy/install.sh`. Reorganise the README install section so users can pick the right installer in one glance, and avoid the "wrong installer" confusion that comes from having both GUI and CLI distributions.
 
 **Architecture:**
-- A new public repository `shuttleX/homebrew-shuttle` hosts two formulae (`shuttle.rb`, `shuttled.rb`). The release workflow auto-PRs version bumps via `mislav/bump-homebrew-formula-action`.
+- A new public repository `ggshr9/homebrew-shuttle` hosts two formulae (`shuttle.rb`, `shuttled.rb`). The release workflow auto-PRs version bumps via `mislav/bump-homebrew-formula-action`.
 - A new `scripts/install-windows.ps1` mirrors `deploy/install.sh` step-for-step (architecture detection, downloads, three-step wizard, service registration, firewall rules with explicit prompt, status/uninstall/upgrade subcommands).
 - The existing `deploy/install.sh` is kept in place. A thin wrapper `scripts/install-linux.sh` is added so the three platforms have a consistent `scripts/install-<os>.<ext>` URL pattern.
 - README install section gains a decision table at the top: "If you want X → use Y."
@@ -24,7 +24,7 @@
 - `scripts/install-smoke.md` — manual smoke checklist for each platform.
 - `scripts/test-install-windows.ps1` — PSScriptAnalyzer + dry-run lint.
 
-**Created (in a separate repo `shuttleX/homebrew-shuttle`):**
+**Created (in a separate repo `ggshr9/homebrew-shuttle`):**
 - `Formula/shuttle.rb` — Homebrew formula for the `shuttle` CLI.
 - `Formula/shuttled.rb` — Homebrew formula for the `shuttled` daemon.
 - `README.md` — tap usage instructions.
@@ -557,7 +557,7 @@ git commit -m "docs(scripts): installer smoke checklist"
 Show the planned command and wait for explicit approval:
 
 ```bash
-gh repo create shuttleX/homebrew-shuttle --public \
+gh repo create ggshr9/homebrew-shuttle --public \
     --description "Homebrew Tap for Shuttle (https://github.com/ggshr9/shuttle)"
 ```
 
@@ -568,7 +568,7 @@ After approval, run the command above.
 - [ ] **Step 8.3: Clone locally**
 
 ```bash
-gh repo clone shuttleX/homebrew-shuttle /tmp/homebrew-shuttle
+gh repo clone ggshr9/homebrew-shuttle /tmp/homebrew-shuttle
 cd /tmp/homebrew-shuttle
 mkdir -p Formula .github/workflows
 ```
@@ -761,7 +761,7 @@ Locate the job that publishes release artifacts. Append a step that runs **after
         with:
           formula-name: shuttle
           formula-path: Formula/shuttle.rb
-          homebrew-tap: shuttleX/homebrew-shuttle
+          homebrew-tap: ggshr9/homebrew-shuttle
           base-branch: main
           download-url: https://github.com/ggshr9/shuttle/releases/download/${{ github.ref_name }}/shuttle-darwin-amd64.tar.gz
         env:
@@ -773,7 +773,7 @@ Locate the job that publishes release artifacts. Append a step that runs **after
         with:
           formula-name: shuttled
           formula-path: Formula/shuttled.rb
-          homebrew-tap: shuttleX/homebrew-shuttle
+          homebrew-tap: ggshr9/homebrew-shuttle
           base-branch: main
           download-url: https://github.com/ggshr9/shuttle/releases/download/${{ github.ref_name }}/shuttled-darwin-amd64.tar.gz
         env:
@@ -787,7 +787,7 @@ Add a note in `docs/release.md` (create if missing):
 ```markdown
 ## Required GitHub Secrets
 
-- `HOMEBREW_TAP_TOKEN` — a fine-grained PAT with `contents:write` permission on `shuttleX/homebrew-shuttle`. Set in repo Settings → Secrets and variables → Actions.
+- `HOMEBREW_TAP_TOKEN` — a fine-grained PAT with `contents:write` permission on `ggshr9/homebrew-shuttle`. Set in repo Settings → Secrets and variables → Actions.
 ```
 
 - [ ] **Step 12.3: Commit**

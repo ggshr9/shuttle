@@ -36,6 +36,7 @@ type Server struct {
 	logger       *slog.Logger
 	replayFilter *crypto.ReplayFilter
 	padder       *obfs.Padder
+	metrics      *transport.HandshakeMetrics
 }
 
 func NewServer(cfg *ServerConfig, logger *slog.Logger) *Server {
@@ -52,6 +53,12 @@ func NewServer(cfg *ServerConfig, logger *slog.Logger) *Server {
 		replayFilter: crypto.NewReplayFilter(120 * time.Second),
 		padder:       obfs.NewPadder(0),
 	}
+}
+
+// SetHandshakeMetrics installs the handshake metrics hook. Must be called
+// before Listen; the hook is invoked once per completed or failed handshake.
+func (s *Server) SetHandshakeMetrics(m *transport.HandshakeMetrics) {
+	s.metrics = m
 }
 
 func (s *Server) Type() string { return "h3" }
@@ -133,10 +140,13 @@ func (s *Server) acceptLoop(ctx context.Context) {
 }
 
 func (s *Server) handleConn(ctx context.Context, qconn *quic.Conn) {
+	start := time.Now()
+
 	// Accept the first stream as the control/auth stream.
 	ctrlStream, err := qconn.AcceptStream(ctx)
 	if err != nil {
 		s.logger.Debug("failed to accept control stream", "err", err)
+		s.recordFailure(classifyReason(err))
 		_ = qconn.CloseWithError(1, "no control stream")
 		return
 	}
@@ -147,6 +157,7 @@ func (s *Server) handleConn(ctx context.Context, qconn *quic.Conn) {
 	authBuf := make([]byte, 64)
 	if _, err := io.ReadFull(ctrlStream, authBuf); err != nil {
 		s.logger.Debug("failed to read auth payload", "err", err)
+		s.recordFailure(classifyReason(err))
 		s.serveCover(ctrlStream, qconn)
 		return
 	}
@@ -157,6 +168,7 @@ func (s *Server) handleConn(ctx context.Context, qconn *quic.Conn) {
 	// Check replay.
 	if s.replayFilter.CheckBytes(nonce) {
 		s.logger.Warn("replay detected", "remote", qconn.RemoteAddr())
+		s.recordFailure("auth")
 		s.serveCover(ctrlStream, qconn)
 		return
 	}
@@ -164,6 +176,7 @@ func (s *Server) handleConn(ctx context.Context, qconn *quic.Conn) {
 	// Validate HMAC.
 	if !auth.VerifyHMAC(nonce, clientMAC, s.config.Password) {
 		s.logger.Debug("auth failed", "remote", qconn.RemoteAddr())
+		s.recordFailure("auth")
 		s.serveCover(ctrlStream, qconn)
 		return
 	}
@@ -171,6 +184,7 @@ func (s *Server) handleConn(ctx context.Context, qconn *quic.Conn) {
 	// Auth OK.
 	if _, err := ctrlStream.Write([]byte{0x01}); err != nil {
 		s.logger.Debug("failed to send auth OK", "err", err)
+		s.recordFailure(classifyReason(err))
 		_ = qconn.CloseWithError(1, "auth response failed")
 		return
 	}
@@ -179,11 +193,25 @@ func (s *Server) handleConn(ctx context.Context, qconn *quic.Conn) {
 	ctrlStream.CancelRead(0)
 	ctrlStream.Close()
 
+	s.recordSuccess(time.Since(start))
+
 	conn := &h3Connection{qconn: qconn, padder: s.padder}
 	select {
 	case s.connCh <- conn:
 	case <-ctx.Done():
 		conn.Close()
+	}
+}
+
+func (s *Server) recordSuccess(d time.Duration) {
+	if s.metrics != nil && s.metrics.OnSuccess != nil {
+		s.metrics.OnSuccess("h3", d)
+	}
+}
+
+func (s *Server) recordFailure(reason string) {
+	if s.metrics != nil && s.metrics.OnFailure != nil {
+		s.metrics.OnFailure("h3", reason)
 	}
 }
 

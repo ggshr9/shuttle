@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"sync/atomic"
+	"time"
 
 	"github.com/ggshr9/shuttle/config"
 	"github.com/ggshr9/shuttle/crypto"
@@ -28,13 +29,34 @@ type ClientConfig struct {
 
 // Client implements transport.ClientTransport using Reality (TLS + Noise IK + yamux).
 type Client struct {
-	config *ClientConfig
-	closed atomic.Bool
+	config  *ClientConfig
+	closed  atomic.Bool
+	metrics *transport.HandshakeMetrics
 }
 
 // NewClient creates a new Reality client transport.
 func NewClient(cfg *ClientConfig) *Client {
 	return &Client{config: cfg}
+}
+
+// SetHandshakeMetrics installs the handshake metrics hook on this client.
+// Must be called before Dial; the hook fires once per Dial — OnSuccess
+// after the Noise (and optional PQ) handshake plus yamux setup, OnFailure
+// on any error encountered before that point.
+func (c *Client) SetHandshakeMetrics(m *transport.HandshakeMetrics) {
+	c.metrics = m
+}
+
+func (c *Client) recordSuccess(d time.Duration) {
+	if c.metrics != nil && c.metrics.OnSuccess != nil {
+		c.metrics.OnSuccess("reality", d)
+	}
+}
+
+func (c *Client) recordFailure(reason string) {
+	if c.metrics != nil && c.metrics.OnFailure != nil {
+		c.metrics.OnFailure("reality", reason)
+	}
 }
 
 // Type returns the transport type identifier.
@@ -59,6 +81,8 @@ func (c *Client) Dial(ctx context.Context, addr string) (transport.Connection, e
 		addr = c.config.ServerAddr
 	}
 
+	start := time.Now()
+
 	// Step 1: TLS dial with SNI impersonation
 	tlsConf := &tls.Config{
 		ServerName:         c.config.ServerName,
@@ -69,6 +93,7 @@ func (c *Client) Dial(ctx context.Context, addr string) (transport.Connection, e
 	dialer := &tls.Dialer{Config: tlsConf}
 	raw, err := dialer.DialContext(ctx, "tcp", addr)
 	if err != nil {
+		c.recordFailure(classifyReason(err))
 		return nil, fmt.Errorf("reality dial: %w", err)
 	}
 
@@ -83,12 +108,14 @@ func (c *Client) Dial(ctx context.Context, addr string) (transport.Connection, e
 	// Step 2: Noise IK handshake
 	localPub, localPriv, err := crypto.DeriveKeysFromPassword(c.config.Password)
 	if err != nil {
+		c.recordFailure("protocol")
 		return nil, fmt.Errorf("derive keys: %w", err)
 	}
 	var remotePub [32]byte
 	if c.config.PublicKey != "" {
 		pubBytes, err := hex.DecodeString(c.config.PublicKey)
 		if err != nil || len(pubBytes) != 32 {
+			c.recordFailure("protocol")
 			return nil, fmt.Errorf("invalid server public key: expected 64-char hex, got %d chars", len(c.config.PublicKey))
 		}
 		copy(remotePub[:], pubBytes)
@@ -96,29 +123,35 @@ func (c *Client) Dial(ctx context.Context, addr string) (transport.Connection, e
 
 	hs, err := crypto.NewInitiator(localPriv, localPub, remotePub)
 	if err != nil {
+		c.recordFailure("protocol")
 		return nil, fmt.Errorf("noise init: %w", err)
 	}
 
 	// Send handshake message 1 (-> e, es, s, ss)
 	msg1, err := hs.WriteMessage(nil)
 	if err != nil {
+		c.recordFailure("protocol")
 		return nil, fmt.Errorf("noise write msg1: %w", err)
 	}
 	if err := writeFrame(raw, msg1); err != nil {
+		c.recordFailure(classifyReason(err))
 		return nil, fmt.Errorf("send msg1: %w", err)
 	}
 
 	// Read handshake message 2 (<- e, ee, se)
 	msg2, err := readFrame(raw)
 	if err != nil {
+		c.recordFailure(classifyReason(err))
 		return nil, fmt.Errorf("read msg2: %w", err)
 	}
 	_, err = hs.ReadMessage(msg2)
 	if err != nil {
+		c.recordFailure("auth")
 		return nil, fmt.Errorf("noise read msg2: %w", err)
 	}
 
 	if !hs.Completed() {
+		c.recordFailure("auth")
 		return nil, fmt.Errorf("noise handshake incomplete")
 	}
 
@@ -127,6 +160,7 @@ func (c *Client) Dial(ctx context.Context, addr string) (transport.Connection, e
 	if c.config.PostQuantum {
 		pq, err := crypto.NewPQHandshake()
 		if err != nil {
+			c.recordFailure("protocol")
 			return nil, fmt.Errorf("pq handshake init: %w", err)
 		}
 
@@ -136,18 +170,21 @@ func (c *Client) Dial(ctx context.Context, addr string) (transport.Connection, e
 		pqMsg[0] = crypto.HandshakeVersionHybridPQ
 		copy(pqMsg[1:], pqPub)
 		if err := writeFrame(raw, pqMsg); err != nil {
+			c.recordFailure(classifyReason(err))
 			return nil, fmt.Errorf("send pq public key: %w", err)
 		}
 
 		// Read PQ ciphertext from server
 		pqCiphertext, err := readFrame(raw)
 		if err != nil {
+			c.recordFailure(classifyReason(err))
 			return nil, fmt.Errorf("read pq ciphertext: %w", err)
 		}
 
 		// Decapsulate to derive PQ shared secret
 		pqSecret, err := pq.Decapsulate(pqCiphertext)
 		if err != nil {
+			c.recordFailure("protocol")
 			return nil, fmt.Errorf("pq decapsulate: %w", err)
 		}
 
@@ -156,6 +193,7 @@ func (c *Client) Dial(ctx context.Context, addr string) (transport.Connection, e
 		// X25519 AND the PQ exchange.
 		raw, err = wrapConnWithPQ(raw, pqSecret)
 		if err != nil {
+			c.recordFailure("protocol")
 			return nil, fmt.Errorf("pq wrap: %w", err)
 		}
 	}
@@ -164,9 +202,11 @@ func (c *Client) Dial(ctx context.Context, addr string) (transport.Connection, e
 	mux := ymux.New(c.config.Yamux)
 	muxConn, err := mux.Client(raw)
 	if err != nil {
+		c.recordFailure("protocol")
 		return nil, fmt.Errorf("yamux client: %w", err)
 	}
 
+	c.recordSuccess(time.Since(start))
 	success = true
 	return muxConn, nil
 }

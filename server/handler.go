@@ -11,6 +11,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/ggshr9/shuttle/internal/dnsclass"
 	"github.com/ggshr9/shuttle/internal/relay"
 	"github.com/ggshr9/shuttle/mesh"
 	meshsignal "github.com/ggshr9/shuttle/mesh/signal"
@@ -184,6 +185,9 @@ func (h *Handler) HandleStream(ctx context.Context, stream transport.Stream, rem
 			remote, err := net.DialTimeout("tcp", target, 10*time.Second)
 			if err != nil {
 				h.Logger.Debug("dial target failed", "target", target, "err", err)
+				if h.Metrics != nil {
+					h.Metrics.RecordDestResolveFailure(dnsclass.Classify(err))
+				}
 				return
 			}
 			defer remote.Close() //nolint:gocritic // not a real loop; reads until newline then returns
@@ -213,7 +217,15 @@ func (h *Handler) HandleStream(ctx context.Context, stream transport.Stream, rem
 			var counter *countingReadWriter
 			if user != nil {
 				user.ActiveConns.Add(1)
-				defer user.ActiveConns.Add(-1) //nolint:gocritic // not a real loop; reads until newline then returns
+				if h.Users != nil {
+					h.Users.FireActivity(user.Name, +1)
+				}
+				defer func() {
+					user.ActiveConns.Add(-1)
+					if h.Users != nil {
+						h.Users.FireActivity(user.Name, -1)
+					}
+				}() //nolint:gocritic // not a real loop; reads until newline then returns
 				counter = &countingReadWriter{
 					inner: stream,
 					user:  user,

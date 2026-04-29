@@ -51,6 +51,12 @@ type Router struct {
 	defaultAct   Action
 	networkType  string // current network type: "wifi", "cellular", "ethernet", ""
 	logger       *slog.Logger
+
+	// decisionHook is invoked (asynchronously) after each Match* decision
+	// with the resolved Action and the rule kind that produced it
+	// (e.g. "domain", "geoip", "ip-cidr", "process", "protocol", "default").
+	// Used by the engine to populate routing-decision metrics.
+	decisionHook func(decision, rule string)
 }
 
 type ipRule struct {
@@ -107,6 +113,32 @@ func NewRouter(cfg *RouterConfig, geoIP *GeoIPDB, geoSite *GeoSiteDB, logger *sl
 	}
 
 	return r
+}
+
+// SetDecisionHook installs a callback that fires after each Match* decision.
+// The hook receives the resolved action ("proxy"/"direct"/"reject") and the
+// rule kind that produced it ("domain", "geoip", "ip-cidr", "process",
+// "protocol", "default"). Pass nil to clear.
+//
+// The hook is dispatched on a fresh goroutine so it cannot block the match
+// path; callers must therefore make their own counters concurrency-safe.
+// Order of hook deliveries across concurrent matches is not guaranteed.
+func (r *Router) SetDecisionHook(hook func(decision, rule string)) {
+	r.mu.Lock()
+	r.decisionHook = hook
+	r.mu.Unlock()
+}
+
+// notifyDecision dispatches a decision to the registered hook (if any) on a
+// fresh goroutine. Caller must hold r.mu (read or write) so reading the hook
+// pointer is race-free.
+func (r *Router) notifyDecision(decision Action, rule string) {
+	if r.decisionHook == nil {
+		return
+	}
+	hook := r.decisionHook
+	d := string(decision)
+	go hook(d, rule)
 }
 
 // SetNetworkType updates the current network type used for network-type-aware routing.
@@ -239,8 +271,11 @@ func (r *Router) MatchDomain(domain string) Action {
 	defer r.mu.RUnlock()
 
 	if action, found := r.domainTrie.Lookup(domain); found {
-		return Action(action)
+		act := Action(action)
+		r.notifyDecision(act, "domain")
+		return act
 	}
+	r.notifyDecision(r.defaultAct, "default")
 	return r.defaultAct
 }
 
@@ -252,6 +287,7 @@ func (r *Router) MatchIP(ip net.IP) Action {
 	// Check explicit CIDR rules first
 	for _, rule := range r.ipRules {
 		if rule.cidr.Contains(ip) {
+			r.notifyDecision(rule.action, "ip-cidr")
 			return rule.action
 		}
 	}
@@ -260,10 +296,12 @@ func (r *Router) MatchIP(ip net.IP) Action {
 	if r.geoIP != nil {
 		country := r.geoIP.LookupCountry(ip)
 		if country == "CN" {
+			r.notifyDecision(ActionDirect, "geoip")
 			return ActionDirect
 		}
 	}
 
+	r.notifyDecision(r.defaultAct, "default")
 	return r.defaultAct
 }
 
@@ -273,8 +311,10 @@ func (r *Router) MatchProcess(name string) Action {
 	defer r.mu.RUnlock()
 
 	if action, ok := r.processMap[strings.ToLower(name)]; ok {
+		r.notifyDecision(action, "process")
 		return action
 	}
+	r.notifyDecision(r.defaultAct, "default")
 	return r.defaultAct
 }
 
@@ -284,8 +324,10 @@ func (r *Router) MatchProtocol(proto string) Action {
 	defer r.mu.RUnlock()
 
 	if action, ok := r.protocolMap[strings.ToLower(proto)]; ok {
+		r.notifyDecision(action, "protocol")
 		return action
 	}
+	r.notifyDecision(r.defaultAct, "default")
 	return r.defaultAct
 }
 

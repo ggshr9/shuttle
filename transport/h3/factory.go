@@ -7,6 +7,7 @@ import (
 	"github.com/quic-go/quic-go"
 	"github.com/ggshr9/shuttle/adapter"
 	"github.com/ggshr9/shuttle/config"
+	"github.com/ggshr9/shuttle/transport"
 )
 
 func init() {
@@ -46,7 +47,11 @@ func (f *factory) NewClient(cfg *config.ClientConfig, opts adapter.FactoryOption
 			ProbeInterval: probe,
 		}
 	}
-	return NewClient(h3Cfg), nil
+	cli := NewClient(h3Cfg)
+	if hm, ok := opts.HandshakeMetrics.(*transport.HandshakeMetrics); ok && hm != nil {
+		cli.SetHandshakeMetrics(hm)
+	}
+	return cli, nil
 }
 
 func (f *factory) NewServer(cfg *config.ServerConfig, opts adapter.FactoryOptions) (adapter.ServerTransport, error) {
@@ -67,5 +72,9 @@ func (f *factory) NewServer(cfg *config.ServerConfig, opts adapter.FactoryOption
 	if cc, ok := opts.CongestionControl.(quic.CongestionControl); ok && cc != nil {
 		sCfg.CongestionControl = cc
 	}
-	return NewServer(sCfg, logger), nil
+	srv := NewServer(sCfg, logger)
+	if hm, ok := opts.HandshakeMetrics.(*transport.HandshakeMetrics); ok && hm != nil {
+		srv.SetHandshakeMetrics(hm)
+	}
+	return srv, nil
 }

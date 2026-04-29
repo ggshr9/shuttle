@@ -280,6 +280,22 @@ func (e *Engine) startInternal(ctx context.Context) error {
 	if len(cfgSnap.Subscriptions) > 0 {
 		sm := subscription.NewManager()
 		sm.SetAllowPrivateNetworks(cfgSnap.AllowPrivateNetworks)
+		// Wire refresh metrics: each Refresh call notifies the hook with
+		// (id, "ok"|"fail", ts); we record per-subscription OK/Fail counts
+		// and the most recent refresh timestamp.
+		sm.SetRefreshHook(func(id, result string, ts time.Time) {
+			e.metrics.mu.Lock()
+			stats := e.metrics.subscriptions[id]
+			switch result {
+			case "ok":
+				stats.OK++
+			case "fail":
+				stats.Fail++
+			}
+			stats.LastRefresh = ts
+			e.metrics.subscriptions[id] = stats
+			e.metrics.mu.Unlock()
+		})
 		sm.LoadFromConfig(cfgSnap.Subscriptions)
 		sm.StartAutoRefresh(ctx, 24*time.Hour)
 		e.mu.Lock()

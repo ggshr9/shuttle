@@ -261,7 +261,7 @@ Operator-facing checklist (markdown checkboxes). Each item indicates whether it 
 
 ### 5a. macOS — Homebrew Tap
 
-A separate public repo `shuttleX/homebrew-shuttle` (created during implementation, with explicit confirmation at `gh repo create` time).
+A separate public repo `ggshr9/homebrew-shuttle` (created during implementation, with explicit confirmation at `gh repo create` time).
 
 Two formulae:
 

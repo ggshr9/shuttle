@@ -13,6 +13,40 @@ import (
 type UserStore struct {
 	mu    sync.RWMutex
 	users map[string]*UserState // token → state
+
+	// activityHook, if set, is invoked on every per-user connection
+	// open (delta=+1) and close (delta=-1). Wired from server.go when
+	// cfg.Metrics.PerUser is true so the metrics collector can emit
+	// shuttle_user_active_connections without baking a metrics
+	// dependency into the admin package.
+	hookMu       sync.RWMutex
+	activityHook func(user string, delta int)
+}
+
+// SetActivityHook installs a callback fired on every per-user
+// connection open/close. Pass nil to remove. Safe for concurrent use.
+func (s *UserStore) SetActivityHook(hook func(user string, delta int)) {
+	s.hookMu.Lock()
+	s.activityHook = hook
+	s.hookMu.Unlock()
+}
+
+// fireActivity invokes the installed hook (if any) for a user lifecycle event.
+// Called from the connection handler on connect (+1) and disconnect (-1).
+func (s *UserStore) fireActivity(user string, delta int) {
+	s.hookMu.RLock()
+	hook := s.activityHook
+	s.hookMu.RUnlock()
+	if hook != nil {
+		hook(user, delta)
+	}
+}
+
+// FireActivity is the exported entry-point for the connection handler to
+// notify the store of a user-attributed connection delta. Wraps the internal
+// hook dispatch so the handler doesn't need direct access to the hook field.
+func (s *UserStore) FireActivity(user string, delta int) {
+	s.fireActivity(user, delta)
 }
 
 // UserState tracks a single user's runtime state.

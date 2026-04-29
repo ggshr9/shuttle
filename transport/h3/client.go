@@ -35,6 +35,7 @@ type Client struct {
 	closed    atomic.Bool
 	padder    *obfs.Padder
 	multipath *MultipathManager // nil when multipath is disabled
+	metrics   *transport.HandshakeMetrics
 }
 
 func NewClient(cfg *ClientConfig) *Client {
@@ -47,6 +48,26 @@ func NewClient(cfg *ClientConfig) *Client {
 	return &Client{
 		config: cfg,
 		padder: obfs.NewPadder(0),
+	}
+}
+
+// SetHandshakeMetrics installs the handshake metrics hook on this client.
+// Must be called before Dial; the hook fires once per Dial — OnSuccess
+// after a fully authenticated session is ready, OnFailure on any
+// handshake error.
+func (c *Client) SetHandshakeMetrics(m *transport.HandshakeMetrics) {
+	c.metrics = m
+}
+
+func (c *Client) recordSuccess(d time.Duration) {
+	if c.metrics != nil && c.metrics.OnSuccess != nil {
+		c.metrics.OnSuccess("h3", d)
+	}
+}
+
+func (c *Client) recordFailure(reason string) {
+	if c.metrics != nil && c.metrics.OnFailure != nil {
+		c.metrics.OnFailure("h3", reason)
 	}
 }
 
@@ -70,6 +91,8 @@ func (c *Client) Dial(ctx context.Context, addr string) (transport.Connection, e
 	if addr == "" {
 		addr = c.config.ServerAddr
 	}
+
+	start := time.Now()
 
 	chromeParams := DefaultChromeTransportParams()
 
@@ -96,12 +119,14 @@ func (c *Client) Dial(ctx context.Context, addr string) (transport.Connection, e
 
 	qconn, err := quic.DialAddr(ctx, addr, tlsConf, quicConf)
 	if err != nil {
+		c.recordFailure(classifyReason(err))
 		return nil, fmt.Errorf("h3 dial: %w", err)
 	}
 
 	// HTTP/3-style session establishment on control stream.
 	ctrlStream, err := qconn.OpenStreamSync(ctx)
 	if err != nil {
+		c.recordFailure(classifyReason(err))
 		_ = qconn.CloseWithError(1, "control stream open failed")
 		return nil, fmt.Errorf("h3 open control stream: %w", err)
 	}
@@ -109,11 +134,13 @@ func (c *Client) Dial(ctx context.Context, addr string) (transport.Connection, e
 
 	authPayload, err := computeSessionAuth(c.config.Password)
 	if err != nil {
+		c.recordFailure("protocol")
 		_ = qconn.CloseWithError(1, "auth generation failed")
 		return nil, fmt.Errorf("h3 auth: %w", err)
 	}
 
 	if _, err := ctrlStream.Write(authPayload); err != nil {
+		c.recordFailure(classifyReason(err))
 		_ = qconn.CloseWithError(1, "auth write failed")
 		return nil, fmt.Errorf("h3 write auth: %w", err)
 	}
@@ -121,13 +148,17 @@ func (c *Client) Dial(ctx context.Context, addr string) (transport.Connection, e
 	// Read 1-byte server response.
 	resp := make([]byte, 1)
 	if _, err := io.ReadFull(ctrlStream, resp); err != nil {
+		c.recordFailure(classifyReason(err))
 		_ = qconn.CloseWithError(1, "auth response read failed")
 		return nil, fmt.Errorf("h3 read auth response: %w", err)
 	}
 	if resp[0] != 0x01 {
+		c.recordFailure("auth")
 		_ = qconn.CloseWithError(2, "auth rejected")
 		return nil, fmt.Errorf("h3 auth rejected: verify password matches server config")
 	}
+
+	c.recordSuccess(time.Since(start))
 
 	h3conn := &h3Connection{qconn: qconn, padder: c.padder}
 	c.conn = h3conn

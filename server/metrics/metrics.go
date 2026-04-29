@@ -17,6 +17,12 @@ import (
 // Default histogram buckets for connection duration (in seconds).
 var defaultDurationBuckets = []float64{0.1, 0.5, 1, 5, 10, 30, 60, 300, 600, 3600}
 
+// HandshakeDurationBuckets are the default histogram buckets for handshake latency, in seconds.
+var HandshakeDurationBuckets = []float64{0.01, 0.05, 0.1, 0.25, 0.5, 1, 2, 5}
+
+// DNSQueryDurationBuckets are the default histogram buckets for DNS query latency, in seconds.
+var DNSQueryDurationBuckets = []float64{0.001, 0.005, 0.01, 0.05, 0.1, 0.5, 1}
+
 // Collector gathers server-side metrics for Prometheus exposition.
 type Collector struct {
 	// Gauges (current values)
@@ -39,6 +45,19 @@ type Collector struct {
 	durationCounts  []atomic.Int64
 	durationSum     atomic.Int64 // stored as nanoseconds
 	durationTotal   atomic.Int64
+
+	// Handshake metrics (per-transport histogram + failure counter)
+	handshakeDuration *labeledHistogram
+	handshakeFailures *labeledCounter
+
+	dnsQueryDuration *labeledHistogram
+	destResolveFails *labeledCounter
+
+	// Per-user active connections gauge (gated by cfg.Metrics.PerUser).
+	// Populated only when UserActivityDelta is called; otherwise empty
+	// and omitted from /metrics output.
+	userActiveMu sync.RWMutex
+	userActive   map[string]*atomic.Int64
 
 	startTime time.Time
 
@@ -65,6 +84,24 @@ func NewCollector() *Collector {
 		durationCounts:  make([]atomic.Int64, len(buckets)),
 		startTime:       time.Now(),
 	}
+	c.handshakeDuration = newLabeledHistogram(
+		"shuttle_handshake_duration_seconds",
+		HandshakeDurationBuckets,
+		[]string{"transport"},
+	)
+	c.handshakeFailures = newLabeledCounter(
+		"shuttle_handshake_failures_total",
+		[]string{"transport", "reason"},
+	)
+	c.dnsQueryDuration = newLabeledHistogram(
+		"shuttle_dns_query_duration_seconds",
+		DNSQueryDurationBuckets,
+		[]string{"protocol", "cached"},
+	)
+	c.destResolveFails = newLabeledCounter(
+		"shuttle_destination_resolve_failures_total",
+		[]string{"reason"},
+	)
 	return c
 }
 
@@ -117,6 +154,56 @@ func (c *Collector) RecordBytes(in, out int64) {
 // RecordAuthFailure increments the auth failure counter.
 func (c *Collector) RecordAuthFailure() {
 	c.AuthFailures.Add(1)
+}
+
+// RecordHandshake records a successful handshake's duration for the given transport.
+func (c *Collector) RecordHandshake(transport string, duration time.Duration) {
+	c.handshakeDuration.Observe(duration.Seconds(), transport)
+}
+
+// RecordHandshakeFailure records a handshake failure with a categorised reason.
+// Reason should be one of: timeout, auth, protocol.
+func (c *Collector) RecordHandshakeFailure(transport, reason string) {
+	c.handshakeFailures.Inc(transport, reason)
+}
+
+// RecordDNSQuery records a DNS query duration. protocol is one of "udp", "system".
+func (c *Collector) RecordDNSQuery(protocol string, cached bool, duration time.Duration) {
+	cachedStr := "false"
+	if cached {
+		cachedStr = "true"
+	}
+	c.dnsQueryDuration.Observe(duration.Seconds(), protocol, cachedStr)
+}
+
+// RecordDestResolveFailure records a destination resolution failure.
+// reason is one of "nxdomain", "timeout", "refused".
+func (c *Collector) RecordDestResolveFailure(reason string) {
+	c.destResolveFails.Inc(reason)
+}
+
+// UserActivityDelta adjusts the per-user active connections gauge by delta.
+// Pass +1 on connect and -1 on disconnect. Lazily allocates the user's
+// counter on first use.
+//
+// This metric should only be wired when cfg.Metrics.PerUser is true to
+// bound label cardinality.
+func (c *Collector) UserActivityDelta(user string, delta int64) {
+	c.userActiveMu.RLock()
+	v, ok := c.userActive[user]
+	c.userActiveMu.RUnlock()
+	if !ok {
+		c.userActiveMu.Lock()
+		if c.userActive == nil {
+			c.userActive = make(map[string]*atomic.Int64)
+		}
+		if v, ok = c.userActive[user]; !ok {
+			v = &atomic.Int64{}
+			c.userActive[user] = v
+		}
+		c.userActiveMu.Unlock()
+	}
+	v.Add(delta)
 }
 
 // Handler returns an http.Handler that serves /metrics in Prometheus text format.
@@ -224,6 +311,24 @@ func (c *Collector) writeMetrics(w io.Writer) {
 			fmt.Fprintf(w, "shuttle_transport_connections_total{transport=%q} %d\n", name, tc.total.Load())
 		}
 	}
+
+	// --- Handshake metrics ---
+	c.handshakeDuration.write(w, "Server-side handshake duration in seconds, by transport")
+	c.handshakeFailures.write(w, "Total handshake failures, by transport and reason")
+
+	c.dnsQueryDuration.write(w, "DNS query duration in seconds")
+	c.destResolveFails.write(w, "Destination resolve failures by reason")
+
+	// --- Per-user active connections (only emitted when populated) ---
+	c.userActiveMu.RLock()
+	if len(c.userActive) > 0 {
+		fmt.Fprintf(w, "# HELP shuttle_user_active_connections Active connections by user\n")
+		fmt.Fprintf(w, "# TYPE shuttle_user_active_connections gauge\n")
+		for user, v := range c.userActive {
+			fmt.Fprintf(w, "shuttle_user_active_connections{user=%q} %d\n", user, v.Load())
+		}
+	}
+	c.userActiveMu.RUnlock()
 
 	// --- Duration histogram ---
 	fmt.Fprintf(w, "# HELP shuttle_connection_duration_seconds Connection duration histogram\n")

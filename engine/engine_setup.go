@@ -52,6 +52,7 @@ func (e *Engine) buildTransports(cfg *config.ClientConfig, ccAdapter quic.Conges
 	opts := adapter.FactoryOptions{
 		Logger:            e.logger,
 		CongestionControl: ccAdapter,
+		HandshakeMetrics:  e.clientHandshakeHook(),
 	}
 
 	for name, factory := range adapter.All() {
@@ -67,6 +68,29 @@ func (e *Engine) buildTransports(cfg *config.ClientConfig, ccAdapter quic.Conges
 
 	e.logger.Debug("transport setup", "count", len(transports))
 	return transports
+}
+
+// clientHandshakeHook constructs the HandshakeMetrics hook injected into
+// client-side transports. OnSuccess appends the duration into a per-
+// transport ring (capped at 1024 samples to bound memory under sustained
+// traffic); OnFailure increments a per-(transport,reason) counter.
+func (e *Engine) clientHandshakeHook() *transport.HandshakeMetrics {
+	return &transport.HandshakeMetrics{
+		OnSuccess: func(t string, d time.Duration) {
+			e.metrics.mu.Lock()
+			defer e.metrics.mu.Unlock()
+			e.metrics.handshakeDurations[t] = append(e.metrics.handshakeDurations[t], d.Nanoseconds())
+			if l := len(e.metrics.handshakeDurations[t]); l > 1024 {
+				e.metrics.handshakeDurations[t] = e.metrics.handshakeDurations[t][l-1024:]
+			}
+		},
+		OnFailure: func(t, reason string) {
+			key := t + "/" + reason
+			e.metrics.mu.Lock()
+			defer e.metrics.mu.Unlock()
+			e.metrics.handshakeFailures[key]++
+		},
+	}
 }
 
 // buildRouter creates the routing engine including GeoIP/GeoSite and DNS.
@@ -150,6 +174,27 @@ func (e *Engine) buildRouter(cfg *config.ClientConfig, ruleProviders map[string]
 		dnsResolver.SetPrefetcher(prefetcher)
 	}
 
+	// Wire DNS query metrics: OnQuery appends a duration sample keyed by
+	// "<protocol>/<cached>"; OnFailure is currently a no-op on the client —
+	// the plan does not define a client-side resolver-failure counter, and
+	// failures surface separately through routing/connection error paths.
+	dnsResolver.SetMetricHook(&router.MetricHook{
+		OnQuery: func(protocol string, cached bool, duration time.Duration) {
+			cachedStr := "false"
+			if cached {
+				cachedStr = "true"
+			}
+			key := protocol + "/" + cachedStr
+			e.metrics.mu.Lock()
+			defer e.metrics.mu.Unlock()
+			e.metrics.dnsDurations[key] = append(e.metrics.dnsDurations[key], duration.Nanoseconds())
+			if l := len(e.metrics.dnsDurations[key]); l > 1024 {
+				e.metrics.dnsDurations[key] = e.metrics.dnsDurations[key][l-1024:]
+			}
+		},
+		OnFailure: func(_ string) {},
+	})
+
 	routerCfg := &router.RouterConfig{
 		DefaultAction: router.Action(cfg.Routing.Default),
 		RuleProviders: ruleProviders,
@@ -184,6 +229,16 @@ func (e *Engine) buildRouter(cfg *config.ClientConfig, ruleProviders map[string]
 	}
 	e.logger.Debug("router built", "rules", len(routerCfg.Rules), "default_action", routerCfg.DefaultAction, "dns_prefetch", cfg.Routing.DNS.Prefetch)
 	rt := router.NewRouter(routerCfg, geoIPDB, geoSiteDB, e.logger)
+
+	// Wire routing-decision metrics: each Match* call notifies the hook with
+	// (action, rule_kind); we increment routingDecisions["<action>/<rule>"].
+	rt.SetDecisionHook(func(decision, rule string) {
+		key := decision + "/" + rule
+		e.metrics.mu.Lock()
+		e.metrics.routingDecisions[key]++
+		e.metrics.mu.Unlock()
+	})
+
 	return rt, dnsResolver, prefetcher
 }
 

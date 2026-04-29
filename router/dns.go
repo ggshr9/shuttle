@@ -16,6 +16,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/ggshr9/shuttle/internal/dnsclass"
 	"github.com/ggshr9/shuttle/router/dns/fakeip"
 )
 
@@ -54,12 +55,41 @@ type DNSResolver struct {
 	mux        *DNSMultiplexer    // persistent connection pool + dedup (nil when disabled)
 	prefetcher *Prefetcher        // optional DNS prefetcher (nil when disabled)
 	fakeIPPool *fakeip.Pool       // fake-ip pool (nil when mode != "fake-ip")
+	metricHook *MetricHook        // optional metric hook (nil when not installed)
+}
+
+// MetricHook is called after each resolver lookup attempt so callers can
+// emit observability signals without coupling the resolver to a specific
+// metrics package.
+//
+// OnQuery fires for each successful resolution. protocol is one of
+// "cache", "hosts", "fakeip", "policy", "split-dns" describing which path
+// produced the answer. cached is true when the result came from the
+// in-memory DNS cache. duration is wall-clock time spent in the lookup.
+//
+// OnFailure fires for each failed resolution with a categorised reason
+// returned by ClassifyDNSErr ("nxdomain", "timeout", "refused").
+type MetricHook struct {
+	OnQuery   func(protocol string, cached bool, duration time.Duration)
+	OnFailure func(reason string)
+}
+
+// SetMetricHook installs a metric hook on the resolver. It is intended to
+// be called once at startup; concurrent calls during active resolution
+// are not synchronised.
+func (r *DNSResolver) SetMetricHook(h *MetricHook) {
+	r.metricHook = h
 }
 
 // SetPrefetcher sets the DNS prefetcher that will be notified of successful resolutions.
 func (r *DNSResolver) SetPrefetcher(p *Prefetcher) {
 	r.prefetcher = p
 }
+
+// ClassifyDNSErr is an alias for dnsclass.Classify, retained on the
+// router package for ergonomics. It maps a resolver error to one of
+// "nxdomain", "timeout", "refused".
+func ClassifyDNSErr(err error) string { return dnsclass.Classify(err) }
 
 type dnsCache struct {
 	mu      sync.RWMutex
@@ -170,31 +200,49 @@ func (r *DNSResolver) ReverseFakeIP(ip net.IP) (string, bool) {
 // 3. If they disagree → check if domestic result is foreign IP (pollution)
 // 4. If polluted → use remote result
 func (r *DNSResolver) Resolve(ctx context.Context, domain string) ([]net.IP, error) {
+	start := time.Now()
+	ips, protocol, cached, err := r.resolve(ctx, domain)
+	if r.metricHook != nil {
+		if err != nil {
+			if r.metricHook.OnFailure != nil {
+				r.metricHook.OnFailure(ClassifyDNSErr(err))
+			}
+		} else if r.metricHook.OnQuery != nil {
+			r.metricHook.OnQuery(protocol, cached, time.Since(start))
+		}
+	}
+	return ips, err
+}
+
+// resolve is the inner implementation of Resolve. It returns the resolved
+// IPs along with a protocol label and a cache-hit flag for the metric
+// hook in Resolve. Callers outside of Resolve should not use this method.
+func (r *DNSResolver) resolve(ctx context.Context, domain string) ([]net.IP, string, bool, error) {
 	// Fake-ip mode: return a virtual IP instead of querying upstream DNS.
 	if r.fakeIPPool != nil && r.fakeIPPool.ShouldFakeIP(domain) {
 		fakeAddr := r.fakeIPPool.Lookup(domain)
-		return []net.IP{fakeAddr.AsSlice()}, nil
+		return []net.IP{fakeAddr.AsSlice()}, "fakeip", false, nil
 	}
 
 	// Static hosts table — checked before cache
 	if ip := r.resolveHosts(domain); ip != nil {
-		return []net.IP{ip}, nil
+		return []net.IP{ip}, "hosts", false, nil
 	}
 
 	// Check cache first
 	if ips, ok := r.cache.get(domain); ok {
-		return ips, nil
+		return ips, "cache", true, nil
 	}
 
 	// Per-domain DNS policy — route to a specific nameserver
 	if server := r.matchDomainPolicy(domain); server != "" {
 		ips, err := r.querySpecificServer(ctx, domain, server)
 		if err != nil {
-			return nil, err
+			return nil, "policy", false, err
 		}
 		r.cache.put(domain, ips, r.config.CacheTTL, r.isDomesticServer(server))
 		r.recordPrefetch(domain)
-		return ips, nil
+		return ips, "policy", false, nil
 	}
 
 	// Query both DNS servers in parallel
@@ -229,15 +277,16 @@ func (r *DNSResolver) Resolve(ctx context.Context, domain string) ([]net.IP, err
 	select {
 	case domResult = <-domCh:
 	case <-ctx.Done():
-		return nil, ctx.Err()
+		return nil, "split-dns", false, ctx.Err()
 	}
 	select {
 	case remResult = <-remCh:
 	case <-ctx.Done():
-		return nil, ctx.Err()
+		return nil, "split-dns", false, ctx.Err()
 	}
 
-	return r.selectResult(domain, domResult.ips, domResult.err, remResult.ips, remResult.err)
+	ips, err := r.selectResult(domain, domResult.ips, domResult.err, remResult.ips, remResult.err)
+	return ips, "split-dns", false, err
 }
 
 // resolveHosts checks the static hosts table for a matching entry.

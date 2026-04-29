@@ -315,6 +315,124 @@ func TestCollectorConcurrent(t *testing.T) {
 	}
 }
 
+func TestCollector_HandshakeHistogram(t *testing.T) {
+	c := NewCollector()
+	c.RecordHandshake("h3", 50*time.Millisecond)
+	c.RecordHandshake("h3", 250*time.Millisecond)
+
+	rr := httptest.NewRecorder()
+	c.Handler().ServeHTTP(rr, httptest.NewRequest("GET", "/metrics", nil))
+	body := rr.Body.String()
+
+	if !strings.Contains(body, `shuttle_handshake_duration_seconds_count{transport="h3"} 2`) {
+		t.Fatalf("missing handshake count, got:\n%s", body)
+	}
+}
+
+func TestCollector_HandshakeFailure(t *testing.T) {
+	c := NewCollector()
+	c.RecordHandshakeFailure("reality", "auth")
+	c.RecordHandshakeFailure("reality", "auth")
+	c.RecordHandshakeFailure("reality", "timeout")
+
+	rr := httptest.NewRecorder()
+	c.Handler().ServeHTTP(rr, httptest.NewRequest("GET", "/metrics", nil))
+	body := rr.Body.String()
+
+	if !strings.Contains(body, `shuttle_handshake_failures_total{transport="reality",reason="auth"} 2`) {
+		t.Fatalf("missing auth failure line, got:\n%s", body)
+	}
+	if !strings.Contains(body, `shuttle_handshake_failures_total{transport="reality",reason="timeout"} 1`) {
+		t.Fatalf("missing timeout failure line, got:\n%s", body)
+	}
+}
+
+func TestCollector_DNSQuery(t *testing.T) {
+	c := NewCollector()
+	c.RecordDNSQuery("system", true, 2*time.Millisecond)
+	c.RecordDNSQuery("system", false, 30*time.Millisecond)
+
+	rr := httptest.NewRecorder()
+	c.Handler().ServeHTTP(rr, httptest.NewRequest("GET", "/metrics", nil))
+	body := rr.Body.String()
+
+	if !strings.Contains(body, `shuttle_dns_query_duration_seconds_count{protocol="system",cached="true"} 1`) {
+		t.Fatalf("missing cached count, got:\n%s", body)
+	}
+	if !strings.Contains(body, `shuttle_dns_query_duration_seconds_count{protocol="system",cached="false"} 1`) {
+		t.Fatalf("missing uncached count, got:\n%s", body)
+	}
+}
+
+func TestCollector_DestResolveFailure(t *testing.T) {
+	c := NewCollector()
+	c.RecordDestResolveFailure("nxdomain")
+
+	rr := httptest.NewRecorder()
+	c.Handler().ServeHTTP(rr, httptest.NewRequest("GET", "/metrics", nil))
+	body := rr.Body.String()
+
+	if !strings.Contains(body, `shuttle_destination_resolve_failures_total{reason="nxdomain"} 1`) {
+		t.Fatalf("missing failure line, got:\n%s", body)
+	}
+}
+
+func TestCollector_UserActivity(t *testing.T) {
+	c := NewCollector()
+
+	// Before any deltas, the gauge should not appear in output.
+	rr := httptest.NewRecorder()
+	c.Handler().ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/metrics", nil))
+	if strings.Contains(rr.Body.String(), "shuttle_user_active_connections") {
+		t.Fatalf("gauge emitted before any UserActivityDelta call:\n%s", rr.Body.String())
+	}
+
+	c.UserActivityDelta("alice", +1)
+	c.UserActivityDelta("alice", +1)
+	c.UserActivityDelta("alice", -1)
+	c.UserActivityDelta("bob", +1)
+
+	rr = httptest.NewRecorder()
+	c.Handler().ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/metrics", nil))
+	body := rr.Body.String()
+	if !strings.Contains(body, `shuttle_user_active_connections{user="alice"} 1`) {
+		t.Fatalf("missing alice gauge, got:\n%s", body)
+	}
+	if !strings.Contains(body, `shuttle_user_active_connections{user="bob"} 1`) {
+		t.Fatalf("missing bob gauge, got:\n%s", body)
+	}
+	if !strings.Contains(body, "# TYPE shuttle_user_active_connections gauge") {
+		t.Fatalf("missing TYPE line, got:\n%s", body)
+	}
+}
+
+func TestCollector_UserActivityConcurrent(t *testing.T) {
+	// Ensure concurrent deltas on the same user are race-free.
+	c := NewCollector()
+	const goroutines = 32
+	const incrPerG = 100
+
+	var wg sync.WaitGroup
+	wg.Add(goroutines)
+	for i := 0; i < goroutines; i++ {
+		go func() {
+			defer wg.Done()
+			for j := 0; j < incrPerG; j++ {
+				c.UserActivityDelta("alice", +1)
+				c.UserActivityDelta("alice", -1)
+			}
+		}()
+	}
+	wg.Wait()
+
+	rr := httptest.NewRecorder()
+	c.Handler().ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/metrics", nil))
+	body := rr.Body.String()
+	if !strings.Contains(body, `shuttle_user_active_connections{user="alice"} 0`) {
+		t.Fatalf("expected alice gauge to settle to 0 after balanced deltas, got:\n%s", body)
+	}
+}
+
 func TestFormatFloat(t *testing.T) {
 	tests := []struct {
 		in   float64
