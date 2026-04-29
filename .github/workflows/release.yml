@@ -348,3 +348,35 @@ jobs:
           body_path: release-notes.md
           files: release/*
           fail_on_unmatched_files: false
+
+  # ──────────────────────────────────────────────
+  # Bump Homebrew tap formulae after the GitHub Release exists.
+  # Requires HOMEBREW_TAP_TOKEN secret: a fine-grained PAT with
+  # `contents:write` on ggshr9/homebrew-shuttle.
+  # ──────────────────────────────────────────────
+  bump-homebrew:
+    needs: [release]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    steps:
+      - name: Bump shuttle formula
+        uses: mislav/bump-homebrew-formula-action@v3
+        with:
+          formula-name: shuttle
+          formula-path: Formula/shuttle.rb
+          homebrew-tap: ggshr9/homebrew-shuttle
+          base-branch: main
+          download-url: https://github.com/ggshr9/shuttle/releases/download/${{ github.ref_name }}/shuttle-darwin-amd64.tar.gz
+        env:
+          COMMITTER_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+
+      - name: Bump shuttled formula
+        uses: mislav/bump-homebrew-formula-action@v3
+        with:
+          formula-name: shuttled
+          formula-path: Formula/shuttled.rb
+          homebrew-tap: ggshr9/homebrew-shuttle
+          base-branch: main
+          download-url: https://github.com/ggshr9/shuttle/releases/download/${{ github.ref_name }}/shuttled-darwin-amd64.tar.gz
+        env:
+          COMMITTER_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
