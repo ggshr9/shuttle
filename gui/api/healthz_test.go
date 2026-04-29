@@ -31,3 +31,18 @@ func TestHealthz_Returns200WithStatus(t *testing.T) {
 		t.Fatalf("status = %v, want ok", body["status"])
 	}
 }
+
+func TestHealthz_PreservedAfterDeepHealthAdded(t *testing.T) {
+	// Sanity: the new /api/health/live and /api/healthz coexist with
+	// distinct semantics. /api/healthz is the iOS BridgeAdapter shallow probe.
+	mux := http.NewServeMux()
+	registerHealthzRoute(mux)
+
+	req := httptest.NewRequest("GET", "/api/healthz", nil)
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != 200 {
+		t.Fatalf("/api/healthz status = %d, want 200", w.Code)
+	}
+}
