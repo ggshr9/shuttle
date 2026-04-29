@@ -20,8 +20,10 @@ export function nextBackoffMs(attempt: number, opts: BackoffOptions = {}): numbe
   const max = opts.maxMs ?? DEFAULT_MAX_MS
   const jitter = opts.jitter ?? DEFAULT_JITTER
 
-  const exp = Math.min(max, base * 2 ** Math.max(0, attempt))
-  // Multiplicative jitter in [1 - jitter, 1 + jitter].
+  const exp = base * 2 ** Math.max(0, attempt)
+  // Multiplicative jitter in [1 - jitter, 1 + jitter], then clamp to
+  // maxMs so the stated ceiling is actually enforced (jittering after
+  // the clamp would let results exceed maxMs by up to `jitter`%).
   const factor = 1 + (Math.random() * 2 - 1) * jitter
-  return Math.round(exp * factor)
+  return Math.round(Math.min(max, exp * factor))
 }
