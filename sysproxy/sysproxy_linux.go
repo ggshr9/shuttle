@@ -3,98 +3,148 @@
 package sysproxy
 
 import (
+	"errors"
+	"fmt"
 	"os/exec"
 	"strings"
 )
 
+// errToolMissing signals that the controlling tool (gsettings/kwriteconfig5)
+// is not installed, so the caller may try the next desktop environment.
+// Real exec failures use a different error and are surfaced directly.
+var errToolMissing = errors.New("sysproxy: tool not installed")
+
 func set(cfg ProxyConfig) error {
-	// Try GNOME/gsettings first
-	if err := setGNOME(cfg); err == nil {
+	// Try GNOME/gsettings first.
+	err := setGNOME(cfg)
+	if err == nil {
 		return nil
 	}
-
-	// Try KDE/kwriteconfig5
-	if err := setKDE(cfg); err == nil {
-		return nil
+	if !errors.Is(err, errToolMissing) {
+		return err
 	}
 
-	// No supported desktop environment found
-	// User will need to set environment variables manually
+	// Fall through to KDE only if gsettings was missing.
+	err = setKDE(cfg)
+	if err == nil {
+		return nil
+	}
+	if !errors.Is(err, errToolMissing) {
+		return err
+	}
+
+	return errors.New("sysproxy: no supported desktop environment found (need gsettings or kwriteconfig5)")
+}
+
+// runOrErr runs cmd and wraps any failure with a context label that
+// callers can present to the user; ExitError carries stderr if available.
+func runOrErr(label string, cmd *exec.Cmd) error {
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("%s: %w (%s)", label, err, strings.TrimSpace(string(out)))
+	}
 	return nil
 }
 
 func setGNOME(cfg ProxyConfig) error {
-	// Check if gsettings is available
 	if _, err := exec.LookPath("gsettings"); err != nil {
-		return err
+		return errToolMissing
 	}
 
 	if !cfg.Enable {
-		// Disable proxy
-		_ = exec.Command("gsettings", "set", "org.gnome.system.proxy", "mode", "none").Run()
-		return nil
+		return runOrErr("gsettings disable",
+			exec.Command("gsettings", "set", "org.gnome.system.proxy", "mode", "none"))
 	}
 
-	// Set manual proxy mode
-	_ = exec.Command("gsettings", "set", "org.gnome.system.proxy", "mode", "manual").Run()
+	if err := runOrErr("gsettings mode",
+		exec.Command("gsettings", "set", "org.gnome.system.proxy", "mode", "manual")); err != nil {
+		return err
+	}
 
-	// Set HTTP proxy
 	if cfg.HTTPAddr != "" {
 		host, port := splitHostPort(cfg.HTTPAddr)
-		_ = exec.Command("gsettings", "set", "org.gnome.system.proxy.http", "host", host).Run()
-		_ = exec.Command("gsettings", "set", "org.gnome.system.proxy.http", "port", port).Run()
-		_ = exec.Command("gsettings", "set", "org.gnome.system.proxy.https", "host", host).Run()
-		_ = exec.Command("gsettings", "set", "org.gnome.system.proxy.https", "port", port).Run()
+		for _, scheme := range []string{"http", "https"} {
+			if err := runOrErr("gsettings "+scheme+" host",
+				exec.Command("gsettings", "set", "org.gnome.system.proxy."+scheme, "host", host)); err != nil {
+				return err
+			}
+			if err := runOrErr("gsettings "+scheme+" port",
+				exec.Command("gsettings", "set", "org.gnome.system.proxy."+scheme, "port", port)); err != nil {
+				return err
+			}
+		}
 	}
 
-	// Set SOCKS proxy
 	if cfg.SOCKSAddr != "" {
 		host, port := splitHostPort(cfg.SOCKSAddr)
-		_ = exec.Command("gsettings", "set", "org.gnome.system.proxy.socks", "host", host).Run()
-		_ = exec.Command("gsettings", "set", "org.gnome.system.proxy.socks", "port", port).Run()
+		if err := runOrErr("gsettings socks host",
+			exec.Command("gsettings", "set", "org.gnome.system.proxy.socks", "host", host)); err != nil {
+			return err
+		}
+		if err := runOrErr("gsettings socks port",
+			exec.Command("gsettings", "set", "org.gnome.system.proxy.socks", "port", port)); err != nil {
+			return err
+		}
 	}
 
-	// Set bypass list
 	if len(cfg.Bypass) > 0 {
 		bypassArg := "['" + strings.Join(cfg.Bypass, "','") + "']"
-		_ = exec.Command("gsettings", "set", "org.gnome.system.proxy", "ignore-hosts", bypassArg).Run()
+		if err := runOrErr("gsettings bypass",
+			exec.Command("gsettings", "set", "org.gnome.system.proxy", "ignore-hosts", bypassArg)); err != nil {
+			return err
+		}
 	}
 
 	return nil
 }
 
 func setKDE(cfg ProxyConfig) error {
-	// Check if kwriteconfig5 is available
 	if _, err := exec.LookPath("kwriteconfig5"); err != nil {
-		return err
+		return errToolMissing
 	}
 
 	if !cfg.Enable {
-		// Disable proxy
-		_ = exec.Command("kwriteconfig5", "--file", "kioslaverc", "--group", "Proxy Settings", "--key", "ProxyType", "0").Run()
-		return nil
+		return runOrErr("kwriteconfig5 disable",
+			exec.Command("kwriteconfig5", "--file", "kioslaverc", "--group", "Proxy Settings", "--key", "ProxyType", "0"))
 	}
 
-	// Enable manual proxy
-	_ = exec.Command("kwriteconfig5", "--file", "kioslaverc", "--group", "Proxy Settings", "--key", "ProxyType", "1").Run()
+	if err := runOrErr("kwriteconfig5 mode",
+		exec.Command("kwriteconfig5", "--file", "kioslaverc", "--group", "Proxy Settings", "--key", "ProxyType", "1")); err != nil {
+		return err
+	}
 
-	// Set HTTP proxy
 	if cfg.HTTPAddr != "" {
-		_ = exec.Command("kwriteconfig5", "--file", "kioslaverc", "--group", "Proxy Settings", "--key", "httpProxy", "http://"+cfg.HTTPAddr).Run()  //nolint:gosec // G204: input is from validated ProxyConfig, not user-tainted
-		_ = exec.Command("kwriteconfig5", "--file", "kioslaverc", "--group", "Proxy Settings", "--key", "httpsProxy", "http://"+cfg.HTTPAddr).Run() //nolint:gosec // G204: input is from validated ProxyConfig, not user-tainted
+		if err := runOrErr("kwriteconfig5 httpProxy",
+			//nolint:gosec // G204: input is from validated ProxyConfig, not user-tainted
+			exec.Command("kwriteconfig5", "--file", "kioslaverc", "--group", "Proxy Settings", "--key", "httpProxy", "http://"+cfg.HTTPAddr)); err != nil {
+			return err
+		}
+		if err := runOrErr("kwriteconfig5 httpsProxy",
+			//nolint:gosec // G204: input is from validated ProxyConfig, not user-tainted
+			exec.Command("kwriteconfig5", "--file", "kioslaverc", "--group", "Proxy Settings", "--key", "httpsProxy", "http://"+cfg.HTTPAddr)); err != nil {
+			return err
+		}
 	}
 
-	// Set SOCKS proxy
 	if cfg.SOCKSAddr != "" {
-		_ = exec.Command("kwriteconfig5", "--file", "kioslaverc", "--group", "Proxy Settings", "--key", "socksProxy", "socks://"+cfg.SOCKSAddr).Run() //nolint:gosec // G204: input is from validated ProxyConfig, not user-tainted
+		if err := runOrErr("kwriteconfig5 socksProxy",
+			//nolint:gosec // G204: input is from validated ProxyConfig, not user-tainted
+			exec.Command("kwriteconfig5", "--file", "kioslaverc", "--group", "Proxy Settings", "--key", "socksProxy", "socks://"+cfg.SOCKSAddr)); err != nil {
+			return err
+		}
 	}
 
-	// Set bypass list
 	if len(cfg.Bypass) > 0 {
-		_ = exec.Command("kwriteconfig5", "--file", "kioslaverc", "--group", "Proxy Settings", "--key", "NoProxyFor", strings.Join(cfg.Bypass, ",")).Run() //nolint:gosec // G204: input is from validated ProxyConfig bypass list, not user-tainted
+		if err := runOrErr("kwriteconfig5 NoProxyFor",
+			//nolint:gosec // G204: input is from validated ProxyConfig bypass list, not user-tainted
+			exec.Command("kwriteconfig5", "--file", "kioslaverc", "--group", "Proxy Settings", "--key", "NoProxyFor", strings.Join(cfg.Bypass, ","))); err != nil {
+			return err
+		}
 	}
 
-	// Notify KDE to reload settings
+	// dbus-send is best-effort: KDE picks up file changes anyway, the
+	// signal just speeds up reload. Don't fail set() on a missing
+	// dbus-send (e.g. KDE-without-dbus is rare but possible).
 	_ = exec.Command("dbus-send", "--type=signal", "/KIO/Scheduler", "org.kde.KIO.Scheduler.reparseSlaveConfiguration", "string:").Run()
 
 	return nil
