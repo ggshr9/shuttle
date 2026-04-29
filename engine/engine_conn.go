@@ -6,9 +6,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/shuttleX/shuttle/obfs"
-	"github.com/shuttleX/shuttle/plugin"
-	"github.com/shuttleX/shuttle/transport"
+	"github.com/ggshr9/shuttle/obfs"
+	"github.com/ggshr9/shuttle/plugin"
+	"github.com/ggshr9/shuttle/transport"
 )
 
 // chainConn wraps a net.Conn so that closing it calls chain.OnDisconnect,

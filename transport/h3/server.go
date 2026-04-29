@@ -11,11 +11,11 @@ import (
 	"time"
 
 	"github.com/quic-go/quic-go"
-	"github.com/shuttleX/shuttle/config"
-	"github.com/shuttleX/shuttle/crypto"
-	"github.com/shuttleX/shuttle/obfs"
-	"github.com/shuttleX/shuttle/transport"
-	"github.com/shuttleX/shuttle/transport/auth"
+	"github.com/ggshr9/shuttle/config"
+	"github.com/ggshr9/shuttle/crypto"
+	"github.com/ggshr9/shuttle/obfs"
+	"github.com/ggshr9/shuttle/transport"
+	"github.com/ggshr9/shuttle/transport/auth"
 )
 
 type ServerConfig struct {

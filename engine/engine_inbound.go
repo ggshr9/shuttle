@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/shuttleX/shuttle/adapter"
-	"github.com/shuttleX/shuttle/config"
-	"github.com/shuttleX/shuttle/outbound/healthcheck"
+	"github.com/ggshr9/shuttle/adapter"
+	"github.com/ggshr9/shuttle/config"
+	"github.com/ggshr9/shuttle/outbound/healthcheck"
 )
 
 // startInbounds starts all configured inbound listeners using the pluggable

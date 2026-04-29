@@ -16,7 +16,7 @@ description: |
   and encrypted tunneling. Features H3/QUIC, Reality/TLS+Noise, and CDN
   transports with adaptive congestion control.
 vendor: Shuttle
-homepage: https://github.com/shuttleX/shuttle
+homepage: https://github.com/ggshr9/shuttle
 license: MIT
 
 contents:

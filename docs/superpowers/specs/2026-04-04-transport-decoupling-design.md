@@ -245,10 +245,10 @@ Server side has an equivalent `ByteStreamServer` with `Accept()` that reverses t
 ```go
 // engine_setup.go — directly imports h3, reality, cdn, webrtc
 import (
-    "github.com/shuttleX/shuttle/transport/h3"
-    "github.com/shuttleX/shuttle/transport/reality"
-    "github.com/shuttleX/shuttle/transport/cdn"
-    rtcTransport "github.com/shuttleX/shuttle/transport/webrtc"
+    "github.com/ggshr9/shuttle/transport/h3"
+    "github.com/ggshr9/shuttle/transport/reality"
+    "github.com/ggshr9/shuttle/transport/cdn"
+    rtcTransport "github.com/ggshr9/shuttle/transport/webrtc"
 )
 
 func (e *Engine) buildTransports(cfg *config.ClientConfig, cc quic.CongestionControl) []transport.ClientTransport {
@@ -265,15 +265,15 @@ func (e *Engine) buildTransports(cfg *config.ClientConfig, cc quic.CongestionCon
 **After:**
 ```go
 // engine_setup.go — imports only adapter
-import "github.com/shuttleX/shuttle/adapter"
+import "github.com/ggshr9/shuttle/adapter"
 
 // Transport packages register via init() in a separate imports file:
 // engine/imports.go
 import (
-    _ "github.com/shuttleX/shuttle/transport/h3"
-    _ "github.com/shuttleX/shuttle/transport/reality"
-    _ "github.com/shuttleX/shuttle/transport/cdn"
-    _ "github.com/shuttleX/shuttle/transport/webrtc"
+    _ "github.com/ggshr9/shuttle/transport/h3"
+    _ "github.com/ggshr9/shuttle/transport/reality"
+    _ "github.com/ggshr9/shuttle/transport/cdn"
+    _ "github.com/ggshr9/shuttle/transport/webrtc"
 )
 
 func (e *Engine) buildTransports(cfg *config.ClientConfig) []adapter.ClientTransport {

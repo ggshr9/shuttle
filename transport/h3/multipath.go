@@ -9,8 +9,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/shuttleX/shuttle/adapter"
-	"github.com/shuttleX/shuttle/transport"
+	"github.com/ggshr9/shuttle/adapter"
+	"github.com/ggshr9/shuttle/transport"
 )
 
 // MultipathConfig configures multipath behavior.

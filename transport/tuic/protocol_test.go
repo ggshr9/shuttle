@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"testing"
 
-	"github.com/shuttleX/shuttle/transport/tuic"
+	"github.com/ggshr9/shuttle/transport/tuic"
 )
 
 func TestParseUUID(t *testing.T) {

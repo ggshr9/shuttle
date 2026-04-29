@@ -4,7 +4,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/shuttleX/shuttle/config"
+	"github.com/ggshr9/shuttle/config"
 )
 
 func TestUserStoreAddAndList(t *testing.T) {

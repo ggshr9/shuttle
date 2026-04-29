@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/shuttleX/shuttle/adapter"
+	"github.com/ggshr9/shuttle/adapter"
 )
 
 // mockOutbound is a test double for adapter.Outbound.

@@ -3,7 +3,7 @@ package engine
 import (
 	"encoding/json"
 
-	"github.com/shuttleX/shuttle/config"
+	"github.com/ggshr9/shuttle/config"
 )
 
 // adaptLegacyConfig converts legacy proxy.* config fields into equivalent

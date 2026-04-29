@@ -8,9 +8,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/shuttleX/shuttle/adapter"
-	shuttlecrypto "github.com/shuttleX/shuttle/crypto"
-	shuttletls "github.com/shuttleX/shuttle/transport/security/tls"
+	"github.com/ggshr9/shuttle/adapter"
+	shuttlecrypto "github.com/ggshr9/shuttle/crypto"
+	shuttletls "github.com/ggshr9/shuttle/transport/security/tls"
 )
 
 func TestTLSWrapper_ClientServer(t *testing.T) {

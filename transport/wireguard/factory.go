@@ -5,8 +5,8 @@ import (
 	"net"
 	"net/netip"
 
-	"github.com/shuttleX/shuttle/adapter"
-	"github.com/shuttleX/shuttle/config"
+	"github.com/ggshr9/shuttle/adapter"
+	"github.com/ggshr9/shuttle/config"
 )
 
 func init() {

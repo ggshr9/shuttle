@@ -10,7 +10,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/shuttleX/shuttle/transport"
+	"github.com/ggshr9/shuttle/transport"
 )
 
 // PathInfo is a read-only snapshot of a path's status for external reporting.

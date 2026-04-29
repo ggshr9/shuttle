@@ -5,7 +5,7 @@ import (
 	"io"
 	"net"
 
-	"github.com/shuttleX/shuttle/adapter"
+	"github.com/ggshr9/shuttle/adapter"
 )
 
 // HMACAuthenticator implements adapter.Authenticator using HMAC-SHA256.

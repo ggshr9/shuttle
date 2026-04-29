@@ -14,8 +14,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/shuttleX/shuttle/config"
-	"github.com/shuttleX/shuttle/server"
+	"github.com/ggshr9/shuttle/config"
+	"github.com/ggshr9/shuttle/server"
 )
 
 // Subscription represents a subscription source.

@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/shuttleX/shuttle/transport"
+	"github.com/ggshr9/shuttle/transport"
 )
 
 // --- Selector tests (scheduler tests already in scheduler_test.go, multipath in multipath_test.go) ---

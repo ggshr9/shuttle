@@ -5,9 +5,9 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/shuttleX/shuttle/connlog"
-	"github.com/shuttleX/shuttle/engine"
-	"github.com/shuttleX/shuttle/stats"
+	"github.com/ggshr9/shuttle/connlog"
+	"github.com/ggshr9/shuttle/engine"
+	"github.com/ggshr9/shuttle/stats"
 )
 
 func registerStatsRoutes(mux *http.ServeMux, eng *engine.Engine, statsStore *stats.Storage, connStore *connlog.Storage) {

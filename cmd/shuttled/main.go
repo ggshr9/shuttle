@@ -10,19 +10,19 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/shuttleX/shuttle/config"
-	"github.com/shuttleX/shuttle/crypto"
-	"github.com/shuttleX/shuttle/internal/logutil"
-	"github.com/shuttleX/shuttle/internal/qrterm"
-	"github.com/shuttleX/shuttle/internal/servicecli"
-	"github.com/shuttleX/shuttle/internal/sysopt"
-	"github.com/shuttleX/shuttle/server"
-	"github.com/shuttleX/shuttle/service"
-	"github.com/shuttleX/shuttle/update"
+	"github.com/ggshr9/shuttle/config"
+	"github.com/ggshr9/shuttle/crypto"
+	"github.com/ggshr9/shuttle/internal/logutil"
+	"github.com/ggshr9/shuttle/internal/qrterm"
+	"github.com/ggshr9/shuttle/internal/servicecli"
+	"github.com/ggshr9/shuttle/internal/sysopt"
+	"github.com/ggshr9/shuttle/server"
+	"github.com/ggshr9/shuttle/service"
+	"github.com/ggshr9/shuttle/update"
 )
 
 // getVersion returns the current version, set via ldflags:
-//   -X github.com/shuttleX/shuttle/update.Version=v0.3.1
+//   -X github.com/ggshr9/shuttle/update.Version=v0.3.1
 func getVersion() string { return update.Version }
 
 func main() {

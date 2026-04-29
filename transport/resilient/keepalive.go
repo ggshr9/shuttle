@@ -5,7 +5,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/shuttleX/shuttle/transport"
+	"github.com/ggshr9/shuttle/transport"
 )
 
 // Ping/pong protocol markers exchanged over a control stream.

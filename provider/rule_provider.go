@@ -13,7 +13,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/shuttleX/shuttle/server"
+	"github.com/ggshr9/shuttle/server"
 )
 
 // RuleProviderConfig holds configuration for a RuleProvider.

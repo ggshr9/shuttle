@@ -4,7 +4,7 @@
 
 ### Download Binary
 
-Pre-built binaries are available on the [GitHub Releases](https://github.com/your-org/shuttle/releases) page. Download the archive for your platform and extract it to a directory in your `$PATH`.
+Pre-built binaries are available on the [GitHub Releases](https://github.com/ggshr9/shuttle/releases) page. Download the archive for your platform and extract it to a directory in your `$PATH`.
 
 | Platform | File |
 |----------|------|
@@ -20,7 +20,7 @@ Each archive contains two binaries: `shuttle` (client) and `shuttled` (server).
 Go 1.24 or later is required.
 
 ```bash
-git clone https://github.com/your-org/shuttle.git
+git clone https://github.com/ggshr9/shuttle.git
 cd shuttle
 
 # Client
@@ -176,7 +176,7 @@ Point your routing default at the outbound name you want to use.
 
 **shuttle-gui** is a desktop application with a system tray icon, Simple Mode for quick setup, and an Advanced Mode with full configuration access including Mesh VPN, congestion control settings, and live traffic charts.
 
-Download `shuttle-gui` from the [GitHub Releases](https://github.com/your-org/shuttle/releases) page. On first launch it will guide you through adding a server.
+Download `shuttle-gui` from the [GitHub Releases](https://github.com/ggshr9/shuttle/releases) page. On first launch it will guide you through adding a server.
 
 The GUI manages its own config file and starts/stops the engine internally — no separate `shuttle` process is needed.
 

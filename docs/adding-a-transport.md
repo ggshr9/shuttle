@@ -29,7 +29,7 @@ package mytransport
 
 import (
     "context"
-    "github.com/shuttleX/shuttle/adapter"
+    "github.com/ggshr9/shuttle/adapter"
 )
 
 type Client struct {
@@ -66,8 +66,8 @@ Each `adapter.Stream` must implement:
 package mytransport
 
 import (
-    "github.com/shuttleX/shuttle/adapter"
-    "github.com/shuttleX/shuttle/config"
+    "github.com/ggshr9/shuttle/adapter"
+    "github.com/ggshr9/shuttle/config"
 )
 
 func init() {
@@ -112,7 +112,7 @@ type TransportConfig struct {
 In `cmd/shuttle/main.go` and `cmd/shuttled/main.go`, add:
 
 ```go
-import _ "github.com/shuttleX/shuttle/transport/mytransport"
+import _ "github.com/ggshr9/shuttle/transport/mytransport"
 ```
 
 This triggers `init()` which registers the factory.

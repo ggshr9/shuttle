@@ -2,7 +2,7 @@
 
 package tray
 
-import "github.com/shuttleX/shuttle/engine"
+import "github.com/ggshr9/shuttle/engine"
 
 // Callbacks holds functions the tray can invoke.
 // On mobile, the tray is a no-op.

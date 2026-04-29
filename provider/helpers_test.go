@@ -3,7 +3,7 @@ package provider
 import (
 	"time"
 
-	"github.com/shuttleX/shuttle/server"
+	"github.com/ggshr9/shuttle/server"
 )
 
 // allowLoopback swaps the provider's HTTP client for one that permits

@@ -18,15 +18,15 @@ import (
 	"github.com/wailsapp/wails/v2/pkg/options/windows"
 	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 
-	"github.com/shuttleX/shuttle/config"
-	"github.com/shuttleX/shuttle/connlog"
-	"github.com/shuttleX/shuttle/engine"
-	"github.com/shuttleX/shuttle/gui"
-	"github.com/shuttleX/shuttle/gui/api"
-	"github.com/shuttleX/shuttle/gui/tray"
-	"github.com/shuttleX/shuttle/speedtest"
-	"github.com/shuttleX/shuttle/stats"
-	"github.com/shuttleX/shuttle/subscription"
+	"github.com/ggshr9/shuttle/config"
+	"github.com/ggshr9/shuttle/connlog"
+	"github.com/ggshr9/shuttle/engine"
+	"github.com/ggshr9/shuttle/gui"
+	"github.com/ggshr9/shuttle/gui/api"
+	"github.com/ggshr9/shuttle/gui/tray"
+	"github.com/ggshr9/shuttle/speedtest"
+	"github.com/ggshr9/shuttle/stats"
+	"github.com/ggshr9/shuttle/subscription"
 )
 
 // App wraps the engine for Wails bindings.

@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/shuttleX/shuttle/transport"
+	"github.com/ggshr9/shuttle/transport"
 )
 
 // startTestServer creates and starts a CDN server on a random port.

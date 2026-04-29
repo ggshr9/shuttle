@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"net"
 
-	"github.com/shuttleX/shuttle/transport/shared"
+	"github.com/ggshr9/shuttle/transport/shared"
 )
 
 // DialerConfig holds configuration for a VLESS client dialer.

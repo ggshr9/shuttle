@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/shuttleX/shuttle/engine"
+	"github.com/ggshr9/shuttle/engine"
 )
 
 func TestPrometheusEndpoint(t *testing.T) {

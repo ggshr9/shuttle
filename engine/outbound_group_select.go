@@ -6,7 +6,7 @@ import (
 	"net"
 	"sync"
 
-	"github.com/shuttleX/shuttle/adapter"
+	"github.com/ggshr9/shuttle/adapter"
 )
 
 // selectState holds the manually-chosen active outbound for the GroupSelect strategy.

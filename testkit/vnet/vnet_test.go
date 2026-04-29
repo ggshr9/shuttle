@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/shuttleX/shuttle/testkit/observe"
+	"github.com/ggshr9/shuttle/testkit/observe"
 )
 
 func TestBasicDialListen(t *testing.T) {

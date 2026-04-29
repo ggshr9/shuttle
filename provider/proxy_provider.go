@@ -12,7 +12,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/shuttleX/shuttle/server"
+	"github.com/ggshr9/shuttle/server"
 )
 
 // ProxyProviderConfig holds configuration for a ProxyProvider.

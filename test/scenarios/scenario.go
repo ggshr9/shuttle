@@ -15,10 +15,10 @@ import (
 	"testing"
 
 	"github.com/hashicorp/yamux"
-	"github.com/shuttleX/shuttle/testkit/fault"
-	"github.com/shuttleX/shuttle/testkit/observe"
-	"github.com/shuttleX/shuttle/testkit/vnet"
-	"github.com/shuttleX/shuttle/transport"
+	"github.com/ggshr9/shuttle/testkit/fault"
+	"github.com/ggshr9/shuttle/testkit/observe"
+	"github.com/ggshr9/shuttle/testkit/vnet"
+	"github.com/ggshr9/shuttle/transport"
 )
 
 // ---------------------------------------------------------------------------

@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"net"
 
-	"github.com/shuttleX/shuttle/adapter"
+	"github.com/ggshr9/shuttle/adapter"
 )
 
 // Config configures the TLS wrapper.

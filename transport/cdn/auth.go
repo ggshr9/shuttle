@@ -1,7 +1,7 @@
 package cdn
 
 import (
-	"github.com/shuttleX/shuttle/transport/auth"
+	"github.com/ggshr9/shuttle/transport/auth"
 )
 
 // generateAuthPayload creates a [32-byte nonce][32-byte HMAC-SHA256(password, nonce)] payload.

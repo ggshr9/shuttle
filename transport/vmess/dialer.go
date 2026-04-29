@@ -8,7 +8,7 @@ import (
 	"net"
 	"time"
 
-	"github.com/shuttleX/shuttle/transport/shared"
+	"github.com/ggshr9/shuttle/transport/shared"
 )
 
 // DialerConfig configures a VMess client dialer.

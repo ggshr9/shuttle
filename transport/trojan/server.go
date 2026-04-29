@@ -11,7 +11,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/shuttleX/shuttle/transport/shared"
+	"github.com/ggshr9/shuttle/transport/shared"
 )
 
 // Handler is called for authenticated Trojan connections.

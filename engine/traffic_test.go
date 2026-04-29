@@ -6,8 +6,8 @@ import (
 	"net"
 	"testing"
 
-	"github.com/shuttleX/shuttle/config"
-	"github.com/shuttleX/shuttle/router"
+	"github.com/ggshr9/shuttle/config"
+	"github.com/ggshr9/shuttle/router"
 )
 
 func TestTrafficManager_BuildBuiltinOutbounds(t *testing.T) {

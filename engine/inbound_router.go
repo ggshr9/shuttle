@@ -7,9 +7,9 @@ import (
 	"net"
 	"strconv"
 
-	"github.com/shuttleX/shuttle/adapter"
-	"github.com/shuttleX/shuttle/proxy"
-	"github.com/shuttleX/shuttle/router"
+	"github.com/ggshr9/shuttle/adapter"
+	"github.com/ggshr9/shuttle/proxy"
+	"github.com/ggshr9/shuttle/router"
 )
 
 // inboundRouter implements adapter.InboundRouter, bridging inbound traffic

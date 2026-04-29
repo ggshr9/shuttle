@@ -12,11 +12,11 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/shuttleX/shuttle/config"
-	shuttlecrypto "github.com/shuttleX/shuttle/crypto"
-	"github.com/shuttleX/shuttle/internal/pool"
-	"github.com/shuttleX/shuttle/transport"
-	ymux "github.com/shuttleX/shuttle/transport/mux/yamux"
+	"github.com/ggshr9/shuttle/config"
+	shuttlecrypto "github.com/ggshr9/shuttle/crypto"
+	"github.com/ggshr9/shuttle/internal/pool"
+	"github.com/ggshr9/shuttle/transport"
+	ymux "github.com/ggshr9/shuttle/transport/mux/yamux"
 	"golang.org/x/crypto/curve25519"
 )
 

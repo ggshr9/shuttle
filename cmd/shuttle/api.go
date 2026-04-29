@@ -10,9 +10,9 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/shuttleX/shuttle/config"
-	"github.com/shuttleX/shuttle/engine"
-	"github.com/shuttleX/shuttle/gui/api"
+	"github.com/ggshr9/shuttle/config"
+	"github.com/ggshr9/shuttle/engine"
+	"github.com/ggshr9/shuttle/gui/api"
 )
 
 func runAPI(configPath, listen string, autoConnect bool) {

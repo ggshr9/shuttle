@@ -9,13 +9,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/shuttleX/shuttle/config"
-	"github.com/shuttleX/shuttle/engine"
-	"github.com/shuttleX/shuttle/internal/procnet"
-	"github.com/shuttleX/shuttle/router/geodata"
-	"github.com/shuttleX/shuttle/server"
-	"github.com/shuttleX/shuttle/subscription"
-	"github.com/shuttleX/shuttle/update"
+	"github.com/ggshr9/shuttle/config"
+	"github.com/ggshr9/shuttle/engine"
+	"github.com/ggshr9/shuttle/internal/procnet"
+	"github.com/ggshr9/shuttle/router/geodata"
+	"github.com/ggshr9/shuttle/server"
+	"github.com/ggshr9/shuttle/subscription"
+	"github.com/ggshr9/shuttle/update"
 )
 
 // buildProbeTransport creates an *http.Transport for the given proxy mode ("socks5", "http", or "direct").

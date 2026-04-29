@@ -1,7 +1,7 @@
 package fault
 
 import (
-	"github.com/shuttleX/shuttle/transport"
+	"github.com/ggshr9/shuttle/transport"
 )
 
 // faultStream wraps a transport.Stream and applies fault injection rules.

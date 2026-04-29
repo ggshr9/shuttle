@@ -9,7 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/shuttleX/shuttle/internal/paths"
+	"github.com/ggshr9/shuttle/internal/paths"
 )
 
 type linuxManager struct {

@@ -273,7 +273,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/shuttleX/shuttle/internal/healthcheck"
+	"github.com/ggshr9/shuttle/internal/healthcheck"
 )
 
 func TestHealthLive_OK(t *testing.T) {
@@ -337,9 +337,9 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/shuttleX/shuttle/config"
-	"github.com/shuttleX/shuttle/internal/healthcheck"
-	"github.com/shuttleX/shuttle/server/metrics"
+	"github.com/ggshr9/shuttle/config"
+	"github.com/ggshr9/shuttle/internal/healthcheck"
+	"github.com/ggshr9/shuttle/server/metrics"
 )
 
 const defaultLivenessThreshold = 30 * time.Second
@@ -462,7 +462,7 @@ git commit -m "feat(admin): add /api/health/live with heartbeat freshness check"
 Append to `server/admin/health_test.go`:
 
 ```go
-import "github.com/shuttleX/shuttle/config"
+import "github.com/ggshr9/shuttle/config"
 
 func TestHealthReady_OKWhenAllListenersBound(t *testing.T) {
 	cfg := &config.ServerConfig{}
@@ -564,7 +564,7 @@ func Handler(info *ServerInfo, cfg *config.ServerConfig, configPath string, user
 
 Add the import:
 ```go
-"github.com/shuttleX/shuttle/internal/healthcheck"
+"github.com/ggshr9/shuttle/internal/healthcheck"
 ```
 
 - [ ] **Step 5.2: Replace existing `/api/health` registration**
@@ -701,7 +701,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/shuttleX/shuttle/internal/healthcheck"
+	"github.com/ggshr9/shuttle/internal/healthcheck"
 )
 
 type fakeEngine struct {
@@ -830,7 +830,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/shuttleX/shuttle/internal/healthcheck"
+	"github.com/ggshr9/shuttle/internal/healthcheck"
 )
 
 const clientLivenessThreshold = 30 * time.Second
@@ -1072,9 +1072,9 @@ Replace the existing "Reporting Security Issues" section with:
 ```markdown
 ## Reporting Security Issues
 
-**Confidential reports:** Use [GitHub Security Advisory](https://github.com/shuttleX/shuttle/security/advisories/new) for any security-sensitive issue. This is the preferred channel — reports are private until coordinated disclosure.
+**Confidential reports:** Use [GitHub Security Advisory](https://github.com/ggshr9/shuttle/security/advisories/new) for any security-sensitive issue. This is the preferred channel — reports are private until coordinated disclosure.
 
-**Non-sensitive concerns:** A public [GitHub issue](https://github.com/shuttleX/shuttle/issues/new) is fine for hardening suggestions, dependency updates, or configuration questions where no exploit path is involved.
+**Non-sensitive concerns:** A public [GitHub issue](https://github.com/ggshr9/shuttle/issues/new) is fine for hardening suggestions, dependency updates, or configuration questions where no exploit path is involved.
 
 **PGP:** No project PGP key is currently published. Please use GitHub Security Advisory for confidential reports — GitHub encrypts reports in transit and at rest.
 
@@ -1288,7 +1288,7 @@ Insert at the very top of `examples/server.example.yaml`, before any existing co
 
 ```yaml
 # IMPORTANT: Read SECURITY.md before deploying to production.
-# https://github.com/shuttleX/shuttle/blob/main/SECURITY.md
+# https://github.com/ggshr9/shuttle/blob/main/SECURITY.md
 #
 ```
 

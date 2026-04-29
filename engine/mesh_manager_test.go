@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/shuttleX/shuttle/config"
+	"github.com/ggshr9/shuttle/config"
 )
 
 func TestMeshManager_New(t *testing.T) {

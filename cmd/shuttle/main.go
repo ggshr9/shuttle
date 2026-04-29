@@ -10,17 +10,17 @@ import (
 	"path/filepath"
 	"syscall"
 
-	"github.com/shuttleX/shuttle/config"
-	"github.com/shuttleX/shuttle/crypto"
-	"github.com/shuttleX/shuttle/engine"
-	"github.com/shuttleX/shuttle/gui/api"
-	"github.com/shuttleX/shuttle/internal/servicecli"
-	"github.com/shuttleX/shuttle/service"
-	"github.com/shuttleX/shuttle/update"
+	"github.com/ggshr9/shuttle/config"
+	"github.com/ggshr9/shuttle/crypto"
+	"github.com/ggshr9/shuttle/engine"
+	"github.com/ggshr9/shuttle/gui/api"
+	"github.com/ggshr9/shuttle/internal/servicecli"
+	"github.com/ggshr9/shuttle/service"
+	"github.com/ggshr9/shuttle/update"
 )
 
 // getVersion returns the current version, set via ldflags:
-//   -X github.com/shuttleX/shuttle/update.Version=v0.3.1
+//   -X github.com/ggshr9/shuttle/update.Version=v0.3.1
 func getVersion() string { return update.Version }
 
 // runUIOverride holds the --ui flag value from the run subcommand so that

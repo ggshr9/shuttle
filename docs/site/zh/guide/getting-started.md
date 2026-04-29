@@ -4,7 +4,7 @@
 
 ### 下载预编译二进制
 
-在 [GitHub Releases](https://github.com/your-org/shuttle/releases) 页面下载对应平台的压缩包，解压后将可执行文件放入 `$PATH` 中的目录。
+在 [GitHub Releases](https://github.com/ggshr9/shuttle/releases) 页面下载对应平台的压缩包，解压后将可执行文件放入 `$PATH` 中的目录。
 
 | 平台 | 文件名 |
 |------|--------|
@@ -20,7 +20,7 @@
 需要 Go 1.24 或更高版本。
 
 ```bash
-git clone https://github.com/your-org/shuttle.git
+git clone https://github.com/ggshr9/shuttle.git
 cd shuttle
 
 # 客户端
@@ -176,7 +176,7 @@ outbounds:
 
 **shuttle-gui** 是 Shuttle 的桌面应用，提供系统托盘图标、简单模式（快速上手）以及高级模式（包含 Mesh VPN、拥塞控制设置、实时流量图表等完整功能）。
 
-从 [GitHub Releases](https://github.com/your-org/shuttle/releases) 页面下载 `shuttle-gui`。首次启动时会引导你添加服务器。
+从 [GitHub Releases](https://github.com/ggshr9/shuttle/releases) 页面下载 `shuttle-gui`。首次启动时会引导你添加服务器。
 
 GUI 会自行管理配置文件并在内部启停引擎，无需单独运行 `shuttle` 进程。
 

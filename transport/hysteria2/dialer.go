@@ -9,7 +9,7 @@ import (
 	"sync/atomic"
 
 	"github.com/quic-go/quic-go"
-	"github.com/shuttleX/shuttle/transport/shared"
+	"github.com/ggshr9/shuttle/transport/shared"
 )
 
 // DialerConfig configures a Hysteria2 client dialer.

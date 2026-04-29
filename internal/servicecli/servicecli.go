@@ -8,8 +8,8 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/shuttleX/shuttle/internal/paths"
-	"github.com/shuttleX/shuttle/service"
+	"github.com/ggshr9/shuttle/internal/paths"
+	"github.com/ggshr9/shuttle/service"
 )
 
 // Options identifies which binary is calling in.

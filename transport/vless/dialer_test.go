@@ -11,8 +11,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/shuttleX/shuttle/adapter"
-	"github.com/shuttleX/shuttle/transport/vless"
+	"github.com/ggshr9/shuttle/adapter"
+	"github.com/ggshr9/shuttle/transport/vless"
 )
 
 // TestVLESS_EchoThroughServer starts a plain TCP echo server, a VLESS server

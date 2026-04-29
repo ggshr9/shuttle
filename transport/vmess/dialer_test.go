@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/shuttleX/shuttle/transport/vmess"
+	"github.com/ggshr9/shuttle/transport/vmess"
 )
 
 // testUUID is a fixed UUID for testing: "01234567-89ab-cdef-0123-456789abcdef"

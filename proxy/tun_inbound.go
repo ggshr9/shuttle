@@ -6,7 +6,7 @@ import (
 	"log/slog"
 	"net"
 
-	"github.com/shuttleX/shuttle/adapter"
+	"github.com/ggshr9/shuttle/adapter"
 )
 
 // TUNInboundConfig configures a TUN inbound device.

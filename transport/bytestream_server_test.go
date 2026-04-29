@@ -10,10 +10,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/shuttleX/shuttle/adapter"
-	"github.com/shuttleX/shuttle/transport/auth"
-	yamuxmux "github.com/shuttleX/shuttle/transport/mux/yamux"
-	tlswrap "github.com/shuttleX/shuttle/transport/security/tls"
+	"github.com/ggshr9/shuttle/adapter"
+	"github.com/ggshr9/shuttle/transport/auth"
+	yamuxmux "github.com/ggshr9/shuttle/transport/mux/yamux"
+	tlswrap "github.com/ggshr9/shuttle/transport/security/tls"
 )
 
 func TestByteStreamServer_FullPipeline(t *testing.T) {

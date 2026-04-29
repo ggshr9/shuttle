@@ -3,7 +3,7 @@ package servicecli
 import (
 	"testing"
 
-	"github.com/shuttleX/shuttle/service"
+	"github.com/ggshr9/shuttle/service"
 )
 
 func TestParseScope(t *testing.T) {

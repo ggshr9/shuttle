@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/shuttleX/shuttle/config"
+	"github.com/ggshr9/shuttle/config"
 )
 
 // ProxyOutboundConfig is the JSON options schema for a custom proxy outbound.

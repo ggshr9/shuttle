@@ -6,7 +6,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/shuttleX/shuttle/provider"
+	"github.com/ggshr9/shuttle/provider"
 )
 
 // Action defines what to do with a connection.

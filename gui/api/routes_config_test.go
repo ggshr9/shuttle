@@ -6,8 +6,8 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/shuttleX/shuttle/config"
-	"github.com/shuttleX/shuttle/engine"
+	"github.com/ggshr9/shuttle/config"
+	"github.com/ggshr9/shuttle/engine"
 )
 
 func TestServersList_Pagination(t *testing.T) {

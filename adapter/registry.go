@@ -4,7 +4,7 @@ import (
 	"log/slog"
 	"sync"
 
-	"github.com/shuttleX/shuttle/config"
+	"github.com/ggshr9/shuttle/config"
 )
 
 // TransportFactory creates client and server transports from config.

@@ -4,11 +4,11 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/shuttleX/shuttle/adapter"
-	"github.com/shuttleX/shuttle/config"
-	_ "github.com/shuttleX/shuttle/transport/shadowsocks" // register factory
-	_ "github.com/shuttleX/shuttle/transport/trojan"      // register factory
-	_ "github.com/shuttleX/shuttle/transport/vless"       // register factory
+	"github.com/ggshr9/shuttle/adapter"
+	"github.com/ggshr9/shuttle/config"
+	_ "github.com/ggshr9/shuttle/transport/shadowsocks" // register factory
+	_ "github.com/ggshr9/shuttle/transport/trojan"      // register factory
+	_ "github.com/ggshr9/shuttle/transport/vless"       // register factory
 
 	"github.com/stretchr/testify/require"
 )

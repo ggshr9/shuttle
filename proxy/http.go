@@ -11,7 +11,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/shuttleX/shuttle/qos"
+	"github.com/ggshr9/shuttle/qos"
 )
 
 // HTTPConfig configures the HTTP proxy server.

@@ -8,10 +8,10 @@ import (
 	"net"
 	"time"
 
-	"github.com/shuttleX/shuttle/adapter"
-	"github.com/shuttleX/shuttle/config"
-	"github.com/shuttleX/shuttle/internal/dnsclass"
-	"github.com/shuttleX/shuttle/internal/relay"
+	"github.com/ggshr9/shuttle/adapter"
+	"github.com/ggshr9/shuttle/config"
+	"github.com/ggshr9/shuttle/internal/dnsclass"
+	"github.com/ggshr9/shuttle/internal/relay"
 )
 
 // inboundListener holds the state for one per-request protocol inbound.

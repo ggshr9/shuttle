@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/shuttleX/shuttle/congestion"
+	"github.com/ggshr9/shuttle/congestion"
 )
 
 // ---------------------------------------------------------------------------

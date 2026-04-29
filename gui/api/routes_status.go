@@ -6,8 +6,8 @@ import (
 	"runtime"
 	"time"
 
-	"github.com/shuttleX/shuttle/engine"
-	"github.com/shuttleX/shuttle/update"
+	"github.com/ggshr9/shuttle/engine"
+	"github.com/ggshr9/shuttle/update"
 )
 
 func registerStatusRoutes(mux *http.ServeMux, eng *engine.Engine) {

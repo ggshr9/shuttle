@@ -7,7 +7,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/shuttleX/shuttle/plugin"
+	"github.com/ggshr9/shuttle/plugin"
 )
 
 const observabilityChannelBuffer = 64

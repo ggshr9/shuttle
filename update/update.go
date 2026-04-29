@@ -17,7 +17,7 @@ var Version = "dev"
 
 const (
 	// GitHubRepo is the repository for releases
-	GitHubRepo = "shuttleX/shuttle"
+	GitHubRepo = "ggshr9/shuttle"
 	// CheckInterval is the minimum time between update checks
 	CheckInterval = 4 * time.Hour
 )

@@ -6,11 +6,11 @@ import (
 	"log/slog"
 	"net"
 
-	"github.com/shuttleX/shuttle/adapter"
-	"github.com/shuttleX/shuttle/config"
-	"github.com/shuttleX/shuttle/plugin"
-	"github.com/shuttleX/shuttle/proxy"
-	"github.com/shuttleX/shuttle/router"
+	"github.com/ggshr9/shuttle/adapter"
+	"github.com/ggshr9/shuttle/config"
+	"github.com/ggshr9/shuttle/plugin"
+	"github.com/ggshr9/shuttle/proxy"
+	"github.com/ggshr9/shuttle/router"
 )
 
 // TrafficManager owns data-plane wiring: dialer construction, inbound/outbound

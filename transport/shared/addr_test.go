@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"testing"
 
-	"github.com/shuttleX/shuttle/transport/shared"
+	"github.com/ggshr9/shuttle/transport/shared"
 )
 
 func TestEncodeDecodeAddr_Domain(t *testing.T) {

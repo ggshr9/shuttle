@@ -7,7 +7,7 @@ import (
 	"sync"
 
 	"fyne.io/systray"
-	"github.com/shuttleX/shuttle/engine"
+	"github.com/ggshr9/shuttle/engine"
 )
 
 //go:embed icon_default.png

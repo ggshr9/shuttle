@@ -5,7 +5,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/shuttleX/shuttle/config"
+	"github.com/ggshr9/shuttle/config"
 )
 
 // Priority levels for traffic classification.

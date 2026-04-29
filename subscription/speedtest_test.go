@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/shuttleX/shuttle/config"
+	"github.com/ggshr9/shuttle/config"
 )
 
 // startListener starts a local TCP listener and returns its address.

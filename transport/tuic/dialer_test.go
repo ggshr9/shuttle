@@ -10,10 +10,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/shuttleX/shuttle/adapter"
-	shuttlecrypto "github.com/shuttleX/shuttle/crypto"
-	"github.com/shuttleX/shuttle/transport/shared"
-	"github.com/shuttleX/shuttle/transport/tuic"
+	"github.com/ggshr9/shuttle/adapter"
+	shuttlecrypto "github.com/ggshr9/shuttle/crypto"
+	"github.com/ggshr9/shuttle/transport/shared"
+	"github.com/ggshr9/shuttle/transport/tuic"
 )
 
 func generateTestTLSConfig(t *testing.T) *tls.Config {

@@ -9,17 +9,17 @@ import (
 	"time"
 
 	"github.com/quic-go/quic-go"
-	"github.com/shuttleX/shuttle/adapter"
-	"github.com/shuttleX/shuttle/config"
-	"github.com/shuttleX/shuttle/congestion"
-	"github.com/shuttleX/shuttle/provider"
-	"github.com/shuttleX/shuttle/obfs"
-	"github.com/shuttleX/shuttle/proxy"
-	"github.com/shuttleX/shuttle/qos"
-	"github.com/shuttleX/shuttle/router"
-	"github.com/shuttleX/shuttle/router/geodata"
-	"github.com/shuttleX/shuttle/stream"
-	"github.com/shuttleX/shuttle/transport"
+	"github.com/ggshr9/shuttle/adapter"
+	"github.com/ggshr9/shuttle/config"
+	"github.com/ggshr9/shuttle/congestion"
+	"github.com/ggshr9/shuttle/provider"
+	"github.com/ggshr9/shuttle/obfs"
+	"github.com/ggshr9/shuttle/proxy"
+	"github.com/ggshr9/shuttle/qos"
+	"github.com/ggshr9/shuttle/router"
+	"github.com/ggshr9/shuttle/router/geodata"
+	"github.com/ggshr9/shuttle/stream"
+	"github.com/ggshr9/shuttle/transport"
 )
 
 // buildCongestionControl creates the appropriate CC based on config.

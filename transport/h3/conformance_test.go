@@ -3,8 +3,8 @@ package h3
 import (
 	"testing"
 
-	"github.com/shuttleX/shuttle/transport"
-	"github.com/shuttleX/shuttle/transport/conformance"
+	"github.com/ggshr9/shuttle/transport"
+	"github.com/ggshr9/shuttle/transport/conformance"
 )
 
 func h3Factory(t testing.TB) (

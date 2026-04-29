@@ -77,7 +77,7 @@ wget https://downloads.openwrt.org/releases/23.05.0/targets/ramips/mt7621/openwr
 tar xf openwrt-sdk-*.tar.xz && cd openwrt-sdk-*
 
 # 3. Clone shuttle to package directory
-git clone https://github.com/shuttleX/shuttle package/shuttle
+git clone https://github.com/ggshr9/shuttle package/shuttle
 
 # 4. Update feeds and build
 ./scripts/feeds update -a

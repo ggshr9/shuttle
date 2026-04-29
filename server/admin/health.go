@@ -5,9 +5,9 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/shuttleX/shuttle/config"
-	"github.com/shuttleX/shuttle/internal/healthcheck"
-	"github.com/shuttleX/shuttle/server/metrics"
+	"github.com/ggshr9/shuttle/config"
+	"github.com/ggshr9/shuttle/internal/healthcheck"
+	"github.com/ggshr9/shuttle/server/metrics"
 )
 
 const defaultLivenessThreshold = 30 * time.Second

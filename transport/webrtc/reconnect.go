@@ -6,7 +6,7 @@ import (
 	"time"
 
 	pionwebrtc "github.com/pion/webrtc/v4"
-	ymux "github.com/shuttleX/shuttle/transport/mux/yamux"
+	ymux "github.com/ggshr9/shuttle/transport/mux/yamux"
 	"github.com/coder/websocket"
 )
 

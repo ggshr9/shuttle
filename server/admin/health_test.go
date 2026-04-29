@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/shuttleX/shuttle/config"
-	"github.com/shuttleX/shuttle/internal/healthcheck"
+	"github.com/ggshr9/shuttle/config"
+	"github.com/ggshr9/shuttle/internal/healthcheck"
 )
 
 func TestHealthLive_OK(t *testing.T) {

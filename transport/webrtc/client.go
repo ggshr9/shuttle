@@ -13,8 +13,8 @@ import (
 	"time"
 
 	"github.com/pion/webrtc/v4"
-	"github.com/shuttleX/shuttle/transport"
-	ymux "github.com/shuttleX/shuttle/transport/mux/yamux"
+	"github.com/ggshr9/shuttle/transport"
+	ymux "github.com/ggshr9/shuttle/transport/mux/yamux"
 	"github.com/coder/websocket"
 )
 

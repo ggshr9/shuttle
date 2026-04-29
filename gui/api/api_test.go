@@ -8,9 +8,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/shuttleX/shuttle/config"
-	"github.com/shuttleX/shuttle/engine"
-	"github.com/shuttleX/shuttle/subscription"
+	"github.com/ggshr9/shuttle/config"
+	"github.com/ggshr9/shuttle/engine"
+	"github.com/ggshr9/shuttle/subscription"
 )
 
 // newTestEngine creates a stopped engine with default config for testing.

@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	rtcTransport "github.com/shuttleX/shuttle/transport/webrtc"
+	rtcTransport "github.com/ggshr9/shuttle/transport/webrtc"
 )
 
 // ──────────────────────────────────────────────────────────────────────────────

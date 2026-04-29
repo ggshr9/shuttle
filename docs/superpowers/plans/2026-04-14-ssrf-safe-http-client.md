@@ -559,7 +559,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/shuttleX/shuttle/server"
+	"github.com/ggshr9/shuttle/server"
 )
 
 // TestFetch_BlockedByDialTimeValidation verifies that even when Add() passes
@@ -701,7 +701,7 @@ Replace `gui/api/api.go:231-236`:
 }
 ```
 
-Ensure `github.com/shuttleX/shuttle/server` is already imported at the top of `gui/api/api.go` (it is — the existing code at line 233 uses `server.IsBlockedIP`).
+Ensure `github.com/ggshr9/shuttle/server` is already imported at the top of `gui/api/api.go` (it is — the existing code at line 233 uses `server.IsBlockedIP`).
 
 - [ ] **Step 3: Run GUI API tests**
 
@@ -744,7 +744,7 @@ Find the branch that handles `via == "direct"` (or the default branch that const
 
 If the current code uses a different structure (e.g., returns `http.DefaultTransport`), replace with the above. Preserve the signature and error-string return convention.
 
-Ensure `github.com/shuttleX/shuttle/server` is imported in `routes_misc.go`.
+Ensure `github.com/ggshr9/shuttle/server` is imported in `routes_misc.go`.
 
 **Note on proxied paths:** For `via=socks5` and `via=proxy`, the dial goes through the user's outbound — `SafeDialContext` does not apply because the local dialer only connects to the proxy, not to the target. Pre-flight `validateProbeURL` (Task 6) handles the DNS rebinding case for those paths.
 
@@ -866,10 +866,10 @@ with:
 			}
 ```
 
-Add `"github.com/shuttleX/shuttle/server"` to the imports at the top of `config/config_validate.go`.
+Add `"github.com/ggshr9/shuttle/server"` to the imports at the top of `config/config_validate.go`.
 
 **Circular import check:** `server` package currently imports `config`? Run:
-`rg '"github.com/shuttleX/shuttle/config"' server/` (via Grep tool).
+`rg '"github.com/ggshr9/shuttle/config"' server/` (via Grep tool).
 
 If `server` imports `config`, there's a cycle. In that case:
 - Option A: Move `isBlockedIP` + `blockedCIDRs` to a new `internal/netblock` package that both `server` and `config` depend on.

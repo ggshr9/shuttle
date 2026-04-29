@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/shuttleX/shuttle/transport"
+	"github.com/ggshr9/shuttle/transport"
 )
 
 // TransportFactory creates a matched client+server pair for testing.

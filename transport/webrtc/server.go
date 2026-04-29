@@ -9,8 +9,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/shuttleX/shuttle/crypto"
-	"github.com/shuttleX/shuttle/transport"
+	"github.com/ggshr9/shuttle/crypto"
+	"github.com/ggshr9/shuttle/transport"
 )
 
 // ServerConfig holds configuration for a WebRTC server transport.

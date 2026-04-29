@@ -5,7 +5,7 @@ import (
 	"net"
 	"time"
 
-	"github.com/shuttleX/shuttle/mesh/signal"
+	"github.com/ggshr9/shuttle/mesh/signal"
 )
 
 // TriggerICERestart triggers an ICE restart for a specific peer.

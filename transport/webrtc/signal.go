@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	"github.com/pion/webrtc/v4"
-	"github.com/shuttleX/shuttle/transport/auth"
+	"github.com/ggshr9/shuttle/transport/auth"
 )
 
 const maxSDPSize = 64 * 1024 // 64 KB

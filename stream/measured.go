@@ -5,7 +5,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/shuttleX/shuttle/transport"
+	"github.com/ggshr9/shuttle/transport"
 )
 
 // MeasuredStream wraps a transport.Stream, recording read/write metrics.

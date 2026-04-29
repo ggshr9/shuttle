@@ -1,6 +1,6 @@
 package router
 
-import "github.com/shuttleX/shuttle/config"
+import "github.com/ggshr9/shuttle/config"
 
 // ConfigRuleToRouterRule converts a config.RouteRule to a router.Rule.
 // This is the single authoritative conversion used by engine setup and GUI API handlers.

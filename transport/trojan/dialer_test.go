@@ -11,8 +11,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/shuttleX/shuttle/transport/shared"
-	"github.com/shuttleX/shuttle/transport/trojan"
+	"github.com/ggshr9/shuttle/transport/shared"
+	"github.com/ggshr9/shuttle/transport/trojan"
 )
 
 // echoServer accepts connections and echoes all data back.

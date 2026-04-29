@@ -13,8 +13,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/shuttleX/shuttle/transport"
-	ymux "github.com/shuttleX/shuttle/transport/mux/yamux"
+	"github.com/ggshr9/shuttle/transport"
+	ymux "github.com/ggshr9/shuttle/transport/mux/yamux"
 )
 
 // GRPCConfig configures the gRPC CDN transport.

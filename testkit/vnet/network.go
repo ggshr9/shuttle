@@ -6,7 +6,7 @@ import (
 	"net"
 	"sync"
 
-	"github.com/shuttleX/shuttle/testkit/observe"
+	"github.com/ggshr9/shuttle/testkit/observe"
 )
 
 // edge represents a directed link between two nodes.
