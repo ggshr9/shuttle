@@ -143,6 +143,11 @@ func Start(configJSON string) (string, error) {
 	srv = api.NewServer(eng, nil)
 	addr, err := srv.ListenAndServe("127.0.0.1:0")
 	if err != nil {
+		// api.NewServer started a heartbeat goroutine; if bind fails we
+		// must Close the server explicitly or the goroutine leaks
+		// (mobile processes don't always exit on bind failure).
+		_ = srv.Close()
+		srv = nil
 		_ = eng.Stop()
 		eng = nil
 		mobileLogger.Error("api server start failed", "err", err)
@@ -201,6 +206,11 @@ func StartWithTUN(configJSON string, tunFD int) (string, error) {
 	srv = api.NewServer(eng, nil)
 	addr, err := srv.ListenAndServe("127.0.0.1:0")
 	if err != nil {
+		// api.NewServer started a heartbeat goroutine; if bind fails we
+		// must Close the server explicitly or the goroutine leaks
+		// (mobile processes don't always exit on bind failure).
+		_ = srv.Close()
+		srv = nil
 		_ = eng.Stop()
 		eng = nil
 		mobileLogger.Error("api server start failed", "err", err)
