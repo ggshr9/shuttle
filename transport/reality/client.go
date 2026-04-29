@@ -93,7 +93,7 @@ func (c *Client) Dial(ctx context.Context, addr string) (transport.Connection, e
 	dialer := &tls.Dialer{Config: tlsConf}
 	raw, err := dialer.DialContext(ctx, "tcp", addr)
 	if err != nil {
-		c.recordFailure(classifyReason(err))
+		c.recordFailure(transport.ClassifyHandshakeReason(err))
 		return nil, fmt.Errorf("reality dial: %w", err)
 	}
 
@@ -134,14 +134,14 @@ func (c *Client) Dial(ctx context.Context, addr string) (transport.Connection, e
 		return nil, fmt.Errorf("noise write msg1: %w", err)
 	}
 	if err := writeFrame(raw, msg1); err != nil {
-		c.recordFailure(classifyReason(err))
+		c.recordFailure(transport.ClassifyHandshakeReason(err))
 		return nil, fmt.Errorf("send msg1: %w", err)
 	}
 
 	// Read handshake message 2 (<- e, ee, se)
 	msg2, err := readFrame(raw)
 	if err != nil {
-		c.recordFailure(classifyReason(err))
+		c.recordFailure(transport.ClassifyHandshakeReason(err))
 		return nil, fmt.Errorf("read msg2: %w", err)
 	}
 	_, err = hs.ReadMessage(msg2)
@@ -170,14 +170,14 @@ func (c *Client) Dial(ctx context.Context, addr string) (transport.Connection, e
 		pqMsg[0] = crypto.HandshakeVersionHybridPQ
 		copy(pqMsg[1:], pqPub)
 		if err := writeFrame(raw, pqMsg); err != nil {
-			c.recordFailure(classifyReason(err))
+			c.recordFailure(transport.ClassifyHandshakeReason(err))
 			return nil, fmt.Errorf("send pq public key: %w", err)
 		}
 
 		// Read PQ ciphertext from server
 		pqCiphertext, err := readFrame(raw)
 		if err != nil {
-			c.recordFailure(classifyReason(err))
+			c.recordFailure(transport.ClassifyHandshakeReason(err))
 			return nil, fmt.Errorf("read pq ciphertext: %w", err)
 		}
 

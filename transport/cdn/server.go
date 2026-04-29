@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"github.com/ggshr9/shuttle/config"
-	"github.com/ggshr9/shuttle/crypto"
 	"github.com/ggshr9/shuttle/transport"
 	"github.com/ggshr9/shuttle/transport/auth"
 	ymux "github.com/ggshr9/shuttle/transport/mux/yamux"
@@ -78,23 +77,12 @@ func (s *Server) Listen(ctx context.Context) error {
 		MinVersion: tls.VersionTLS12,
 	}
 
-	if s.config.CertFile != "" && s.config.KeyFile != "" {
-		cert, err := tls.LoadX509KeyPair(s.config.CertFile, s.config.KeyFile)
-		if err != nil {
-			return fmt.Errorf("load tls cert: %w", err)
-		}
-		tlsConf.Certificates = []tls.Certificate{cert}
-	} else {
-		// Auto-generate self-signed cert for zero-config setup
-		certPEM, keyPEM, err := crypto.GenerateSelfSignedCert(nil, 365*24*time.Hour)
-		if err != nil {
-			return fmt.Errorf("generate self-signed cert: %w", err)
-		}
-		cert, err := tls.X509KeyPair(certPEM, keyPEM)
-		if err != nil {
-			return fmt.Errorf("parse self-signed cert: %w", err)
-		}
-		tlsConf.Certificates = []tls.Certificate{cert}
+	cert, generated, err := transport.LoadOrGenerateCert(s.config.CertFile, s.config.KeyFile)
+	if err != nil {
+		return err
+	}
+	tlsConf.Certificates = []tls.Certificate{cert}
+	if generated {
 		s.logger.Info("cdn: using auto-generated self-signed certificate")
 	}
 
@@ -175,7 +163,7 @@ func (s *Server) handleStream(w http.ResponseWriter, r *http.Request) {
 	var authBuf [64]byte
 	if _, err := io.ReadFull(duplex.reader, authBuf[:]); err != nil {
 		s.logger.Debug("cdn: failed to read auth payload", "err", err, "remote", r.RemoteAddr)
-		s.recordFailure(classifyReason(err))
+		s.recordFailure(transport.ClassifyHandshakeReason(err))
 		return
 	}
 

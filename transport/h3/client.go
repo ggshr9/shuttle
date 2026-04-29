@@ -119,14 +119,14 @@ func (c *Client) Dial(ctx context.Context, addr string) (transport.Connection, e
 
 	qconn, err := quic.DialAddr(ctx, addr, tlsConf, quicConf)
 	if err != nil {
-		c.recordFailure(classifyReason(err))
+		c.recordFailure(transport.ClassifyHandshakeReason(err))
 		return nil, fmt.Errorf("h3 dial: %w", err)
 	}
 
 	// HTTP/3-style session establishment on control stream.
 	ctrlStream, err := qconn.OpenStreamSync(ctx)
 	if err != nil {
-		c.recordFailure(classifyReason(err))
+		c.recordFailure(transport.ClassifyHandshakeReason(err))
 		_ = qconn.CloseWithError(1, "control stream open failed")
 		return nil, fmt.Errorf("h3 open control stream: %w", err)
 	}
@@ -140,7 +140,7 @@ func (c *Client) Dial(ctx context.Context, addr string) (transport.Connection, e
 	}
 
 	if _, err := ctrlStream.Write(authPayload); err != nil {
-		c.recordFailure(classifyReason(err))
+		c.recordFailure(transport.ClassifyHandshakeReason(err))
 		_ = qconn.CloseWithError(1, "auth write failed")
 		return nil, fmt.Errorf("h3 write auth: %w", err)
 	}
@@ -148,7 +148,7 @@ func (c *Client) Dial(ctx context.Context, addr string) (transport.Connection, e
 	// Read 1-byte server response.
 	resp := make([]byte, 1)
 	if _, err := io.ReadFull(ctrlStream, resp); err != nil {
-		c.recordFailure(classifyReason(err))
+		c.recordFailure(transport.ClassifyHandshakeReason(err))
 		_ = qconn.CloseWithError(1, "auth response read failed")
 		return nil, fmt.Errorf("h3 read auth response: %w", err)
 	}

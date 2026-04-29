@@ -1,6 +1,13 @@
 package transport
 
-import "time"
+import (
+	"context"
+	"errors"
+	"io"
+	"net"
+	"os"
+	"time"
+)
 
 // HandshakeMetrics is the optional hook called by server-side transports
 // after each completed (or failed) accept. It is set once at server startup
@@ -16,4 +23,28 @@ import "time"
 type HandshakeMetrics struct {
 	OnSuccess func(transport string, duration time.Duration)
 	OnFailure func(transport string, reason string)
+}
+
+// ClassifyHandshakeReason maps a handshake error into one of the metric
+// reason categories: "timeout" or "protocol". Auth failures across all
+// transports (HMAC verify, Noise rejection) are detected inline and
+// reported with reason="auth" by the caller without going through this
+// helper, so the result here is "timeout" for deadline-derived errors
+// and "protocol" for everything else (including io.EOF and unexpected
+// stream termination).
+func ClassifyHandshakeReason(err error) string {
+	if err == nil {
+		return "protocol"
+	}
+	if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, os.ErrDeadlineExceeded) {
+		return "timeout"
+	}
+	var netErr net.Error
+	if errors.As(err, &netErr) && netErr.Timeout() {
+		return "timeout"
+	}
+	if errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) {
+		return "protocol"
+	}
+	return "protocol"
 }

@@ -125,7 +125,7 @@ func (c *GRPCClient) Dial(ctx context.Context, addr string) (transport.Connectio
 
 	resp, err := c.client.Do(req)
 	if err != nil {
-		c.recordFailure(classifyReason(err))
+		c.recordFailure(transport.ClassifyHandshakeReason(err))
 		pw.Close()
 		return nil, fmt.Errorf("grpc dial: %w", err)
 	}
@@ -145,7 +145,7 @@ func (c *GRPCClient) Dial(ctx context.Context, addr string) (transport.Connectio
 
 	// Send auth: [32-byte nonce][32-byte HMAC-SHA256(password, nonce)]
 	if err := sendGRPCAuth(duplex, c.config.Password); err != nil {
-		c.recordFailure(classifyReason(err))
+		c.recordFailure(transport.ClassifyHandshakeReason(err))
 		duplex.Close()
 		return nil, fmt.Errorf("grpc auth: %w", err)
 	}

@@ -124,7 +124,7 @@ func (c *H2Client) Dial(ctx context.Context, addr string) (transport.Connection,
 
 	resp, err := c.client.Do(req)
 	if err != nil {
-		c.recordFailure(classifyReason(err))
+		c.recordFailure(transport.ClassifyHandshakeReason(err))
 		pw.Close()
 		return nil, fmt.Errorf("http2 dial: %w", err)
 	}
@@ -144,7 +144,7 @@ func (c *H2Client) Dial(ctx context.Context, addr string) (transport.Connection,
 
 	// Send auth: [32-byte nonce][32-byte HMAC-SHA256(password, nonce)]
 	if err := sendAuth(duplex, c.config.Password); err != nil {
-		c.recordFailure(classifyReason(err))
+		c.recordFailure(transport.ClassifyHandshakeReason(err))
 		duplex.Close()
 		return nil, fmt.Errorf("auth handshake: %w", err)
 	}

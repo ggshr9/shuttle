@@ -104,23 +104,12 @@ func (s *Server) Listen(ctx context.Context) error {
 	tlsConf := &tls.Config{
 		MinVersion: tls.VersionTLS13,
 	}
-	if s.config.CertFile != "" && s.config.KeyFile != "" {
-		cert, err := tls.LoadX509KeyPair(s.config.CertFile, s.config.KeyFile)
-		if err != nil {
-			return fmt.Errorf("load tls cert: %w", err)
-		}
-		tlsConf.Certificates = []tls.Certificate{cert}
-	} else {
-		// Auto-generate self-signed cert for zero-config setup
-		certPEM, keyPEM, err := shuttlecrypto.GenerateSelfSignedCert(nil, 365*24*time.Hour)
-		if err != nil {
-			return fmt.Errorf("generate self-signed cert: %w", err)
-		}
-		cert, err := tls.X509KeyPair(certPEM, keyPEM)
-		if err != nil {
-			return fmt.Errorf("parse self-signed cert: %w", err)
-		}
-		tlsConf.Certificates = []tls.Certificate{cert}
+	cert, generated, err := transport.LoadOrGenerateCert(s.config.CertFile, s.config.KeyFile)
+	if err != nil {
+		return err
+	}
+	tlsConf.Certificates = []tls.Certificate{cert}
+	if generated {
 		s.logger.Info("reality: using auto-generated self-signed certificate")
 	}
 	ln, err := tls.Listen("tcp", addr, tlsConf)
@@ -168,7 +157,7 @@ func (s *Server) handleConn(ctx context.Context, raw net.Conn) {
 	msg1, err := readFrame(raw)
 	if err != nil {
 		s.logger.Debug("noise read failed, forwarding to target", "err", err)
-		s.recordFailure(classifyReason(err))
+		s.recordFailure(transport.ClassifyHandshakeReason(err))
 		_ = raw.SetReadDeadline(time.Time{})
 		s.forwardToTarget(raw)
 		return
@@ -193,7 +182,7 @@ func (s *Server) handleConn(ctx context.Context, raw net.Conn) {
 		return
 	}
 	if err := writeFrame(raw, msg2); err != nil {
-		s.recordFailure(classifyReason(err))
+		s.recordFailure(transport.ClassifyHandshakeReason(err))
 		raw.Close()
 		return
 	}

@@ -70,23 +70,12 @@ func (s *Server) Listen(ctx context.Context) error {
 		CipherSuites:     ChromeCipherSuites,
 		CurvePreferences: ChromeCurvePreferences,
 	}
-	if s.config.CertFile != "" && s.config.KeyFile != "" {
-		cert, err := tls.LoadX509KeyPair(s.config.CertFile, s.config.KeyFile)
-		if err != nil {
-			return fmt.Errorf("load tls cert: %w", err)
-		}
-		tlsConf.Certificates = []tls.Certificate{cert}
-	} else {
-		// Auto-generate self-signed cert for zero-config setup
-		certPEM, keyPEM, err := crypto.GenerateSelfSignedCert(nil, 365*24*time.Hour)
-		if err != nil {
-			return fmt.Errorf("generate self-signed cert: %w", err)
-		}
-		cert, err := tls.X509KeyPair(certPEM, keyPEM)
-		if err != nil {
-			return fmt.Errorf("parse self-signed cert: %w", err)
-		}
-		tlsConf.Certificates = []tls.Certificate{cert}
+	cert, generated, err := transport.LoadOrGenerateCert(s.config.CertFile, s.config.KeyFile)
+	if err != nil {
+		return err
+	}
+	tlsConf.Certificates = []tls.Certificate{cert}
+	if generated {
 		s.logger.Info("using auto-generated self-signed certificate")
 	}
 
@@ -146,7 +135,7 @@ func (s *Server) handleConn(ctx context.Context, qconn *quic.Conn) {
 	ctrlStream, err := qconn.AcceptStream(ctx)
 	if err != nil {
 		s.logger.Debug("failed to accept control stream", "err", err)
-		s.recordFailure(classifyReason(err))
+		s.recordFailure(transport.ClassifyHandshakeReason(err))
 		_ = qconn.CloseWithError(1, "no control stream")
 		return
 	}
@@ -157,7 +146,7 @@ func (s *Server) handleConn(ctx context.Context, qconn *quic.Conn) {
 	authBuf := make([]byte, 64)
 	if _, err := io.ReadFull(ctrlStream, authBuf); err != nil {
 		s.logger.Debug("failed to read auth payload", "err", err)
-		s.recordFailure(classifyReason(err))
+		s.recordFailure(transport.ClassifyHandshakeReason(err))
 		s.serveCover(ctrlStream, qconn)
 		return
 	}
@@ -184,7 +173,7 @@ func (s *Server) handleConn(ctx context.Context, qconn *quic.Conn) {
 	// Auth OK.
 	if _, err := ctrlStream.Write([]byte{0x01}); err != nil {
 		s.logger.Debug("failed to send auth OK", "err", err)
-		s.recordFailure(classifyReason(err))
+		s.recordFailure(transport.ClassifyHandshakeReason(err))
 		_ = qconn.CloseWithError(1, "auth response failed")
 		return
 	}
