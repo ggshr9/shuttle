@@ -29,11 +29,19 @@ If the hash does not match, do not use the file. Re-download from the official r
 
 ## Reporting Security Issues
 
-If you discover a security vulnerability, please report it by opening a GitHub issue:
+**Confidential reports:** Use [GitHub Security Advisory](https://github.com/shuttleX/shuttle/security/advisories/new) for any security-sensitive issue. This is the preferred channel — reports are private until coordinated disclosure.
 
-https://github.com/shuttleX/shuttle/issues/new
+**Non-sensitive concerns:** A public [GitHub issue](https://github.com/shuttleX/shuttle/issues/new) is fine for hardening suggestions, dependency updates, or configuration questions where no exploit path is involved.
 
-Include as much detail as possible: affected version, steps to reproduce, and potential impact. We will respond promptly and coordinate a fix.
+**PGP:** No project PGP key is currently published. Please use GitHub Security Advisory for confidential reports — GitHub encrypts reports in transit and at rest.
+
+**What to include:**
+- Affected version (commit hash if running from main)
+- Steps to reproduce
+- Estimated impact (data exposure / denial of service / privilege escalation)
+- Suggested fix if you have one
+
+We aim to acknowledge reports within 72 hours and to ship a fix or mitigation within 30 days for high-severity issues.
 
 ## Supported Versions
 
